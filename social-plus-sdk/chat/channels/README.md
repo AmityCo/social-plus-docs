@@ -8,12 +8,12 @@ description: >-
 
 In this section, we will cover the concept of channels in Social Plus Chat SDK and how to use them to enable different types of chat messaging capabilities in your application.
 
-{% hint style="info" %}
-Please be aware that there is some incompatibility between SDK **version 5** and **version 6** regarding the Subchannel feature.&#x20;
+<Info>
+Please be aware that there is some incompatibility between SDK **version 5** and **version 6** regarding the Subchannel feature.
 
-* Applications using SDK version 5 cannot view messages sent to subchannels by SDK version 6.&#x20;
+* Applications using SDK version 5 cannot view messages sent to subchannels by SDK version 6.
 * Channels can be sorted by 'Last Activity', which means that if messages are sent to SDK version 5 in subchannels, it moves the channel to the top of the collection. However, while the order will be updated to the top, SDK version 5 will not display the message.
-{% endhint %}
+</Info>
 
 ## Channel and Subchannel Structure
 
@@ -29,21 +29,76 @@ The differences between channels and subchannels are as follows:
 4. **Management**: Users can create, update, delete, and query subchannels within a channel, managing each subchannel individually.
 5. **Moderation**: Moderation actions, such as banning, unbanning, muting, and unmuting users, can be performed at the channel level rather than the subchannel level. This approach ensures that moderation decisions apply to all subchannels within the main channel, providing consistent management across different conversations or topics.
 
-{% hint style="info" %}
+<Info>
 By default, when a channel is created, a corresponding default subchannel is also automatically generated.
-{% endhint %}
+</Info>
 
-<figure><img src="../../../.gitbook/assets/Screenshot 2566-04-25 at 09.20.51.png" alt=""><figcaption></figcaption></figure>
+<Frame>
+  <img src="../../../.gitbook/assets/Screenshot 2566-04-25 at 09.20.51.png" alt="" />
+</Frame>
 
 ## Channel Types
 
 Social Plus's Chat SDK has several channel types with different use cases. Each type is designed to match a particular use case for chat channels.
 
-<table data-header-hidden><thead><tr><th width="150">Channel Type</th><th width="132">Discoverable by</th><th width="128">Message sending privileges</th><th width="120">Moderation access</th><th width="101">Channel Creation</th><th>Realtime Events</th></tr></thead><tbody><tr><td><strong>Channel Type</strong></td><td><strong>Discoverable by</strong></td><td><strong>Message sending privileges</strong></td><td><strong>Moderation access</strong></td><td><strong>Channel Creation</strong></td><td><strong>Realtime Events Retrieval</strong></td></tr><tr><td>Community</td><td>All users and admins</td><td>Joined members and admins</td><td>All Moderation tools</td><td>SDK, Console</td><td>Automatic</td></tr><tr><td>Private Community</td><td>Joined members and admins</td><td>Joined members and admins</td><td>All Moderation tools</td><td>SDK, Console</td><td>Automatic</td></tr><tr><td>Live</td><td>Joined members and admins</td><td>Joined members and admins</td><td>All Moderation tools</td><td>SDK, Console</td><td>Subscription needed</td></tr><tr><td>Broadcast</td><td>All users and admins</td><td>Admins, and designated moderators</td><td>Admin Moderation tools</td><td>SDK, Console</td><td>Subscription needed</td></tr><tr><td>Conversation</td><td>Joined members </td><td>Joined members </td><td>No Moderation tools</td><td>SDK</td><td>Automatic</td></tr></tbody></table>
+<table>
+  <thead>
+    <tr>
+      <th width="150">Channel Type</th>
+      <th width="132">Discoverable by</th>
+      <th width="128">Message sending privileges</th>
+      <th width="120">Moderation access</th>
+      <th width="101">Channel Creation</th>
+      <th>Realtime Events</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Community</td>
+      <td>All users and admins</td>
+      <td>Joined members and admins</td>
+      <td>All Moderation tools</td>
+      <td>SDK, Console</td>
+      <td>Automatic</td>
+    </tr>
+    <tr>
+      <td>Private Community</td>
+      <td>Joined members and admins</td>
+      <td>Joined members and admins</td>
+      <td>All Moderation tools</td>
+      <td>SDK, Console</td>
+      <td>Automatic</td>
+    </tr>
+    <tr>
+      <td>Live</td>
+      <td>Joined members and admins</td>
+      <td>Joined members and admins</td>
+      <td>All Moderation tools</td>
+      <td>SDK, Console</td>
+      <td>Subscription needed</td>
+    </tr>
+    <tr>
+      <td>Broadcast</td>
+      <td>All users and admins</td>
+      <td>Admins, and designated moderators</td>
+      <td>Admin Moderation tools</td>
+      <td>SDK, Console</td>
+      <td>Subscription needed</td>
+    </tr>
+    <tr>
+      <td>Conversation</td>
+      <td>Joined members</td>
+      <td>Joined members</td>
+      <td>No Moderation tools</td>
+      <td>SDK</td>
+      <td>Automatic</td>
+    </tr>
+  </tbody>
+</table>
 
-{% hint style="info" %}
+<Info>
 For further information about channel's realtime events process, please visit [chat-realtime-events.md](../../core-concepts/realtime-events/chat-realtime-events.md "mention").
-{% endhint %}
+</Info>
 
 ### Community and Private Community Channel
 
@@ -102,15 +157,17 @@ Each channel has its own list of members, and no two channels can have the same 
 * Private Group Chat
 * Customer Support Chat
 
-> Channel types can be created through SDK i.e `Community`, `Live` and `Conversation`. Creation of `Private` and `Standard` type has been removed.&#x20;
+<Note>
+Channel types can be created through SDK i.e `Community`, `Live` and `Conversation`. Creation of `Private` and `Standard` type has been removed.
+</Note>
 
 ### Broadcast
 
-The Broadcast channel is heavily adopted by corporate users who constantly promote or advertise their products, or make the announcement to drive awareness. Unlike other channel types, broadcast channels only allow admin users to send messages from Console, [API](https://api-docs.amity.co/#/Message/post\_api\_v3\_messages), and SDK, and everyone else in the channel will be under read-only mode.
+The Broadcast channel is heavily adopted by corporate users who constantly promote or advertise their products, or make the announcement to drive awareness. Unlike other channel types, broadcast channels only allow admin users to send messages from Console, [API](https://api-docs.amity.co/#/Message/post_api_v3_messages), and SDK, and everyone else in the channel will be under read-only mode.
 
 #### Broadcast channel characteristics
 
-* Broadcast messages can be sent out via SP console, [API](https://api-docs.amity.co/#/Message/post\_api\_v3\_messages), and SDK with admin or moderator permissions.
+* Broadcast messages can be sent out via SP console, [API](https://api-docs.amity.co/#/Message/post_api_v3_messages), and SDK with admin or moderator permissions.
 * The administrator can choose to send to any community OR live channel (but not to the conversation channel).
 * Support @mention user
 * Support @mention channel users (mention all users)
@@ -122,6 +179,106 @@ Typical use cases:
 
 ### Channel Properties
 
-<table data-header-hidden><thead><tr><th width="291">Name</th><th width="211">Data Type</th><th>Description</th></tr></thead><tbody><tr><td>Name</td><td>Data Type</td><td>Description</td></tr><tr><td><code>channelId</code></td><td><code>String</code></td><td>ID of the channel</td></tr><tr><td><code>defaultSubchannelId</code> </td><td><code>String</code></td><td>ID of the default subchannel that's generated upon channel creation</td></tr><tr><td><code>isDistinct</code></td><td><code>Bool</code></td><td>Is channel distinct?</td></tr><tr><td><code>metadata</code></td><td><code>JsonObject</code></td><td>Additional properties to support custom fields</td></tr><tr><td><code>type</code></td><td><code>AmityChannelType</code></td><td>Type of channel</td></tr><tr><td><code>tags</code></td><td><code>Array&#x3C;String></code></td><td>Tags used for searching</td></tr><tr><td><code>isMuted</code></td><td><code>Bool</code></td><td>Is this channel muted?</td></tr><tr><td><code>isRateLimited</code></td><td><code>Bool</code></td><td>This channel has limited sending rate?</td></tr><tr><td><code>rateLimit</code></td><td><code>Int</code></td><td>Number of messages within rate limit</td></tr><tr><td><code>displayName</code></td><td><code>String</code></td><td>Channel name for displaying</td></tr><tr><td><code>memberCount</code></td><td><code>Integer</code></td><td>Number of members in channel</td></tr><tr><td><code>messageCount</code></td><td><code>Integer</code></td><td>Number of messages in channel</td></tr><tr><td><code>unreadCount</code></td><td><code>Integer</code></td><td>Number of unread messages in channel</td></tr><tr><td><code>lastActivity</code></td><td><code>DateTime</code></td><td>Date/time of user's last activity related to the channel (e.g. add/remove member)</td></tr><tr><td><code>createdAt</code></td><td><code>DateTime</code></td><td>Date/time the channel was created</td></tr><tr><td><code>updatedAt</code></td><td><code>DateTime</code></td><td>Date/time the channel was last updated</td></tr><tr><td><code>avatarFileId</code></td><td><code>String</code></td><td>Avatar file ID</td></tr><tr><td><code>isPublic</code></td><td><code>Bool</code></td><td>Public / Private community channel</td></tr></tbody></table>
+<table>
+  <thead>
+    <tr>
+      <th width="291">Name</th>
+      <th width="211">Data Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`channelId`</td>
+      <td>`String`</td>
+      <td>ID of the channel</td>
+    </tr>
+    <tr>
+      <td>`defaultSubchannelId`</td>
+      <td>`String`</td>
+      <td>ID of the default subchannel that's generated upon channel creation</td>
+    </tr>
+    <tr>
+      <td>`isDistinct`</td>
+      <td>`Bool`</td>
+      <td>Is channel distinct?</td>
+    </tr>
+    <tr>
+      <td>`metadata`</td>
+      <td>`JsonObject`</td>
+      <td>Additional properties to support custom fields</td>
+    </tr>
+    <tr>
+      <td>`type`</td>
+      <td>`AmityChannelType`</td>
+      <td>Type of channel</td>
+    </tr>
+    <tr>
+      <td>`tags`</td>
+      <td>`Array<String>`</td>
+      <td>Tags used for searching</td>
+    </tr>
+    <tr>
+      <td>`isMuted`</td>
+      <td>`Bool`</td>
+      <td>Is this channel muted?</td>
+    </tr>
+    <tr>
+      <td>`isRateLimited`</td>
+      <td>`Bool`</td>
+      <td>This channel has limited sending rate?</td>
+    </tr>
+    <tr>
+      <td>`rateLimit`</td>
+      <td>`Int`</td>
+      <td>Number of messages within rate limit</td>
+    </tr>
+    <tr>
+      <td>`displayName`</td>
+      <td>`String`</td>
+      <td>Channel name for displaying</td>
+    </tr>
+    <tr>
+      <td>`memberCount`</td>
+      <td>`Integer`</td>
+      <td>Number of members in channel</td>
+    </tr>
+    <tr>
+      <td>`messageCount`</td>
+      <td>`Integer`</td>
+      <td>Number of messages in channel</td>
+    </tr>
+    <tr>
+      <td>`unreadCount`</td>
+      <td>`Integer`</td>
+      <td>Number of unread messages in channel</td>
+    </tr>
+    <tr>
+      <td>`lastActivity`</td>
+      <td>`DateTime`</td>
+      <td>Date/time of user's last activity related to the channel (e.g. add/remove member)</td>
+    </tr>
+    <tr>
+      <td>`createdAt`</td>
+      <td>`DateTime`</td>
+      <td>Date/time the channel was created</td>
+    </tr>
+    <tr>
+      <td>`updatedAt`</td>
+      <td>`DateTime`</td>
+      <td>Date/time the channel was last updated</td>
+    </tr>
+    <tr>
+      <td>`avatarFileId`</td>
+      <td>`String`</td>
+      <td>Avatar file ID</td>
+    </tr>
+    <tr>
+      <td>`isPublic`</td>
+      <td>`Bool`</td>
+      <td>Public / Private community channel</td>
+    </tr>
+  </tbody>
+</table>
 
 Channel Object is a Live Object and you can observe real-time changes in Channel Properties. Please see to [Live Object](../../core-concepts/live-objects-collections/) on how to listen to real-time changes.
