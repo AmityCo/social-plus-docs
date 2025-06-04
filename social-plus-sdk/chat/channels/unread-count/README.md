@@ -1,0 +1,9 @@
+# Unread Count
+
+{% hint style="info" %}
+For iOS and Android SDK version 6.26.0 and above and TS SDK version 6.18.0 and above, please refer to this migration guideline to access the latest unread count feature - [sdk-v6.26.0-unread-count-migration-guide.md](../../../../developers/migration-guides/sdk-v6.26.0-unread-count-migration-guide.md "mention").
+{% endhint %}
+
+The unread count feature in chat channels allows you to keep track of new messages and stay up-to-date with ongoing conversations. By providing a simple indicator of unread messages, users can quickly prioritize which channels require their attention. This topic provides instructions for managing unread messages in a chat channel.
+
+we only support unread count on community, conversation, and broadcast channels. We do not support this feature in live channels. Mention unread in channels aren't supported as well.
