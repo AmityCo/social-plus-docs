@@ -4,97 +4,91 @@ In the Social Plus SDK, a user is represented by an `AmityUser` object, which co
 
 To retrieve an `AmityUser` object for a specific `userId`, you can use the `getUser` method provided by the `UserRepository`. This method accepts the `userId` as a parameter and returns a [Live Object](../live-objects-collections/) of `AmityUser`. The live object allows developers to observe changes to the user's properties in real-time, ensuring that their app remains up-to-date with the latest user information.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/622081ba01cf57a18b4b36db2707844c" %}
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    <Embed url="https://gist.github.com/amythee/622081ba01cf57a18b4b36db2707844c" />
+  </Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/7b46a1e7362137feef90aa1db36b4862" %}
-{% endtab %}
+  <Tab title="Android">
+    <Embed url="https://gist.github.com/amythee/7b46a1e7362137feef90aa1db36b4862" />
+  </Tab>
 
-{% tab title="JavaScript" %}
-Follow the below code to retrieve a user object:
+  <Tab title="JavaScript">
+    Follow the below code to retrieve a user object:
 
-```javascript
-import { UserRepository } from '@amityco/js-sdk';
+    ```javascript
+    import { UserRepository } from '@amityco/js-sdk';
 
-const liveObject = UserRepository.getUser('userId');
-liveObject.on('dataUpdated', user => {
-  // user is successfully fetched
-});
-```
+    const liveObject = UserRepository.getUser('userId');
+    liveObject.on('dataUpdated', user => {
+      // user is successfully fetched
+    });
+    ```
 
-####
+    #### Get Single User
 
-#### Get Single User
+    The User Repository provides a method to get a single user. It returns a LiveObject which you can observe.
 
-The User Repository provides a method to get a single user. It returns a LiveObject which you can observe.
+    ```javascript
+    userRepo.userForId('user123')
+    ```
 
-```javascript
-userRepo.userForId('user123')
-```
+    You can also use the code below to get one user:
 
-You can also use the code below to get one user:
+    ```typescript
+    let liveUser = UserRepository.getUser("some-user-id")
+    userObject.on("dataUpdated", model => {
+       // you can access user object as model here
+      console.log(model.userId, model.displayName)
+    })
+    ```
 
-```typescript
-let liveUser = UserRepository.getUser("some-user-id")
-userObject.on(“dataUpdated”, model => {
-   // you can access user object as model here
-  console.log(model.userId, model.displayName)
-})
-```
+    #### Get All Users
 
-####
+    The User Repository provides a method to get a list of all users, which will be returned as a LiveCollection:
 
-#### Get All Users
+    ```javascript
+    userRepo.getAllUsers()
+    ```
 
-The User Repository provides a method to get a list of all users, which will be returned as a LiveCollection:
+    This method takes an optional `sortBy` parameter which must be a `UserSortingMethod` - these include `displayName`, `firstCreated`, and `lastCreated`:
 
-```javascript
-userRepo.getAllUsers()
-```
+    ```javascript
+    import { UserSortingMethod } from '@amityco/js-sdk'
 
-This method takes an optional `sortBy` parameter which must be a `UserSortingMethod` - these include `displayName`, `firstCreated`, and `lastCreated`:
+    userRepo.getAllUsers(UserSortingMethod.DisplayName)
+    ```
+  </Tab>
 
-```javascript
-import { UserSortingMethod } from '@amityco/js-sdk'
+  <Tab title="TypeScript">
+    <Embed url="https://gist.github.com/amythee/9184aa74c7fe1773a027e81e54465871" />
+  </Tab>
 
-userRepo.getAllUsers(UserSortingMethod.DisplayName)
-```
+  <Tab title="Flutter">
+    <Embed url="https://gist.github.com/amythee/6a732f6953a3cc445c2510b798fd3692" />
+  </Tab>
+</Tabs>
 
+To retrieve multiple users, you can use `getUserByIds` method provided by `UserRepository`. This method accepts a collection of `userId` as a parameter and returns a [Live Collection](../live-objects-collections/) of `AmityUser`.
 
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/9184aa74c7fe1773a027e81e54465871" %}
-{% endtab %}
+  <Tab title="Android">
+    <Embed url="https://gist.github.com/354656ab49ab513390cbe298cf84c70e" />
+  </Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/6a732f6953a3cc445c2510b798fd3692" %}
-{% endtab %}
-{% endtabs %}
+  <Tab title="Javascript">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
 
-To retrieve multiple users, you can use `getUserByIds` method provided by `UserRepository`. This method accepts a collection of `userId` as a parameter and returns a [Live Collection](../live-objects-collections/) of`AmityUser`.&#x20;
+  <Tab title="TypeScript">
+    <Embed url="https://gist.github.com/amythee/f962d6f3bdaf473928882a3f6ddf900c" />
+  </Tab>
 
-{% tabs %}
-{% tab title="iOS" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/354656ab49ab513390cbe298cf84c70e" %}
-{% endtab %}
-
-{% tab title="Javascript" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/f962d6f3bdaf473928882a3f6ddf900c" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>

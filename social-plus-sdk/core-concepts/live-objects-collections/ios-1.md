@@ -6,7 +6,7 @@ In Flutter SDK, we have a concept of Live Object and Live Collection. Live Objec
 
 ### How it Works
 
-SDK handles lots of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync. Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through helper methods in the Live Object and Live Collection classes.&#x20;
+SDK handles lots of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync. Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through helper methods in the Live Object and Live Collection classes.
 
 New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
 
@@ -24,35 +24,41 @@ Live Collection is available for the following in user/community feeds:
 
 Live Object is available for the following in user/community feeds:
 
-* Post Live Object&#x20;
-* Community Live Object&#x20;
+* Post Live Object
+* Community Live Object
 * Comment Live Object
-* Poll Live Object&#x20;
-* Story Live Object&#x20;
+* Poll Live Object
+* Story Live Object
 
 ### LiveObject
 
-`StreamSubscription<Object>` is a native flutter class that keeps track of a single object. It is a live object. In Flutter `AmitySDK`, any object which provides Stream is a Live Object.&#x20;
+`StreamSubscription<Object>` is a native flutter class that keeps track of a single object. It is a live object. In Flutter `AmitySDK`, any object which provides Stream is a Live Object.
 
 Examples:
 
-{% embed url="https://gist.github.com/amythee/bd4f33e6e1af748ef6637e2601029dfd" %}
+<Frame>
+```dart
+postRepository.getPost(postId).listen((post) {
+  // Handle post updates
+});
+```
+</Frame>
 
 This function helps listen to Live Object. Whenever any property for the observed object changes, the `listen` callback will be triggered.
 
 ### Live Collection
 
-`LiveCollection` is a generic class that keeps track of a collection of objects. It is a Live Collection. In Flutter SDK, any object that is encapsulated by `LiveCollection` class is a live collection.&#x20;
+`LiveCollection` is a generic class that keeps track of a collection of objects. It is a Live Collection. In Flutter SDK, any object that is encapsulated by `LiveCollection` class is a live collection.
 
-Examples:&#x20;
+Examples:
 
-* `MessageLiveCollection`&#x20;
-* `ChannelLiveCollection` &#x20;
+* `MessageLiveCollection`
+* `ChannelLiveCollection`
 
 `LiveCollection` exposes these methods:
 
-* `asStream`&#x20;
-* `onError`&#x20;
+* `asStream`
+* `onError`
 
 These methods help observe a Live Collection. Whenever any property for any object within the collection changes, the observer is triggered, as well as observing any errors from the collection.
 
@@ -64,16 +70,58 @@ These methods help observe a Live Collection. Whenever any property for any obje
 
 * If the requested data collection is stored locally on the device, the block will be called immediately with the local version of the data.
 * In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the `listen` block will be triggered again.
-* Any future changes to the data from any sources can trigger the `listen` block.&#x20;
+* Any future changes to the data from any sources can trigger the `listen` block.
 
 #### Pagination
 
 `AmityCollection` in SDK returns a maximum of `pageSize` items per page. It has `loadNext()` method to fetch more data. It also exposes `hasNext` property to check if the next page or previous page is present.
 
-{% embed url="https://gist.github.com/amythee/fd760cbed7685a2b1b4e9debd33fd810" %}
+<Frame>
+```dart
+final collection = postRepository.getPosts();
+collection.loadNext();
+collection.asStream().listen((posts) {
+  // Handle posts
+});
+```
+</Frame>
 
 Once the next page is available, the same `listen` block gets triggered and you can access the collection as shown above. If you want to shrink the collection to the original first page, you can do so by calling `reset()` method on the same collection.
 
 One typical usage of LiveCollection is in `ListView`. Below is an example of fetching a collection and updating its state in a `Widget`.
 
-{% embed url="https://gist.github.com/amythee/c244b0dda92d25a264f820884d8fc667" %}
+<Frame>
+```dart
+class _PostListState extends State<PostList> {
+  late StreamSubscription<List<AmityPost>> _subscription;
+  List<AmityPost> _posts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final collection = postRepository.getPosts();
+    _subscription = collection.asStream().listen((posts) {
+      setState(() {
+        _posts = posts;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: _posts.length,
+      itemBuilder: (context, index) {
+        return PostItem(post: _posts[index]);
+      },
+    );
+  }
+}
+```
+</Frame>

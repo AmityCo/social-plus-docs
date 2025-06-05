@@ -20,9 +20,9 @@ New data gets automatically collected everytime when there is an updation and us
 
 Live Collection is available for the following functionalities in user/community feeds via [pagingData](broken-reference) APIs:
 
-{% hint style="info" %}
+<Info>
 For any specific errors that's handled in PagingData please visit the web page below  to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
-{% endhint %}
+</Info>
 
 * Post Collection
 * Comment Collection
@@ -49,13 +49,13 @@ In the RxJava3 framework we have these different types of objects that can be ob
 
 1. **Flowable** - emits a stream of elements
    * `doOnNext`
-   * `doOnError`\
+   * `doOnError`
 
 2. **Single** - emits exactly one element
    * `doOnSuccess`
-   * `doOnError`\
+   * `doOnError`
 
-3. **Completable** - emits a “complete” event, without emitting any data type, just a success/failure
+3. **Completable** - emits a "complete" event, without emitting any data type, just a success/failure
    * `doOnComplete`
    * `doOnError`
 
@@ -93,7 +93,7 @@ Amity Android SDK seamlessly integrates with Jetpack Compose UI, allowing you to
 
 ### Flow of PagingData in Compose
 
-In Jetpack Compose, integrating data from a \`Flow\<PagingData\<T>>\` source into your UI is made easy through the \`collectAsLazyPagingItems()\` function. This function allows you to seamlessly paginate and display items within your Composable functions.
+In Jetpack Compose, integrating data from a `Flow<PagingData<T>>` source into your UI is made easy through the `collectAsLazyPagingItems()` function. This function allows you to seamlessly paginate and display items within your Composable functions.
 
 To start using it, add compose paging dependency in your project app level `build.gradle` file.
 

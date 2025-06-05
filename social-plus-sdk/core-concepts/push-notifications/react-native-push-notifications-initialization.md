@@ -21,9 +21,10 @@ Refer to the official documentation to set up and install Firebase and Firebase 
 4. Upload the FCM service account JSON file.
 
 <div align="left">
-
-<figure><img src="https://docs.amity.co/~gitbook/image?url=https%3A%2F%2F2352509137-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-MX0mOAVWkotGme0iRzu%252Fuploads%252FyQx9uOJgaMZX0x56hHEd%252FScreenshot%25202567-06-10%2520at%252009.43.29.png%3Falt%3Dmedia%26token%3D76e2a909-cfea-430c-bf47-71639c4ee16c&#x26;width=300&#x26;dpr=4&#x26;quality=100&#x26;sign=26c549f&#x26;sv=1" alt="" width="375"><figcaption></figcaption></figure>
-
+<figure>
+<img src="https://docs.amity.co/~gitbook/image?url=https%3A%2F%2F2352509137-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-MX0mOAVWkotGme0iRzu%252Fuploads%252FyQx9uOJgaMZX0x56hHEd%252FScreenshot%25202567-06-10%2520at%252009.43.29.png%3Falt%3Dmedia%26token%3D76e2a909-cfea-430c-bf47-71639c4ee16c&#x26;width=300&#x26;dpr=4&#x26;quality=100&#x26;sign=26c549f&#x26;sv=1" alt="" width="375" />
+<figcaption></figcaption>
+</figure>
 </div>
 
 #### **iOS**
@@ -34,9 +35,10 @@ Refer to the official documentation to set up and install Firebase and Firebase 
 4. Upload the `.p12` file.
 
 <div align="left">
-
-<figure><img src="https://docs.amity.co/~gitbook/image?url=https%3A%2F%2F2352509137-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-MX0mOAVWkotGme0iRzu%252Fuploads%252FwLgHn5gldylHoWkyxKqZ%252FScreenshot%25202567-06-10%2520at%252010.08.40.png%3Falt%3Dmedia%26token%3De302837e-a6d6-433a-a191-fe1038fa9cd2&#x26;width=300&#x26;dpr=4&#x26;quality=100&#x26;sign=2f4752fd&#x26;sv=1" alt="" width="375"><figcaption></figcaption></figure>
-
+<figure>
+<img src="https://docs.amity.co/~gitbook/image?url=https%3A%2F%2F2352509137-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-MX0mOAVWkotGme0iRzu%252Fuploads%252FwLgHn5gldylHoWkyxKqZ%252FScreenshot%25202567-06-10%2520at%252010.08.40.png%3Falt%3Dmedia%26token%3De302837e-a6d6-433a-a191-fe1038fa9cd2&#x26;width=300&#x26;dpr=4&#x26;quality=100&#x26;sign=2f4752fd&#x26;sv=1" alt="" width="375" />
+<figcaption></figcaption>
+</figure>
 </div>
 
 ### 3. Passing FCM Token or APN Token to UIKit
@@ -92,6 +94,4 @@ const App = () => {
 };
 
 export default App;
-
 ```
-

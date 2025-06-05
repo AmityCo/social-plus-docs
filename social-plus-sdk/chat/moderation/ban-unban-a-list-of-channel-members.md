@@ -16,31 +16,34 @@ As well as the banning and unbanning of users, admins also have the ability to g
 
 The globally banned user can not access Amity's network again until they have been globally unbanned.
 
-{% hint style="info" %}
+<Info>
 When a user is banned, it can take up to 30 seconds before the user is disconnected from the network.
-{% endhint %}
+</Info>
 
 ## Ban Users
 
 Banning members is a more heavy-handed moderation method. When a user is banned, all its messages are retroactively deleted, it will be removed from the channel, and it will not be allowed to join the channel again until it is explicitly unbanned.
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 ```swift
-
 let moderation = AmityChannelModeration(client: <amityclient>, channel: <channel-id>)
 ​
 moderation.banMembers(["user1"]) { success, errror in
   ...
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/5c7e8f1c65dee31e24cca663740737af" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```java
+amityChannelRepository.banMembers("channelId", Collections.singletonList("userId")).subscribe();
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 repository.banMembers({
   userIds: ['user1'],
@@ -48,35 +51,54 @@ repository.banMembers({
   ...
 });
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/9f1e9bbcb7126ff0330cec53e7650c89" %}
+<CodeGroup>
+```typescript
+channelRepository.banMembers("channelId", ["userId"]);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/1db93c530a89f5ccc3caac1933ed4b96" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+channelRepository.banMembers({
+  channelId: "channelId",
+  userIds: ["userId"]
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/7991a1742a26056c1938c2a9b5b88cc8#file-amitychannelmemberban-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+AmityChannelMember().ban(channelId: channelId, userId: userId);
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ## Unban Users
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/3b8110a47daff61d673cc33da6edb9a5" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```java
+amityChannelRepository.unbanMembers("channelId", Collections.singletonList("userId")).subscribe();
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 repository.unbanMembers({
   userIds: ['user1'],
@@ -84,23 +106,38 @@ repository.unbanMembers({
   ...
 });
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/79ada50acaf5898aae0871c7a812f314" %}
+<CodeGroup>
+```typescript
+channelRepository.unbanMembers("channelId", ["userId"]);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/2b7988270a6e1563f48a92a07c44d2fe" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+channelRepository.unbanMembers({
+  channelId: "channelId",
+  userIds: ["userId"]
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d342f7489dd8214e8195fbba79a0718e#file-amitychannelmemberunban-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+AmityChannelMember().unban(channelId: channelId, userId: userId);
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
-{% hint style="info" %}
+<Info>
 This feature does not work with `Broadcast` and `Conversation` channels. Calling `banMembers()` or `unbanMembers()` on these channels will result in an error.
-{% endhint %}
+</Info>

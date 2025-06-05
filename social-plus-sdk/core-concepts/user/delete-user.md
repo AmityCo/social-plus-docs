@@ -1,12 +1,12 @@
 # Delete User
 
-Delete User API is called to delete a user from the system. The display name of the deleted user is replaced with “Deleted User”. This API can be called only by admin users.
+Delete User API is called to delete a user from the system. The display name of the deleted user is replaced with "Deleted User". This API can be called only by admin users.
 
-{% hint style="info" %}
+<Info>
 Please note that this action is a **hard delete**, and **all deleted data will be lost and cannot be recovered**.
-{% endhint %}
+</Info>
 
-When deleting a user, you can specify that the user should be marked as deleted but the user’s data should remain unchanged, or you can specify that all personal data associated with the user should be deleted:
+When deleting a user, you can specify that the user should be marked as deleted but the user's data should remain unchanged, or you can specify that all personal data associated with the user should be deleted:
 
 * if the `deleteAll` parameter is set to true, and all personal data (i.e. profile, photos, images, and files), message channels, posts, and comments of the user will be deleted.
 * the `markMessageDeleted` parameter, when set to true, deletes all message channels and messages that the user has created
@@ -23,7 +23,7 @@ Once a user has been deleted from the system, the account cannot be reactivated 
 
 The user's system ID will still be stored in the database, but to protect the user's identity, the account's username will be replaced with the text "Deleted User". All deleted accounts will be marked as "Deleted Accounts".
 
-#### **All conversation channels created by the user will be deleted.**&#x20;
+#### **All conversation channels created by the user will be deleted**
 
 If the user account is deleted, all conversation channels created by that user will be deleted immediately and no other user will be able to access those channels afterwards.
 
@@ -31,7 +31,7 @@ If the user account is deleted, all conversation channels created by that user w
 
 After the account is deleted, all messages for all channels and all attachments created by the user are deleted and cannot be restored.
 
-#### **Channel member count will be updated**&#x20;
+#### **Channel member count will be updated**
 
 When a user is deleted, the channel members are updated in all channels where the user was a member, so that only active users are counted in the channels.
 
@@ -43,7 +43,7 @@ All the user's data, including profile, photos, videos, images, text, audio, vid
 
 All posts created/shared by the deleted user will be deleted and all comments added by the deleted user will also be removed from all posts. No comments or sub-posts will be available after the user deletes the account.
 
-#### **Reaction and comment count will be updated**&#x20;
+#### **Reaction and comment count will be updated**
 
 All reactions and comments posted by the deleted user are detected and updated in the posts.
 
@@ -65,38 +65,32 @@ The status of the user's account is marked as "deleted" when queried and the use
 | ------ | -------------- |
 | UserID | User public id |
 
-The API response will be different based on the request and records match. The request may have a successful response, or it may have a bad request error, and it may respond as a User not found. The responses to API calls are mentioned below.&#x20;
+The API response will be different based on the request and records match. The request may have a successful response, or it may have a bad request error, and it may respond as a User not found. The responses to API calls are mentioned below.
 
 #### Success
 
-{% hint style="success" %}
+<Note type="success">
 {
-
 "success":true
-
 }
-{% endhint %}
+</Note>
 
 #### Bad Request error
 
-{% hint style="warning" %}
-{ "status": "error",&#x20;
-
-"code": 400000,&#x20;
-
-"message": "User is already deleted"&#x20;
-
+<Note type="warning">
+{
+"status": "error",
+"code": 400000,
+"message": "User is already deleted"
 }
-{% endhint %}
+</Note>
 
 #### User Not Found error
 
-{% hint style="warning" %}
-{ "status": "error",&#x20;
-
-"code": 400400,&#x20;
-
-"message": "User Not Found."&#x20;
-
+<Note type="warning">
+{
+"status": "error",
+"code": 400400,
+"message": "User Not Found."
 }
-{% endhint %}
+</Note>

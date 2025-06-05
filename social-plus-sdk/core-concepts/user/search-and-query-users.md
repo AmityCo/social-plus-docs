@@ -14,42 +14,61 @@ When providing a search keyword, the API performs an exact-match lookup for spec
 * For instance, if you search for **"Äli"**, only users whose display name contains the **"Äli"** characters (e.g., **"Älise"**) will be returned.
 * Conversely, searching for **"Alice"** will not return **"Älice"**.
 
-{% hint style="info" %}
+<Note>
 - The search keyword must be **at least 3 characters long**.
 - Deleted users are excluded from the results
-{% endhint %}
+</Note>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/c2fa08ba1c32a8b990f61ddd2ea57028" %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+AmityUserRepository().searchUser(byDisplayName: "Brian").query()
+```
+</CodeGroup>
 Search users by display name
-{% endembed %}
-{% endtab %}
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/e6efe625dd44688833a0e78dca54ecea" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val userRepository = AmityUserRepository(client)
+val userCollection = userRepository.searchUserByDisplayName("Brian").build().query()
+```
+</CodeGroup>
 
 The code above will provide you with the list of users which matches with display name "Brian".
-{% endtab %}
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 userRepo.searchUserByDisplayName('Test User 1')
 ```
 
 The above example searches for all users whose display names _start with_ "Test User 1".&#x20;
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 The `queryUsers` provides a way to search for users by their display name.
 
-{% embed url="https://gist.github.com/4e64739fbc3013367170ba7d2f33b74e" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const { data: users } = await client.queryUsers({
+  displayName: 'Test User 1'
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/3ee3dab5280389461b9417ce8a7734d6#file-amityusersearchbydisplayname-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final AmityUserRepository userRepository = AmityUserRepository();
+PagingController<String, AmityUser> userCollection = userRepository.searchUserByDisplayName("Brian").getPagingController();
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Query Users
 
@@ -58,22 +77,30 @@ Query for users to receive a collection of `AmityUser` based on a single paramet
 With the `displayName` sorting option, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as **Ä** are treated as variants of **A**. For example, a sorted list might appear as:\
 `adam, Älex, Alice, Arthur, charlie, Kristen`.
 
-{% hint style="info" %}
+<Note>
 Deleted users are excluded from the results
-{% endhint %}
+</Note>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/b95e6bbe016d7a3d7e1666afe71cd96d" %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+AmityUserRepository().getUsers().query()
+```
+</CodeGroup>
 Query users
-{% endembed %}
-{% endtab %}
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/d07130ddf29326ce4f160ac361a3984b" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val userRepository = AmityUserRepository(client)
+val userCollection = userRepository.getUsers().build().query()
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```typescript
 const liveUserCollection = UserRepository.queryUsers({
     keyword?: string, 
@@ -86,23 +113,38 @@ const liveUserCollection = UserRepository.queryUsers({
 // firstCreated: sort: createdAt asc 
 // displayName: sort: alphanumerical asc
 
-liveUserCollection.on(“dataUpdated”, models => {
+liveUserCollection.on("dataUpdated", models => {
   models.map(model => console.log(model.userId))
 })
 ```
+</Tab>
 
-###
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/56048b7aafbce478752770202e5d6a24" %}
+<Tab title="TypeScript">
+<CodeGroup>
+```typescript
+const { data: users } = await client.queryUsers();
+```
+</CodeGroup>
 
 If you wish to observe for changes to a collection of users, you can use `liveUsers`
 
-{% embed url="https://gist.github.com/bfbb6d5f0408dbb9cadfa8be0fa9c3aa" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const subscription = client.liveUsers({
+  sortBy: 'displayName'
+}).subscribe(users => {
+  console.log('Users updated:', users);
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/ee07f318a29fc7db6f103487f5f32b78#file-amityusergetusers-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final AmityUserRepository userRepository = AmityUserRepository();
+PagingController<String, AmityUser> userCollection = userRepository.getUsers().getPagingController();
+```
+</CodeGroup>
+</Tab>
+</Tabs>

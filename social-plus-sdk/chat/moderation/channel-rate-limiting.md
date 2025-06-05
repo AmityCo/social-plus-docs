@@ -6,22 +6,21 @@ This method is useful when there is a large number of messages going through the
 >
 > Note that the SDK permanently stores all messages it receives in the system **before** the rate limit comes into effect: in the case of a large spike of incoming messages, even if a message did not get published to a user in real-time, that user can still scroll up to see message history and see that past message.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% code overflow="wrap" %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
 ```swift
 repository.rateLimitPeriod(600, rateLimit: 5, rateLimitWindow: 60) { success, error in
   ...
 }
 ```
-{% endcode %}
-{% endtab %}
-
-{% tab title="Android" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-
-{% tab title="JavaScript" %}
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+  <Tab title="JavaScript">
+    <CodeGroup>
 ```javascript
 repository.setRateLimit({
   period: 600,
@@ -29,18 +28,17 @@ repository.setRateLimit({
   rateLimitWindow: 60,
 }).catch(error => {
   ...
-});JavaScript
+});
 ```
-{% endtab %}
-
-{% tab title="TypeScript" %}
-Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
-
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
+    </CodeGroup>
+  </Tab>
+  <Tab title="TypeScript">
+    Supported ✅ (please wait while we prepare a real example!)
+  </Tab>
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>
 
 The above method enables a rate limit of 5 messages every 60 seconds: once there are more than 5 messages sent, from any user, within 60 seconds, those messages will be queued on the server and not published to other channel members until 60 seconds have passed. The rate limit will last as long as the period specified in the method call: in the example above the rate limit will be active for 10 minutes (600 seconds).
 
@@ -48,32 +46,32 @@ If you would like to have a permanent rate limit, call the method above with a p
 
 To disable the rate limit, simply call `removeRateLimitWithCompletion:`
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
 ```swift
 repository.removeRateLimit { success, error in
   ...
 }
 ```
-{% endtab %}
-
-{% tab title="Android" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-
-{% tab title="JavaScript" %}
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+  <Tab title="JavaScript">
+    <CodeGroup>
 ```javascript
 repository.removeRateLimit().catch(error => {
   ...
 });
 ```
-{% endtab %}
-
-{% tab title="TypeScript" %}
-Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
-
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
+    </CodeGroup>
+  </Tab>
+  <Tab title="TypeScript">
+    Supported ✅ (please wait while we prepare a real example!)
+  </Tab>
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>

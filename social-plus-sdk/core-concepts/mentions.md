@@ -1,7 +1,5 @@
 # Mentions
 
-
-
 <figure><img src="../../.gitbook/assets/image-removebg-preview (2).png" alt=""><figcaption></figcaption></figure>
 
 Mentions allow users to tag other users in messages, comments, and posts. It's a powerful tool for fostering engagement and collaboration within your social application. With mentions, users can easily direct messages to specific individuals or groups and can alert them to new content or important updates. In the SDK, mentions can be implemented in a range of ways, depending on your application's needs and user experience.  Here are the models that support mentions creation and highlighting:
@@ -10,7 +8,7 @@ Mentions allow users to tag other users in messages, comments, and posts. It's a
 * [mention-in-comment.md](../social/comments/mention-in-comment.md "mention")
 * [mention-in-messages.md](../chat/messaging/mention-in-messages.md "mention")
 
-you have the flexibility to define your own mention data structure for representing mentions. This allows you to highlight the mentioned text in a way that best suits the needs of your application and users. The most important aspect of mentions is to notify users when they have been mentioned, regardless of the specific data structure used. This ensures that users can quickly and easily engage with the content that is most relevant to them.
+You have the flexibility to define your own mention data structure for representing mentions. This allows you to highlight the mentioned text in a way that best suits the needs of your application and users. The most important aspect of mentions is to notify users when they have been mentioned, regardless of the specific data structure used. This ensures that users can quickly and easily engage with the content that is most relevant to them.
 
 ## Mention Users
 
@@ -31,41 +29,36 @@ To represent mentions using our structure, you will need to utilize the AmityMen
 * `userId` - userId of the user being mentioned. If the type of the mention is channel, then `userId` is undefined.
 * `length` - length of the mention
 
-{% hint style="info" %}
-The length property doesn’t include the “@“ mention sign. For example, “@all” mention’s length is 3.
-{% endhint %}
+<Info>
+The length property doesn't include the "@" mention sign. For example, "@all" mention's length is 3.
+</Info>
 
 #### Mention Users Example
 
 Below is an example to create a comment with mentions by using our default mention metadata structure:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/957b35145e49d9645b041c8ee53e53bc#file-create_comment_with_mention-swift" %}
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    <Frame url="https://gist.github.com/amythee/957b35145e49d9645b041c8ee53e53bc#file-create_comment_with_mention-swift" />
+  </Tab>
+  <Tab title="Android">
+    <Frame url="https://gist.github.com/amythee/1c9f2f7a2bc7dd8ddc742c6ef8fbee35#file-amitycommentmentioncreation-kt" />
+  </Tab>
+  <Tab title="JavaScript">
+    <Frame url="https://gist.github.com/amythee/04e63c4ad13ee0dfdf174c7157ac8d5d#file-createcomment-js" />
+    <Frame url="https://gist.github.com/4dd325324015b0e8b2b7fc4338054616" />
+  </Tab>
+  <Tab title="TypeScript">
+    <Frame url="https://gist.github.com/4dd325324015b0e8b2b7fc4338054616" />
+  </Tab>
+  <Tab title="Flutter">
+    <Frame url="https://gist.github.com/amythee/8ba20704ecf3a127497a54c4db57a3e7" />
+  </Tab>
+</Tabs>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/1c9f2f7a2bc7dd8ddc742c6ef8fbee35#file-amitycommentmentioncreation-kt" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/04e63c4ad13ee0dfdf174c7157ac8d5d#file-createcomment-js" %}
-
-{% embed url="https://gist.github.com/4dd325324015b0e8b2b7fc4338054616" %}
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/4dd325324015b0e8b2b7fc4338054616" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/8ba20704ecf3a127497a54c4db57a3e7" %}
-{% endtab %}
-{% endtabs %}
-
-{% hint style="info" %}
+<Info>
 We do not allow banned users to be mentioned, as we take a firm stance against harmful or inappropriate content in social applications. However, admins may still be able to access the names of banned users through the search users function. Once a message is sent, however, banned users' information will be excluded from the payload. Banned users will also not be notified or receive any push notifications if they are mentioned, further ensuring that they do not engage with the content.
-{% endhint %}
+</Info>
 
 ## Render Mentions
 
@@ -76,31 +69,27 @@ As we mentioned we provided the flexibility for you to define your own mention o
 
 Below is an example to render mentions in a comment by using our default mention data structure:
 
-{% tabs %}
-{% tab title="iOS" %}
-The following example demonstrates how `AmityMentionMapper` and `AmityMention` works in a comment. The function `getAttributedString` uses `AmityMentionMapper` to extract `AmityMention` from metadata, and return the highlighted text.
+<Tabs>
+  <Tab title="iOS">
+    The following example demonstrates how `AmityMentionMapper` and `AmityMention` works in a comment. The function `getAttributedString` uses `AmityMentionMapper` to extract `AmityMention` from metadata, and return the highlighted text.
 
-{% embed url="https://gist.github.com/amythee/9df177f623c122e3abd3093dc49c1747#file-get_highlighted_text_from_comment-swift" %}
-{% endtab %}
+    <Frame url="https://gist.github.com/amythee/9df177f623c122e3abd3093dc49c1747#file-get_highlighted_text_from_comment-swift" />
+  </Tab>
+  <Tab title="Android">
+    <Frame url="https://gist.github.com/amythee/9f6fdf1d39d0d6ce7b909e278490ed12#file-amitycommentmentionrender-kt" />
+  </Tab>
+  <Tab title="JavaScript">
+    There is no restrictions over how you'll handle the highlighting the mentions in your UI. At Amity, we pass this metadata property inside `CommentRepository.createTextcomment` and `CommentRepository.editTextComment` along with other parameters to conveniently highlight across the platforms.
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/9f6fdf1d39d0d6ce7b909e278490ed12#file-amitycommentmentionrender-kt" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-There is no restrictions over how you'll handle the highlighting the mentions in your UI. At Amity, we pass this metadata property inside `CommentRepository.createTextcomment` and `CommentRepository.editTextComment` along with other parameters to conveniently highlight across the platforms.
-
-{% embed url="https://gist.github.com/amythee/81593be29f9baa66b9667f3ea743ce40#file-createcomment-js" %}
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/c71937825a384c18915e4ac9a02c2f37" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/f4e91a73045d2278554ba9e8daf27dfc" %}
-{% endtab %}
-{% endtabs %}
+    <Frame url="https://gist.github.com/amythee/81593be29f9baa66b9667f3ea743ce40#file-createcomment-js" />
+  </Tab>
+  <Tab title="TypeScript">
+    <Frame url="https://gist.github.com/amythee/c71937825a384c18915e4ac9a02c2f37" />
+  </Tab>
+  <Tab title="Flutter">
+    <Frame url="https://gist.github.com/amythee/f4e91a73045d2278554ba9e8daf27dfc" />
+  </Tab>
+</Tabs>
 
 ## Mention Notifications
 

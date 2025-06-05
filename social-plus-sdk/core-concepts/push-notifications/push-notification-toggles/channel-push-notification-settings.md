@@ -4,38 +4,98 @@ The SDK offers push notification settings per channel, allowing users to configu
 
 ## Get Channel Push Notification Settings
 
-The SDK provides "`getSettings()`" function within Channel Notification to check whether push notification is enabled on the channel.
+The SDK provides `getSettings()` function within Channel Notification to check whether push notification is enabled on the channel.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/ac68bef77f0656e95337e518c07226d5" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/69d0087edb2fe11c6f5ea44b70c54645" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift
+      channel.notifications.getSettings { result in
+          switch result {
+          case .success(let enabled):
+              print("Push notification enabled: \(enabled)")
+          case .failure(let error):
+              print("Error: \(error)")
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin
+      channel.notifications.getSettings(
+          onSuccess = { enabled ->
+              println("Push notification enabled: $enabled")
+          },
+          onError = { error ->
+              println("Error: $error")
+          }
+      )
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>
 
 ## Update Channel Push Notification Settings
 
-The SDK provides "`enable()`"  and "`disable()`" functions where user can choose whether to enable or disable push notifications coming from the channel.
+The SDK provides `enable()` and `disable()` functions where user can choose whether to enable or disable push notifications coming from the channel.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/72c0d5fbddf44cc21595eddcefeaf558" %}
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift
+      // Enable push notifications
+      channel.notifications.enable { result in
+          switch result {
+          case .success:
+              print("Successfully enabled push notifications")
+          case .failure(let error):
+              print("Error: \(error)")
+          }
+      }
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/93d10225259b81a52515abf6fc2288bc" %}
-{% endtab %}
+      // Disable push notifications
+      channel.notifications.disable { result in
+          switch result {
+          case .success:
+              print("Successfully disabled push notifications")
+          case .failure(let error):
+              print("Error: \(error)")
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin
+      // Enable push notifications
+      channel.notifications.enable(
+          onSuccess = {
+              println("Successfully enabled push notifications")
+          },
+          onError = { error ->
+              println("Error: $error")
+          }
+      )
 
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
-
-##
+      // Disable push notifications
+      channel.notifications.disable(
+          onSuccess = {
+              println("Successfully disabled push notifications")
+          },
+          onError = { error ->
+              println("Error: $error")
+          }
+      )
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>

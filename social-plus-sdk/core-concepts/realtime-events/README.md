@@ -11,7 +11,7 @@ Currently, the SDK supports real-time event subscriptions for the following mode
 * Follow/Unfollow
 * Subchannel
 
-## <mark style="color:blue;">Usage</mark>
+## Usage
 
 To subscribe or unsubscribe from the relevant real-time events, you need to create a `Subscription Topic`. Upon constructing the subscription topic, the SDK exposes methods for subscribing and unsubscribing, allowing you to listen to specific events without needing to create a new topic.
 
@@ -28,16 +28,20 @@ Once you've successfully established a subscription using the methods outlined p
 
 Here's an example of subscribing to real-time events from a subscription topic and observing changes via a live object. For available topics please visit [social-realtime-events.md](../../core-concepts/realtime-events/social-realtime-events.md "mention") and [chat-realtime-events.md](../../core-concepts/realtime-events/chat-realtime-events.md "mention").
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/cb275664de317fdbc3dfd82914dc1c30#file-subscribe_and_observe_changes-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<Frame>
+<img src="https://gist.github.com/amythee/cb275664de317fdbc3dfd82914dc1c30#file-subscribe_and_observe_changes-swift" />
+</Frame>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/74144223bbf44278c22db9d90548f5c9#file-amityrtepostsubscription-kt" %}
-{% endtab %}
+<Tab title="Android">
+<Frame>
+<img src="https://gist.github.com/amythee/74144223bbf44278c22db9d90548f5c9#file-amityrtepostsubscription-kt" />
+</Frame>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 In JavaScript SDK, After subscribing to data models from liveObjects, the changes from the realtime event will also be reflected on the `dataUpdated` event of the same liveObject.
 
 ```javascript
@@ -61,12 +65,16 @@ React.useEffect(() => {
   }
 }, [community.communityId]);
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/9f314ceaf98aaf75ca7b0ce055a03e48#file-watchchangesusingobserver-ts" %}
+<Tab title="TypeScript">
+<Frame>
+<img src="https://gist.github.com/amythee/9f314ceaf98aaf75ca7b0ce055a03e48#file-watchchangesusingobserver-ts" />
+</Frame>
 
-{% embed url="https://gist.github.com/amythee/5d64a9d0f8e3519abd4d7f33d281cfba#file-watchchangesusingobserver-ts" %}
+<Frame>
+<img src="https://gist.github.com/amythee/5d64a9d0f8e3519abd4d7f33d281cfba#file-watchchangesusingobserver-ts" />
+</Frame>
 
 Available event handlers:
 
@@ -103,8 +111,8 @@ Available event handlers:
 * onFollowRequestDeclined
 * onFollowerDeleted
 * onFollowInfoUpdated
-{% endtab %}
-{% endtabs %}
+</Tab>
+</Tabs>
 
 ## Unsubscribe Events
 
@@ -114,18 +122,22 @@ Each topic subscription in the SDK provides an `unsubscribe` method. For unsubsc
 
 If the `logout()` method is invoked at any point, the current session will be terminated and all existing subscriptions will be automatically removed. This functionality assists in efficiently managing active subscriptions and preventing unwanted data consumption.
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 Use `unsubscribeTopic(...)` method from `AmityTopicSubscription` class or use `unsubscribeEvent(:_)` method from the model itself
 
-{% embed url="https://gist.github.com/amythee/fa158b8cc7962d0c07a2186bc924835d#file-unsubscribe_a_topic-swift" %}
-{% endtab %}
+<Frame>
+<img src="https://gist.github.com/amythee/fa158b8cc7962d0c07a2186bc924835d#file-unsubscribe_a_topic-swift" />
+</Frame>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/bba01863d92b18f45097cba44306b09d#file-amityrteunsubscription-kt" %}
-{% endtab %}
+<Tab title="Android">
+<Frame>
+<img src="https://gist.github.com/amythee/bba01863d92b18f45097cba44306b09d#file-amityrteunsubscription-kt" />
+</Frame>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 import { 
 	getCommunityTopic,
@@ -143,16 +155,16 @@ EventSubscriberRepository.subscribe(topic, (err) => {
 // Unsubscribe
 EventSubscriberRepository.unsubscribe(topic);
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
-{% endtabs %}
+</Tab>
+</Tabs>
 
 By adopting these practices, you can efficiently manage the subscription limit and maintain a responsive and performant application.
 
-## <mark style="color:blue;">Subscription Topics limit</mark>
+## Subscription Topics limit
 
 The SDK imposes a maximum limit of 20 for the number of topics that can be subscribed to simultaneously. Developers are advised to manage their list of subscriptions and unsubscribe as necessary.
 

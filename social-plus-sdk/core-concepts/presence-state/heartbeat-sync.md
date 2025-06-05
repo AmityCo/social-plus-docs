@@ -8,31 +8,44 @@ The SDK automatically manages the periodic syncing of this heartbeat once the `s
 
 Invoke the `startHeartbeat` method in `client.presence` to initiate the heartbeat synchronization process. This method automatically checks the user's presence settings within the network, and if enabled, begins to sync the heartbeat at specified intervals defined in the SDK. The synchronization process is handled automatically, streamlining the user's interaction with the system.
 
-{% hint style="info" %}
+<Info>
 The heartbeat sync interval is determined automatically by SDK. Normally you can expect the heartbeat to be synced every 20-30 seconds.
-{% endhint %}
+</Info>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/f8b827d21dc61ad06c334fd2d0df615b" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/1d5a051db2fafb7db00889d12c4fe035" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+```swift
+client.presence.startHeartbeat()
+```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+```kotlin
+client.presence.startHeartbeat()
+```
+    </CodeGroup>
+  </Tab>
+</Tabs>
 
 ## Stop Heartbeat
 
 Utilize the `stopHeartbeat()` method within `client.presence` to cease the heartbeat synchronization process. To restart the sync, you must invoke the `startHeartbeat()` method again.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/29d1fb992dcc40d32c3feef458690f49" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/0cc98b67d7c16ce27a826422ba74c408" %}
-{% endtab %}
-{% endtabs %}
-
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+```swift
+client.presence.stopHeartbeat()
+```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+```kotlin
+client.presence.stopHeartbeat()
+```
+    </CodeGroup>
+  </Tab>
+</Tabs>

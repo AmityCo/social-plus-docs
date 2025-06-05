@@ -6,17 +6,17 @@ description: >-
 
 # Comments
 
-Comment refers to a user-generated response or reaction to a specific piece of content, such as a post or content. Comments enable users to engage in conversations and express their thoughts, opinions, and emotions about the content they see. They provide a way for users to interact with each other and create a sense of community around the content. Commenting is an essential feature for social platforms as it encourages user engagement, helps create a more immersive experience for users, and can be used to generate insights into user behavior and preferences. In a Social Plus SDK product, the SDK provides the necessary tools and functionality for developers to integrate commenting into their apps or websites.&#x20;
+Comment refers to a user-generated response or reaction to a specific piece of content, such as a post or content. Comments enable users to engage in conversations and express their thoughts, opinions, and emotions about the content they see. They provide a way for users to interact with each other and create a sense of community around the content. Commenting is an essential feature for social platforms as it encourages user engagement, helps create a more immersive experience for users, and can be used to generate insights into user behavior and preferences. In a Social Plus SDK product, the SDK provides the necessary tools and functionality for developers to integrate commenting into their apps or websites.
 
 Furthermore, a comment supports real-time events and Live Object features, for more information please refer to [live-objects-collections](../../core-concepts/live-objects-collections/ "mention") and [realtime-events](../../core-concepts/realtime-events/ "mention").
 
-### Comment Reference Type <a href="#create-comment" id="create-comment"></a>
+### Comment Reference Type
 
 Incorporating comment reference types within your app enhances user engagement and promotes interaction, as it allows users to comment on both regular posts and content-specific posts. By differentiating between these two comment types, your app can provide a more organized and contextual commenting experience, catering to the diverse needs of your users and the content they interact with. Comment's `referenceType` can be:
 
 1. **Post type comment:** A post type comment is designed for regular posts, such as text updates, photos, or videos shared by users. These comments are associated with the regular post and are displayed beneath it, facilitating conversation and interaction.
 2. **Story type comment:** Similar to post-type comments, these comments are associated with each story, driving user conversation.
-3. **Content type comment:** A content type comment, on the other hand, is intended for content-specific posts, such as articles, or other specialized content.&#x20;
+3. **Content type comment:** A content type comment, on the other hand, is intended for content-specific posts, such as articles, or other specialized content.
 
 ### Comment Repository
 

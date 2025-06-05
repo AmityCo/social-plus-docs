@@ -19,16 +19,16 @@ You can add reactions to a given [reference](../../social/reactions/#create-comm
 * `referenceId` - ID of the message.
 * `reactionName` - the name of the reaction that you will remove. Reaction name is case sensitive, i.e. "like" & "Like" are two different reactions.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/1e20f8c7c11e8bc7079907f0eaed0a52" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<Embed url="https://gist.github.com/amythee/1e20f8c7c11e8bc7079907f0eaed0a52" />
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/24cd18296df656d9a73d73bb5b0d6b98" %}
-{% endtab %}
+<Tab title="Android">
+<Embed url="https://gist.github.com/amythee/24cd18296df656d9a73d73bb5b0d6b98" />
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 try {
   const isAdded = await MessageRepository.addReaction({
@@ -43,24 +43,22 @@ try {
   console.error('can not add reaction', error);
 }
 ```
+</Tab>
 
-###
-{% endtab %}
-
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/05034754d42afde2deca9aceb465f17c#file-addreaction-ts" %}
+<Embed url="https://gist.github.com/amythee/05034754d42afde2deca9aceb465f17c#file-addreaction-ts" />
 
 Beta
 
-{% embed url="https://gist.github.com/5022a25d98f47ad9a6ae98caf94e4254" %}
-{% endtab %}
+<Embed url="https://gist.github.com/5022a25d98f47ad9a6ae98caf94e4254" />
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d8881198e9354aabc189143cb84e4b28#file-amityreactionmessageadd-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<Embed url="https://gist.github.com/amythee/d8881198e9354aabc189143cb84e4b28#file-amityreactionmessageadd-dart" />
+</Tab>
+</Tabs>
 
 ## Remove Reaction
 
@@ -71,16 +69,16 @@ You can remove a reaction from a reference by calling `removeReaction`.&#x20;
 * `reactionName` - the name of the reaction that you will remove. Reaction name is case sensitive, i.e. "like" & "Like" are two different reactions.
 * `referenceId` - ID of the message.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/26e1ba1e0c3eed4d60aa4745e8ebda70" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<Embed url="https://gist.github.com/amythee/26e1ba1e0c3eed4d60aa4745e8ebda70" />
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/05fc334828d93aec40d44f08025ce62b" %}
-{% endtab %}
+<Tab title="Android">
+<Embed url="https://gist.github.com/amythee/05fc334828d93aec40d44f08025ce62b" />
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 try {
   const isRemoved = await MessageRepository.removeReaction({
@@ -95,22 +93,22 @@ try {
   console.error('can not remove reaction', error);
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/d45eddce90548d565da157666aa12f85#file-removereaction-ts" %}
+<Embed url="https://gist.github.com/amythee/d45eddce90548d565da157666aa12f85#file-removereaction-ts" />
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/1afa3631156d3a1b9e03a0e078143c8a" %}
-{% endtab %}
+<Embed url="https://gist.github.com/1afa3631156d3a1b9e03a0e078143c8a" />
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/33be722beb06c9fb68af44c656e2aec1#file-amityreactionmessageremove-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<Embed url="https://gist.github.com/amythee/33be722beb06c9fb68af44c656e2aec1#file-amityreactionmessageremove-dart" />
+</Tab>
+</Tabs>
 
 ## Reaction Query
 
@@ -120,26 +118,26 @@ Using this method, you can fetch detailed information about a particular reactio
 
 To query `getReactions` you'll need to simply provide `referenceType` and `referenceId` to query specific types of reactions. For further information regarding reaction reference types, please see - [#create-comment](../../social/reactions/#create-comment "mention").
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/5c1d82fe6207b2c8e17483423e33e1fa" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<Embed url="https://gist.github.com/amythee/5c1d82fe6207b2c8e17483423e33e1fa" />
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/9c9683cf7e37f569cec13fe17e1d2592" %}
-{% endtab %}
+<Tab title="Android">
+<Embed url="https://gist.github.com/amythee/9c9683cf7e37f569cec13fe17e1d2592" />
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6 and Beta(v0.0.1)
 
-{% embed url="https://gist.github.com/amythee/78ed3ecb141585261a9347a45b611a34#file-queryreactions-ts" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/78ed3ecb141585261a9347a45b611a34#file-queryreactions-ts" />
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d8881198e9354aabc189143cb84e4b28#file-amityreactionmessageadd-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<Embed url="https://gist.github.com/amythee/d8881198e9354aabc189143cb84e4b28#file-amityreactionmessageadd-dart" />
+</Tab>
+</Tabs>

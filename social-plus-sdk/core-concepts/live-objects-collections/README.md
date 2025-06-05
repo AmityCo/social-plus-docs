@@ -9,9 +9,9 @@ There are two main sources that can make changes to the object and collection:
 
 Refer to the platform-specific subpages in this section for an in-depth explanation of how your SDK handles live objects and live collections.
 
-{% hint style="info" %}
+<Info>
 By subscribing to a specific topic in the [Real-time event](../realtime-events/) system, users can ensure that they are receiving the most up-to-date information and notifications related to the observed object across devices.
-{% endhint %}
+</Info>
 
 ## Live Object
 
@@ -23,7 +23,7 @@ Live Object API is designed around the observer design pattern, allowing users t
 
 It's worth noting that while data updates may occur internally within the SDK, these updates will not affect previous snapshots. The only way for users to see the latest data is by getting new snapshots delivered via Live Object updates.
 
-<figure><img src="../../../.gitbook/assets/image (4) (4).png" alt=""><figcaption></figcaption></figure>
+<img src="../../../.gitbook/assets/image (4) (4).png" alt="" />
 
 ## Live Collection
 
@@ -37,4 +37,4 @@ To use Live Collection, users can observe changes in a specific collection withi
 
 By subscribing to changes on a specific collection using Live Collection, users can stay up-to-date with the latest changes and updates to important collections within the app. This can be particularly helpful for managing large amounts of data or monitoring changes to frequently updated collections, such as messages or posts.
 
-<figure><img src="../../../.gitbook/assets/image (2) (1) (1) (1) (1).png" alt=""><figcaption></figcaption></figure>
+<img src="../../../.gitbook/assets/image (2) (1) (1) (1) (1).png" alt="" />

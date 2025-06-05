@@ -5,7 +5,7 @@
 FCM dependency:
 
 ```
-implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-fcm:x.y.z
+implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-fcm:x.y.z'
 ```
 
 Before you can start receiving push notifications, you need to obtain a FCM unique token string that identifies each FCM client app instance:
@@ -19,7 +19,7 @@ You can initialize the services with the obtained token. Please note that the FC
 
 ### Retrieve Push Notifications
 
-To retrieve push notifications, use a service that extends `FirebaseMessagingService`. Refer to Firebase's [messages handling](https://firebase.google.com/docs/cloud-messaging/android/receive#handling\_messages) documentation for detailed information.
+To retrieve push notifications, use a service that extends `FirebaseMessagingService`. Refer to Firebase's [messages handling](https://firebase.google.com/docs/cloud-messaging/android/receive#handling_messages) documentation for detailed information.
 
 ### Push Notification In China
 

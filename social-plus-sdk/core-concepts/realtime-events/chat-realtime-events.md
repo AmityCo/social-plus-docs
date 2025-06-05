@@ -8,26 +8,40 @@ To receive updates from a channel or any content created within that channel, th
 
 ### Subchannel Topic
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/e2942c227c355a8139073eb140c90155#file-subscribe_subchannel-swift" %}
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      <CodeBlock>
+        ```swift
+        https://gist.github.com/amythee/e2942c227c355a8139073eb140c90155#file-subscribe_subchannel-swift
+        ```
+      </CodeBlock>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      <CodeBlock>
+        ```java
+        https://gist.github.com/amythee/b498c3659a273eb08dc8c210c7d38f64
+        ```
+      </CodeBlock>
+    </CodeGroup>
+  </Tab>
+  <Tab title="JavaScript">
+    We don't support this feature in JS SDK.
+  </Tab>
+  <Tab title="TypeScript">
+    Version 6 and Beta(v0.0.1)
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/b498c3659a273eb08dc8c210c7d38f64" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-We don't support this feature in JS SDK.
-{% endtab %}
-
-{% tab title="TypeScript" %}
-Version 6 and Beta(v0.0.1)
-
-{% embed url="https://gist.github.com/amythee/7ec2e92438c22a432eceaf411a06f701#file-subscribesubchannel-ts" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-{% endtabs %}
+    <CodeGroup>
+      <CodeBlock>
+        ```typescript
+        https://gist.github.com/amythee/7ec2e92438c22a432eceaf411a06f701#file-subscribesubchannel-ts
+        ```
+      </CodeBlock>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Flutter">
+    The functionality isn't currently supported by this SDK.
+  </Tab>
+</Tabs>

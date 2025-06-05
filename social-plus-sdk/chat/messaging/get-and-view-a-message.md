@@ -6,16 +6,24 @@ To view the content of a message using the Social Plus Chat SDK, developers can 
 
 To get a single message by its ID, use the getting message function of the Social Plus Chat SDK. This method returns a message live object, which you can use to display the message in your app. Here's an example:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/922cff71e45268b73dc76237005c8bfb" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+AmityMessageRepository.getMessage("messageId")
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/47a9a839fb20f5da62e0350497c82cc8" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+messageRepository.getMessage("messageId")
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 You can use the `getMessage` method to get a single comment. You need to pass the `messageId` of the requested message as the parameter.
 
 ```javascript
@@ -24,11 +32,11 @@ import { MessageRepository } from '@amityco/js-sdk';
 const liveObject = MessageRepository.getMessage('messageId');
 let message = liveObject.model;
 
-liveObject .on('dataUpdated', data => {
+liveObject.on('dataUpdated', data => {
   message = data;
 });
 
-liveObject .on('dataError', error => {
+liveObject.on('dataError', error => {
   console.error(error);
 });
 
@@ -37,18 +45,22 @@ liveObject.dispose();
 ```
 
 The method returns a `liveobject` instance of a message model. It will throw an error if the passed `messageId` is not valid.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 **Version 6 and Beta**
 
-{% embed url="https://gist.github.com/amythee/d8ad5efbeeb1c4d8aba9b89381ca0a96" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const liveObject = MessageRepository.getMessage(messageId);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
+<Tab title="Flutter">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
-{% endtabs %}
+</Tab>
+</Tabs>
 
 ## Get messages with a query
 
@@ -60,16 +72,31 @@ You can also use a query to get messages that match specific criteria. The query
 
 This is the most basic type of message and is useful for sending simple messages such as chat messages, system notifications, or status updates. Each text message has a character limit of 20,000 characters, making it suitable for sending concise messages.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/922cff71e45268b73dc76237005c8bfb" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let message = channel.messages[indexPath.row]
+if let textMessage = message as? AmityTextMessage {
+    print("Message text: \(textMessage.text)")
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/36e3729e6da94046910e38a39060b06a" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val message = messageAdapter.getItem(position)
+if (message.getMessageType() == AmityMessage.Type.TEXT) {
+    val textData = message.getData() as AmityMessage.TextData
+    println("Message text: ${textData.getText()}")
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 import React, { useEffect, useState } from 'react';
 import { FileRepository, MessageType } from '@amityco/js-sdk';
@@ -79,18 +106,31 @@ const TextContent = ({ data, fileId }) => {
   return data?.text ? <p>{data!.text}</p> : null;
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 v6.0.0 and Beta
 
-{% embed url="https://gist.github.com/dab8384f3d0cee39775e89d7155d010b" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const message = await client.getMessageById(messageId);
+if (message.type === MessageType.TEXT) {
+  console.log(message.data.text);
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d90b1de36e2a83b839742b474fe044c3#file-amitymessagetextview-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+Widget build(BuildContext context) {
+  return Text(widget.message.data?.text ?? '');
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Image Message
 
@@ -103,16 +143,31 @@ Sending visual content such as photos, graphics, or images in a channel is facil
 
 This allows for flexible usage and easy integration into various chat applications. For more information about an image, please refer to the page - [image-handling.md](../../core-concepts/files-images-and-videos/image-handling.md "mention").
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/ae6b8f030d63a60b9fa9455ae522e7dd" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+if let imageMessage = message as? AmityImageMessage {
+    imageView.image = imageMessage.image
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/67992670a6c79c4dc7af1ceb692beeda" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+if (message.getMessageType() == AmityMessage.Type.IMAGE) {
+    val imageData = message.getData() as AmityMessage.ImageData
+    Glide.with(context)
+        .load(imageData.getFileUrl())
+        .into(imageView)
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 import React, { useEffect, useState } from 'react';
 import { FileRepository } from '@amityco/js-sdk';
@@ -137,44 +192,75 @@ const ImageMessageContent = ({ data, fileId }) => {
   )
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
 > In TypeScript SDK, viewing a file, image, and audio message have the same steps and sample code. You can query all file types with `observeFile`.
 
-{% embed url="https://gist.github.com/amythee/b9f396a73150c00504a063191dd12183#file-displayimagemessage-ts" %}
+<CodeGroup>
+```typescript
+const file = await client.observeFile(fileId);
+console.log(file.url);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/ba44c4831ddc44c20f3942e93f03d39e" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const message = await client.getMessageById(messageId);
+if (message.type === MessageType.IMAGE) {
+  console.log(message.data.fileUrl);
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/a160651275e49be13b7d2f9f1ab02a68#file-amitymessageimageview-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+Widget build(BuildContext context) {
+  return Image.network(widget.message.data?.fileUrl ?? '');
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### File Message
 
 This is a message that contains a file attachment, such as a PDF, a Word document, or any other type of file. This is a useful type of message for sharing files within a channel, such as a document or a photo. The maximum size for a file is 1 GB. For more information about a file, please refer to the page - [file.md](../../core-concepts/files-images-and-videos/file.md "mention")
 
-{% tabs %}
-{% tab title="iOS" %}
-{% hint style="info" %}
+<Tabs>
+<Tab title="iOS">
+<Info>
 In **iOS** SDK, `AmityFileRepository` provides `downloadFile:` and `downloadFileAsData:` method to download the file from the URL. The same method can be used to download the audio.
-{% endhint %}
+</Info>
 
-{% embed url="https://gist.github.com/amythee/b8dfca52e5231dd97f91b7a0b2cfcf7f" %}
-{% endtab %}
+<CodeGroup>
+```swift
+if let fileMessage = message as? AmityFileMessage {
+    print("File URL: \(fileMessage.fileURL)")
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/383f4e192626795165fc8e01e4369744" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+if (message.getMessageType() == AmityMessage.Type.FILE) {
+    val fileData = message.getData() as AmityMessage.FileData
+    println("File URL: ${fileData.getFileUrl()}")
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
-```django
+<Tab title="JavaScript">
+```javascript
 import React, { useEffect, useState } from 'react';
 import { FileRepository, MessageType } from '@amityco/js-sdk';
 
@@ -199,16 +285,29 @@ const FileContent = ({ data, fileId }) => {
   )
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/ea0fa2f25d3229cfcfd02869c978f6db" %}
-{% endtab %}
+<Tab title="TypeScript">
+<CodeGroup>
+```typescript
+const message = await client.getMessageById(messageId);
+if (message.type === MessageType.FILE) {
+  console.log(message.data.fileUrl);
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/11e1b2dcf207655fafe1e017d922eca8#file-amitymessagefileview-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+Widget build(BuildContext context) {
+  return Text(widget.message.data?.fileName ?? '');
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Video Message
 
@@ -222,23 +321,43 @@ This is a useful type of message for sharing video content within a chat convers
 
 Once you upload a video the videos undergo transcoding from their original resolution. You can quickly access the original size of the video right after you make the video message. However, it takes time for the transcoded resolutions to be ready. This allows for flexible usage and easy integration into various chat applications. For more information about a video, please refer to the page - [video-handling.md](../../core-concepts/files-images-and-videos/video-handling.md "mention").
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/d88642eb714baeb23338f75fb3a677d5#file-play_video_example-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+if let videoMessage = message as? AmityVideoMessage {
+    videoPlayer.play(url: videoMessage.fileURL)
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/f9b1616865efb4b6386074b731ca49f0" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+if (message.getMessageType() == AmityMessage.Type.VIDEO) {
+    val videoData = message.getData() as AmityMessage.VideoData
+    videoPlayer.setVideoPath(videoData.getFileUrl())
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/772918f9ef8c3585f3b79e74f36cce86" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="TypeScript">
+<CodeGroup>
+```typescript
+const message = await client.getMessageById(messageId);
+if (message.type === MessageType.VIDEO) {
+  console.log(message.data.fileUrl);
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Custom Message
 
@@ -248,24 +367,44 @@ This can be useful for a variety of use cases. For example, a developer building
 
 The possibilities for custom messages are endless and can be tailored to the specific needs of any application. Custom messages can be sent and received using the Social Plus Chat SDK and can be queried and displayed in a chat channel just like any other message type.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/9888131c9671f869f65cfeebf407be1b" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+if let customMessage = message as? AmityCustomMessage {
+    let data = customMessage.data
+    // Handle custom data
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/ccff8550940617d27dce81198a325661" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+if (message.getMessageType() == AmityMessage.Type.CUSTOM) {
+    val customData = message.getData() as AmityMessage.CustomData
+    // Handle custom data
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 Supported ✅ (please wait while we prepare a real example!)
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 For custom messages, the data is in the data property.
-{% endtab %}
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/7446eaed453c4c62a950fcd1550afb68#file-amitymessagecustomview-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+Widget build(BuildContext context) {
+  return Text(widget.message.data?.customData.toString() ?? '');
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>

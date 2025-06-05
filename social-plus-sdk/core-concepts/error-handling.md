@@ -8,34 +8,54 @@
 
 <table data-header-hidden><thead><tr><th width="155.33333333333331">Code</th><th>Error Name</th><th>Description</th></tr></thead><tbody><tr><td><strong>Code</strong></td><td><strong>Error Name</strong></td><td><strong>Description</strong></td></tr><tr><td>800000</td><td><code>Unknown</code></td><td><p>Uncategorized errors. </p><p>To debug, refer to the <em>'error.message'</em> property.</p></td></tr><tr><td>800110</td><td><code>InvalidParameter</code></td><td>Data type of the parameter is invalid.</td></tr><tr><td>800210</td><td><code>ConnectionError</code></td><td>Websocket connection of the SDK cannot reach the platform server. This could also be the case if a user is global-banned and try to register a session.</td></tr></tbody></table>
 
-
-
 ## Error Objects
 
 Error objects can be returned to you via LiveObjects, callbacks, or client error delegates. The possible error codes are listed in a public error code enum: each case is named after its error.
 
 You can convert a Social Plus Exception into a Social Plus Error with the following:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/1adbaf71a34e73af61476d7065fbb6eb" %}
+<Tabs>
+<Tab title="iOS">
+<CodeBlock language="swift">
+{`// Implement this delegate method which gets called when error occurs
+func didReceiveAsyncError(_ error: Error) {
+    let error = error as NSError
+    guard let amityError = AmityErrorCode(rawValue: error.code) else {
+        assertionFailure("unknown error \(error.code), please report this code to Amity")
+        return
+    }
+    
+    if amityError == .globalBan {
+        // Handle global ban event here
+    }
+}`}
+</CodeBlock>
 
-{% hint style="info" %}
+<Note>
 All the errors returned by the iOS SDK come in the form of an `NSError` with domain Social Plus.
-{% endhint %}
-{% endtab %}
+</Note>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/670c317861e6a36a1b63c9b46a4271ab" %}
-AmityError enums map to the supported error scenarios
-{% endembed %}
+<Tab title="Android">
+<CodeBlock language="kotlin">
+{`// Example of handling errors in Android
+try {
+    // Your code that might throw AmityException
+} catch (e: AmityException) {
+    when (e) {
+        is AmityException.NetworkError -> // Handle network error
+        is AmityException.BadRequest -> // Handle bad request
+        // Handle other specific exceptions
+    }
+}`}
+</CodeBlock>
 
-For any specific errors that's handled in PagingData please visit the web page below  to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
-{% endtab %}
+For any specific errors that's handled in PagingData please visit the web page below to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
+</Tab>
 
-{% tab title="JavaScript" %}
-```java
-import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
+<Tab title="JavaScript">
+<CodeBlock language="javascript">
+{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
 
 const liveObject = CommunityRepository.communityForId('abc');
 liveObject.on("dataUpdated", data => {
@@ -44,31 +64,40 @@ liveObject.on("dataUpdated", data => {
 liveObject.on("dataError", err => {
   // failed to fetch the community 
   console.log(err.code == ErrorCode.BusinessError);
-}
-```
+})`}
+</CodeBlock>
 
+<Note>
+All the errors returned by the SDK come in form of an Error with domain `ASC`.
+</Note>
+</Tab>
 
+<Tab title="TypeScript">
+<CodeBlock language="typescript">
+{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
 
-{% hint style="info" %}
-&#x20;All the errors returned by the SDK come in form of an Error with domain `ASC`.&#x20;
-{% endhint %}
-{% endtab %}
+const liveObject = CommunityRepository.communityForId('abc');
+liveObject.on("dataUpdated", (data: Community) => {
+  // community is fetched
+});
+liveObject.on("dataError", (err: Error) => {
+  // failed to fetch the community 
+  console.log(err.code === ErrorCode.BusinessError);
+})`}
+</CodeBlock>
+</Tab>
+</Tabs>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/eb3589e419e4daa0e7e410cb7a8955b9" %}
-{% endtab %}
-{% endtabs %}
-
-> When an error is returned as a result of an action from your side (e.g. trying to join a channel), the action is considered completed and the SDK will not execute any additional logic.
+When an error is returned as a result of an action from your side (e.g. trying to join a channel), the action is considered completed and the SDK will not execute any additional logic.
 
 ## Global ban error handling
 
-A global ban error means that the user is banned from the system resulting in the inability to have a connection with the system. If the user already has a session, the session will be revoked, and will be unable to create a new session.&#x20;
+A global ban error means that the user is banned from the system resulting in the inability to have a connection with the system. If the user already has a session, the session will be revoked, and will be unable to create a new session.
 
-{% tabs %}
-{% tab title="iOS" %}
-```swift
-var client: AmityClient?
+<Tabs>
+<Tab title="iOS">
+<CodeBlock language="swift">
+{`var client: AmityClient?
 client.clientErrorDelegate = self // set yourself as the delegate
 
 ...
@@ -84,37 +113,61 @@ func didReceiveAsyncError(_ error: Error) {
         if amityError == .globalBan {
             // Handle global ban event here
         }
+    }`}
+</CodeBlock>
+</Tab>
+
+<Tab title="Android">
+<CodeBlock language="kotlin">
+{`// Banned while not having a session
+client.login(userId, authToken, object: AmityClient.Callback<AmityUser> {
+    override fun onSuccess(user: AmityUser) {
+        // Login successful
     }
-```
-{% endtab %}
+    
+    override fun onError(error: AmityException) {
+        if (error is AmityException.GlobalBan) {
+            // Handle global ban
+        }
+    }
+})`}
+</CodeBlock>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/5581afbcf85dc940b050e2a8c557aaba" %}
-Banned while not having a session
-{% endembed %}
+<CodeBlock language="kotlin">
+{`// Observing the LiveObject for ban while having a session
+client.getGlobalBanLiveObject().observe(object: AmityEventHandler<Boolean> {
+    override fun onReceived(isGlobalBanned: Boolean) {
+        if (isGlobalBanned) {
+            // Handle global ban
+        }
+    }
+})`}
+</CodeBlock>
+</Tab>
 
-
-
-{% embed url="https://gist.github.com/b771fee125355059f90f624f5c910bd9" %}
-Observing the LiveObject for ban while having a session
-{% endembed %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-```java
-client = new ASCClient({ apiKey, apiEndpoint });
+<Tab title="JavaScript">
+<CodeBlock language="javascript">
+{`client = new ASCClient({ apiKey, apiEndpoint });
 
 client.on('dataError', error => {
   if (error.code === ErrorCode.GlobalBanError) {
     // handle the case the user is globally banned
   }
-});
-```
-{% endtab %}
+});`}
+</CodeBlock>
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/ed878a8d4638c4c1f37bd4e8f1438b23" %}
-&#x20;
-{% endembed %}
-{% endtab %}
-{% endtabs %}
+<Tab title="TypeScript">
+<CodeBlock language="typescript">
+{`import { ASCClient, ErrorCode } from '@amityco/js-sdk';
+
+const client = new ASCClient({ apiKey, apiEndpoint });
+
+client.on('dataError', (error: Error) => {
+  if (error.code === ErrorCode.GlobalBanError) {
+    // handle the case the user is globally banned
+  }
+});`}
+</CodeBlock>
+</Tab>
+</Tabs>

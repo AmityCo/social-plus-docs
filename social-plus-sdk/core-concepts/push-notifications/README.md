@@ -6,7 +6,7 @@ Push notifications are small pop-up messages triggered by an application, even w
 
 Clients who want to have the push notifications delivered to their own servers first in order to customize before it reach their users can opt for this method.
 
-In this solution, events are sent from Social Plus’s servers to the client’s servers via webhook. Clients can decide what to do with each event before it reaches the end user's device as a notification. Clients have the ability to edit the notifications (i.e.: translate the message), filter them (based on specific use cases or user preferences), and perform analytics before sending them to the users. With this new feature, clients can also have notifications for web apps.
+In this solution, events are sent from Social Plus's servers to the client's servers via webhook. Clients can decide what to do with each event before it reaches the end user's device as a notification. Clients have the ability to edit the notifications (i.e.: translate the message), filter them (based on specific use cases or user preferences), and perform analytics before sending them to the users. With this new feature, clients can also have notifications for web apps.
 
 For more information, go to [Webhook Events](../../../developers/beta-features/real-time-events.md) settings.
 
@@ -16,13 +16,13 @@ In this scenario, there's no SDK involvement needed. The whole notification proc
 
 With this solution, the notifications will be triggered and delivered to your users directly by Social Plus's servers. There's nothing that the iOS client has to do in order to display the notification to your users. Social Plus's servers will prepare for you a notification that can be directly displayed to the user as and when it's received.
 
-Click for more [Network Level settings](../../../analytics-and-moderation/console/settings/push-notifications.md).&#x20;
+Click for more [Network Level settings](../../../analytics-and-moderation/console/settings/push-notifications.md).
 
 Click to learn about different SDK [Settings](../../../analytics-and-moderation/console/settings/#push-notifications).
 
-{% hint style="info" %}
+<Info>
 Direct push notifications only support on iOS, Android, and Flutter SDKs.
-{% endhint %}
+</Info>
 
 ### Push Notification Examples
 

@@ -35,15 +35,15 @@ Live Collection is available for the following in user/community feeds:
 * Stream Collection
 * User Collection
 
-{% hint style="info" %}
+<Info>
 Live Collection is not supported for global feed and custom post ranking.
-{% endhint %}
+</Info>
 
 ### Live Object
 
-Although live objects were introduced prior to v6. All getter methods for singular objects (example `getPost`) will now return a subscribe-able object.&#x20;
+Although live objects were introduced prior to v6. All getter methods for singular objects (example `getPost`) will now return a subscribe-able object.
 
-&#x20;This means that if an object gets updated and you have subscribed to real-time events, the object will get updated automatically via real-time events.
+This means that if an object gets updated and you have subscribed to real-time events, the object will get updated automatically via real-time events.
 
 If for your use case, you don't require any real-time updates, you can unsubscribe immediately. For further information about Live Object, please visit [#live-object](./#live-object "mention") page.
 
@@ -109,11 +109,11 @@ const GetPostOnce: FC<{ postId: string }> = ({ postId }) => {
 
 ### Live Collection
 
-Although live collections were introduced prior to v6. All query methods for the collection of objects (example `getPosts`) will now return a subscribe-able collection.&#x20;
+Although live collections were introduced prior to v6. All query methods for the collection of objects (example `getPosts`) will now return a subscribe-able collection.
 
-&#x20;This means that if an object in the collection gets updated and you have subscribed to real-time events, the collection will get updated automatically via real-time events.
+This means that if an object in the collection gets updated and you have subscribed to real-time events, the collection will get updated automatically via real-time events.
 
-If for your use case, you don't require any real-time updates, you can unsubscribe immediately. Similar to the live objects above.  For further information about Live Collection, please visit [#live-collection](./#live-collection "mention") page.
+If for your use case, you don't require any real-time updates, you can unsubscribe immediately. Similar to the live objects above. For further information about Live Collection, please visit [#live-collection](./#live-collection "mention") page.
 
 #### Getting Real-Time updates for a collection
 
@@ -179,7 +179,6 @@ const subscribePostTopic = (targetType: string, targetId: string) => {
     );
   }
 };
-
 ```
 
 #### Getting paginated collection without and real-time updates
@@ -215,4 +214,3 @@ const GetPosts: FC<{ targetId: string; targetType: string }> =
   return null;
 };
 ```
-

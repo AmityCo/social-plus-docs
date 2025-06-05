@@ -8,7 +8,7 @@ Live Object helps to observe changes in a single object whereas Live Collection 
 
 ### How it Works
 
-SDK handles a lot of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. This means some data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync.&#x20;
+SDK handles a lot of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. This means some data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync.
 
 Live Object and Live Collection help in syncing these constantly updating data, so you will always get the most recent one. Whenever the data gets updated, you will be notified through helper methods in live objects and live collection classes.
 
@@ -20,7 +20,7 @@ Live collection is available for the following functionalities in user/community
 * Comment Collection
 * Story Collection
 * User Collection
-* Reactions Collection&#x20;
+* Reactions Collection
 * Followers/Following Collection
 * Channel Collection
 * Sub-Channel Collection
@@ -37,15 +37,15 @@ Both `AmityObject` and `AmityCollection` provide methods for observing changes i
 
 `AmityNotificationToken` is a simple object which keeps track of what is being observed. Each Live Object or Live Collection observation is tied to its respective token. As soon as the token is invalidated or deallocated, observation ends. The token is declared within the scope of the class.
 
-{% embed url="https://gist.github.com/babdf3acfc683358de5e45dd3412f467" %}
+<CodeBlock url="https://gist.github.com/babdf3acfc683358de5e45dd3412f467">
 `AmityNotification` is alive in `MyClass` scope.
-{% endembed %}
+</CodeBlock>
 
-The token is used in combination with `AmityObject` or `AmityCollection`. We will explore it more in AmityObject `and` `AmityCollection` concepts.
+The token is used in combination with `AmityObject` or `AmityCollection`. We will explore it more in AmityObject and `AmityCollection` concepts.
 
 ### AmityObject
 
-`AmityObject` is a generic class that keeps track of a single object. It is a live object. In iOS `AmitySDK`, any object which is encapsulated by `AmityObject` is a live object.&#x20;
+`AmityObject` is a generic class that keeps track of a single object. It is a live object. In iOS `AmitySDK`, any object which is encapsulated by `AmityObject` is a live object.
 
 Examples:
 
@@ -54,38 +54,38 @@ Examples:
 
 `AmityObject` class exposes the following methods:
 
-* `observe` &#x20;
-* `observeOnce`&#x20;
+* `observe`
+* `observeOnce`
 
 These methods help observe a live object. Whenever any property for the observed object changes, the observer is triggered.
 
-{% hint style="info" %}
+<Info>
 Please make sure that the user is logged in before observing AmityObject. You can also refer to the [session state](../session-state.md) section for more details.
-{% endhint %}
+</Info>
 
 #### Observer
 
-`observe` method can be triggered multiple times throughout the lifetime of the application as long as its associated `AmityNotificationToken` is retained in memory.  `observeOnce` method, on the other hand, can only be triggered once.&#x20;
+`observe` method can be triggered multiple times throughout the lifetime of the application as long as its associated `AmityNotificationToken` is retained in memory. `observeOnce` method, on the other hand, can only be triggered once.
 
 Both `observe` and `observeOnce` methods will be called from the main thread so you can perform any UI update-related tasks from within the observed block itself.
 
 * If the requested object data is stored locally on the device, the block will be called immediately with the local version of the data. This can be verified through the `dataStatus` property of `AmityObject`.
 * In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the observed block will be triggered again.
-* Any future changes to that data from any sources can trigger an observer.&#x20;
+* Any future changes to that data from any sources can trigger an observer.
 
 **Lifecycle:** The life cycle of the observer is tied to its token. If the token is not retained, then the observer can get deallocated at any time and will not be called. Both `observe` and `observeOnce` block will be retained using token as shown below.
 
-{% embed url="https://gist.github.com/1ddd6d8fa2b04430ed4b4c602fb0e6ec" %}
+<CodeBlock url="https://gist.github.com/1ddd6d8fa2b04430ed4b4c602fb0e6ec">
 Live Object observation is bound to a token
-{% endembed %}
+</CodeBlock>
 
 #### Invalidate token
 
 The `AmityNotificationToken` provides a method called `invalidate()` which can be used to invalidate the token anytime. As soon as you invalidate the token, your observation stops and observe block will no longer be triggered.
 
-{% embed url="https://gist.github.com/7694a70e40ca4fd1893823b16b916221" %}
+<CodeBlock url="https://gist.github.com/7694a70e40ca4fd1893823b16b916221">
 Invalidate a token
-{% endembed %}
+</CodeBlock>
 
 #### Accessing Objects
 
@@ -97,23 +97,23 @@ There are multiple ways to access data from `AmityObject`. `AmityObject` exposes
 
 Once you add an observer block, you can access both local or fresh data as shown below.
 
-{% embed url="https://gist.github.com/19d131a363e9c75b4a1d625a919bec22" %}
+<CodeBlock url="https://gist.github.com/19d131a363e9c75b4a1d625a919bec22">
 Accessing live object properties
-{% endembed %}
+</CodeBlock>
 
 If you want to observe fresh object just once, you can check the data status and invalidate the token once you receive the fresh object.
 
-{% embed url="https://gist.github.com/17345fc724e5f145f39c27f95738ecc9" %}
+<CodeBlock url="https://gist.github.com/17345fc724e5f145f39c27f95738ecc9">
 Get a fresh object
-{% endembed %}
+</CodeBlock>
 
-> For `observerOnce` method, if data is present locally, this observer will be triggered only once with that local data. If you are looking for fresh data, use the `observe` block and invalidate the token once fresh data is received as shown above.
+For `observerOnce` method, if data is present locally, this observer will be triggered only once with that local data. If you are looking for fresh data, use the `observe` block and invalidate the token once fresh data is received as shown above.
 
 If you only care about local data and do not want to observe anything, you can also access the `object` property from `AmityObject` directly.
 
-{% embed url="https://gist.github.com/909cbb6e7d07d1f8f8f3476815ab33e2" %}
+<CodeBlock url="https://gist.github.com/909cbb6e7d07d1f8f8f3476815ab33e2">
 Get a local data
-{% endembed %}
+</CodeBlock>
 
 While this is possible, we recommend accessing object from within the`observe` or `observeOnce` block depending on your requirement.
 
@@ -128,33 +128,33 @@ While this is possible, we recommend accessing object from within the`observe` o
 
 ### AmityCollection
 
-`AmityCollection` is a generic class that keeps track of a collection of objects. It is a live collection. In iOS SDK, any object which is encapsulated by `AmityCollection` class is a live collection.&#x20;
+`AmityCollection` is a generic class that keeps track of a collection of objects. It is a live collection. In iOS SDK, any object which is encapsulated by `AmityCollection` class is a live collection.
 
-Examples:&#x20;
+Examples:
 
-* `AmityCollection<AmityMessage>`&#x20;
-* `AmityCollection<AmityChannel>` &#x20;
+* `AmityCollection<AmityMessage>`
+* `AmityCollection<AmityChannel>`
 
 `AmityCollection` exposes these methods:
 
-* `observe`&#x20;
-* `observeOnce`&#x20;
+* `observe`
+* `observeOnce`
 
 These methods help to observe a live collection. Whenever any property for any object within the collection changes, the observer is triggered.
 
-{% hint style="info" %}
-Please make sure that the user is logged in before observing AmityCollection. You can also refer to  [session state](../session-state.md) section for more details.
-{% endhint %}
+<Info>
+Please make sure that the user is logged in before observing AmityCollection. You can also refer to [session state](../session-state.md) section for more details.
+</Info>
 
 #### Observer
 
-`observe` method can get triggered multiple times throughout the lifetime of the application as long as it's associated `AmityNotificationToken` is retained in memory. `observeOnce`, on the other hand, can only be triggered once.&#x20;
+`observe` method can get triggered multiple times throughout the lifetime of the application as long as it's associated `AmityNotificationToken` is retained in memory. `observeOnce`, on the other hand, can only be triggered once.
 
 Both `observe` and `observeOnce` method will be called from the main thread so you can perform any UI update related task within the observe block itself.
 
 * If the requested data collection is stored locally on the device, the block will be called immediately with the local version of the data. This can be verified through the `dataStatus` property of `AmityCollection`.
 * In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the observe block will be triggered again.
-* Any future changes to the data from any sources can trigger observer.&#x20;
+* Any future changes to the data from any sources can trigger observer.
 
 **Lifecycle:** The life cycle of the observer for AmityCollection is also tied to its token. If the token is not retained, the observer can get deallocated at any time and will not be called. So, both `observe` and `observeOnce` block should be retained. You can refer to the section in `AmityObject` about retaining and invalidating a token.
 
@@ -162,25 +162,23 @@ Both `observe` and `observeOnce` method will be called from the main thread so y
 
 Unlike most databases, `AmityCollection` does not return all data in an array. Instead, data is fetched one by one using the `objectAtIndex:` method. This allows the framework to store most of the actual result on disk, and load them in memory only when necessary.
 
-`AmityCollection` also exposes a `count` property which determines the number of objects present in a collection.&#x20;
+`AmityCollection` also exposes a `count` property which determines the number of objects present in a collection.
 
 With these two public interfaces, you can create a robust list UI for your use case. Similar to `AmityObject`, `AmityCollection` also exposes `dataStatus` and `loadingStatus` property.
 
 Let's look at the typical flow when accessing a collection data.
 
-{% embed url="https://gist.github.com/ab5bf699a2e7bdaf80f15d94c6051309" %}
+<CodeBlock url="https://gist.github.com/ab5bf699a2e7bdaf80f15d94c6051309">
 Observe a Live Collection
-{% endembed %}
+</CodeBlock>
 
 If you want to observe only fresh or local collection, you can access it using the`dataStatus` property and invalidate the token once you have accessed your desired collection data.
 
-{% embed url="https://gist.github.com/e45d4410014895017c2a6aaaa1b5a936" %}
+<CodeBlock url="https://gist.github.com/e45d4410014895017c2a6aaaa1b5a936">
 Observe a Fresh Live Collection
-{% endembed %}
+</CodeBlock>
 
-> For `observerOnce` method, if data is present locally, this observer will be triggered only once with that local data. If you are looking for fresh data, use `observe` block and invalidate the token once fresh data is received as shown above.
-
-
+For `observerOnce` method, if data is present locally, this observer will be triggered only once with that local data. If you are looking for fresh data, use `observe` block and invalidate the token once fresh data is received as shown above.
 
 Observer also provides you with the `AmityCollectionChange` object which contains indexes of what is added, deleted, or modified in a collection. You can also refer to these properties to update the UI for the list.
 
@@ -188,31 +186,31 @@ Observer also provides you with the `AmityCollectionChange` object which contain
 
 While SDK provides `liveCollection.object(at:)` to access a single item, you might often find the need to iterate through all objects in the collection. The SDK has a convenient way to do this using `.allObjects()`.
 
-{% embed url="https://gist.github.com/6f3599b0f3c819d1ce60002572013369" %}
+<CodeBlock url="https://gist.github.com/6f3599b0f3c819d1ce60002572013369">
 Iterate each object in a live collection using `.allObjects()`
-{% endembed %}
+</CodeBlock>
 
 Using the above method is the same with this logic:
 
-{% embed url="https://gist.github.com/aeab2b924b0fd36ce8563c6f0c431a7a" %}
+<CodeBlock url="https://gist.github.com/aeab2b924b0fd36ce8563c6f0c431a7a">
 An equivalent implementation of `.allObjects()`
-{% endembed %}
+</CodeBlock>
 
 #### Pagination
 
 `AmityCollection` in SDK returns a maximum of 20 items per page. It has `nextPage()` and `previousPage()` method to fetch more data. It also exposes `hasNext` and `hasPrevious` property to check if next page or previous page is present.
 
-{% embed url="https://gist.github.com/9a50acd15f82c2c72a684521167d082e" %}
+<CodeBlock url="https://gist.github.com/9a50acd15f82c2c72a684521167d082e">
 Call `nextPage()` / `previousPage()` to load more data
-{% endembed %}
+</CodeBlock>
 
 Once next page is available, the same `observe` block gets triggered and you can access the collection as shown above. If you want to shrink the collection to the original first page, you can do so by calling `resetPage()` method on the same collection.
 
 One typical usage of Live Collection is in `UITableView`. Below is an example of fetching a collection and displaying it in a tableview.
 
-{% embed url="https://gist.github.com/726754677f2c94f2ae9d350808dbeb09" %}
+<CodeBlock url="https://gist.github.com/726754677f2c94f2ae9d350808dbeb09">
 Using a live collection with `UITableView`
-{% endembed %}
+</CodeBlock>
 
 ## SwiftUI Support
 
@@ -220,18 +218,18 @@ AmityObject and AmityCollection are now observable object with its properties ma
 
 | Live Object   | @Published | Remarks    |
 | ------------- | ---------- | ---------- |
-| dataStatus    | ✅          | -          |
-| loadingStatus | ✅          | -          |
-| snapshot      | ✅          | New        |
-| error         | ✅          | -          |
-| object        | ❌          | Deprecated |
+| dataStatus    | ✅         | -          |
+| loadingStatus | ✅         | -          |
+| snapshot      | ✅         | New        |
+| error         | ✅         | -          |
+| object        | ❌         | Deprecated |
 
 | Live Collection | @Published | Remarks |
 | --------------- | ---------- | ------- |
-| dataStatus      | ✅          | -       |
-| loadingStatus   | ✅          | -       |
-| snapshots       | ✅          | New     |
-| error           | ✅          | New     |
+| dataStatus      | ✅         | -       |
+| loadingStatus   | ✅         | -       |
+| snapshots       | ✅         | New     |
+| error           | ✅         | New     |
 
 ### Access AmityObject & AmityCollection in SwiftUI views
 
@@ -239,40 +237,46 @@ Since `AmityObject` & `AmityCollection` are observable object, it can be used as
 
 #### **Live Object - SwiftUI**
 
-{% embed url="https://gist.github.com/amythee/7d886c8ee7c112729ed39676af11274e" %}
+<CodeBlock url="https://gist.github.com/amythee/7d886c8ee7c112729ed39676af11274e">
+</CodeBlock>
 
 **Live Collection - SwiftUI**
 
-{% embed url="https://gist.github.com/amythee/c78803ceacb3663e6fb713505a42fa2b" %}
+<CodeBlock url="https://gist.github.com/amythee/c78803ceacb3663e6fb713505a42fa2b">
+</CodeBlock>
 
 Since the properties are published, If you are using Combine Framework, you can also subscribe to changes on those properties.
 
 **Live Object - Combine**
 
-{% embed url="https://gist.github.com/amythee/db15eb14cd4317f234d00490f421c3c8" %}
+<CodeBlock url="https://gist.github.com/amythee/db15eb14cd4317f234d00490f421c3c8">
+</CodeBlock>
 
 **Live Collection - Combine**
 
-{% embed url="https://gist.github.com/amythee/889ffb46faa46c14437c9d4d41e6a46e" %}
+<CodeBlock url="https://gist.github.com/amythee/889ffb46faa46c14437c9d4d41e6a46e">
+</CodeBlock>
 
-{% hint style="info" %}
-&#x20;_ℹ️ States of live collection & live object are published before snapshots so that you can compare the state from within subscriber._
-{% endhint %}
+<Info>
+ℹ️ States of live collection & live object are published before snapshots so that you can compare the state from within subscriber.
+</Info>
 
-#### FAQ’s:
+#### FAQ's:
 
 **#1:** LiveCollection is not updated when used from inside of another observable class.
 
 `AmityCollection` & `AmityObject` is an `ObservableObject`. When this live collection or live object is embedded inside another Observable Object, SwiftUI cannot observe the changes in snapshot occurring within Live collection & Live object. As a result, there might be a situation where you see your view is not getting updated even when snapshot(s) are updated. This is a common problem with nested observable object in SwiftUI.
 
-{% embed url="https://gist.github.com/amythee/31e9cb707e76b7bc67af22d7f02c03fb" %}
+<CodeBlock url="https://gist.github.com/amythee/31e9cb707e76b7bc67af22d7f02c03fb">
+</CodeBlock>
 
 To solve this issue we recommend to create a specific view which observes `AmityCollection` & `AmityObject` as `@ObservedObject` as shown in code example.
 
 **#2:** Published property still returns old values.
 
-Since the properties of AmityCollection & AmityObject are marked with `@Published` annotation, the publishing of changes occurs in the property’s `willSet` block, meaning that any subscribers will receive an update before the property is changed. This behaviour can easily lead to unexpected bugs.
+Since the properties of AmityCollection & AmityObject are marked with `@Published` annotation, the publishing of changes occurs in the property's `willSet` block, meaning that any subscribers will receive an update before the property is changed. This behaviour can easily lead to unexpected bugs.
 
-{% embed url="https://gist.github.com/amythee/1dc5c91d93afc8abf7ad5c87c47737eb" %}
+<CodeBlock url="https://gist.github.com/amythee/1dc5c91d93afc8abf7ad5c87c47737eb">
+</CodeBlock>
 
 For more details, please refer to [https://developer.apple.com/documentation/combine/published](https://developer.apple.com/documentation/combine/published)
