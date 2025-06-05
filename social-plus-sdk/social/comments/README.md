@@ -22,31 +22,6 @@ Incorporating comment reference types within your app enhances user engagement a
 
 The functionality of comments can be utilized through the Comment Repository, which offers methods for interacting with a data source that stores posts. This includes methods for querying comments, creating a new comment, updating an existing comment, or deleting a comment.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/cac39f58dca4faf3d7f9a52311017cd5#file-create_comment_repository-swift" %}
-Initialize comment repository
-{% endembed %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/4505a8a70c8d92ebc112e156d979acf7#file-amitycommentrepositoryinitialization-kt" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-```javascript
-import { CommentRepository } from '@amityco/js-sdk';
-```
-{% endtab %}
-
-{% tab title="TypeScript" %}
-The functionality isn't currently supported by this SDK.
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/0175953fbd804e31dde252f26c3d8819#file-amitycommentrepoinitialization-dart" %}
-{% endtab %}
-{% endtabs %}
 
 ### Comment Description
 

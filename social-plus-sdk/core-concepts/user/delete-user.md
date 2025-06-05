@@ -55,42 +55,18 @@ The status of the user's account is marked as "deleted" when queried and the use
 
 ### **Headers**
 
-| Content-type  | application/json        |
-| ------------- | ----------------------- |
-| Authorization | Bearer\{{Admin Token\}} |
 
 ### Path
 
-| Path   | Data field     |
-| ------ | -------------- |
-| UserID | User public id |
 
 The API response will be different based on the request and records match. The request may have a successful response, or it may have a bad request error, and it may respond as a User not found. The responses to API calls are mentioned below.
 
 #### Success
 
-<Note type="success">
-{
-"success":true
-}
-</Note>
+
 
 #### Bad Request error
 
-<Note type="warning">
-{
-"status": "error",
-"code": 400000,
-"message": "User is already deleted"
-}
-</Note>
 
 #### User Not Found error
 
-<Note type="warning">
-{
-"status": "error",
-"code": 400400,
-"message": "User Not Found."
-}
-</Note>

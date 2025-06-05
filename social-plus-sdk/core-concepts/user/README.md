@@ -10,68 +10,32 @@ If you wish to assign additional permissions for a user, for example, moderation
 
 ### Description of Users
 
-<table>
-<thead>
-<tr>
-<th width="240">Name</th>
-<th>Data Type</th>
-<th width="229">Description</th>
-<th>Attributes</th>
-</tr>
-</thead>
-<tbody>
-<tr><td>Name</td><td>Data Type</td><td>Description</td><td>Attributes</td></tr>
-<tr><td><code>userId</code></td><td><code>string</code></td><td>The id of this user</td><td></td></tr>
-<tr><td><code>roles</code></td><td><code>Array.&#x3C;string></code></td><td>A list of user's roles</td><td></td></tr>
-<tr><td><code>displayName</code></td><td><code>string</code></td><td>The display name of the user</td><td></td></tr>
-<tr><td><code>flagCount</code></td><td><code>integer</code></td><td>The number of users that have flagged this user</td><td></td></tr>
-<tr><td><code>metadata</code></td><td><code>Object</code></td><td>The metadata of the user</td><td></td></tr>
-<tr><td><code>hashFlag</code></td><td><code>Object</code></td><td>A hash for checking internally if this user was flagged by the user</td><td></td></tr>
-<tr><td><code>createdAt</code></td><td><code>date</code></td><td>The date/time the user was created at</td><td></td></tr>
-<tr><td><code>updatedAt</code></td><td><code>date</code></td><td>The date/time the user was updated at</td><td></td></tr>
-<tr><td><code>isGlobalBan</code></td><td><code>Boolean</code></td><td><p>Flag that indicates if the user is globally banned. <code>True</code> means the user is globally banned.<br></p><p><em><strong>Note</strong>: This is not yet supported for Typescript</em></p></td><td></td></tr>
-<tr><td><code>avatarCustomUrl</code></td><td><code>String</code></td><td>Custom Url provided for this user avatar</td><td></td></tr>
-<tr><td><code>isDeleted</code></td><td><code>Boolean</code></td><td>Flag that indicates if the user is deleted</td><td></td></tr>
-</tbody>
-</table>
-
 ### User Repository
 
 Though the SDK does not store and should not be responsible for the handling User profile data for your application; We do provide tools to make some surface-level queries and searches for existing user accounts. With the help of our `UserRepository` class, you will be able to list all the users, search for list of users whose display name matches your search query and get `AmityUser` object from user ID.
 
 <Tabs>
-<Tab title="iOS">
-<CodeBlock>
-```swift
-let userRepository = AmityUserRepository(client: client)
-```
-</CodeBlock>
-</Tab>
-
-<Tab title="Android">
-<CodeBlock>
-```kotlin
-val userRepository = AmityUserRepository(client)
-```
-</CodeBlock>
-</Tab>
-
-<Tab title="JavaScript">
-<CodeBlock>
-```javascript
-import { UserRepository } from '@amityco/js-sdk';
-const userRepo = new UserRepository();
-```
-</CodeBlock>
-</Tab>
-
-<Tab title="Flutter">
-<CodeBlock>
-```dart
-final userRepository = AmityUserRepository();
-```
-</CodeBlock>
-</Tab>
+  <Tab title="iOS">
+    ```
+    let userRepository = AmityUserRepository(client: client)
+    ```
+  </Tab>
+  <Tab title="Android">
+    ```
+    val userRepository = AmityUserRepository(client)
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```
+    import { UserRepository } from '@amityco/js-sdk';
+    const userRepo = new UserRepository();
+    ```
+  </Tab>
+  <Tab title="Flutter">
+    ```
+    final userRepository = AmityUserRepository();
+    ```
+  </Tab>
 </Tabs>
 
 ### Ban User

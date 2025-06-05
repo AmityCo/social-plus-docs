@@ -1,6 +1,6 @@
 # Social
 
-[<img src="https://i.ibb.co/w67NSLH/iOSicon.png" alt="image-text" data-size="line">](https://docs.amity.co/social/ios) **iOS** [<img src="https://i.ibb.co/MD88cLD/android-Icon.png" alt="image-text" data-size="line">](https://docs.amity.co/social/android) **Android** [<img src="https://i.ibb.co/ZzhYFSL/webIcon.png" alt="image-text" data-size="line">](https://docs.amity.co/social/web) **Web** <img src="../../.gitbook/assets/Typescript_logo_2020.svg" alt="" data-size="line"> **TypeScript** <img src="../../.gitbook/assets/reactnativelogo.png" alt="" data-size="line"> **React Native** <img src="../../.gitbook/assets/Screen Shot 2565-08-24 at 13.18.22.png" alt="" data-size="line"> **Flutter**
+
 
 Social Plus SDK allows engineers to integrate social communities and user feed capabilities without the hassle of deploying and maintaining any server infrastructure. Companies can now build user-powered social news feeds and notifications into their mobile and web app in no time. Enabling you to engage your customers with the same tools used by many of the popular social applications.
 

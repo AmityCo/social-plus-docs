@@ -20,9 +20,3 @@ The message payload is always the same regardless of which Development Kit the u
 | `data` | `Object` | The message data (any text will be stored in `text` key) | `text`: Text message |
 | `isDeleted` | `boolean` | The message has been marked as deleted | Content |
 | `createdAt` | `date` | The date/time the message was created at | Content |
-| `updatedAt` | `date` | The date/time the message was updated at | Content |
-| `editedAt` | `date` | The date/time the message was edited at | Content |
-| `flagCount` | `integer` | The number of users that have flagged this message | Content |
-| `reactions` | `Object` | The reaction data (stored as a reactionName and counter key/value pair) | Example: { `like`: 1, `dislike`: 2 } |
-| `reactionsCount` | `integer` | The total number of reactions on this message | Content |
-| `myReactions` | `Array.<string>` | A list of user's reactions on this message | Content |

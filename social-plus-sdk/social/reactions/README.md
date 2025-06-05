@@ -4,7 +4,6 @@ description: Let users react to messages, posts, and comments, which are visible
 
 # Reactions
 
-<figure><img src="../../../.gitbook/assets/image (110).png" alt=""><figcaption></figcaption></figure>
 
 Reactions are the interactions that users can perform on messages, posts, or comments. The interactions can be anything such as like, dislike, love, etc. It's up to the client to determine the type of reactions. The SDK provides convenient functions to add, remove, and query reactions for any content. Currently, reactions are supported for Posts, Messages, and Comments.
 

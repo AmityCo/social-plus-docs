@@ -2,7 +2,7 @@
 
 Here's an overview of notification tray and how you can get started with integrating them into your applications
 
-<figure><img src="../../../.gitbook/assets/Screenshot 2568-04-22 at 15.35.51.png" alt=""><figcaption></figcaption></figure>
+
 
 #### **Notification Tray SDK Feature**
 
