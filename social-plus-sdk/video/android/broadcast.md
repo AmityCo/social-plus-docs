@@ -91,7 +91,7 @@ We highly recommend using Android's ConstraintLayout to construct our `AmityCame
 
 In Jetpack Compose, inflate `AmityCameraView` as AndroidView and provide it to aforementioned object as below
 
-{% embed url="https://gist.github.com/amythee/737758a36346c3009058cc4678ce9b29" %}
+<Embed url="https://gist.github.com/amythee/737758a36346c3009058cc4678ce9b29"/>
 
 ### Preview the video
 

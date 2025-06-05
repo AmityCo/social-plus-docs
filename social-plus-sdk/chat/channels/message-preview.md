@@ -46,15 +46,15 @@ Within our SDK, clients can effortlessly obtain message previews using a channel
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/7d1988d5ffd5bb8a7e76579e8dc60292" %}
+<Embed url="https://gist.github.com/amythee/7d1988d5ffd5bb8a7e76579e8dc60292"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/52ae304641f49e6c665d1124828116b9" %}
+<Embed url="https://gist.github.com/52ae304641f49e6c665d1124828116b9"/>
 {% endtab %}
 
 {% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/7c01a28be980c405be01fa1fb071cda3" %}
+<Embed url="https://gist.github.com/amythee/7c01a28be980c405be01fa1fb071cda3"/>
 {% endtab %}
 {% endtabs %}
 
@@ -64,14 +64,14 @@ Our SDK offers clients a straightforward approach to access message previews for
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/2a613aad8acab92134299a2e118d4edb" %}
+<Embed url="https://gist.github.com/amythee/2a613aad8acab92134299a2e118d4edb"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/9e53ff015777f026d20bf264a7963fa9" %}
+<Embed url="https://gist.github.com/9e53ff015777f026d20bf264a7963fa9"/>
 {% endtab %}
 
 {% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/b3e35552dfc7b5e098dfacec72d0a4d4" %}
+<Embed url="https://gist.github.com/amythee/b3e35552dfc7b5e098dfacec72d0a4d4"/>
 {% endtab %}
 {% endtabs %}

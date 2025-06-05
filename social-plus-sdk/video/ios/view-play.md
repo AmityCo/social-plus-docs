@@ -60,7 +60,7 @@ The system offers real-time automated moderation for live streams, where streams
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/82c7c4f0cb8a18a523b1c9985888811e" %}
+<Embed url="https://gist.github.com/amythee/82c7c4f0cb8a18a523b1c9985888811e"/>
 {% endtab %}
 {% endtabs %}
 
@@ -110,7 +110,7 @@ App.liveStreamsToken = App.liveStreamsCollection.observe { collection, change, e
 {% tab title="v6.19.0 and above" %}
 Use AmityVideoPlayer to play a live stream.
 
-{% embed url="https://gist.github.com/amythee/8d0f4f0da7500573cd67be5fe3d1bd2c" %}
+<Embed url="https://gist.github.com/amythee/8d0f4f0da7500573cd67be5fe3d1bd2c"/>
 {% endtab %}
 
 {% tab title="Deprecated" %}
@@ -160,13 +160,13 @@ RTMP is a low-latency video streaming protocol, that iOS does not support in its
 
 Live streams are recorded and saved as files after the session ends. It would take some time to prepare recorded videos to be ready. You can observe the collection of streams that have recorded videos available.
 
-{% embed url="https://gist.github.com/amythee/e15d9925faef67ed6d3fad56d494831e" %}
+<Embed url="https://gist.github.com/amythee/e15d9925faef67ed6d3fad56d494831e"/>
 
 {% tabs %}
 {% tab title="v6.19.0 and above" %}
 Use AmityRecordedStreamPlayer to play recorded videos. If the live stream session contains multiple recorded videos, the player will play one video after another.
 
-{% embed url="https://gist.github.com/amythee/120b94f06260532184215670be0522fe" %}
+<Embed url="https://gist.github.com/amythee/120b94f06260532184215670be0522fe"/>
 {% endtab %}
 
 {% tab title="Deprecated" %}

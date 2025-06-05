@@ -1,6 +1,6 @@
 # Mentions
 
-<figure><img src="../../.gitbook/assets/image-removebg-preview (2).png" alt=""><figcaption></figcaption></figure>
+<figure><img src="../../.gitbook/assets/image-removebg-preview (2).png" alt="" /><figcaption></figcaption></figure>
 
 Mentions allow users to tag other users in messages, comments, and posts. It's a powerful tool for fostering engagement and collaboration within your social application. With mentions, users can easily direct messages to specific individuals or groups and can alert them to new content or important updates. In the SDK, mentions can be implemented in a range of ways, depending on your application's needs and user experience.  Here are the models that support mentions creation and highlighting:
 

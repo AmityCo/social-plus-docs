@@ -43,7 +43,7 @@ The system offers real-time automated moderation for live streams, where streams
 
 {% tabs %}
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/3c1acb7679c2be88319284616187e58f" %}
+<Embed url="https://gist.github.com/3c1acb7679c2be88319284616187e58f"/>
 {% endtab %}
 {% endtabs %}
 
@@ -97,7 +97,7 @@ From SDK version 6.19.0 onwards, AmityVideoPlayer plays a Live stream with `stre
 
 {% tabs %}
 {% tab title="6.19.0 and above" %}
-{% embed url="https://gist.github.com/amythee/84fd476998b8d9fcab087fc28c978c2f" %}
+<Embed url="https://gist.github.com/amythee/84fd476998b8d9fcab087fc28c978c2f"/>
 {% endtab %}
 
 {% tab title="Deprecated" %}
@@ -128,7 +128,7 @@ From SDK version 6.19.0 onwards, recorded stream can only be played with AmityVi
 {% tab title="6.19.0 and above" %}
 SDK provides AmityVideoPlayer with a capability to play a recorded stream based on `streamId`&#x20;
 
-{% embed url="https://gist.github.com/amythee/7e8b11c7f9e0b32e510388d983608ba0" %}
+<Embed url="https://gist.github.com/amythee/7e8b11c7f9e0b32e510388d983608ba0"/>
 {% endtab %}
 
 {% tab title="Deprecated" %}
@@ -176,4 +176,4 @@ exoplayer?.prepare(videoSource)
 
 By inflating `AmityVideoPlayer` as AndroidView in Compose, it can seamlessly play live or recorded stream video within the Composable function.
 
-{% embed url="https://gist.github.com/amythee/193a6de1d10f4a4153822adb10f77728" %}
+<Embed url="https://gist.github.com/amythee/193a6de1d10f4a4153822adb10f77728"/>
