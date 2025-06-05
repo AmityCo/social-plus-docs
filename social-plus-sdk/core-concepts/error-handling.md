@@ -1,0 +1,173 @@
+# Error Handling
+
+## Server Errors
+
+<table data-header-hidden><thead><tr><th width="118.33333333333331">Code</th><th width="343">Error Name</th><th>Description</th></tr></thead><tbody><tr><td><strong>Code</strong></td><td><strong>Error Name</strong></td><td><strong>Description</strong></td></tr><tr><td>400000</td><td><code>BadRequestError</code></td><td>Request contains invalid parameters.</td></tr><tr><td>400001</td><td><code>InvalidRegularExpression</code></td><td>An invalid regex rule retrieved from or added to the Blocklist</td></tr><tr><td>400002</td><td><code>VideoFormatInvalidRequestError</code></td><td>Video format not supported</td></tr><tr><td>400100</td><td><code>UnauthorizedError</code></td><td>Unverified user performs any action that requires access token verification.</td></tr><tr><td>400300</td><td><code>ForbiddenError</code></td><td>User performs forbidden action such as uploading a pdf file in an image message.</td></tr><tr><td>400301</td><td><code>PermissionDenied</code></td><td>User has no permission to perform the action.</td></tr><tr><td>400302</td><td><code>UserIsMuted</code></td><td>A muted user sends a message.</td></tr><tr><td>400303</td><td><code>ChannelIsMuted</code></td><td>User sends a message in a muted channel.</td></tr><tr><td>400304</td><td><code>UserIsBanned</code></td><td>User accessed a channel or community where he is banned.</td></tr><tr><td>400307</td><td><code>MaxRepetitionExceed</code></td><td>User reached the limit of the number of sent messages containing blocklisted words.</td></tr><tr><td>400308</td><td><code>BanWordFound</code></td><td>User sends a message that contains a blocklisted word.</td></tr><tr><td>400309</td><td><code>LinkNotAllowed</code></td><td>User sends a message that contains link that is not in the Allowlist.</td></tr><tr><td>400311</td><td><code>RPCRateLimitError</code></td><td>Web socket rate limit is exceeded.</td></tr><tr><td>400312</td><td><code>GlobalBanError</code></td><td>Banned user performs any action.</td></tr><tr><td>400314</td><td><code>UnsafeContent</code></td><td>Content moderation system detects unsafe content (eg. nudity). </td></tr><tr><td>400315</td><td><code>DuplicateEntryError</code></td><td>Display name of a collection already exists (eg. for your channels or community categories).</td></tr><tr><td>400316</td><td><code>UserIsUnbanned</code></td><td>Returned when unbanning a user that is not banned.</td></tr><tr><td>400317</td><td><code>ForbiddenError</code></td><td>The only active moderator in a channel/community attempts to leave and there are no other moderators in the group.</td></tr><tr><td>400318</td><td><code>ForbiddenError</code></td><td>The only moderator in a channel/community attempts to leave and there are no other members in the group.</td></tr><tr><td>400319</td><td><code>ForbiddenError</code></td><td>User changes module and user notification settings but the network notification setting is off.</td></tr><tr><td>400400</td><td><code>ItemNotFound</code></td><td>System cannot find any resource matched with the requested condition.</td></tr><tr><td>400900</td><td><code>Conflict</code></td><td>System cannot create/update duplicated data.</td></tr><tr><td>500000</td><td><code>BusinessError</code></td><td>Uncategorized internal system errors not related to any user input.</td></tr><tr><td>500000</td><td><code>BusinessError</code></td><td>Video upload failed</td></tr></tbody></table>
+
+## Client Errors
+
+<table data-header-hidden><thead><tr><th width="155.33333333333331">Code</th><th>Error Name</th><th>Description</th></tr></thead><tbody><tr><td><strong>Code</strong></td><td><strong>Error Name</strong></td><td><strong>Description</strong></td></tr><tr><td>800000</td><td><code>Unknown</code></td><td><p>Uncategorized errors. </p><p>To debug, refer to the <em>'error.message'</em> property.</p></td></tr><tr><td>800110</td><td><code>InvalidParameter</code></td><td>Data type of the parameter is invalid.</td></tr><tr><td>800210</td><td><code>ConnectionError</code></td><td>Websocket connection of the SDK cannot reach the platform server. This could also be the case if a user is global-banned and try to register a session.</td></tr></tbody></table>
+
+## Error Objects
+
+Error objects can be returned to you via LiveObjects, callbacks, or client error delegates. The possible error codes are listed in a public error code enum: each case is named after its error.
+
+You can convert a Social Plus Exception into a Social Plus Error with the following:
+
+<Tabs>
+<Tab title="iOS">
+<CodeBlock language="swift">
+{`// Implement this delegate method which gets called when error occurs
+func didReceiveAsyncError(_ error: Error) {
+    let error = error as NSError
+    guard let amityError = AmityErrorCode(rawValue: error.code) else {
+        assertionFailure("unknown error \(error.code), please report this code to Amity")
+        return
+    }
+    
+    if amityError == .globalBan {
+        // Handle global ban event here
+    }
+}`}
+</CodeBlock>
+
+<Note>
+All the errors returned by the iOS SDK come in the form of an `NSError` with domain Social Plus.
+</Note>
+</Tab>
+
+<Tab title="Android">
+<CodeBlock language="kotlin">
+{`// Example of handling errors in Android
+try {
+    // Your code that might throw AmityException
+} catch (e: AmityException) {
+    when (e) {
+        is AmityException.NetworkError -> // Handle network error
+        is AmityException.BadRequest -> // Handle bad request
+        // Handle other specific exceptions
+    }
+}`}
+</CodeBlock>
+
+For any specific errors that's handled in PagingData please visit the web page below to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
+</Tab>
+
+<Tab title="JavaScript">
+<CodeBlock language="javascript">
+{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
+
+const liveObject = CommunityRepository.communityForId('abc');
+liveObject.on("dataUpdated", data => {
+  // community is fetched
+});
+liveObject.on("dataError", err => {
+  // failed to fetch the community 
+  console.log(err.code == ErrorCode.BusinessError);
+})`}
+</CodeBlock>
+
+<Note>
+All the errors returned by the SDK come in form of an Error with domain `ASC`.
+</Note>
+</Tab>
+
+<Tab title="TypeScript">
+<CodeBlock language="typescript">
+{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
+
+const liveObject = CommunityRepository.communityForId('abc');
+liveObject.on("dataUpdated", (data: Community) => {
+  // community is fetched
+});
+liveObject.on("dataError", (err: Error) => {
+  // failed to fetch the community 
+  console.log(err.code === ErrorCode.BusinessError);
+})`}
+</CodeBlock>
+</Tab>
+</Tabs>
+
+When an error is returned as a result of an action from your side (e.g. trying to join a channel), the action is considered completed and the SDK will not execute any additional logic.
+
+## Global ban error handling
+
+A global ban error means that the user is banned from the system resulting in the inability to have a connection with the system. If the user already has a session, the session will be revoked, and will be unable to create a new session.
+
+<Tabs>
+<Tab title="iOS">
+<CodeBlock language="swift">
+{`var client: AmityClient?
+client.clientErrorDelegate = self // set yourself as the delegate
+
+...
+
+// Implement this delegate method which gets called when error occurs
+func didReceiveAsyncError(_ error: Error) {
+        let error = error as NSError
+        guard let amityError = AmityErrorCode(rawValue: error.code) else {
+            assertionFailure("unknown error \(error.code), please report this code to Amity")
+            return
+        }
+        
+        if amityError == .globalBan {
+            // Handle global ban event here
+        }
+    }`}
+</CodeBlock>
+</Tab>
+
+<Tab title="Android">
+<CodeBlock language="kotlin">
+{`// Banned while not having a session
+client.login(userId, authToken, object: AmityClient.Callback<AmityUser> {
+    override fun onSuccess(user: AmityUser) {
+        // Login successful
+    }
+    
+    override fun onError(error: AmityException) {
+        if (error is AmityException.GlobalBan) {
+            // Handle global ban
+        }
+    }
+})`}
+</CodeBlock>
+
+<CodeBlock language="kotlin">
+{`// Observing the LiveObject for ban while having a session
+client.getGlobalBanLiveObject().observe(object: AmityEventHandler<Boolean> {
+    override fun onReceived(isGlobalBanned: Boolean) {
+        if (isGlobalBanned) {
+            // Handle global ban
+        }
+    }
+})`}
+</CodeBlock>
+</Tab>
+
+<Tab title="JavaScript">
+<CodeBlock language="javascript">
+{`client = new ASCClient({ apiKey, apiEndpoint });
+
+client.on('dataError', error => {
+  if (error.code === ErrorCode.GlobalBanError) {
+    // handle the case the user is globally banned
+  }
+});`}
+</CodeBlock>
+</Tab>
+
+<Tab title="TypeScript">
+<CodeBlock language="typescript">
+{`import { ASCClient, ErrorCode } from '@amityco/js-sdk';
+
+const client = new ASCClient({ apiKey, apiEndpoint });
+
+client.on('dataError', (error: Error) => {
+  if (error.code === ErrorCode.GlobalBanError) {
+    // handle the case the user is globally banned
+  }
+});`}
+</CodeBlock>
+</Tab>
+</Tabs>

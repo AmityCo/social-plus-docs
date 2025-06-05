@@ -1,0 +1,147 @@
+# Broadcast Live Stream
+
+To broadcast a live stream video, we provide a convenient broadcaster tool called `AmityStreamBroadcaster`.  We now only support 16:9 video ratio with the following resolution representing by the enum `AmityStreamBroadcastResolution`:
+
+* `.SD_480P` indicates a video with resolution 480x854  and video bitrate 1216 kpbs
+* `.HD_720P` indicates a video with resolution 720x1280  and video bitrate 2496 kpbs
+* `.FHD_1080P` indicates a video with resolution 1080x1920  and video bitrate 4992 kpbs
+
+#### Setup&#x20;
+
+You simply need to include this dependency to your project in `build.gradle` in the application level.
+
+```
+ implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-video-publisher:x.y.z'
+```
+
+Inside your Application class, in the application initialization process, you need to register the video publisher SDK to the core SDK by calling.
+
+```kotlin
+  @Override
+  open fun onCreate() {
+        super.onCreate()
+        AmityStreamBroadcasterClient.setup(AmityCoreClient.getConfiguration())
+    }
+```
+
+&#x20;We highly recommend using Android's ConstraintLayout to construct our `AmityCameraView` Since we only support 16:9 video ratio, ConstratntLayout will ensure that the view will be drawn in the correct width and height.
+
+### Authorize the required permissions
+
+`AmityStreamBroadcaster` requires the following permissions to work properly.
+
+As per the required parameter by the aforementioned object to provide `AmityCameraView` , you will need to define the view in your Activity or Fragment layout by :
+
+1. Camera access
+2. Microphone access
+
+Before using `AmityStreamBroadcaster`, please make sure these permissions are granted.
+
+See [here](https://developer.android.com/training/permissions/requesting) the steps to ask for the permissions.
+
+### **Create an AmityStreamBroadCaster Object**
+
+In order to create the object, we also provide the `AmityStreamBroadCaster.Builder` class to create and configure this object easily. It requires `AmityCameraView` as a parameter and  `AmityStreamBroadcasterConfig` as a configurable value which will be explained in the following section.
+
+```kotlin
+val broadcaster = AmityStreamBroadcaster.Builder(amity_camera)
+        .setConfiguration(configuration)
+        .build()
+```
+
+#### Prepare a configuration
+
+For configuration, we provide the `AmityStreamBroadcasterConfiguration.Builder` to construct the configuration conveniently. As we have mentioned above, We support `SD_480P`, `HD_720P` and, `FHD_1080P` resolutions. Orientations are relying on Android Configuration class, you may either choose Configuration.ORIENTATION\_PORTRAIT or `Configuration.ORIENTATION_LANDSCAPE` .
+
+```kotlin
+val configuration = AmityStreamBroadcasterConfiguration.Builder()
+        .setOrientation(Configuration.ORIENTATION_PORTRAIT)
+        .setResolution(AmityBroadcastResolution.HD_720P)
+        .build()
+```
+
+#### Setup a layout
+
+As per the required parameter by the aforementioned object to provide `AmityCameraView` , you need to define the view in your Activity or Fragment layout by :
+
+```kotlin
+<androidx.constraintlayout.widget.ConstraintLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.amity.socialcloud.sdk.video.AmityCameraView
+        android:id="@+id/amity_camera"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintDimensionRatio="H,9:16"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.5">
+    </com.amity.socialcloud.sdk.video.AmityCameraView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+We highly recommend using Android's ConstraintLayout to construct our `AmityCameraView` Since we only support 16:9 video ratio, ConstraintLayout ensures that the view will be drawn in the correct width and height.
+
+#### Setup a layout in Jetpack Compose
+
+In Jetpack Compose, inflate `AmityCameraView` as AndroidView and provide it to aforementioned object as below
+
+{% embed url="https://gist.github.com/amythee/737758a36346c3009058cc4678ce9b29" %}
+
+### Preview the video
+
+To begin previewing the camera input call
+
+```swift
+broadcaster.startPreview()
+```
+
+### Start live stream session
+
+To begin broadcasting live stream call
+
+```swift
+broadcaster.startPublish(title: String, description: String)
+```
+
+### Stop live stream session
+
+To stop broadcasting live stream call
+
+```swift
+broadcaster.stopPublish()
+```
+
+### Switch camera position
+
+By default, the broadcaster will use the back camera. However, you can switch camera positions anytime by calling.
+
+```swift
+broadcaster.switchCamera()
+
+```
+
+### **Observe a broadcasting state**
+
+To observe the status of a broadcast, we provide a function (flow) to observe any status changes and return as `AmityStreamBroadcasterState` . The possible statuses are :&#x20;
+
+* `.IDLE`indicates a status of stream in an idle state.
+* `.CONNECTING`indicates a status of stream that it's connecting to a rtmp server.
+* `.CONNECTED`indicates a status of stream that it's connected to a rtmp server.
+* `.DISNNECTED`indicates a status of stream that it's disconnected to a rtmp server. We also provide error information through an exception.
+
+```swift
+broadcaster.stateFlowable
+        .subscribe { status ->
+                when (status) {
+                is AmitytreamBroadcasterState.CONNECTED { showConnected() }
+                is AmitytreamBroadcasterState.CONNECTING { showConnecting() }
+                is AmitytreamBroadcasterState.DISCONNECTED { showDisconnected()}
+                }
+ }
+```

@@ -1,0 +1,13 @@
+---
+description: Host your events virtually and see community interaction as it happens.
+---
+
+# View & Play Live Stream
+
+In order to play a live stream or recorded live stream using the JS-SDK, we have implemented an internal player. This player allows developers to easily incorporate video playback functionality into their applications. To utilize this feature, developers can refer to the example code provided below, which demonstrates how to play the desired video with simplicity and efficiency.
+
+{% embed url="https://gist.github.com/amythee/76ce949699cd8e9fe76557a0293449ca" %}
+
+In the example code mentioned above, developers are required to provide a `streamId` parameter to utilize the stream player functionality. This stream player is capable of playing both live streams and recorded live streams.
+
+Recorded stream video refers to a previously streamed content that has concluded and has been recorded within the system.

@@ -1,0 +1,112 @@
+---
+description: Live Objects are supported in the Android SDK with RxJava Data Streaming
+---
+
+# Android Live Objects/Collections
+
+The [RxJava3](https://github.com/ReactiveX/RxJava) library is being used in Android development to achieve Live Object and Live Collection behavior.
+
+It is a Java VM implementation of ReactiveX, a library for composing asynchronous and event-based programs by using observable sequences. The building blocks of RxJava are Observables and Subscribers. Observable is used for emitting items and Subscriber is used for consuming those items.
+
+You can visit [ReactiveX](http://reactivex.io/intro.html) for more information.
+
+### How it Works
+
+SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.&#x20;
+
+Rx3 Data Stream helps in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through Flowable Objects and Flowable Collection.
+
+New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
+
+Live Collection is available for the following functionalities in user/community feeds via [pagingData](broken-reference) APIs:
+
+<Info>
+For any specific errors that's handled in PagingData please visit the web page below  to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
+</Info>
+
+* Post Collection
+* Comment Collection
+* Reactions Collection&#x20;
+* Followers/Following Collection
+* Channel Collection
+* Message Collection
+* Channel Member Collection
+* Community Collection
+* Community Members Collection
+* User list collection
+* Channel members search collection
+* Live stream collection
+
+## **How to Retrieve Data from Rx3 Data Stream**
+
+To retrieve data from the RxStream, we need to subscribe to the Stream(Flowable/Single/Completable) by defining subscribing and observing threads.
+
+{% embed url="https://gist.github.com/amythee/48c1128e80e082fc7fd5254b9e8b55f3" %}
+
+### **Events a Data Stream can Emit**
+
+In the RxJava3 framework we have these different types of objects that can be observed:
+
+1. **Flowable** - emits a stream of elements
+   * `doOnNext`
+   * `doOnError`
+
+2. **Single** - emits exactly one element
+   * `doOnSuccess`
+   * `doOnError`
+
+3. **Completable** - emits a "complete" event, without emitting any data type, just a success/failure
+   * `doOnComplete`
+   * `doOnError`
+
+### **Data Stream Interface**
+
+Data Stream uses all standard [RxJava3 operators](https://github.com/ReactiveX/RxJava/wiki/Alphabetical-List-of-Observable-Operators).
+
+## Example
+
+To get channel data, below is a sample code.
+
+{% embed url="https://gist.github.com/amythee/a997fc0617f207bf073b4fd5dd1f43b3" %}
+
+## Kotlin's Coroutines bridge
+
+The Amity Android SDK comes equipped with asynchronous and data stream capabilities, powered by RxJava3 by default. However, for those who prefer to use Kotlin's Coroutines, the SDK can be seamlessly integrated with the following Kotlin extension functions, allowing for easy interoperability between Amity Android SDK functions and Kotlin Coroutines functions.
+
+### Suspend functions
+
+By using the `.await()` method, it enables the conversion of `Completable` and `Single<T>` functions of the Amity Android SDK into `suspend` functions.
+
+{% embed url="https://gist.github.com/amythee/600c3952ba913f57831e57623dc2ad4a" %}
+
+{% embed url="https://gist.github.com/amythee/6ed0235b91223672f31ee9a058a6f38c" %}
+
+### Flow functions
+
+By using the `.asFlow()` method, it enables the conversion of `Flowable<T>` functions of the Amity Android SDK into `Flow` functions.
+
+{% embed url="https://gist.github.com/amythee/ea7c04c5a0c080bde6c39517c6025c10" %}
+
+## Jetpack Compose compatibility
+
+Amity Android SDK seamlessly integrates with Jetpack Compose UI, allowing you to take full advantage of the modern UI toolkit provided by Jetpack Compose. You can effortlessly incorporate our SDK into your Jetpack Compose-based projects to enhance your app's social experience. This compatibility ensures that you can leverage the power of Jetpack Compose while benefiting from the features and capabilities our SDK provides.
+
+### Flow of PagingData in Compose
+
+In Jetpack Compose, integrating data from a `Flow<PagingData<T>>` source into your UI is made easy through the `collectAsLazyPagingItems()` function. This function allows you to seamlessly paginate and display items within your Composable functions.
+
+To start using it, add compose paging dependency in your project app level `build.gradle` file.
+
+```
+implementation "androidx.paging:paging-compose:x.y.z"
+```
+
+Then in your Composable functions, you can collect from flow and display data, and also can observe the load state.
+
+{% embed url="https://gist.github.com/amythee/2d78a7d2a13921da9e48eea6d76448af" %}
+
+### Flow in Compose
+
+By using `collectAsState()` method, it can deliver asynchronous data updates to your Compose UI components.
+
+{% embed url="https://gist.github.com/amythee/cc0368a98295118fb2a3b6b7ba72e82d" %}

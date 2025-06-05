@@ -1,0 +1,262 @@
+---
+description: Host your events virtually and see community interaction as it happens.
+---
+
+# Create Live Stream
+
+![](<../../../.gitbook/assets/image (4) (3) (1).png>)
+
+{% hint style="warning" %}
+There is a limitation to the maximum number of concurrent live events. Reach out to us at[ community.social.plus.co](https://community.amity.co/) with your use-case and we will determine if the current limit can be raised.
+{% endhint %}
+
+### Create a stream&#x20;
+
+To create a stream, follow the code below. This will return a `LiveObject` instance of the created `StreamModel`.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk-react-native';
+
+async function createStream() {
+  const newStream = {
+    title: 'stream title',
+    thumbnailFileId: 'fileId',
+    description: 'this is my live stream',
+    isSecure: false,
+  };
+
+  const { data: stream } = await StreamRepository.createStream(newStream);
+
+  return stream;
+}
+```
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+async function createStream() {
+  const newStream = {
+    title: 'stream title',
+    thumbnailFileId: 'fileId',
+    description: 'this is my live stream',
+    isSecure: false,
+  };
+
+  const { data: stream } = await StreamRepository.createStream(newStream);
+
+  return stream;
+}
+```
+
+### Delete a stream&#x20;
+
+To delete a stream, you will need the ID of the stream that you want to delete. The function will return true if successfully deleted, otherwise, it will throw an error.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+async function deleteStream() {
+  const success = await StreamRepository.deleteStream('streamId');
+
+  return success;
+}
+```
+
+```typescript
+import { createQuery, runQuery, StreamRepository } from '@amityco/ts-sdk';
+
+const query = createQuery(StreamRepository.deleteStream, 'streamId');
+
+runQuery(query, ({ data: isDeleted, ...options }) => console.log(isDeleted, options));
+```
+
+### Dispose a stream&#x20;
+
+Disposing a stream means updating the streaming status to ended and invalidating the streaming URL.&#x20;
+
+To dispose a stream, you need the ID of the stream that you want to dispose. The function will return true if successfully deleted, otherwise, it will throw an error.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+async function disposeStream() {
+  const success = await StreamRepository.disposeStream('streamId');
+
+  return success;
+}
+```
+
+```typescript
+import { createQuery, runQuery, StreamRepository } from '@amityco/ts-sdk';
+
+const query = createQuery(StreamRepository.disposeStream, 'streamId');
+
+runQuery(query, ({ data: stream, ...options }) => console.log(stream, options));
+```
+
+### Retrieve a stream object
+
+Each stream object has a unique identifier. To retrieve a single stream object, use the sample code below. This function returns a `LiveObject` instance of `streamModel`. The stream object contains essential data such as the video stream title and description.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+const getStreamById = async () => {
+  return StreamRepository.getStreamById('streamId', ({ data: stream, loading, error }) => {
+    if (error) {
+      // handle error
+    }
+
+    if (loading) {
+      // handle loading
+    }
+
+    if (stream) {
+      // handle data
+    }
+  });
+};
+```
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+const getStreamById = async () => {
+  return StreamRepository.getStreamById('streamId', ({ data: stream, loading, error }) => {
+    if (error) {
+      // handle error
+    }
+
+    if (loading) {
+      // handle loading
+    }
+
+    if (stream) {
+      // handle data
+    }
+  });
+};
+```
+
+### Get the stream status
+
+The stream consists of many states. It can change from one state to another, depending on events and actions. The following enum cases describe all the possible status of a stream.
+
+* `StreamStatus.Idle` - has generated but no actions have been taken
+* `StreamStatus.Live`  -  currently being broadcasted
+* `StreamStatus.Ended` - has ended broadcasting and in the progress of transforming to a recorded stream
+* `StreamStatus.Recorded` - has ended broadcasting and has been transformed to a recorded stream
+
+You can check the status of a stream by calling `.status`.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+const getStreamById = async () => {
+  return StreamRepository.getStreamById('streamId', ({ data: stream, loading, error }) => {
+    if (error) {
+      // handle error
+    }
+
+    if (loading) {
+      // handle loading
+    }
+
+    if (stream) {
+      // handle data
+      stream.status
+    }
+  });
+};
+```
+
+```typescript
+import { StreamStatus } from '@amityco/ts-sdk';
+
+const getStreamById = async () => {
+  return StreamRepository.getStreamById('streamId', ({ data: stream, loading, error }) => {
+    if (error) {
+      // handle error
+    }
+
+    if (loading) {
+      // handle loading
+    }
+
+    if (stream) {
+      // handle data
+      stream.status;
+    }
+  });
+};
+```
+
+### Retrieving a stream collection&#x20;
+
+`StreamRepository` provides a convenient method `queryStreams` and can be called to query live streams. We provide enums of stream status as `parameters.statuses` . You can observe changes in a collection as per the defined statuses.
+
+This function returns a live collection of stream objects.
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+const getStreams = async () => {
+  return StreamRepository.getStreams(
+    {
+      isLive: false,
+      statuses: [Amity.StreamStatus.ENDED, Amity.StreamStatus.RECORDED],
+      userPublicIds: ['userId1', 'userId2'],
+      isDeleted: false,
+    },
+    ({ data: streams, loading, error }) => {
+      if (error) {
+        // handle error
+      }
+
+      if (loading) {
+        // handle loading
+      }
+
+      if (streams) {
+        // handle data
+      }
+    },
+  );
+};
+```
+
+```typescript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+const getStreams = async () => {
+  return StreamRepository.getStreams(
+    {
+      isLive: false,
+      statuses: [Amity.StreamStatus.ENDED, Amity.StreamStatus.RECORDED],
+      userPublicIds: ['userId1', 'userId2'],
+      isDeleted: false,
+    },
+    ({ data: streams, loading, error }) => {
+      if (error) {
+        // handle error
+      }
+
+      if (loading) {
+        // handle loading
+      }
+
+      if (streams) {
+        // handle data
+      }
+    },
+  );
+};
+```
+
+{% hint style="info" %}
+`isDeleted` can be any of these values:
+
+* `null` (default) - show all streams (deleted and undeleted)&#x20;
+* `true` - show only deleted streams&#x20;
+* `false` - show only non-deleted streams
+{% endhint %}

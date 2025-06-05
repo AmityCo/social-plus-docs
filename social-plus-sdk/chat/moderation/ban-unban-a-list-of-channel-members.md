@@ -1,0 +1,143 @@
+---
+description: >-
+  When a user is banned in a channel, they are removed from a channel and no
+  longer able to participate or observe messages in that channel.
+---
+
+# Ban/Unban a List of Channel Members
+
+Moderators can ban and unban users. When a user is banned from a channel, they are forcibly removed from the channel and may no longer participate or observe messages in that channel. All their previous messages in the channel will also be automatically deleted.
+
+A user that has been banned from a channel can not rejoin the channel until they have been unbanned.
+
+## Global Ban
+
+As well as the banning and unbanning of users, admins also have the ability to global ban a user. When a user is globally banned, they can no longer access Social Plus's network and will be forcibly removed from all their existing channels. All the globally banned user's messages will also be deleted.
+
+The globally banned user can not access Amity's network again until they have been globally unbanned.
+
+<Info>
+When a user is banned, it can take up to 30 seconds before the user is disconnected from the network.
+</Info>
+
+## Ban Users
+
+Banning members is a more heavy-handed moderation method. When a user is banned, all its messages are retroactively deleted, it will be removed from the channel, and it will not be allowed to join the channel again until it is explicitly unbanned.
+
+<Tabs>
+<Tab title="iOS">
+```swift
+let moderation = AmityChannelModeration(client: <amityclient>, channel: <channel-id>)
+​
+moderation.banMembers(["user1"]) { success, errror in
+  ...
+}
+```
+</Tab>
+
+<Tab title="Android">
+<CodeGroup>
+```java
+amityChannelRepository.banMembers("channelId", Collections.singletonList("userId")).subscribe();
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
+```javascript
+repository.banMembers({
+  userIds: ['user1'],
+}).catch(error => {
+  ...
+});
+```
+</Tab>
+
+<Tab title="TypeScript">
+Version 6
+
+<CodeGroup>
+```typescript
+channelRepository.banMembers("channelId", ["userId"]);
+```
+</CodeGroup>
+
+Beta (v0.0.1)
+
+<CodeGroup>
+```typescript
+channelRepository.banMembers({
+  channelId: "channelId",
+  userIds: ["userId"]
+});
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+AmityChannelMember().ban(channelId: channelId, userId: userId);
+```
+</CodeGroup>
+</Tab>
+</Tabs>
+
+## Unban Users
+
+<Tabs>
+<Tab title="iOS">
+Supported ✅ (please wait while we prepare a real example!)
+</Tab>
+
+<Tab title="Android">
+<CodeGroup>
+```java
+amityChannelRepository.unbanMembers("channelId", Collections.singletonList("userId")).subscribe();
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
+```javascript
+repository.unbanMembers({
+  userIds: ['user1'],
+}).catch(error => {
+  ...
+});
+```
+</Tab>
+
+<Tab title="TypeScript">
+Version 6
+
+<CodeGroup>
+```typescript
+channelRepository.unbanMembers("channelId", ["userId"]);
+```
+</CodeGroup>
+
+Beta (v0.0.1)
+
+<CodeGroup>
+```typescript
+channelRepository.unbanMembers({
+  channelId: "channelId",
+  userIds: ["userId"]
+});
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+AmityChannelMember().unban(channelId: channelId, userId: userId);
+```
+</CodeGroup>
+</Tab>
+</Tabs>
+
+<Info>
+This feature does not work with `Broadcast` and `Conversation` channels. Calling `banMembers()` or `unbanMembers()` on these channels will result in an error.
+</Info>
