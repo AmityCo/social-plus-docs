@@ -10,11 +10,11 @@ The SDK provides "`getSettings()`" function within Community Notification to ins
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/925c4470c6ecf110b7de4a7f7ab1d508" %}
+<Embed url="https://gist.github.com/amythee/925c4470c6ecf110b7de4a7f7ab1d508"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/73a153e9d84d32e6739d19299797a9cc" %}
+<Embed url="https://gist.github.com/amythee/73a153e9d84d32e6739d19299797a9cc"/>
 {% endtab %}
 
 {% tab title="Flutter" %}
@@ -28,11 +28,11 @@ The SDK provides "`enable()`" function where user can choose which notification 
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/88ef088d70bfa97c5c9a807ed47f1678" %}
+<Embed url="https://gist.github.com/amythee/88ef088d70bfa97c5c9a807ed47f1678"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/7838f75ff18921274834c1e12e446d62" %}
+<Embed url="https://gist.github.com/amythee/7838f75ff18921274834c1e12e446d62"/>
 {% endtab %}
 
 {% tab title="Flutter" %}

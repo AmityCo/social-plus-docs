@@ -16,7 +16,7 @@ There is a limitation for the maximum concurrent live events. Please feel free t
 
 Each stream object has a unique identifier. To retrieve a single stream object. The stream object contains essential data such as title, description, streamerUrl, watcherUrl, etc
 
-{% embed url="https://gist.github.com/amythee/85740588f25afac21c52b3274bb2557e" %}
+<Embed url="https://gist.github.com/amythee/85740588f25afac21c52b3274bb2557e"/>
 
 ### Stream Status
 
@@ -35,7 +35,7 @@ The system offers real-time automated moderation for live streams, where streams
 
 {% tabs %}
 {% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/2c8dbf51574b9f5bee306654db4106a6" %}
+<Embed url="https://gist.github.com/amythee/2c8dbf51574b9f5bee306654db4106a6"/>
 {% endtab %}
 {% endtabs %}
 
@@ -43,7 +43,7 @@ The system offers real-time automated moderation for live streams, where streams
 
 &#x20;You can query a list of streams by calling **`queryStream`**.
 
-{% embed url="https://gist.github.com/amythee/d74b63c788fa0782120943be4755807c" %}
+<Embed url="https://gist.github.com/amythee/d74b63c788fa0782120943be4755807c"/>
 
 ## Playing a live stream
 
@@ -53,22 +53,22 @@ To play a live stream, please refer to [view-and-play-live-stream.md](../web/vie
 
 To play a recorded stream, currently, FLV, MP4, and M3U8 protocols are  supported by using **`recordings`** inside the stream object.
 
-{% embed url="https://gist.github.com/ab836532def3bbb89c4fa9805728a33f" %}
+<Embed url="https://gist.github.com/ab836532def3bbb89c4fa9805728a33f"/>
 
 ## Create a stream object
 
 Note that the TypeScript SDK does not support broadcasting a live stream directly. Instead, it allows the creation of a stream object. You can then retrieve the streaming URL from this object and implement it with a third-party library or a streaming tool like OBS.
 
-{% embed url="https://gist.github.com/75cdb3d62f3d3bb986a66eeb83b9de8e" %}
+<Embed url="https://gist.github.com/75cdb3d62f3d3bb986a66eeb83b9de8e"/>
 
 ## Stop live stream session
 
 To stop broadcasting a live stream, you can use the dedicated stop function provided by the SDK. This function will explicitly end the ongoing live stream and change its status to 'ENDED' Using this function is crucial for effectively managing your live streams and ensuring that they transition properly to their recorded state after broadcasting. Here's how you can use the function:
 
-{% embed url="https://gist.github.com/5ec52719ca044545369b9964850c0c41" %}
+<Embed url="https://gist.github.com/5ec52719ca044545369b9964850c0c41"/>
 
 ## Delete live stream
 
 To delete a stream, you will need the ID of the stream that you want to delete. The function will return true if successfully deleted, otherwise, it will throw an error.
 
-{% embed url="https://gist.github.com/f80fd898ee60c0e078cb41e9843d0b80" %}
+<Embed url="https://gist.github.com/f80fd898ee60c0e078cb41e9843d0b80"/>

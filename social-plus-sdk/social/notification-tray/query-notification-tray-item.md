@@ -16,14 +16,14 @@ The `getNotificationTrayItems()` method returns a [Live collection](../../core-c
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/5dc7b39d3eb748b5e26ee1793da86483" %}
+<Embed url="https://gist.github.com/amythee/5dc7b39d3eb748b5e26ee1793da86483"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/6934ee9bd2d45fc194517d1e3c6dc408" %}
+<Embed url="https://gist.github.com/6934ee9bd2d45fc194517d1e3c6dc408"/>
 {% endtab %}
 
 {% tab title="Web" %}
-{% embed url="https://gist.github.com/amythee/6ef042844b2a719ffd0b9e5c2c1d63b7" %}
+<Embed url="https://gist.github.com/amythee/6ef042844b2a719ffd0b9e5c2c1d63b7"/>
 {% endtab %}
 {% endtabs %}

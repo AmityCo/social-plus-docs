@@ -15,7 +15,7 @@ Before you can start receiving push notifications, you need to obtain a FCM uniq
 
 You can initialize the services with the obtained token. Please note that the FCM token can be changed through an application life cycle. Please make sure that the FCM token supplied to the messaging SDK is up to date. To notify the messaging SDK of the latest token, the following line of code can be called whenever necessary:
 
-{% embed url="https://gist.github.com/850284e5274caaaf8eeaf01650525ba8" %}
+<Embed url="https://gist.github.com/850284e5274caaaf8eeaf01650525ba8"/>
 
 ### Retrieve Push Notifications
 
@@ -37,6 +37,6 @@ implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-bai
 
 Baidu API key is needed for Baidu push services initialization:
 
-{% embed url="https://gist.github.com/amythee/05d25bc9ef2a28f9236820d383a49f08" %}
+<Embed url="https://gist.github.com/amythee/05d25bc9ef2a28f9236820d383a49f08"/>
 
 **Note: The messaging SDK always considers FCM as a primary push provider and Baidu as a secondary push provider. If the messaging SDK detects Google Play services on the device, Baidu push services won't be initialized.**

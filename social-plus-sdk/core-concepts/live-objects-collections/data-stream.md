@@ -41,7 +41,7 @@ For any specific errors that's handled in PagingData please visit the web page b
 
 To retrieve data from the RxStream, we need to subscribe to the Stream(Flowable/Single/Completable) by defining subscribing and observing threads.
 
-{% embed url="https://gist.github.com/amythee/48c1128e80e082fc7fd5254b9e8b55f3" %}
+<Embed url="https://gist.github.com/amythee/48c1128e80e082fc7fd5254b9e8b55f3"/>
 
 ### **Events a Data Stream can Emit**
 
@@ -67,7 +67,7 @@ Data Stream uses all standard [RxJava3 operators](https://github.com/ReactiveX/R
 
 To get channel data, below is a sample code.
 
-{% embed url="https://gist.github.com/amythee/a997fc0617f207bf073b4fd5dd1f43b3" %}
+<Embed url="https://gist.github.com/amythee/a997fc0617f207bf073b4fd5dd1f43b3"/>
 
 ## Kotlin's Coroutines bridge
 
@@ -77,15 +77,15 @@ The Amity Android SDK comes equipped with asynchronous and data stream capabilit
 
 By using the `.await()` method, it enables the conversion of `Completable` and `Single<T>` functions of the Amity Android SDK into `suspend` functions.
 
-{% embed url="https://gist.github.com/amythee/600c3952ba913f57831e57623dc2ad4a" %}
+<Embed url="https://gist.github.com/amythee/600c3952ba913f57831e57623dc2ad4a"/>
 
-{% embed url="https://gist.github.com/amythee/6ed0235b91223672f31ee9a058a6f38c" %}
+<Embed url="https://gist.github.com/amythee/6ed0235b91223672f31ee9a058a6f38c"/>
 
 ### Flow functions
 
 By using the `.asFlow()` method, it enables the conversion of `Flowable<T>` functions of the Amity Android SDK into `Flow` functions.
 
-{% embed url="https://gist.github.com/amythee/ea7c04c5a0c080bde6c39517c6025c10" %}
+<Embed url="https://gist.github.com/amythee/ea7c04c5a0c080bde6c39517c6025c10"/>
 
 ## Jetpack Compose compatibility
 
@@ -103,10 +103,10 @@ implementation "androidx.paging:paging-compose:x.y.z"
 
 Then in your Composable functions, you can collect from flow and display data, and also can observe the load state.
 
-{% embed url="https://gist.github.com/amythee/2d78a7d2a13921da9e48eea6d76448af" %}
+<Embed url="https://gist.github.com/amythee/2d78a7d2a13921da9e48eea6d76448af"/>
 
 ### Flow in Compose
 
 By using `collectAsState()` method, it can deliver asynchronous data updates to your Compose UI components.
 
-{% embed url="https://gist.github.com/amythee/cc0368a98295118fb2a3b6b7ba72e82d" %}
+<Embed url="https://gist.github.com/amythee/cc0368a98295118fb2a3b6b7ba72e82d"/>

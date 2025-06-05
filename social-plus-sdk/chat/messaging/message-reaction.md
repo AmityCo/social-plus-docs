@@ -6,7 +6,7 @@ description: >-
 
 # Message Reaction
 
-<figure><img src="../../../.gitbook/assets/image (5) (1) (1) (3).png" alt=""><figcaption></figcaption></figure>
+<figure><img src="../../../.gitbook/assets/image (5) (1) (1) (3).png" alt="" /><figcaption></figcaption></figure>
 
 The Social Plus SDK product also provides functionality for adding and removing reactions to messages. Users can add any number of reactions to a particular message, allowing them to engage with the content in a more expressive and nuanced way. Additionally, users can also remove reactions that they have added to a message, providing greater control and flexibility over their engagement with the content.
 

@@ -10,7 +10,7 @@ Once the user joins the channel, they will be able to participate in conversatio
   <Tab title="iOS">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/7991098360c38871df9c3810cc0420ed#file-join_a_channel-swift" %}
+<Embed url="https://gist.github.com/amythee/7991098360c38871df9c3810cc0420ed#file-join_a_channel-swift"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -18,7 +18,7 @@ Once the user joins the channel, they will be able to participate in conversatio
   <Tab title="Android">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/c09f00e446510aabf1822258df0a8ed1" %}
+<Embed url="https://gist.github.com/amythee/c09f00e446510aabf1822258df0a8ed1"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -34,17 +34,17 @@ channelId: 'channel2'
   <Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/f8db2dbeb4ce6b5b57b8b1f32310d953#file-joinchannel-ts" %}
+<Embed url="https://gist.github.com/amythee/f8db2dbeb4ce6b5b57b8b1f32310d953#file-joinchannel-ts"/>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/bc6472ea1de477b8fec72f55613a7001" %}
+<Embed url="https://gist.github.com/bc6472ea1de477b8fec72f55613a7001"/>
   </Tab>
 
   <Tab title="Flutter">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/1e92fcd7e40deb3c1fa3e672172231f8#file-amitychanneljoin-dart" %}
+<Embed url="https://gist.github.com/amythee/1e92fcd7e40deb3c1fa3e672172231f8#file-amitychanneljoin-dart"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -58,7 +58,7 @@ The `leaveChannel` function is used to disengage a user from a channel by removi
   <Tab title="iOS">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/d697cb2b09a848b8f07f8b82763eb028#file-leave_channel-swift" %}
+<Embed url="https://gist.github.com/amythee/d697cb2b09a848b8f07f8b82763eb028#file-leave_channel-swift"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -66,7 +66,7 @@ The `leaveChannel` function is used to disengage a user from a channel by removi
   <Tab title="Android">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/4fe563367933a7835268df34e77f7b5b" %}
+<Embed url="https://gist.github.com/amythee/4fe563367933a7835268df34e77f7b5b"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -84,17 +84,17 @@ await ChannelMembershipRepository.leaveChannel({
   <Tab title="TypeScript">
 **Version 6**
 
-{% embed url="https://gist.github.com/amythee/3f762c73bd5ff916591347c582107d93#file-leavechannel-ts" %}
+<Embed url="https://gist.github.com/amythee/3f762c73bd5ff916591347c582107d93#file-leavechannel-ts"/>
 
 **Beta (v0.0.1)**
 
-{% embed url="https://gist.github.com/c49007734f8fe626797e23d3d985dbc5" %}
+<Embed url="https://gist.github.com/c49007734f8fe626797e23d3d985dbc5"/>
   </Tab>
 
   <Tab title="Flutter">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/a4e129fbe74b0a9efd6e863b7c381cad#file-amitychannelleave-dart" %}
+<Embed url="https://gist.github.com/amythee/a4e129fbe74b0a9efd6e863b7c381cad#file-amitychannelleave-dart"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -118,7 +118,7 @@ For example, in the event of a channel ban, it's possible to implement the appro
   <Tab title="iOS">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/69890e31b8604119625dd84d4459f840#file-check_channel_membership-swift" %}
+<Embed url="https://gist.github.com/amythee/69890e31b8604119625dd84d4459f840#file-check_channel_membership-swift"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -126,7 +126,7 @@ For example, in the event of a channel ban, it's possible to implement the appro
   <Tab title="Android">
     <CodeGroup>
       <CodeGroupItem>
-{% embed url="https://gist.github.com/amythee/bbc150ef248f0a3f6de36c8ff3b91d17" %}
+<Embed url="https://gist.github.com/amythee/bbc150ef248f0a3f6de36c8ff3b91d17"/>
       </CodeGroupItem>
     </CodeGroup>
   </Tab>
@@ -136,7 +136,7 @@ Supported ✅ (please wait while we prepare a real example!)
   </Tab>
 
   <Tab title="TypeScript">
-{% embed url="https://gist.github.com/amythee/203ae5bb1bd8eaa7995b6b634b45de5b" %}
+<Embed url="https://gist.github.com/amythee/203ae5bb1bd8eaa7995b6b634b45de5b"/>
   </Tab>
 
   <Tab title="Flutter">

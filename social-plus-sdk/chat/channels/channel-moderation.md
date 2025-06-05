@@ -21,11 +21,11 @@ You can check your permission in the channel by sending `AmityPermission` enums 
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/0093c8ce0e6c4cf9bfcc88b61b3d4311" %}
+<Embed url="https://gist.github.com/amythee/0093c8ce0e6c4cf9bfcc88b61b3d4311"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/13081f5936a91acf555e5bed1d9c083f" %}
+<Embed url="https://gist.github.com/amythee/13081f5936a91acf555e5bed1d9c083f"/>
 {% endtab %}
 
 {% tab title="JavaScript" %}
@@ -52,21 +52,21 @@ Version 6
 
 Add Channel Members
 
-{% embed url="https://gist.github.com/a06566f4fb2962a60eea48fecdcd09e7" %}
+<Embed url="https://gist.github.com/a06566f4fb2962a60eea48fecdcd09e7"/>
 
 Remove Channel Members
 
-{% embed url="https://gist.github.com/amythee/7ccdf1769fd3af676913ad583c39aa3b#file-removechannelmembers-ts" %}
+<Embed url="https://gist.github.com/amythee/7ccdf1769fd3af676913ad583c39aa3b#file-removechannelmembers-ts"/>
 
 Beta (v0.0.1)
 
 Add Channel Members
 
-{% embed url="https://gist.github.com/c7833ae526bf6cc609d95a52209e9e8a" %}
+<Embed url="https://gist.github.com/c7833ae526bf6cc609d95a52209e9e8a"/>
 
 Remove Channel Members
 
-{% embed url="https://gist.github.com/384c181bdea78f5c4f4a8c1364a8c853" %}
+<Embed url="https://gist.github.com/384c181bdea78f5c4f4a8c1364a8c853"/>
 {% endtab %}
 
 {% tab title="Flutter" %}
@@ -90,11 +90,11 @@ For the `unbanMembers` function, the following parameters are required:
 
 {% tabs %}
 {% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/6ea5347adf82ca62f8c9a73f44d6e748" %}
+<Embed url="https://gist.github.com/amythee/6ea5347adf82ca62f8c9a73f44d6e748"/>
 {% endtab %}
 
 {% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/5c7e8f1c65dee31e24cca663740737af" %}
+<Embed url="https://gist.github.com/amythee/5c7e8f1c65dee31e24cca663740737af"/>
 {% endtab %}
 
 {% tab title="JavaScript" %}
@@ -128,21 +128,21 @@ Version 6
 
 Ban members
 
-{% embed url="https://gist.github.com/9f1e9bbcb7126ff0330cec53e7650c89" %}
+<Embed url="https://gist.github.com/9f1e9bbcb7126ff0330cec53e7650c89"/>
 
 Unban members
 
-{% embed url="https://gist.github.com/79ada50acaf5898aae0871c7a812f314" %}
+<Embed url="https://gist.github.com/79ada50acaf5898aae0871c7a812f314"/>
 
 Beta (v0.0.1)
 
 Ban members
 
-{% embed url="https://gist.github.com/1db93c530a89f5ccc3caac1933ed4b96" %}
+<Embed url="https://gist.github.com/1db93c530a89f5ccc3caac1933ed4b96"/>
 
 Unban members
 
-{% embed url="https://gist.github.com/2b7988270a6e1563f48a92a07c44d2fe" %}
+<Embed url="https://gist.github.com/2b7988270a6e1563f48a92a07c44d2fe"/>
 {% endtab %}
 
 {% tab title="Flutter" %}
