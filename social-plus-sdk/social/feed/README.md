@@ -4,7 +4,7 @@ description: Let your users showcase their unique personality right in their tim
 
 # Feed
 
-<figure><img src="../../../.gitbook/assets/image (120).png" alt=""><figcaption></figcaption></figure>
+<img src="../../../.gitbook/assets/image (120).png" alt="" />
 
 Social Plus SDK provides a powerful Feed feature that allows users to stay informed, communicate, and express themselves through ranked posts. The Feed feature is comprised of a collection of posts, with three distinct types of feeds available to users: User Feed, Community Feed, and Global Feed.
 
@@ -14,26 +14,22 @@ Social Plus SDK provides a powerful Feed feature that allows users to stay infor
 
 By providing these three distinct types of feeds, the SDK enables users to customize their content experience, ensuring that they receive relevant and engaging content that reflects their interests and preferences. This feature can help to foster a vibrant and dynamic community, promoting engagement, communication, and collaboration among users.
 
-Feed management methods are all contained in `AmityFeedRepository` class. For querying posts from User Feed and Community Feed, please refer to - [query-post.md](../posts/query-post.md "mention").&#x20;
+Feed management methods are all contained in `AmityFeedRepository` class. For querying posts from User Feed and Community Feed, please refer to - [query-post.md](../posts/query-post.md "mention").
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/26429ca3c50bce2c5029077eb767ddb8#file-create_feed_repository-swift" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/d062df6264470bf46dff3fa3337febbe" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/7470d50179ec64e91395569bfd81052c" %}
-{% endtab %}
-
-{% tab title="TypeScript" %}
-Supported ✅ (Please wait while we prepare a real example!)
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/248beca2d42eedb79aabb2591d834657" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <iframe src="https://gist.github.com/amythee/26429ca3c50bce2c5029077eb767ddb8#file-create_feed_repository-swift" />
+  </Tab>
+  <Tab title="Android">
+    <iframe src="https://gist.github.com/amythee/d062df6264470bf46dff3fa3337febbe" />
+  </Tab>
+  <Tab title="JavaScript">
+    <iframe src="https://gist.github.com/amythee/7470d50179ec64e91395569bfd81052c" />
+  </Tab>
+  <Tab title="TypeScript">
+    Supported ✅ (Please wait while we prepare a real example!)
+  </Tab>
+  <Tab title="Flutter">
+    <iframe src="https://gist.github.com/amythee/248beca2d42eedb79aabb2591d834657" />
+  </Tab>
+</Tabs>

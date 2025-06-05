@@ -14,7 +14,7 @@ This feature allows users to block and unblock other users, manage their list of
 * Search user functionality will function normally, blocked users will still be visible.
 * Some interactions will be disabled such as:
   * create a post on a blocker's user feed
-  * create a comment on a blocker's user posts\* (please read limitations in the last section)
+  * create a comment on a blocker's user posts* (please read limitations in the last section)
   * add or remove reactions on a blocker's posts
 * The [connection status](follow-unfollow/get-connection-status-and-connection-counter.md#connection-status) on the blocked user will become `none` and the blocker will not be able to follow the blocked user.
 
@@ -43,27 +43,58 @@ Here's the explanation of the parameter:
 
 * `userId`: This is a required parameter of type `String` that represents the unique identifier of the user you want to block.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/4058e0f09f4627c648048778581823d4" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+amity.blockUser(userId: "userID") { success, error in
+    if success {
+        // Handle success
+    } else {
+        // Handle error
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/08d7211a06f993966cbaf6ea8a55bc75" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+amity.blockUser("userID").subscribe({ 
+    // Handle success
+}, { error -> 
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TS" %}
-{% embed url="https://gist.github.com/amythee/5a8c85557faf22c46ab3ba2e1c77040c" %}
-{% endtab %}
+<Tab title="TS">
+<CodeGroup>
+```typescript
+await amity.blockUser("userID");
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/7ff13cf7eaa70fce5b593452b7e56ade" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+try {
+  await amity.blockUser("userID");
+  // Handle success
+} catch (error) {
+  // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ## Unblock User
 
-Users can also unblock blocked users with the following constraints:&#x20;
+Users can also unblock blocked users with the following constraints: 
 
 * Their connection status will not return to the state before the block if they were connected. The connection status will always be `none`.
 * If Alice was following Bob, they'll need to reconnect with Bob after unblocking.
@@ -73,23 +104,54 @@ Here's the explanation of the parameter:
 
 * `userId`: This is a required parameter of type `String` that represents the unique identifier of the user you want to unblock.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/df1e7e7d881eeb2a71aa6540493dc975" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+amity.unblockUser(userId: "userID") { success, error in
+    if success {
+        // Handle success
+    } else {
+        // Handle error
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/47969724b780c41ffb270a2ac5e58ebe" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+amity.unblockUser("userID").subscribe({ 
+    // Handle success
+}, { error -> 
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TS" %}
-{% embed url="https://gist.github.com/amythee/0b2f736c19114ee1cf243a94b2951ae6" %}
-{% endtab %}
+<Tab title="TS">
+<CodeGroup>
+```typescript
+await amity.unblockUser("userID");
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/97927bb8041dfcaf12165f28f3658c46" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+try {
+  await amity.unblockUser("userID");
+  // Handle success
+} catch (error) {
+  // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ## Blocked Users List
 
@@ -102,23 +164,54 @@ Users can view and manage a list of users they've blocked. The list will display
 
 Blocked users that are inactive or deleted will not be shown in the list. Users can only view users they've blocked and not the users that have blocked them.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/3ce24573971e09c00893582f580a87a8" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+amity.getBlockedUsers { blockedUsers, error in
+    if let users = blockedUsers {
+        // Handle blocked users list
+    } else {
+        // Handle error
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/68819f07f28615a76d7a8dd7ac27446c" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+amity.getBlockedUsers().subscribe({ blockedUsers -> 
+    // Handle blocked users list
+}, { error -> 
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TS" %}
-{% embed url="https://gist.github.com/amythee/40f75fb25da7a1e501ee9420b5ca5a26" %}
-{% endtab %}
+<Tab title="TS">
+<CodeGroup>
+```typescript
+const blockedUsers = await amity.getBlockedUsers();
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/b7cbb5637bbaefa62810a5bed5e8dcd5" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+try {
+  final blockedUsers = await amity.getBlockedUsers();
+  // Handle blocked users list
+} catch (error) {
+  // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ## Limitations
 

@@ -8,16 +8,36 @@ To hard delete a comment, you can use the AmityCommentRepository, which provides
 
 It's worth mentioning that hard deleting posts and comments is only supported via SDK, with UIKit and Console support potentially being added in the future. By implementing the soft and hard delete features provided by Social Plus SDK, you can give your app's users more control over the comments they interact with while maintaining a safe and appropriate community.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/20663654e04593672738ddb7caa6bbd4" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+// Hard delete a comment
+AmityCommentRepository(client: client).deleteComment(withId: commentId, hardDelete: true) { success, error in
+    // Handle success/error
+}
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/0840fafb4b905a3aaef17568e572e2b4#file-amitycommentdelete-kt" %}
-{% endtab %}
+// Soft delete a comment
+AmityCommentRepository(client: client).deleteComment(withId: commentId, hardDelete: false) { success, error in
+    // Handle success/error
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+// Hard delete a comment
+commentRepository.deleteComment(commentId, true).subscribe()
+
+// Soft delete a comment
+commentRepository.deleteComment(commentId, false).subscribe()
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 ```javascript
 const comment = await CommentRepository.deleteComment('commentId', true);
 ```
@@ -31,17 +51,29 @@ The `deleteComment` method returns a promise acknowledging the server's successf
     "success": true
 }
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/7f1c4770ce7b3c672f495eb395e6cf06" %}
-{% endtab %}
+<Tab title="TypeScript">
+<CodeGroup>
+```typescript
+const comment = await CommentRepository.deleteComment('commentId', true);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d328b9fdadec1720b988528f3b215996#file-amitycommentdeletion-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+// Hard delete a comment
+await AmityCoreClient.newClient().deleteComment(commentId: commentId, isHardDelete: true);
 
-{% hint style="info" %}
+// Soft delete a comment
+await AmityCoreClient.newClient().deleteComment(commentId: commentId, isHardDelete: false);
+```
+</CodeGroup>
+</Tab>
+</Tabs>
+
+<Note>
 Only the owner of the comment or an admin can update and/or delete a comment.
-{% endhint %}
+</Note>

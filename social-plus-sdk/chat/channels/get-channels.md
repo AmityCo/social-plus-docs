@@ -7,19 +7,22 @@ Any update to the channels present in this live collection will be automatically
 * This live collection will only contain valid channels. In case of invalid channels (such as user gets banned etc.) the list may exclude those channels.
 * If any channel id is invalid, live collection will throw error.
 
-{% hint style="info" %}
+<Info>
 💡 The maximum number of channel that can be queried is 100.
-{% endhint %}
+</Info>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/d1e815829343ff614437fc381d3ab56c" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/c91b1fb9681e4d9706ace0ec2278478e" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <Frame>
+      <img src="https://gist.github.com/amythee/d1e815829343ff614437fc381d3ab56c" />
+    </Frame>
+  </Tab>
+  <Tab title="Android">
+    <Frame>
+      <img src="https://gist.github.com/c91b1fb9681e4d9706ace0ec2278478e" />
+    </Frame>
+  </Tab>
+</Tabs>
 
 **Limitations:**
 

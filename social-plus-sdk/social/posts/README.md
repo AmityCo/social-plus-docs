@@ -10,11 +10,11 @@ description: >-
 
 A post can be defined as a piece of content created and shared by a user within a network or community. The post can include various types of information such as text, images, videos, links, or other multimedia elements. The SDK provides the necessary tools and functionality for users to create, view, and interact with posts in a social feed. Posts can be displayed in chronological order and can be customized and configured using various settings and options provided by the SDK. The purpose of a post in a product context is to allow users to share information, express thoughts, or connect with others within a social network or community using the SDK.
 
-Social Plus supports a wide range of post types, each with its own unique set of features and capabilities. The types of posts that you can create in Social Plus include text, image, video, file, live stream, poll, and custom posts. Furthermore, a post supports real-time events and Live Object features, for more information please refer to [live-objects-collections](../../core-concepts/live-objects-collections/ "mention") and [realtime-events](../../core-concepts/realtime-events/ "mention")&#x20;
+Social Plus supports a wide range of post types, each with its own unique set of features and capabilities. The types of posts that you can create in Social Plus include text, image, video, file, live stream, poll, and custom posts. Furthermore, a post supports real-time events and Live Object features, for more information please refer to [live-objects-collections](../../core-concepts/live-objects-collections/ "mention") and [realtime-events](../../core-concepts/realtime-events/ "mention")
 
 ### Post Structure
 
-The post structure is a parent-child relationship, with the parent post serving as a container for text data, for other post types such as images or videos, while each image or video is treated as a separate child post. To illustrate this, let's take the example of an image post with two images. In this case, there would be one parent post serving as a text container, and two child posts, each containing one of the images.&#x20;
+The post structure is a parent-child relationship, with the parent post serving as a container for text data, for other post types such as images or videos, while each image or video is treated as a separate child post. To illustrate this, let's take the example of an image post with two images. In this case, there would be one parent post serving as a text container, and two child posts, each containing one of the images.
 
 In addition to enabling users to create more dynamic and engaging content, both parent and child posts also support reactions and comments. This means that users can interact with not only the parent post but also with each child post, providing a more comprehensive and engaging way to engage with content.
 
@@ -24,29 +24,29 @@ In addition to enabling users to create more dynamic and engaging content, both 
 
 The functionality of posts can be utilized through the Post Repository, which offers methods for interacting with a data source that stores posts. This includes methods for obtaining a specific post, creating a new post, updating an existing post, or deleting a post.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/dc29e51991b5512d572d8f8118be076c#file-create_post_repository-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeBlock url="https://gist.github.com/amythee/dc29e51991b5512d572d8f8118be076c#file-create_post_repository-swift" />
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/0d363e1a5359ff32bbe6a8e157ccfc63" %}
-{% endtab %}
+<Tab title="Android">
+<CodeBlock url="https://gist.github.com/amythee/0d363e1a5359ff32bbe6a8e157ccfc63" />
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 import { PostRepository } from '@amityco/js-sdk';
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/6dc7545b0a21fd3cd8f881025c71b38a" %}
-{% endtab %}
+<Tab title="TypeScript">
+<CodeBlock url="https://gist.github.com/6dc7545b0a21fd3cd8f881025c71b38a" />
+</Tab>
 
-{% tab title="Flutter" %}
+<Tab title="Flutter">
 Supported ✅ (Please wait while we prepare a real example!)
-{% endtab %}
-{% endtabs %}
+</Tab>
+</Tabs>
 
 ### Post Description
 

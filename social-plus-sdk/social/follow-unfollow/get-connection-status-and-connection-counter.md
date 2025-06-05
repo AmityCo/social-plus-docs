@@ -19,46 +19,46 @@ In addition to these statuses, our SDK also provides information about the follo
 
 By providing this information, our product allows users to manage their social connections effectively and efficiently, based on their specific needs and preferences.
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 The following feature functionalities are packed in `AmityUserRepository` and can be called via `userRelationship`.
 
-{% embed url="https://gist.github.com/amythee/422534e6327d3b36c9e37724b38e56fd" %}
+<Embed url="https://gist.github.com/amythee/422534e6327d3b36c9e37724b38e56fd" />
 
 To get the current user to follow information, use `getMyFollowInfo`.
 
-{% embed url="https://gist.github.com/amythee/7f43f0dcd58c86ca11304ab7658a3b75" %}
+<Embed url="https://gist.github.com/amythee/7f43f0dcd58c86ca11304ab7658a3b75" />
 
 To get the other's user follow information, use `getFollowInfo` with the `userId` parameter.
 
-{% embed url="https://gist.github.com/amythee/9db0bc9fc7221c63efee0ac0c5f15c44" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/9db0bc9fc7221c63efee0ac0c5f15c44" />
+</Tab>
 
-{% tab title="Android" %}
+<Tab title="Android">
 To get the current user follow information, use the code below.
 
-{% embed url="https://gist.github.com/amythee/c292366d9e2f1027b1fc4f937893f170#file-amityfollowselfget-kt" %}
+<Embed url="https://gist.github.com/amythee/c292366d9e2f1027b1fc4f937893f170#file-amityfollowselfget-kt" />
 
 To get the other's user follow information, use the code below with the `userId` parameter.
 
-{% embed url="https://gist.github.com/amythee/53f8680397c5a10d7c53b904a0886b46#file-amityfollowuserget-kt" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/53f8680397c5a10d7c53b904a0886b46#file-amityfollowuserget-kt" />
+</Tab>
 
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/82c55218e3d99f65d2498ede458e038b#file-followinfo-js" %}
-{% endtab %}
+<Tab title="JavaScript">
+<Embed url="https://gist.github.com/amythee/82c55218e3d99f65d2498ede458e038b#file-followinfo-js" />
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/ae639a96eca9822ca8f90e1ba31adbd1" %}
-{% endtab %}
+<Tab title="TypeScript">
+<Embed url="https://gist.github.com/ae639a96eca9822ca8f90e1ba31adbd1" />
+</Tab>
 
-{% tab title="Flutter" %}
+<Tab title="Flutter">
 To get the current user follow information, use the code below.
 
-{% embed url="https://gist.github.com/amythee/52225809dae070188a0278c8bee9969c#file-amitymyfollowcount-dart" %}
+<Embed url="https://gist.github.com/amythee/52225809dae070188a0278c8bee9969c#file-amitymyfollowcount-dart" />
 
 To get the other's user follow information, use the code below with the `userId` parameter.
 
-{% embed url="https://gist.github.com/amythee/52d2994dcef26ef71fd3e5827b601dd1#file-amityotherfollowinfo-dart" %}
-{% endtab %}
-{% endtabs %}
+<Embed url="https://gist.github.com/amythee/52d2994dcef26ef71fd3e5827b601dd1#file-amityotherfollowinfo-dart" />
+</Tab>
+</Tabs>

@@ -12,33 +12,108 @@ To query communities with certain criteria, the following parameters are used:
 
 If you'd like to fetch all communities, you can pass the keyword as `null`. (deprecated)
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/b08b99bc4c4aa7aa90d56ae107db1ce1#file-query-communities-swift" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/3f9e5c0a6135858ef89647a2f7d86ce1#file-amitycommunityquery-kt" %}
-{% endtab %}
-
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/8d1ae63afa6fd36cfafcd4c8413aed23#file-querycommunity-js" %}
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/102ecb7f374c94a49ae74469335a56df#file-querycommunities-ts" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/d22e645d88768aeb6c0ab69c9bca0525#file-amitycommunityquery-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      <CodeGroupItem>
+```swift
+amityCommunityRepository.getCommunities()
+    .filter(.none)
+    .sortBy(.lastCreated)
+    .includeDeleted(false)
+    .query()
+    .observe { (communityCollection, error) in
+        // Handle communities
+    }
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      <CodeGroupItem>
+```kotlin
+val communityRepository = AmityCoreClient.newCommunityRepository()
+communityRepository.getCommunities()
+    .filter(AmityCommunityFilter.ALL)
+    .sortBy(AmityCommunitySortOption.LAST_CREATED)
+    .includeDeleted(false)
+    .build()
+    .query()
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+  <Tab title="JavaScript">
+    <CodeGroup>
+      <CodeGroupItem>
+```javascript
+const communityRepository = client.communityRepository();
+communityRepository
+    .queryCommunities()
+    .filter("all")
+    .sortBy("lastCreated")
+    .includeDeleted(false)
+    .query()
+    .then((communities) => {
+        // Handle communities
+    })
+    .catch((error) => {
+        // Handle error
+    });
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+  <Tab title="TypeScript">
+    <CodeGroup>
+      <CodeGroupItem>
+```typescript
+const communityRepository = client.communityRepository();
+communityRepository
+    .queryCommunities()
+    .filter("all")
+    .sortBy("lastCreated")
+    .includeDeleted(false)
+    .query()
+    .then((communities) => {
+        // Handle communities
+    })
+    .catch((error) => {
+        // Handle error
+    });
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Flutter">
+    <CodeGroup>
+      <CodeGroupItem>
+```dart
+final communityRepository = AmityCoreClient.newCommunityRepository();
+communityRepository
+    .getCommunitiesByFilter(
+        filter: AmityCommunityFilter.ALL,
+        sortBy: AmityCommunitySortOption.LAST_CREATED,
+        includeDeleted: false,
+    )
+    .then((communities) {
+        // Handle communities
+    })
+    .catchError((error) {
+        // Handle error
+    });
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+</Tabs>
 
 ### Search for communities
 
-To search for communities, users can call the relevant method and provide the desired keyword,  membership options, and other parameters.&#x20;
+To search for communities, users can call the relevant method and provide the desired keyword,  membership options, and other parameters.
 
-If no keyword is supplied, the list of users for the specified community will be sorted by the date they joined.&#x20;
+If no keyword is supplied, the list of users for the specified community will be sorted by the date they joined.
 
 To search for communities with certain criteria, the following parameters are used:
 
@@ -48,12 +123,36 @@ To search for communities with certain criteria, the following parameters are us
 * `sortBy` allows you to filter communities based on the order in which the communities were created or based on alphabetical order, last created, and first created.
 * `includeDeleted` allows you to specify if you want to include deleted communities in your query. By passing `true` or `false` to this method, you can include or exclude deleted communities from the results.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/8be44f3e6072945f3abe4bc16eb179e3" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/3be5134ee8e3c62585281d27588d166f" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      <CodeGroupItem>
+```swift
+amityCommunityRepository.searchCommunities(withText: "keyword")
+    .filter(.none)
+    .sortBy(.displayName)
+    .includeDeleted(false)
+    .query()
+    .observe { (communityCollection, error) in
+        // Handle communities
+    }
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      <CodeGroupItem>
+```kotlin
+val communityRepository = AmityCoreClient.newCommunityRepository()
+communityRepository.searchCommunities("keyword")
+    .filter(AmityCommunityFilter.ALL)
+    .sortBy(AmityCommunitySortOption.DISPLAY_NAME)
+    .includeDeleted(false)
+    .build()
+    .query()
+```
+      </CodeGroupItem>
+    </CodeGroup>
+  </Tab>
+</Tabs>

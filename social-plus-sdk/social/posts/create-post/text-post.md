@@ -9,26 +9,26 @@ Here's an explanation of the method's parameters:
 * `metaData` - Additional properties to support custom fields.
 * `tags` - Arbitrary strings that can be used for defining and querying the posts (Except Flutter).
 
-{% tabs %}
-{% tab title="iOS" %}
-Use `AmityTextPostBuilder` to create text post.
+<Tabs>
+  <Tab title="iOS">
+    Use `AmityTextPostBuilder` to create text post.
 
-{% embed url="https://gist.github.com/amythee/a796f645d0a832d2c4f05e368dcec626" %}
-{% endtab %}
+    <iframe src="https://gist.github.com/amythee/a796f645d0a832d2c4f05e368dcec626"></iframe>
+  </Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/42d682246f1b47188c3a7e6cc372b3f6#file-amityposttextcreation-kt" %}
-{% endtab %}
+  <Tab title="Android">
+    <iframe src="https://gist.github.com/amythee/42d682246f1b47188c3a7e6cc372b3f6#file-amityposttextcreation-kt"></iframe>
+  </Tab>
 
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/22cc099c94e5632045bfb34939833f19#file-createtextpost-js" %}
-{% endtab %}
+  <Tab title="JavaScript">
+    <iframe src="https://gist.github.com/amythee/22cc099c94e5632045bfb34939833f19#file-createtextpost-js"></iframe>
+  </Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/a9fcbe20e985edaf42cd05bcb556796e#file-createtextpost-ts" %}
-{% endtab %}
+  <Tab title="TypeScript">
+    <iframe src="https://gist.github.com/amythee/a9fcbe20e985edaf42cd05bcb556796e#file-createtextpost-ts"></iframe>
+  </Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/b6a8745dbe9977fb6e52c4afe3caa537#file-amityposttextcreation-dart" %}
-{% endtab %}
-{% endtabs %}
+  <Tab title="Flutter">
+    <iframe src="https://gist.github.com/amythee/b6a8745dbe9977fb6e52c4afe3caa537#file-amityposttextcreation-dart"></iframe>
+  </Tab>
+</Tabs>

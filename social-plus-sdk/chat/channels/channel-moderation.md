@@ -102,24 +102,24 @@ For the `unbanMembers` function, the following parameters are required:
 const isBanned = await ChannelRepository.banMembers({ 
   channelId: 'channel1', 
   userIds: ['user1']
-);
-​
+});
+
 const isUnbanned = await ChannelRepository.banMembers({ 
   channelId: 'channel1', 
   userIds: ['user1']
-);
-​
+});
+
 await ChannelRepository.addRole({ 
   channelId: 'channel1', 
   userIds: ['user1'],
-  role: 'role1',
-);
-​
+  role: 'role1'
+});
+
 await ChannelRepository.removeRole({ 
   channelId: 'channel1', 
   userIds: ['user1'],
-  role: 'role1',
-);
+  role: 'role1'
+});
 ```
 {% endtab %}
 

@@ -1,9 +1,9 @@
 # Message Preview
 
-Messages preview is partial data of the message that offers a brief summary of incoming messages through channel and subchannel objects. It allows users to quickly assess partial message content without opening the entire message.&#x20;
+Messages preview is partial data of the message that offers a brief summary of incoming messages through channel and subchannel objects. It allows users to quickly assess partial message content without opening the entire message.
 
 {% hint style="warning" %}
-&#x20;To enable this feature, please refer to the API and the sample cURL commands provided below:
+To enable this feature, please refer to the API and the sample cURL commands provided below:
 
 **API:** [Enable message preview](https://api-docs.amity.co/#/Network%20Setting/put\_api\_v3\_network\_settings\_chat)
 
@@ -26,8 +26,6 @@ curl --location --request PUT 'https://apix.sg.amity.co/api/v3/network-settings/
 _Note:_ Message Preview will be available only in channels and subchannels for new messages created after the feature is enabled.
 {% endhint %}
 
-
-
 ### **Message Previews in Applications**
 
 Message previews play a crucial role in enhancing user experience in messaging platforms. By offering a brief glimpse of incoming messages through channel and subchannel objects, users can assess the urgency, context, and relevance of messages without needing to open the entire conversation. This feature is particularly beneficial in various scenarios:
@@ -40,7 +38,7 @@ Integrating message previews into applications can significantly boost user enga
 
 ### Message Preview attributes
 
-<table><thead><tr><th>Name</th><th>Data Type</th><th width="213">Description</th><th>Attributes</th></tr></thead><tbody><tr><td>messageId</td><td>string</td><td>The id of this message</td><td>​Content</td></tr><tr><td>channelId</td><td>string</td><td>The name of the channel this message was created in</td><td>​Content</td></tr><tr><td>userId</td><td>string</td><td>The name of the user this message was created by</td><td>​Content</td></tr><tr><td>type</td><td>string</td><td>The message type</td><td>enum*: text custom image file</td></tr><tr><td>data</td><td>Object</td><td>The message data (any text will be stored in text key)</td><td>text: Text message</td></tr><tr><td>isDeleted</td><td>boolean</td><td>The message has been marked as deleted</td><td>​Content</td></tr><tr><td>createdAt</td><td>date</td><td>The date/time the message was created at</td><td>​Content</td></tr><tr><td>updatedAt</td><td>date</td><td>The date/time the message was updated at</td><td>​Content</td></tr></tbody></table>
+<table><thead><tr><th>Name</th><th>Data Type</th><th width="213">Description</th><th>Attributes</th></tr></thead><tbody><tr><td>messageId</td><td>string</td><td>The id of this message</td><td>Content</td></tr><tr><td>channelId</td><td>string</td><td>The name of the channel this message was created in</td><td>Content</td></tr><tr><td>userId</td><td>string</td><td>The name of the user this message was created by</td><td>Content</td></tr><tr><td>type</td><td>string</td><td>The message type</td><td>enum*: text custom image file</td></tr><tr><td>data</td><td>Object</td><td>The message data (any text will be stored in text key)</td><td>text: Text message</td></tr><tr><td>isDeleted</td><td>boolean</td><td>The message has been marked as deleted</td><td>Content</td></tr><tr><td>createdAt</td><td>date</td><td>The date/time the message was created at</td><td>Content</td></tr><tr><td>updatedAt</td><td>date</td><td>The date/time the message was updated at</td><td>Content</td></tr></tbody></table>
 
 ### Channel message preview
 
@@ -77,5 +75,3 @@ Our SDK offers clients a straightforward approach to access message previews for
 {% embed url="https://gist.github.com/amythee/b3e35552dfc7b5e098dfacec72d0a4d4" %}
 {% endtab %}
 {% endtabs %}
-
-\

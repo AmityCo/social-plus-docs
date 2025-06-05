@@ -22,7 +22,7 @@ You can choose to filter specific post types or based on parent-child relationsh
 
 ## **Example Use Cases**
 
-### **Search for Text Posts** <a href="#search-for-text-posts" id="search-for-text-posts"></a>
+### **Search for Text Posts**
 
 When the user searches for "ice cream," the output may include posts ranked by their relevance score. For example:
 
@@ -34,29 +34,58 @@ Text Post 4th: "I enjoy trying different types of pastries."
 Text Post 5th: "Cooking is a great way to relax after a long day."
 ```
 
-### **Search for Image Posts** <a href="#search-for-image-posts" id="search-for-image-posts"></a>
+### **Search for Image Posts**
 
 When the user searches for "ice cream," the output may include posts ranked by their relevance score. For example:
 
-<table data-view="cards"><thead><tr><th></th><th></th><th></th><th data-hidden data-card-cover data-type="files"></th></tr></thead><tbody><tr><td></td><td><p><strong>image post — 1st</strong></p><p><strong>caption:</strong> I love ice cream.</p></td><td></td><td><a href="../../../.gitbook/assets/1 (1).avif">1 (1).avif</a></td></tr><tr><td></td><td><p><strong>image post — 2nd</strong></p><p><strong>caption:</strong> &#x3C;no caption></p></td><td></td><td><a href="../../../.gitbook/assets/2.avif">2.avif</a></td></tr><tr><td><p></p><p><strong>image post — 3rd</strong></p><p><strong>caption:</strong> food on my table!</p></td><td></td><td></td><td><a href="../../../.gitbook/assets/3.avif">3.avif</a></td></tr></tbody></table>
+<table data-view="cards">
+<thead>
+<tr>
+<th></th>
+<th></th>
+<th></th>
+<th data-hidden data-card-cover data-type="files"></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><p><strong>image post — 1st</strong></p><p><strong>caption:</strong> I love ice cream.</p></td>
+<td></td>
+<td><a href="../../../.gitbook/assets/1 (1).avif">1 (1).avif</a></td>
+</tr>
+<tr>
+<td></td>
+<td><p><strong>image post — 2nd</strong></p><p><strong>caption:</strong> &lt;no caption&gt;</p></td>
+<td></td>
+<td><a href="../../../.gitbook/assets/2.avif">2.avif</a></td>
+</tr>
+<tr>
+<td><p><strong>image post — 3rd</strong></p><p><strong>caption:</strong> food on my table!</p></td>
+<td></td>
+<td></td>
+<td><a href="../../../.gitbook/assets/3.avif">3.avif</a></td>
+</tr>
+</tbody>
+</table>
 
 The following code snippet demonstrates how to search for text and image posts across the entire network. Users can filter the results to display only text, images, or both, depending on their preference.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/458cd0240139113df1e1ae4cadb34268#file-semantic_search_posts-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<iframe src="https://gist.github.com/amythee/458cd0240139113df1e1ae4cadb34268#file-semantic_search_posts-swift"></iframe>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/4fcd7690cee86b4f388074ee497fac7b#file-amitypostsearch-kt" %}
-{% endtab %}
+<Tab title="Android">
+<iframe src="https://gist.github.com/amythee/4fcd7690cee86b4f388074ee497fac7b#file-amitypostsearch-kt"></iframe>
+</Tab>
 
-{% tab title="Typescript" %}
-{% embed url="https://gist.github.com/amythee/74eed63fb6535e4385b09d1acaf60209" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Typescript">
+<iframe src="https://gist.github.com/amythee/74eed63fb6535e4385b09d1acaf60209"></iframe>
+</Tab>
+</Tabs>
 
-### Limitations <a href="#limitations" id="limitations"></a>
+### Limitations
 
 * Currently, the search only supports text and image posts; other post types are not included.
 * The search function only considers the context of individual posts. It does not consider the relationship between parent posts, their replies, or comments.

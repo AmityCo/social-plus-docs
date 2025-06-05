@@ -1,6 +1,6 @@
 # File Post
 
-Prior to creating a file post, it is crucial to upload the files that will be included in the post data to ensure that the necessary information is accessible and can be linked to the post. This requires uploading the file first, to obtain the file data that will be used in creating the file post. To upload a file, please refer to [#upload-files](../../../core-concepts/files-images-and-videos/file.md#upload-files "mention")
+Prior to creating a file post, it is crucial to upload the files that will be included in the post data to ensure that the necessary information is accessible and can be linked to the post. This requires uploading the file first, to obtain the file data that will be used in creating the file post. To refer to [#upload-files](../../../core-concepts/files-images-and-videos/file.md#upload-files "mention")
 
 Upon successful completion of the file upload process, you can include the file data as a parameter when creating a file post, as demonstrated in the code sample below.
 
@@ -16,39 +16,39 @@ Here's an explanation of the method's parameters:
 
 * The maximum file size limit is up to 1 GB.
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 We can build the post first by using `AmityFilePostBuilder`. Then use the `createFilePost` method in `AmityPostRepository` to create a file post.
 
-{% embed url="https://gist.github.com/amythee/36c78812a3c17917f15c99e0b0c014e6" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/36c78812a3c17917f15c99e0b0c014e6" />
+</Tab>
 
-{% tab title="Android" %}
+<Tab title="Android">
 We can build the post first by using `AmityFilePostCreator.Builder`. Then use the same `createPost` method in `AmityPostRepository` to create an image post.
 
-{% embed url="https://gist.github.com/amythee/14b4c1493117c6b55e4018dbb17efe1b#file-amitypostfilecreation-kt" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/14b4c1493117c6b55e4018dbb17efe1b#file-amitypostfilecreation-kt" />
+</Tab>
 
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/073b1f78add7b0ab5890148f87a93c01#file-createimagepost-js" %}
-{% endtab %}
+<Tab title="JavaScript">
+<Embed url="https://gist.github.com/amythee/073b1f78add7b0ab5890148f87a93c01#file-createimagepost-js" />
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/ee133f379abcf710624f9466fd78a76b" %}
-{% endtab %}
+<Embed url="https://gist.github.com/ee133f379abcf710624f9466fd78a76b" />
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/bd5a3d58f619c5fc89438b5a3ce33618#file-amitypostfilecreation-dart" %}
+<Tab title="Flutter">
+<Embed url="https://gist.github.com/amythee/bd5a3d58f619c5fc89438b5a3ce33618#file-amitypostfilecreation-dart" />
 
-{% hint style="info" %}
+<Hint style="info">
 * Updating files in a file post is not yet supported.
 * Refer to [Post target type](../#post-description) for a more detailed explanation of the `targetType` parameter.
-{% endhint %}
-{% endtab %}
-{% endtabs %}
+</Hint>
+</Tab>
+</Tabs>
 
-{% hint style="info" %}
+<Hint style="info">
 A post can have a maximum of ten files.
-{% endhint %}
+</Hint>

@@ -11,38 +11,48 @@ Here is a brief explanation of the function parameters:
 * `text/caption`: A string that contains the text message that the user wants to send. This parameter is mandatory as it contains the actual message content.
 * `attachment`: The local audio path that the user wants to send on the device
 * `subchannelId`: An identifier for the subchannel where the message will be sent. Subchannels are subdivisions within a channel that represent individual topics or chat threads. Messages and interactions occur within subchannels, not the main channel itself.
-* `tags` - Arbitrary strings that can be used for defining and querying the messages.
+* `tags`: Arbitrary strings that can be used for defining and querying the messages.
 
-{% tabs %}
-{% tab title="iOS" %}
-**Version 6**
+<Tabs>
+  <Tab title="iOS">
+    **Version 6**
 
-{% embed url="https://gist.github.com/amythee/99425dfbdc439d6f06f57aea3874f7e9" %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/99425dfbdc439d6f06f57aea3874f7e9" />
+    </Frame>
 
-**Version 5 (Maintained)**
+    **Version 5 (Maintained)**
 
-{% embed url="https://gist.github.com/amythee/1a58160c86a5fe1ab8ea9488e323c19f" %}
-{% endtab %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/1a58160c86a5fe1ab8ea9488e323c19f" />
+    </Frame>
+  </Tab>
 
-{% tab title="Android" %}
-**Version 6**
+  <Tab title="Android">
+    **Version 6**
 
-{% embed url="https://gist.github.com/amythee/09c7d9cbf4e5c029e3077b988cd4ab99" %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/09c7d9cbf4e5c029e3077b988cd4ab99" />
+    </Frame>
 
-**Version 5 (Maintained)**
+    **Version 5 (Maintained)**
 
-{% embed url="https://gist.github.com/amythee/70006aa251fec068b7ab55a0485bc4ae" %}
-{% endtab %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/70006aa251fec068b7ab55a0485bc4ae" />
+    </Frame>
+  </Tab>
 
-{% tab title="JavaScript" %}
-Sending audio messages uses the same steps as sending a file message. Refer to [File Message](file-message.md) page for more details.
-{% endtab %}
+  <Tab title="JavaScript">
+    Sending audio messages uses the same steps as sending a file message. Refer to [File Message](file-message.md) page for more details.
+  </Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/c4fadd828c02f7bad7172dd0edfaa8bf" %}
-{% endtab %}
-{% endtabs %}
+  <Tab title="TypeScript">
+    <Frame>
+      <img src="https://gist.github.com/c4fadd828c02f7bad7172dd0edfaa8bf" />
+    </Frame>
+  </Tab>
+</Tabs>
 
-{% hint style="warning" %}
-Supported audio formats are MP3, and WAV and cannot exceed 1GB in size
-{% endhint %}
+<Warning>
+  Supported audio formats are MP3, and WAV and cannot exceed 1GB in size
+</Warning>

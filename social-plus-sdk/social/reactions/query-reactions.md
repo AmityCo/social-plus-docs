@@ -23,52 +23,73 @@ To query reactions, provide both the `referenceType` and `referenceId`. If you'd
 
 To query all reactions for a post:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/1bef06f426a2111b1e813070641b8ca1#file-create_reaction_repository-swift" %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      <CodeBlock>
+        ```swift
+        https://gist.github.com/amythee/1bef06f426a2111b1e813070641b8ca1#file-create_reaction_repository-swift
+        ```
+      </CodeBlock>
+      <CodeBlock>
+        ```swift
+        https://gist.github.com/amythee/2faed56b67b193f21f03cad198e3e775#file-query_reactions-swift
+        ```
+      </CodeBlock>
+    </CodeGroup>
+  </Tab>
 
-{% embed url="https://gist.github.com/amythee/2faed56b67b193f21f03cad198e3e775#file-query_reactions-swift" %}
-{% endtab %}
+  <Tab title="Android">
+    <h4>Query Reaction from Post and Story</h4>
+    ```java
+    https://gist.github.com/amythee/7eb599535699cb59293a0526dfc78565
+    ```
 
-{% tab title="Android" %}
-#### Query Reaction from Post and Story
+    <h4>Query Reaction from Comment</h4>
+    ```java
+    https://gist.github.com/amythee/98aaa981f3a49c414b7fc1e12bb2158f
+    ```
+  </Tab>
 
-{% embed url="https://gist.github.com/amythee/7eb599535699cb59293a0526dfc78565" %}
+  <Tab title="JavaScript">
+    ```javascript
+    https://gist.github.com/amythee/6352b136da223bef701a2ad8edb1b708#file-queryreactions-js
+    ```
 
-#### Query Reaction from Comment
+    Each post, comment, message has a set of fields providing detailed info about reactions.
 
-{% embed url="https://gist.github.com/amythee/98aaa981f3a49c414b7fc1e12bb2158f" %}
-{% endtab %}
+    * `reactionsCount` - how many reactions the post has
+    * `myReactions` - list of reactions you added to the post
+    * `reactions` - map that tells how many reactions of a certain type a post has
 
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/6352b136da223bef701a2ad8edb1b708#file-queryreactions-js" %}
+    ```javascript
+    https://gist.github.com/amythee/96d0a5a3ebe596045ce8929da1c9233e#file-reactiondata-js
+    ```
+  </Tab>
 
-Each post, comment, message has a set of fields providing detailed info about reactions.&#x20;
+  <Tab title="TypeScript">
+    Version 6
 
-* `reactionsCount` - how many reactions the post has
-* `myReactions` - list of reactions you added to the post
-* `reactions` - map that tells how many reactions of a certain type a post has
+    ```typescript
+    https://gist.github.com/amythee/9aaf99dcbd8a409b0d4ee6385194093b#file-livereactions-ts
+    ```
 
-{% embed url="https://gist.github.com/amythee/96d0a5a3ebe596045ce8929da1c9233e#file-reactiondata-js" %}
-{% endtab %}
+    Beta(v0.0.1)
 
-{% tab title="TypeScript" %}
-Version 6
+    ```typescript
+    https://gist.github.com/amythee/4c6f28231439a60d290d6c9495ef2715#file-queryreactions-ts
+    ```
+  </Tab>
 
-{% embed url="https://gist.github.com/amythee/9aaf99dcbd8a409b0d4ee6385194093b#file-livereactions-ts" %}
+  <Tab title="Flutter">
+    <h4>Query Reaction from Post</h4>
+    ```dart
+    https://gist.github.com/amythee/4952a13a22bdb16b2adb9e289123aab6#file-amityreactionpostquery-dart
+    ```
 
-Beta(v0.0.1)
-
-{% embed url="https://gist.github.com/amythee/4c6f28231439a60d290d6c9495ef2715#file-queryreactions-ts" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-#### Query Reaction from Post
-
-{% embed url="https://gist.github.com/amythee/4952a13a22bdb16b2adb9e289123aab6#file-amityreactionpostquery-dart" %}
-
-#### Query Reaction from Comment
-
-{% embed url="https://gist.github.com/amythee/960394ce8afa5c8436a18ac58dd9eaa2#file-amityreactioncommentquery-dart" %}
-{% endtab %}
-{% endtabs %}
+    <h4>Query Reaction from Comment</h4>
+    ```dart
+    https://gist.github.com/amythee/960394ce8afa5c8436a18ac58dd9eaa2#file-amityreactioncommentquery-dart
+    ```
+  </Tab>
+</Tabs>

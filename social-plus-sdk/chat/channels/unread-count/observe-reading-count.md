@@ -8,15 +8,22 @@ Note: Observing reading status consumes real-time event topics. Therefore, it is
 
 To start observing reading status, call the startMessageReceiptSync() function:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/98825a7acd668f8019b2810d8a96bd44" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/255c7a568c5e14c68dd7f64f99a617f1" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift
+      SBDMain.startMessageReceiptSync()
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      ```java
+      SendBird.startMessageReceiptSync();
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
 
 This action ensures that the client receives real-time updates on the reading/delivered status of messages in the chatroom.
 
@@ -24,15 +31,22 @@ This action ensures that the client receives real-time updates on the reading/de
 
 When the user exits the chatroom or when observation is no longer required, it is crucial to stop observing reading status to conserve resources and prevent unnecessary real-time event consumption. Use the stopMessageReceiptSync() function for this purpose:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/c0a81b61c644bd69780fe44d7663b0bf" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/eb9b376fde7fe9fe1a974180e0071aa9" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift
+      SBDMain.stopMessageReceiptSync()
+      ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Android">
+    <CodeGroup>
+      ```java
+      SendBird.stopMessageReceiptSync();
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
 
 Stopping observation ensures that the client no longer receives real-time updates on message read/delivered counts.
 

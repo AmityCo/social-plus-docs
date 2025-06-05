@@ -15,8 +15,8 @@ To create relationships with other users, our SDK provides two methods:
 
 By providing these connection methods, our platform allows users to create and manage social connections effectively and efficiently, based on their specific needs and preferences.
 
-{% hint style="info" %}
-The default connection method is the **With request process**. If you wish to change the connection method, you can modify it by making an API call: [Follow with/without request API](https://api-docs.amity.co/#/Network%20Setting/put\_api\_v3\_network\_settings\_social).&#x20;
+<Info>
+The default connection method is the **With request process**. If you wish to change the connection method, you can modify it by making an API call: [Follow with/without request API](https://api-docs.amity.co/#/Network%20Setting/put\_api\_v3\_network\_settings\_social).
 
 Please refer to the example below:
 
@@ -29,6 +29,4 @@ curl --location --request PUT 'https://api.sg.amity.co/api/v3/network-settings/s
   "isFollowWithRequestEnabled": false
 }'
 ```
-
-
-{% endhint %}
+</Info>

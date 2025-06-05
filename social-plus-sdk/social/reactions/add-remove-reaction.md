@@ -19,53 +19,93 @@ The `referenceType` parameter specifies where the reaction is applied. Supported
 
 To add a reaction, use the `addReaction` method:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/67bfd56d56e268c9a23dd8374386e623#file-add_reaction-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+// Add reaction from Post and Story
+AmityReactionRepository()
+    .addReaction("like", referenceType: .post, referenceId: postId) { success, error in
+    // handle success/error
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-**Add Reaction from Post and Story**
+<Tab title="Android">
+Add Reaction from Post and Story
 
-{% embed url="https://gist.github.com/amythee/cc36e27db1f1c1c8882e18476581e9bf" %}
+<CodeGroup>
+```kotlin
+val reactionRepository = AmityReactionRepository(client)
+reactionRepository.addReaction("like", AmityReactionReferenceType.POST, postId)
+    .subscribe()
+```
+</CodeGroup>
 
-#### Add Reaction from Comment
+Add Reaction from Comment
 
-{% embed url="https://gist.github.com/amythee/9d5ff06a616be7ad0d299e6a38100559" %}
-{% endtab %}
+<CodeGroup>
+```kotlin
+val reactionRepository = AmityReactionRepository(client)
+reactionRepository.addReaction("like", AmityReactionReferenceType.COMMENT, commentId)
+    .subscribe()
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 The method returns a promise. If the reaction is successfully removed, the method will return `true`. Otherwise, it will return `false` or an error.
 
-{% embed url="https://gist.github.com/amythee/e91fb91a874f1aadff43ab05d6fac48d#file-addreaction-js" %}
-{% endtab %}
+<CodeGroup>
+```javascript
+const response = await client.addReaction('like', 'post', postId);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/83229aba19155404b9eb064fbf6825fc" %}
+<CodeGroup>
+```typescript
+const response = await client.addReaction('like', 'post', postId);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/9d81fb5be7625d760764d3406809f182" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const response = await client.addReaction('like', 'post', postId);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-#### Add Reaction from Post
+<Tab title="Flutter">
+Add Reaction from Post
 
-{% embed url="https://gist.github.com/amythee/b4f039f00725992ecceebe638b208762" %}
+<CodeGroup>
+```dart
+AmityReaction.postReaction(postId: postId, reactionName: "like");
+```
+</CodeGroup>
 
-#### Add Reaction from Comment
+Add Reaction from Comment
 
-{% embed url="https://gist.github.com/amythee/b16e7e14f5bceb07b115ac420d43a826#file-amityreactioncommentadd-dart" %}
-{% endtab %}
-{% endtabs %}
+<CodeGroup>
+```dart
+AmityReaction.commentReaction(commentId: commentId, reactionName: "like");
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ## Remove Reaction
 
 Similarly, the `removeReaction` function allows users to remove a previously added reaction from a [reference](./#create-comment). This provides users with greater control over their engagement with the content and allows them to change their minds or update their reactions to the post or comment over time.
 
-You can remove a reaction from a reference by calling `removeReaction`.&#x20;
+You can remove a reaction from a reference by calling `removeReaction`.
 
 * `reactionName` - The name of the reaction that you will remove. Reaction names are case sensitive, i.e. "like" & "Like" are two different reactions.
 * `referenceId` - ID of the post or comment respectively.
@@ -79,44 +119,83 @@ The `referenceType` parameter works similarly here, depending on where the react
 
 To remove a reaction, use the `removeReaction` method:
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/4c0ecfa60b8b2139e7853c05d1b2b3e3#file-remove_reaction-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+AmityReactionRepository()
+    .removeReaction("like", referenceType: .post, referenceId: postId) { success, error in
+    // handle success/error
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-#### Remove Reaction from Post and Story
+<Tab title="Android">
+Remove Reaction from Post and Story
 
-{% embed url="https://gist.github.com/amythee/a38d9429a7de4f3f319dc19888f77ad6" %}
+<CodeGroup>
+```kotlin
+val reactionRepository = AmityReactionRepository(client)
+reactionRepository.removeReaction("like", AmityReactionReferenceType.POST, postId)
+    .subscribe()
+```
+</CodeGroup>
 
-#### Remove Reaction from Comment
+Remove Reaction from Comment
 
-{% embed url="https://gist.github.com/amythee/028a6ef0331341363f43f28b0acab6ee" %}
-{% endtab %}
+<CodeGroup>
+```kotlin
+val reactionRepository = AmityReactionRepository(client)
+reactionRepository.removeReaction("like", AmityReactionReferenceType.COMMENT, commentId)
+    .subscribe()
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 The method returns a promise. If the reaction is successfully removed, the method will return `true`. Otherwise, it will return `false` or an error.
 
-{% embed url="https://gist.github.com/amythee/76e0022838d87228405d25891de0ed94#file-removereaction-js" %}
-{% endtab %}
+<CodeGroup>
+```javascript
+const response = await client.removeReaction('like', 'post', postId);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/9a898b74d7fa47b3123bb34c23a50ac7" %}
+<CodeGroup>
+```typescript
+const response = await client.removeReaction('like', 'post', postId);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/825b74fcbaeb80539efbafa5c4288c38" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const response = await client.removeReaction('like', 'post', postId);
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-#### Remove Reaction from Post
+<Tab title="Flutter">
+Remove Reaction from Post
 
-{% embed url="https://gist.github.com/amythee/3aad1618c44aab5a74519e43292e98a3#file-amityreactionpostremove-dart" %}
+<CodeGroup>
+```dart
+AmityReaction.removePostReaction(postId: postId, reactionName: "like");
+```
+</CodeGroup>
 
-#### Remove Reaction from Comment
+Remove Reaction from Comment
 
-{% embed url="https://gist.github.com/amythee/3a72bcc5cdbebe27ffb2c01033ef3362#file-amityreactioncommentremove-dart" %}
-{% endtab %}
-{% endtabs %}
+<CodeGroup>
+```dart
+AmityReaction.removeCommentReaction(commentId: commentId, reactionName: "like");
+```
+</CodeGroup>
+</Tab>
+</Tabs>

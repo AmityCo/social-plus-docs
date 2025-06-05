@@ -2,12 +2,12 @@
 
 Subchannels are part of a channel. They are separate topics or chat threads inside a channel. Messages can be sent and received in subchannels. By default, a channel generates a main subchannel once it's created. You can create, update, delete, and query subchannels inside a channel. For the structure and relationship of channels and subchannels, please visit.
 
-{% hint style="info" %}
+<Info>
 Limitations:
 
 * Sub-channel creation is supported for `Conversation` and `Community` channel types.
 * Users can create up to 300 sub-channels per channel.
-{% endhint %}
+</Info>
 
 ### **Create Subchannel**
 
@@ -16,33 +16,94 @@ In the concept of channels and subchannels, a channel is a primary container tha
 * `channelId`: specifies the unique identifier of the parent channel where the subchannel will be created. This allows the SDK to link the subchannel to the correct parent channel, and organize it within the proper hierarchy.
 * `displayName`: Specifies the public name or label of the subchannel that will be visible to users.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/5e295542faf2d97e5313d385427e04e3" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let channelId = "channelId"
+let displayName = "displayName"
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/479c96883ecd327204f542bc17f4bbc7" %}
-{% endtab %}
+let subchannelRepository = AmitySubchannelRepository(client: client)
+subchannelRepository.createSubChannel(channelId: channelId, displayName: displayName) { subchannel, error in
+    if let error = error {
+        // Handle error
+        return
+    }
+    // Handle success
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val channelId = "channelId"
+val displayName = "displayName"
+
+val subchannelRepository = AmitySubchannelRepository(client)
+subchannelRepository.createSubChannel(channelId, displayName).subscribe({ subchannel ->
+    // Handle success
+}, { error ->
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 We don't support this feature in JS SDK.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/753487dd9103bef916c746e8d0afa9f9#file-createsubchannel-ts" %}
+<CodeGroup>
+```typescript
+const channelId = "channelId";
+const displayName = "displayName";
+
+const subchannelRepository = new SubchannelRepository(client);
+const subchannel = await subchannelRepository.createSubchannel(channelId, displayName);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/811dcedbdd8a6794a03c18ea92e3e60c" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const channelId = "channelId";
+const displayName = "displayName";
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/38bae0e3d64be4ffc191574ac4b9ce16" %}
-{% endtab %}
-{% endtabs %}
+const subchannelRepository = new SubchannelRepository(client);
+const subchannel = await subchannelRepository.createSubchannel({
+    channelId,
+    displayName
+});
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final channelId = "channelId";
+final displayName = "displayName";
+
+final subchannelRepository = AmitySubchannelRepository(client: client);
+try {
+    final subchannel = await subchannelRepository.createSubChannel(
+        channelId: channelId,
+        displayName: displayName,
+    );
+    // Handle success
+} on AmityException catch (e) {
+    // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### **Update Subchannel**
 
@@ -53,33 +114,94 @@ The function requires two parameters: `subchannelId` and `displayName`.
 * `subhannelId`: This is the unique identifier of the subchannel that you'd like to update.
 * `displayName`: This is the updated public name or label of the subchannel that will be visible to users.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/2633f916083b1d3e88dd1abfc5108722" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let subchannelId = "subchannelId"
+let displayName = "displayName"
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/b16585280ad24b4d12cf01fdfe13d8f1" %}
-{% endtab %}
+let subchannelRepository = AmitySubchannelRepository(client: client)
+subchannelRepository.updateSubChannel(subchannelId: subchannelId, displayName: displayName) { subchannel, error in
+    if let error = error {
+        // Handle error
+        return
+    }
+    // Handle success
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val subchannelId = "subchannelId"
+val displayName = "displayName"
+
+val subchannelRepository = AmitySubchannelRepository(client)
+subchannelRepository.updateSubChannel(subchannelId, displayName).subscribe({ subchannel ->
+    // Handle success
+}, { error ->
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 We don't support this feature in JS SDK.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/3d28acf08ecd7e25698a4d9a0dc8fa14#file-updatesubchannel-ts" %}
+<CodeGroup>
+```typescript
+const subchannelId = "subchannelId";
+const displayName = "displayName";
+
+const subchannelRepository = new SubchannelRepository(client);
+const subchannel = await subchannelRepository.updateSubchannel(subchannelId, displayName);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/fc105757d06524126646d5619d6ad006" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const subchannelId = "subchannelId";
+const displayName = "displayName";
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/74fe4f76d2223ee4df64a77953cb0290" %}
-{% endtab %}
-{% endtabs %}
+const subchannelRepository = new SubchannelRepository(client);
+const subchannel = await subchannelRepository.updateSubchannel({
+    subchannelId,
+    displayName
+});
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final subchannelId = "subchannelId";
+final displayName = "displayName";
+
+final subchannelRepository = AmitySubchannelRepository(client: client);
+try {
+    final subchannel = await subchannelRepository.updateSubChannel(
+        subchannelId: subchannelId,
+        displayName: displayName,
+    );
+    // Handle success
+} on AmityException catch (e) {
+    // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### **Delete Subchannel**
 
@@ -87,33 +209,94 @@ The `subchannelId` parameter specifies the ID of the subchannel that you'd like 
 
 A soft delete will mark the subchannel as deleted but keep its data in the system. A hard delete will immediately and permanently delete the subchannel and all its data from the system.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/c9692fef1bdd31bdae57200f81270d8d" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let subchannelId = "subchannelId"
+let hardDelete = true
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/6d43dea2ba1790c47e7d56a6e0396928" %}
-{% endtab %}
+let subchannelRepository = AmitySubchannelRepository(client: client)
+subchannelRepository.deleteSubChannel(subchannelId: subchannelId, hardDelete: hardDelete) { success, error in
+    if let error = error {
+        // Handle error
+        return
+    }
+    // Handle success
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val subchannelId = "subchannelId"
+val hardDelete = true
+
+val subchannelRepository = AmitySubchannelRepository(client)
+subchannelRepository.deleteSubChannel(subchannelId, hardDelete).subscribe({
+    // Handle success
+}, { error ->
+    // Handle error
+})
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 We don't support this feature in JS SDK.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/fa9709c686bb2f9940c98ca2f1b23c14#file-deletesubchannel-ts" %}
+<CodeGroup>
+```typescript
+const subchannelId = "subchannelId";
+const hardDelete = true;
+
+const subchannelRepository = new SubchannelRepository(client);
+await subchannelRepository.deleteSubchannel(subchannelId, hardDelete);
+```
+</CodeGroup>
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/083590e91d6ad604582a038200e691a4" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const subchannelId = "subchannelId";
+const hardDelete = true;
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/719b77134cce1af2b8f2fd8702cf7c90" %}
-{% endtab %}
-{% endtabs %}
+const subchannelRepository = new SubchannelRepository(client);
+await subchannelRepository.deleteSubchannel({
+    subchannelId,
+    hardDelete
+});
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final subchannelId = "subchannelId";
+final hardDelete = true;
+
+final subchannelRepository = AmitySubchannelRepository(client: client);
+try {
+    await subchannelRepository.deleteSubChannel(
+        subchannelId: subchannelId,
+        hardDelete: hardDelete,
+    );
+    // Handle success
+} on AmityException catch (e) {
+    // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### **Get Subchannel**
 
@@ -123,29 +306,64 @@ The `AmitySubchannel` class represents a subchannel in a channel. It contains in
 
 By using a [#live-object](../../core-concepts/live-objects-collections/#live-object "mention") combines with [#real-time-events](subchannel.md#real-time-events "mention"), you can observe any changes made to the subchannel in real-time. This is particularly useful in cases where multiple users may be interacting with the same subchannel and you need to keep the UI up-to-date with the latest data.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/3249734aae5b61fdef8c913eb6c303fb#file-get_sub_channel-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let subchannelId = "subchannelId"
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/acfe376bc61b1599b70887a948961386" %}
-{% endtab %}
+let subchannelRepository = AmitySubchannelRepository(client: client)
+let subchannel = subchannelRepository.getSubChannel(subchannelId)
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val subchannelId = "subchannelId"
+
+val subchannelRepository = AmitySubchannelRepository(client)
+val subchannel = subchannelRepository.getSubChannel(subchannelId)
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 We don't support this feature in JS SDK.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6 and Beta(v0.0.1)
 
-{% embed url="https://gist.github.com/amythee/13ecf642c77f17172b939a7d4c821ccf#file-getsubchannel-ts" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const subchannelId = "subchannelId";
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/6690ef5eac7d0c4babe8a617c0329bca" %}
-{% endtab %}
-{% endtabs %}
+const subchannelRepository = new SubchannelRepository(client);
+const subchannel = await subchannelRepository.getSubchannel(subchannelId);
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final subchannelId = "subchannelId";
+
+final subchannelRepository = AmitySubchannelRepository(client: client);
+try {
+    final subchannel = await subchannelRepository.getSubChannel(
+        subchannelId: subchannelId,
+    );
+    // Handle success
+} on AmityException catch (e) {
+    // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### **Query Subchannels**
 
@@ -153,26 +371,61 @@ The `getSubChannels` function allows you to retrieve a list of subchannels withi
 
 The function returns a [#live-collection](../../core-concepts/live-objects-collections/#live-collection "mention"), which allows you to observe changes to the collection in real-time.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/5e21f19971285b774b4cc5be55d90bb6#file-query_sub_channel-swift" %}
-{% endtab %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+let channelId = "channelId"
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/3f4781bc4633741b2bcf6e42b5fe8b69" %}
-{% endtab %}
+let subchannelRepository = AmitySubchannelRepository(client: client)
+let collection = subchannelRepository.getSubChannels(channelId: channelId)
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+val channelId = "channelId"
+
+val subchannelRepository = AmitySubchannelRepository(client)
+val collection = subchannelRepository.getSubChannels(channelId)
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="JavaScript">
 We don't support this feature in JS SDK.
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6 and Beta(v0.0.1)
 
-{% embed url="https://gist.github.com/amythee/d403c59daa269eb4f25e40d80c59a448#file-querysubchannels-ts" %}
-{% endtab %}
+<CodeGroup>
+```typescript
+const channelId = "channelId";
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/19e610ef431c7634341eb945cf52aa76" %}
-{% endtab %}
-{% endtabs %}
+const subchannelRepository = new SubchannelRepository(client);
+const subchannels = await subchannelRepository.getSubchannels(channelId);
+```
+</CodeGroup>
+</Tab>
+
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+final channelId = "channelId";
+
+final subchannelRepository = AmitySubchannelRepository(client: client);
+try {
+    final subchannels = await subchannelRepository.getSubChannels(
+        channelId: channelId,
+    );
+    // Handle success
+} on AmityException catch (e) {
+    // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>

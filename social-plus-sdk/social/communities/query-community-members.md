@@ -10,63 +10,120 @@ To query community members with certain criteria, the following parameters are u
   * `member` - will filter out all banned members and only include unbanned members.
   * `ban` - will only include banned members in the results.
 * `roles`:  allows users to query for members with default moderator roles by using "_channel-moderator_" or "_community-moderator_" as the value. At this moment, we do not have a way to query for member-only roles. For custom roles assigned to members, users can pass in `roleId` of the custom role to filter members by this role.
-* `includeDeleted` : A parameter accepting a boolean value.&#x20;
-  * `true` -> include a member whose user has been deleted &#x20;
+* `includeDeleted`: A parameter accepting a boolean value.
+  * `true` -> include a member whose user has been deleted
   * `false` -> exclude member whose user has been deleted
 
-{% hint style="info" %}
+<Info>
 Community member count value is based on all members in the community including the members whose user has been deleted.
-{% endhint %}
+</Info>
 
 * `sortBy`: allows users to specify the sorting method for the returned collection. The possible values include `displayName`, `firstCreated`, `lastCreated`. The `firstCreated` sort option will be specified by default if it isn't specified. When a keyword is provided, leading to a list sorted by search rank.
 
-{% hint style="info" %}
+<Info>
 To query community banned members, only the 'Admin' role is currently allowed, while 'Moderators' and 'Users' are not allowed to query community banned members.
-{% endhint %}
+</Info>
 
-{% hint style="info" %}
+<Info>
 Please note that you can only assign custom roles to a member in a community via the SDK. This feature is **not** yet available in the Social Plus Console.
 
 If you assign a custom role to a user via the Social Plus console, the role will only be applied at the user level and not at the community level, and if you try to query for a member with this custom role, no results will be returned.
-{% endhint %}
+</Info>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/ce469dc032b6bf717caeba5c174344f2" %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+// Query members in a community
+let options = CommunityMembershipOptions()
+options.insert(.member)
+community.getMembers(membershipOptions: options) { result in
+    switch result {
+    case .success(let members):
+        print("Successfully retrieved members: \(members)")
+    case .failure(let error):
+        print("Failed to retrieve members: \(error)")
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% embed url="https://gist.github.com/amythee/08af3be2ec7c961809c9351d3063885a" %}
-
-{% embed url="https://gist.github.com/amythee/9483f168819462accb8e55ad8028a90a" %}
-
-{% embed url="https://gist.github.com/amythee/5934c43f99f405aacc59bfca25249d5c#file-get-members-parameter-example-swift" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/f38d5663b3acd75e76acf6079bb6a7de" %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+// Get members in a community
+val options = CommunityMembershipOptions()
+options.add(CommunityMembershipOption.MEMBER)
+community.getMembers(options) { result ->
+    when (result) {
+        is Success -> {
+            val members = result.value
+            // Handle success
+        }
+        is Failure -> {
+            val error = result.error
+            // Handle error
+        }
+    }
+}
+```
+</CodeGroup>
 
 Passing an empty option set for `membershipOptions` parameter will default to `.member`.
-{% endtab %}
+</Tab>
 
-{% tab title="JavaScript" %}
-Below is the sample code to get a list of community members. This method will return a `LiveCollection` instance.&#x20;
+<Tab title="JavaScript">
+Below is the sample code to get a list of community members. This method will return a `LiveCollection` instance.
 
-{% embed url="https://gist.github.com/amythee/374eb7565502773a939950a2a77abd34#file-getcommunitymembers-js" %}
-{% endtab %}
+<CodeGroup>
+```javascript
+// Get members in a community
+const members = await community.getMembers({
+  membershipOptions: ['member'],
+  roles: ['community-moderator'],
+  includeDeleted: false,
+  sortBy: 'firstCreated'
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/amythee/f0c1cf3f012e0f6aa65a45d3dbdb898a#file-querycommunitymembers-ts" %}
-{% endtab %}
+<Tab title="TypeScript">
+<CodeGroup>
+```typescript
+// Query members in a community
+const members = await community.getMembers({
+  membershipOptions: ['member'],
+  roles: ['community-moderator'],
+  includeDeleted: false,
+  sortBy: 'firstCreated'
+});
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/ea7c1c5243209d65ceecc7f0e5eff00d" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+// Get members in a community
+final options = CommunityMembershipOptions()..add(CommunityMembershipOption.member);
+try {
+  final members = await community.getMembers(membershipOptions: options);
+  // Handle success
+} catch (error) {
+  // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
 
 ### Search for community members
 
 To search for community members, users can call the relevant method and provide the desired keyword, roles, and membership options parameters. For example, they may specify certain membership options, such as only retrieving members who are not banned. The result of the method will always return as [Live collection](../../core-concepts/live-objects-collections/).
 
-If no keyword is supplied, the list of users for the specified community will be sorted by the date they joined.&#x20;
+If no keyword is supplied, the list of users for the specified community will be sorted by the date they joined.
 
 To search for community members with certain criteria, the following parameters are used:
 
@@ -75,27 +132,71 @@ To search for community members with certain criteria, the following parameters 
   * `member` - will filter out all banned members and only include unbanned members.
   * `ban` - will only include banned members in the results.
 * `roles`:  allows users to query for members with default moderator roles by using "_channel-moderator_" or "_community-moderator_" as the value. At this moment, we do not have a way to query for member-only roles. For custom roles assigned to members, users can pass in the `roleId` of the custom role to filter members by this role.
-* `includeDeleted` : A parameter accepting a boolean value.&#x20;
-  * `true` -> include a member whose user has been deleted &#x20;
+* `includeDeleted`: A parameter accepting a boolean value.
+  * `true` -> include a member whose user has been deleted
   * `false` -> exclude member whose user has been deleted
 * `sortBy`: allows users to specify the sorting method for the returned collection. The possible values include `displayName`, `firstCreated`, `lastCreated`. The `displayName` sort option will be specified by default if it isn't specified. When a keyword is provided, leading to a list sorted by search rank.
 
-{% hint style="info" %}
+<Info>
 To query community banned members, only the 'Admin' role is currently allowed, while 'Moderators' and 'Users' are not allowed to query community banned members.
-{% endhint %}
+</Info>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/ce469dc032b6bf717caeba5c174344f2" %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+// Search for members in a community
+let options = CommunityMembershipOptions()
+options.insert(.member)
+community.searchMembers(keyword: "John", membershipOptions: options) { result in
+    switch result {
+    case .success(let members):
+        print("Successfully retrieved members: \(members)")
+    case .failure(let error):
+        print("Failed to retrieve members: \(error)")
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% embed url="https://gist.github.com/amythee/9483f168819462accb8e55ad8028a90a" %}
-{% endtab %}
+<Tab title="Android">
+<CodeGroup>
+```kotlin
+// Search for members in a community
+val options = CommunityMembershipOptions()
+options.add(CommunityMembershipOption.MEMBER)
+community.searchMembers("John", options) { result ->
+    when (result) {
+        is Success -> {
+            val members = result.value
+            // Handle success
+        }
+        is Failure -> {
+            val error = result.error
+            // Handle error
+        }
+    }
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/35215ee00c0fa2617e097f2feacf405a" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/ea7c1c5243209d65ceecc7f0e5eff00d" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+<CodeGroup>
+```dart
+// Search for members in a community
+final options = CommunityMembershipOptions()..add(CommunityMembershipOption.member);
+try {
+  final members = await community.searchMembers(
+    keyword: 'John',
+    membershipOptions: options,
+  );
+  // Handle success
+} catch (error) {
+  // Handle error
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>

@@ -4,45 +4,40 @@ There are two types of story deletion: soft delete and hard delete. When a story
 
 ## Soft Delete Story
 
-The '`softDeleteStory()`' function allows users to mark a story as deleted on the server, rendering it inaccessible to users.
+The `softDeleteStory()` function allows users to mark a story as deleted on the server, rendering it inaccessible to users.
 
 This function requires one parameter: 'storyId.' Here's an explanation of the function parameter:
 
 * `storyId`: Corresponds to the ID of the story.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/685004d2dbaa2f3d56fef1f18d3f1b4b" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/03fc9204752c0f33e97bbb9121510c41" %}
-{% endtab %}
-
-{% tab title="TS" %}
-{% embed url="https://gist.github.com/amythee/86a6be5c6011b23d5347612193cd7e85" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <CodeBlock url="https://gist.github.com/amythee/685004d2dbaa2f3d56fef1f18d3f1b4b" />
+  </Tab>
+  <Tab title="Android">
+    <CodeBlock url="https://gist.github.com/amythee/03fc9204752c0f33e97bbb9121510c41" />
+  </Tab>
+  <Tab title="TS">
+    <CodeBlock url="https://gist.github.com/amythee/86a6be5c6011b23d5347612193cd7e85" />
+  </Tab>
+</Tabs>
 
 ## Hard Delete Story
 
-The '`hardDeleteStory()`' function permanently deletes the story and all associated data, including reactions and comments from the server.
+The `hardDeleteStory()` function permanently deletes the story and all associated data, including reactions and comments from the server.
 
 This function requires one parameter: 'storyId.' Here's an explanation of the function parameter:
 
 * `storyId`: Corresponds to the ID of the story.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/4537756cbf7c048fb4468221669d8d1c" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/6610d5456a87582d879c47171ba382d7" %}
-{% endtab %}
-
-{% tab title="TS" %}
-{% embed url="https://gist.github.com/amythee/926631131f26c91082e48d287aace9d8" %}
-{% endtab %}
-{% endtabs %}
-
+<Tabs>
+  <Tab title="iOS">
+    <CodeBlock url="https://gist.github.com/amythee/4537756cbf7c048fb4468221669d8d1c" />
+  </Tab>
+  <Tab title="Android">
+    <CodeBlock url="https://gist.github.com/amythee/6610d5456a87582d879c47171ba382d7" />
+  </Tab>
+  <Tab title="TS">
+    <CodeBlock url="https://gist.github.com/amythee/926631131f26c91082e48d287aace9d8" />
+  </Tab>
+</Tabs>

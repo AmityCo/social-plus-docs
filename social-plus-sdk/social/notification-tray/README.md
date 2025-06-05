@@ -19,12 +19,30 @@ Designed for seamless integration, the Notification Tray SDK ensures **real-time
 
 ### Notification Tray Item Description
 
-<table><thead><tr><th>Name</th><th width="288.5625">DataType</th><th>Description</th></tr></thead><tbody><tr><td><code>notificationId</code></td><td><code>String</code></td><td>id of notification item</td></tr><tr><td><code>lastSeenAt</code></td><td><code>Datetime</code></td><td>Timestamp when the notification was last seen</td></tr><tr><td><code>lastOccuredAt</code></td><td><code>Datetime</code></td><td>Timestamp when the notification last occurred</td></tr><tr><td><code>actors</code></td><td><code>List&#x3C;AmityNotificationActors></code></td><td>Data of user that act on this notification item</td></tr><tr><td><code>actorCount</code></td><td><code>Int</code></td><td>Number of users that act on this notification item</td></tr><tr><td><code>actionType</code></td><td><code>String</code></td><td>Type of action that user act on this notification</td></tr><tr><td><code>trayItemCategory</code></td><td><code>String</code></td><td>Category for when action is either "mention" or "reply"</td></tr><tr><td><code>targetId</code></td><td><code>String</code></td><td>Object id of target</td></tr><tr><td><code>targetType</code></td><td><code>String</code></td><td>Type of target for this act</td></tr><tr><td><code>referenceId</code></td><td><code>String</code></td><td>Optional ObjectId of the reference</td></tr><tr><td><code>referenceType</code></td><td><code>String</code></td><td>Type of refference for this act</td></tr><tr><td><code>parentId</code></td><td><code>String</code></td><td>Optional ObjectId of parent</td></tr><tr><td><code>text</code></td><td><code>String</code></td><td>Ready to render text without any templating</td></tr><tr><td><code>templatedText</code></td><td><code>String</code></td><td>Ready to render text with templating allow client to interpret</td></tr><tr><td><code>isSeen</code></td><td><code>Boolean</code></td><td>Refference of this item is seen</td></tr><tr><td><code>isRecent</code></td><td><code>Boolean</code></td><td>Refference of this item is recent or older</td></tr><tr><td><code>users</code></td><td><code>List&#x3C;AmityUser></code></td><td>List of users that act on this notification</td></tr></tbody></table>
+| Name | DataType | Description |
+| --- | --- | --- |
+| `notificationId` | `String` | id of notification item |
+| `lastSeenAt` | `Datetime` | Timestamp when the notification was last seen |
+| `lastOccuredAt` | `Datetime` | Timestamp when the notification last occurred |
+| `actors` | `List<AmityNotificationActors>` | Data of user that act on this notification item |
+| `actorCount` | `Int` | Number of users that act on this notification item |
+| `actionType` | `String` | Type of action that user act on this notification |
+| `trayItemCategory` | `String` | Category for when action is either "mention" or "reply" |
+| `targetId` | `String` | Object id of target |
+| `targetType` | `String` | Type of target for this act |
+| `referenceId` | `String` | Optional ObjectId of the reference |
+| `referenceType` | `String` | Type of refference for this act |
+| `parentId` | `String` | Optional ObjectId of parent |
+| `text` | `String` | Ready to render text without any templating |
+| `templatedText` | `String` | Ready to render text with templating allow client to interpret |
+| `isSeen` | `Boolean` | Refference of this item is seen |
+| `isRecent` | `Boolean` | Refference of this item is recent or older |
+| `users` | `List<AmityUser>` | List of users that act on this notification |
 
 ### Notification Tray Seen Description
 
-| Name                | Data type  | Description                                |
-| ------------------- | ---------- | ------------------------------------------ |
-| `lastTraySeenAt`    | `Datetime` | Timestamp when the tray was last seen      |
+| Name | Data type | Description |
+| --- | --- | --- |
+| `lastTraySeenAt` | `Datetime` | Timestamp when the tray was last seen |
 | `lastTrayOccuredAt` | `Datetime` | Timestamp when the last tray item occurred |
-| `isSeen`            | `Boolean`  | Refference of this Object is seen          |
+| `isSeen` | `Boolean` | Refference of this Object is seen |

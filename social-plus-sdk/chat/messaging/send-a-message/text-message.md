@@ -11,82 +11,94 @@ Here is a brief explanation of the function parameters:
 * `text`: A string that contains the text message that the user wants to send. This parameter is mandatory as it contains the actual message content.
 * `subchannelId`: An identifier for the subchannel where the message will be sent. Subchannels are subdivisions within a channel that represent individual topics or chat threads. Messages and interactions occur within subchannels, not the main channel itself.
 * `metaData`: Additional properties to support custom fields.
-* `tags` - Arbitrary strings that can be used for defining and querying the messages.
+* `tags`: Arbitrary strings that can be used for defining and querying the messages.
 
-{% tabs %}
-{% tab title="iOS" %}
-**Version 6**
+<Tabs>
+  <Tab title="iOS">
+    **Version 6**
 
-{% embed url="https://gist.github.com/amythee/8caf4860ff3c6255b8c4b825e26cc089" %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/8caf4860ff3c6255b8c4b825e26cc089" />
+    </Frame>
 
-**Version 5 (Maintained)**
+    **Version 5 (Maintained)**
 
-{% embed url="https://gist.github.com/amythee/3abe32253b20e25ee4b710942a4f806f" %}
-{% endtab %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/3abe32253b20e25ee4b710942a4f806f" />
+    </Frame>
+  </Tab>
 
-{% tab title="Android" %}
-**Version 6**
+  <Tab title="Android">
+    **Version 6**
 
-{% embed url="https://gist.github.com/amythee/284bdf467ea8fe7a136400d3b13287ea" %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/284bdf467ea8fe7a136400d3b13287ea" />
+    </Frame>
 
-**Version 5 (Maintained)**
+    **Version 5 (Maintained)**
 
-{% embed url="https://gist.github.com/amythee/6bc19f3db1e24e8a31af236f1823f961" %}
-{% endtab %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/6bc19f3db1e24e8a31af236f1823f961" />
+    </Frame>
+  </Tab>
 
-{% tab title="JavaScript" %}
-```javascript
-import { MessageRepository } from '@amityco/js-sdk';
+  <Tab title="JavaScript">
+    ```javascript
+    import { MessageRepository } from '@amityco/js-sdk';
 
-const liveObject = MessageRepository.createTextMessage({
-  channelId: 'channel1',
-  text: 'Hello World!',
-});
+    const liveObject = MessageRepository.createTextMessage({
+      channelId: 'channel1',
+      text: 'Hello World!',
+    });
 
-liveObject.on('dataUpdate', message => {
-  console.log('message is created', message);
-});
-```
+    liveObject.on('dataUpdate', message => {
+      console.log('message is created', message);
+    });
+    ```
 
+    When creating a message, we can also pass the `parentId` to make it appear under a parent.
 
+    ```javascript
+    import { MessageRepository } from '@amityco/js-sdk';
 
-When creating a message, we can also pass the `parentId` to make it appear under a parent.
-
-```javascript
-import { MessageRepository } from '@amityco/js-sdk';
-
-const messageLiveObject = MessageRepository.createTextMessage({
-  channelId: 'channel1',
-  text: 'Hello World!',
-  parentId: 'exampleParentMessageId,
-  tags: ['tag1', 'tag2'],
-  mentionees: [
-    {
-      "type": "user",
-      "userIds": [
-        "user1", “user2”
+    const messageLiveObject = MessageRepository.createTextMessage({
+      channelId: 'channel1',
+      text: 'Hello World!',
+      parentId: 'exampleParentMessageId',
+      tags: ['tag1', 'tag2'],
+      mentionees: [
+        {
+          "type": "user",
+          "userIds": [
+            "user1", "user2"
+          ]
+        }
       ]
-    }
-  ]
-});
-```
-{% endtab %}
+    });
+    ```
+  </Tab>
 
-{% tab title="TypeScript" %}
-Version 6
+  <Tab title="TypeScript">
+    Version 6
 
-{% embed url="https://gist.github.com/amythee/59381404ca924023929f1042c315b5ae#file-createtextmessage-ts" %}
+    <Frame>
+      <img src="https://gist.github.com/amythee/59381404ca924023929f1042c315b5ae#file-createtextmessage-ts" />
+    </Frame>
 
-Beta (v0.0.1)
+    Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/f0ccc6a26f58792e70738a026bdfa8ad" %}
-{% endtab %}
+    <Frame>
+      <img src="https://gist.github.com/f0ccc6a26f58792e70738a026bdfa8ad" />
+    </Frame>
+  </Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/cdfb7544aea37943da47bf688266ce6d#file-amitymessagetextcreate-dart" %}
-{% endtab %}
-{% endtabs %}
+  <Tab title="Flutter">
+    <Frame>
+      <img src="https://gist.github.com/amythee/cdfb7544aea37943da47bf688266ce6d#file-amitymessagetextcreate-dart" />
+    </Frame>
+  </Tab>
+</Tabs>
 
-{% hint style="warning" %}
-The limit for sending text messages is 10,000 characters per text message. Messages exceeding that limit will return an error and will not be sent.
-{% endhint %}
+<Warning>
+  The limit for sending text messages is 10,000 characters per text message. Messages exceeding that limit will return an error and will not be sent.
+</Warning>

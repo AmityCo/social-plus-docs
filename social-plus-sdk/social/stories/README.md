@@ -12,13 +12,11 @@ Stories, unlike traditional posts, excel in sharing time-sensitive updates like 
 
 Our SDK provides tools for creating, viewing, and interacting with diverse story content—images, videos, and links; as well as configurable story duration and expiry periods. Additionally, you can also collect valuable insights regarding story interactions for analytics and reporting purposes, such as views, reach (unique views), reactions, and Click-Through Rates (CTR). This data will also be made available on our Dashboard soon.
 
-Stories can currently only be created in community feeds, by users with story creation permissions ("MANAGE\_COMMUNITY\_STORY"). By default, these permissions are automatically assigned to the following roles: moderator, community moderator, super-moderator, and global admin. If you have non-moderators whom you'd like to be able to contribute to the community's story feed, you can assign these permissions to your users. Read more [here](https://docs.amity.co/amity-sdk/core-concepts/user/user-permission#permissions). &#x20;
+Stories can currently only be created in community feeds, by users with story creation permissions ("MANAGE_COMMUNITY_STORY"). By default, these permissions are automatically assigned to the following roles: moderator, community moderator, super-moderator, and global admin. If you have non-moderators whom you'd like to be able to contribute to the community's story feed, you can assign these permissions to your users. Read more [here](https://docs.amity.co/amity-sdk/core-concepts/user/user-permission#permissions).
 
-Creating, viewing, and deleting stories is also [available](https://docs.amity.co/analytics-and-moderation/console/stories) on SP Console.&#x20;
+Creating, viewing, and deleting stories is also [available](https://docs.amity.co/analytics-and-moderation/console/stories) on SP Console.
 
 ### Story Structure
-
-
 
 <figure><img src="../../../.gitbook/assets/Screenshot 2566-12-21 at 20.22.57.png" alt=""><figcaption></figcaption></figure>
 
@@ -28,53 +26,51 @@ A Story is multi-layered. The primary content, "**Data**," depending on the data
 
 The functionality of stories can be utilized through the `StoryRepository`, which offers methods for interacting with a data source that stores stories. This includes methods for obtaining stories, creating a new story, and deleting a story.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/dabae8e942b652226adfffdd814911f2" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/4d966b687a17edc5192236b0f59f7fa8" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/a771269a678cfd77e67279ba9ecf3e57" %}
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <iframe src="https://gist.github.com/amythee/dabae8e942b652226adfffdd814911f2"></iframe>
+  </Tab>
+  <Tab title="Android">
+    <iframe src="https://gist.github.com/4d966b687a17edc5192236b0f59f7fa8"></iframe>
+  </Tab>
+  <Tab title="Flutter">
+    <iframe src="https://gist.github.com/amythee/a771269a678cfd77e67279ba9ecf3e57"></iframe>
+  </Tab>
+</Tabs>
 
 ### Story schema
 
-| **Name**       | **Data Type**         | **Description**                                                                    |
-| -------------- | --------------------- | ---------------------------------------------------------------------------------- |
-| storyId        | String                | ID of the story                                                                    |
-| targetType     | Enum                  | Type of target. COMMUNITY                                                          |
-| targetId       | String                | ID of the target                                                                   |
-| dataType       | Enum                  | Type of the story. Either IMAGE or VIDEO.                                          |
-| data           | Object                | Data of the story based on dataType                                                |
-| metadata       | Object                | Metadata of the story                                                              |
-| storyItems     | Array\<StoryItem>     | StoryItems of the story                                                            |
-| syncState      | Enum                  | Sync state of the story. \[FAILED \| SYNCING \| SYNCED]                            |
-| isDeleted      | Boolean               | Flag indicates whether the story is deleted.                                       |
-| isSeen         | Boolean               | Flag indicates whether the story has been viewed by the user                       |
-| myReactions    | Array\<String>        | My reactions on the story                                                          |
-| reactionsCount | Integer               | Count of reactions on the story                                                    |
-| commentsCount  | Integer               | Count of comments on the story                                                     |
-| reactions      | Map\<String, Integer> | Map containing a key \| value of reaction \| reactionsCount. For ex., “like” \| 20 |
-| reach          | Integer               | Count of reach of the story                                                        |
-| impression     | Integer               | Count of impression of the story                                                   |
-| creatorId      | String                | ID of the user who created the story                                               |
-| expiresAt      | DateTime              | Date/time the story expires                                                        |
-| createdAt      | DateTime              | Date/time the story was created                                                    |
+| **Name** | **Data Type** | **Description** |
+| -------- | ------------- | --------------- |
+| storyId | String | ID of the story |
+| targetType | Enum | Type of target. COMMUNITY |
+| targetId | String | ID of the target |
+| dataType | Enum | Type of the story. Either IMAGE or VIDEO. |
+| data | Object | Data of the story based on dataType |
+| metadata | Object | Metadata of the story |
+| storyItems | Array<StoryItem> | StoryItems of the story |
+| syncState | Enum | Sync state of the story. [FAILED \| SYNCING \| SYNCED] |
+| isDeleted | Boolean | Flag indicates whether the story is deleted. |
+| isSeen | Boolean | Flag indicates whether the story has been viewed by the user |
+| myReactions | Array<String> | My reactions on the story |
+| reactionsCount | Integer | Count of reactions on the story |
+| commentsCount | Integer | Count of comments on the story |
+| reactions | Map<String, Integer> | Map containing a key \| value of reaction \| reactionsCount. For ex., "like" \| 20 |
+| reach | Integer | Count of reach of the story |
+| impression | Integer | Count of impression of the story |
+| creatorId | String | ID of the user who created the story |
+| expiresAt | DateTime | Date/time the story expires |
+| createdAt | DateTime | Date/time the story was created |
 
 ### StoryTarget schema
 
-| **Name**   | **Data Type** | **Description**                                                  |
-| ---------- | ------------- | ---------------------------------------------------------------- |
-| targetType | Enum          | Type of target                                                   |
-| targetId   | String        | ID of target                                                     |
-| updatedAt  | DateTime      | Date/time the story target was updated                           |
-| hasUnseen  | Boolean       | Flag indicates whether the StoryTarget possesses unseen stories. |
+| **Name** | **Data Type** | **Description** |
+| -------- | ------------- | --------------- |
+| targetType | Enum | Type of target |
+| targetId | String | ID of target |
+| updatedAt | DateTime | Date/time the story target was updated |
+| hasUnseen | Boolean | Flag indicates whether the StoryTarget possesses unseen stories. |
 
-{% hint style="info" %}
+<Hint>
 Public communities can have up to 100 active stories. Once the limit is reached, new stories cannot be created. However, when a story expires, users can create more.
-{% endhint %}
+</Hint>

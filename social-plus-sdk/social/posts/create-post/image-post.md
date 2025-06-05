@@ -16,50 +16,50 @@ Here's an explanation of the method's parameters:
 
 * The maximum file size limit is up to 1 GB.
 
-{% tabs %}
-{% tab title="iOS" %}
+<Tabs>
+<Tab title="iOS">
 We can build the post first by using `AmityImagePostBuilder`. Then use the `createImagePost` method in `AmityPostRepository` to create image post.
 
-{% embed url="https://gist.github.com/amythee/59b5728fedb04b7802613b36eca55213" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/59b5728fedb04b7802613b36eca55213" />
+</Tab>
 
-{% tab title="Android" %}
+<Tab title="Android">
 We can build the post first by using `AmityImagePostCreator.Builder`. Then use the same `createPost` method in `AmityPostRepository` to create an image post.
 
-{% embed url="https://gist.github.com/amythee/38f66cbf0bcec9a2b6e27dfb01329f04#file-amitypostimagecreation-kt" %}
-{% endtab %}
+<Embed url="https://gist.github.com/amythee/38f66cbf0bcec9a2b6e27dfb01329f04#file-amitypostimagecreation-kt" />
+</Tab>
 
-{% tab title="JavaScript" %}
-{% embed url="https://gist.github.com/amythee/b29244f0cf72e26e29d2da04f20ceebe#file-createimagepost-js" %}
+<Tab title="JavaScript">
+<Embed url="https://gist.github.com/amythee/b29244f0cf72e26e29d2da04f20ceebe#file-createimagepost-js" />
 
 An image post data structure is:
 
 ```javascript
 normalPostStructure + {
-  dataType: “image”,
-  data: { imageId: File[“fileId”] }
+  dataType: "image",
+  data: { imageId: File["fileId"] }
 }
 ```
 
-{% hint style="warning" %}
+<Warning>
 Updating image post in JS SDK is not yet supported.
-{% endhint %}
-{% endtab %}
+</Warning>
+</Tab>
 
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/213b708c6f722fd05f3b01e72afa2e50" %}
-{% endtab %}
+<Tab title="TypeScript">
+<Embed url="https://gist.github.com/213b708c6f722fd05f3b01e72afa2e50" />
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/53e67894a1e6baa80c99ef4681a50ea4#file-amitypostimagecreation-dart" %}
+<Tab title="Flutter">
+<Embed url="https://gist.github.com/amythee/53e67894a1e6baa80c99ef4681a50ea4#file-amitypostimagecreation-dart" />
 
-{% hint style="info" %}
+<Info>
 * Updating images in image post is not yet supported.
 * Refer to Post target type for  a more detailed explanation of the `targetType` parameter.
-{% endhint %}
-{% endtab %}
-{% endtabs %}
+</Info>
+</Tab>
+</Tabs>
 
-{% hint style="info" %}
+<Info>
 A post can have a maximum of ten images.
-{% endhint %}
+</Info>

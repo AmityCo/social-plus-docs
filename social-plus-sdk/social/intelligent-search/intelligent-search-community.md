@@ -22,9 +22,9 @@ You can choose to narrow the search by membership status option
 
 `NOT_MEMBER` - Include only communities that the user is **not** a member of.
 
-### Example Use Cases <a href="#example-use-cases" id="example-use-cases"></a>
+### Example Use Cases
 
-### **Search for Communities** <a href="#search-for-communities" id="search-for-communities"></a>
+### **Search for Communities**
 
 When the user searches for "ice cream," the output may include communities ranked by their relevance score. For example:
 
@@ -54,22 +54,26 @@ Name: "Pastry Lovers"
 Description: "Indulge in the best dessert experiences, from cakes to chilled treats."
 ```
 
-The following code snippet demonstrates how to search for communities across the entire network using semantic search.&#x20;
+The following code snippet demonstrates how to search for communities across the entire network using semantic search.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/476c37ec3b37d59130cd4720958e57cb#file-semantic_search_communities-swift" %}
-{% endtab %}
+<Tabs>
+  <Tab title="iOS">
+    <Frame>
+      <img src="https://gist.github.com/amythee/476c37ec3b37d59130cd4720958e57cb#file-semantic_search_communities-swift" />
+    </Frame>
+  </Tab>
+  <Tab title="Android">
+    <Frame>
+      <img src="https://gist.github.com/amythee/dd8864a04a45393431c883005933c59f#file-amitycommunitysemanticsearch-kt" />
+    </Frame>
+  </Tab>
+  <Tab title="Typescript">
+    <Frame>
+      <img src="https://gist.github.com/amythee/652174c82bdfc4fb1c11ffb395b38e21" />
+    </Frame>
+  </Tab>
+</Tabs>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/dd8864a04a45393431c883005933c59f#file-amitycommunitysemanticsearch-kt" %}
-{% endtab %}
-
-{% tab title="Typescript" %}
-{% embed url="https://gist.github.com/amythee/652174c82bdfc4fb1c11ffb395b38e21" %}
-{% endtab %}
-{% endtabs %}
-
-### Limitations <a href="#limitations" id="limitations"></a>
+### Limitations
 
 * The search is limited to community names and descriptions, excluding all content within communities

@@ -11,22 +11,44 @@ The function takes a `channelId` parameter as a required input, which specifies 
 * `tags`: Arbitrary strings that can be used for define and query for the channels
 * `metadata`: Additional metadata to be associated with the channel.
 
-{% hint style="info" %}
+<Info>
 `metadata` is implemented with _last writer wins_ semantics: multiple mutations by independent users to the metadata object will result in a single stored value. No locking, merging, or other coordination is performed across multiple writes on the data.
-{% endhint %}
+</Info>
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/20d6ab0687edf6f8afa330524232e356" %}
+<Tabs>
+<Tab title="iOS">
+<CodeGroup>
+```swift
+AmityChannelRepository().updateChannel(channelId, displayName: channelName, avatarFileId: fileId, tags: ["tag1", "tag2"], metadata: ["hello": "world"]) { channel, error in
+    // Handle success/error
+}
+```
 
-{% embed url="https://gist.github.com/amythee/49b31e95208fb8462eb67ae4e8c3f954" %}
-{% endtab %}
+```swift
+AmityChannelRepository().updateChannel(channelId, displayName: channelName) { channel, error in
+    // Handle success/error
+}
+```
+</CodeGroup>
+</Tab>
 
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/046fe6b4c0ec308e77e905c6926bb233" %}
-{% endtab %}
+<Tab title="Android">
+```kotlin
+val channelRepository = AmityChannelRepository(client)
+channelRepository.updateChannel(channelId)
+    .displayName(channelName)
+    .avatarFileId(fileId)
+    .tags(listOf("tag1", "tag2"))
+    .metadata(mapOf("hello" to "world"))
+    .build()
+    .submit()
+    .observe { channel ->
+        // Handle success
+    }
+```
+</Tab>
 
-{% tab title="JavaScript" %}
+<Tab title="JavaScript">
 ```javascript
 await ChannelRepository.updateChannel({ 
     channelId: 'channelId', 
@@ -36,21 +58,40 @@ await ChannelRepository.updateChannel({
     metadata: { hello: 'world' }
  })
 ```
-{% endtab %}
+</Tab>
 
-{% tab title="TypeScript" %}
+<Tab title="TypeScript">
 Version 6
 
-{% embed url="https://gist.github.com/amythee/171b6247f3a739513afba5b6df52e046#file-updatechanneldisplayname-ts" %}
-Updating Display Name and Tags
-{% endembed %}
+```typescript
+await channelRepository.updateChannel({
+    channelId: "channelId",
+    displayName: "New Channel Name",
+    tags: ["tag1", "tag2"]
+});
+```
 
 Beta (v0.0.1)
 
-{% embed url="https://gist.github.com/75505a787713d152a5714c8b6bbb6382" %}
-{% endtab %}
+```typescript
+const channelRepository = new ChannelRepository();
+await channelRepository.updateChannel("channelId", {
+    displayName: "New Channel Name",
+    tags: ["tag1", "tag2"]
+});
+```
+</Tab>
 
-{% tab title="Flutter" %}
-{% embed url="https://gist.github.com/amythee/5a98844e706d6af9f0147dd0a635bba4#file-amitychannelupdate-dart" %}
-{% endtab %}
-{% endtabs %}
+<Tab title="Flutter">
+```dart
+final channelRepository = AmityChannelRepository();
+await channelRepository.updateChannel(
+    channelId: channelId,
+    displayName: channelName,
+    avatarFileId: fileId,
+    tags: ['tag1', 'tag2'],
+    metadata: {'hello': 'world'},
+);
+```
+</Tab>
+</Tabs>

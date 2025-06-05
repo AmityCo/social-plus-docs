@@ -6,22 +6,19 @@ The `reactions` property, on the other hand, provides a list of all reactions ma
 
 Finally, the `reactionsCount` property provides a simple way to get the total count of reactions on a comment. By using this property, users can quickly see how popular a post is and how engaged the community is with the content.
 
-{% tabs %}
-{% tab title="iOS" %}
-{% embed url="https://gist.github.com/amythee/b024a7b06fe507d0be46fafcfcff29ca" %}
-{% endtab %}
-
-{% tab title="Android" %}
-{% embed url="https://gist.github.com/amythee/2ed17b96eba985e573509cc8cb890c30#file-amitycommentreaction-kt" %}
-{% endtab %}
-
-{% tab title="TypeScript" %}
-{% embed url="https://gist.github.com/0bc0e5a6bba26ed6feee2a857ddd33a3" %}
-{% endtab %}
-
-{% tab title="Flutter" %}
-Supported ✅ (Please wait while we prepare a real example!)
-{% endtab %}
-{% endtabs %}
+<Tabs>
+  <Tab title="iOS">
+    <iframe src="https://gist.github.com/amythee/b024a7b06fe507d0be46fafcfcff29ca"></iframe>
+  </Tab>
+  <Tab title="Android">
+    <iframe src="https://gist.github.com/amythee/2ed17b96eba985e573509cc8cb890c30#file-amitycommentreaction-kt"></iframe>
+  </Tab>
+  <Tab title="TypeScript">
+    <iframe src="https://gist.github.com/0bc0e5a6bba26ed6feee2a857ddd33a3"></iframe>
+  </Tab>
+  <Tab title="Flutter">
+    Supported ✅ (Please wait while we prepare a real example!)
+  </Tab>
+</Tabs>
 
 For more details on Reactions, refer to our [Reactions](../reactions/) documentation.
