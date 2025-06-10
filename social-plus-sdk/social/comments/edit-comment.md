@@ -135,6 +135,22 @@ Upon successful completion of the file upload process, you can include the image
 </CodeGroup>
   </Tab>
 
+  <Tab title="JavaScript">
+<CodeGroup>
+  ```javascript
+  const commentRepository = new AmityCommentRepository(client);
+  const fileIds = ["fileId1", "fileId2"];
+  commentRepository.updateComment(commentId, "Updated comment with images", fileIds)
+    .then(comment => {
+      // Handle success
+    })
+    .catch(error => {
+      // Handle error
+    });
+  ```
+</CodeGroup>
+  </Tab>
+
   <Tab title="TypeScript">
 <CodeGroup>
   ```typescript 5d91a603eb45bd9c6184e637b31f780a
