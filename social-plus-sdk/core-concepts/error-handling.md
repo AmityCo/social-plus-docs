@@ -16,8 +16,8 @@ You can convert a Social Plus Exception into a Social Plus Error with the follow
 
 <Tabs>
 <Tab title="iOS">
-<CodeBlock language="swift">
-{`// Implement this delegate method which gets called when error occurs
+```swift
+// Implement this delegate method which gets called when error occurs
 func didReceiveAsyncError(_ error: Error) {
     let error = error as NSError
     guard let amityError = AmityErrorCode(rawValue: error.code) else {
@@ -28,8 +28,8 @@ func didReceiveAsyncError(_ error: Error) {
     if amityError == .globalBan {
         // Handle global ban event here
     }
-}`}
-</CodeBlock>
+}
+```
 
 <Note>
 All the errors returned by the iOS SDK come in the form of an `NSError` with domain Social Plus.
@@ -37,8 +37,8 @@ All the errors returned by the iOS SDK come in the form of an `NSError` with dom
 </Tab>
 
 <Tab title="Android">
-<CodeBlock language="kotlin">
-{`// Example of handling errors in Android
+```kotlin
+// Example of handling errors in Android
 try {
     // Your code that might throw AmityException
 } catch (e: AmityException) {
@@ -47,15 +47,15 @@ try {
         is AmityException.BadRequest -> // Handle bad request
         // Handle other specific exceptions
     }
-}`}
-</CodeBlock>
+}
+```
 
 For any specific errors that's handled in PagingData please visit the web page below to properly handle its errors [https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter)
 </Tab>
 
 <Tab title="JavaScript">
-<CodeBlock language="javascript">
-{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
+```javascript
+import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
 
 const liveObject = CommunityRepository.communityForId('abc');
 liveObject.on("dataUpdated", data => {
@@ -64,8 +64,8 @@ liveObject.on("dataUpdated", data => {
 liveObject.on("dataError", err => {
   // failed to fetch the community 
   console.log(err.code == ErrorCode.BusinessError);
-})`}
-</CodeBlock>
+})
+```
 
 <Note>
 All the errors returned by the SDK come in form of an Error with domain `ASC`.
@@ -73,8 +73,8 @@ All the errors returned by the SDK come in form of an Error with domain `ASC`.
 </Tab>
 
 <Tab title="TypeScript">
-<CodeBlock language="typescript">
-{`import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
+```typescript
+import { ErrorCode, CommunityRepository } from '@amityco/js-sdk'
 
 const liveObject = CommunityRepository.communityForId('abc');
 liveObject.on("dataUpdated", (data: Community) => {
@@ -83,8 +83,8 @@ liveObject.on("dataUpdated", (data: Community) => {
 liveObject.on("dataError", (err: Error) => {
   // failed to fetch the community 
   console.log(err.code === ErrorCode.BusinessError);
-})`}
-</CodeBlock>
+})
+```
 </Tab>
 </Tabs>
 
@@ -96,8 +96,8 @@ A global ban error means that the user is banned from the system resulting in th
 
 <Tabs>
 <Tab title="iOS">
-<CodeBlock language="swift">
-{`var client: AmityClient?
+```swift
+var client: AmityClient?
 client.clientErrorDelegate = self // set yourself as the delegate
 
 ...
@@ -113,13 +113,13 @@ func didReceiveAsyncError(_ error: Error) {
         if amityError == .globalBan {
             // Handle global ban event here
         }
-    }`}
-</CodeBlock>
+    }
+```
 </Tab>
 
 <Tab title="Android">
-<CodeBlock language="kotlin">
-{`// Banned while not having a session
+```kotlin
+// Banned while not having a session
 client.login(userId, authToken, object: AmityClient.Callback<AmityUser> {
     override fun onSuccess(user: AmityUser) {
         // Login successful
@@ -130,36 +130,36 @@ client.login(userId, authToken, object: AmityClient.Callback<AmityUser> {
             // Handle global ban
         }
     }
-})`}
-</CodeBlock>
+})
+```
 
-<CodeBlock language="kotlin">
-{`// Observing the LiveObject for ban while having a session
+```kotlin
+// Observing the LiveObject for ban while having a session
 client.getGlobalBanLiveObject().observe(object: AmityEventHandler<Boolean> {
     override fun onReceived(isGlobalBanned: Boolean) {
         if (isGlobalBanned) {
             // Handle global ban
         }
     }
-})`}
-</CodeBlock>
+})
+```
 </Tab>
 
 <Tab title="JavaScript">
-<CodeBlock language="javascript">
-{`client = new ASCClient({ apiKey, apiEndpoint });
+```javascript
+client = new ASCClient({ apiKey, apiEndpoint });
 
 client.on('dataError', error => {
   if (error.code === ErrorCode.GlobalBanError) {
     // handle the case the user is globally banned
   }
-});`}
-</CodeBlock>
+});
+```
 </Tab>
 
 <Tab title="TypeScript">
-<CodeBlock language="typescript">
-{`import { ASCClient, ErrorCode } from '@amityco/js-sdk';
+```typescript
+import { ASCClient, ErrorCode } from '@amityco/js-sdk';
 
 const client = new ASCClient({ apiKey, apiEndpoint });
 
@@ -167,7 +167,7 @@ client.on('dataError', (error: Error) => {
   if (error.code === ErrorCode.GlobalBanError) {
     // handle the case the user is globally banned
   }
-});`}
-</CodeBlock>
+});
+```
 </Tab>
 </Tabs>
