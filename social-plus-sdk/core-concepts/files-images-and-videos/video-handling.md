@@ -21,18 +21,10 @@ To upload a video to the system, you can use the Social Plus Video Upload API pr
 
 <Tabs>
   <Tab title="iOS">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/88605cdb8973e262a01024e76c071c65`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/88605cdb8973e262a01024e76c071c65" />
   </Tab>
   <Tab title="Android">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/3aeb5fe489319c2c72c45ad4a378b6e0#file-amitypostvideoupload-kt`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/3aeb5fe489319c2c72c45ad4a378b6e0#file-amitypostvideoupload-kt" />
   </Tab>
   <Tab title="JavaScript">
     Supported ✅ (please wait while we prepare a real example!)
@@ -40,11 +32,7 @@ To upload a video to the system, you can use the Social Plus Video Upload API pr
   <Tab title="TypeScript">
     **Version 6 and Beta(v0.0.1)**
 
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/68780fdfd0ce758fca807f25bfb29300#file-createvideo-ts`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/68780fdfd0ce758fca807f25bfb29300#file-createvideo-ts" />
 
     If an error is encountered while creating the file, it will return the following errors:
 
@@ -65,11 +53,7 @@ To upload a video to the system, you can use the Social Plus Video Upload API pr
     ```
   </Tab>
   <Tab title="Flutter">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/6a1ea5fee0a85151699e40bedccc534c`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/6a1ea5fee0a85151699e40bedccc534c" />
   </Tab>
 </Tabs>
 
@@ -87,37 +71,21 @@ Once you upload a video the videos undergo transcoding from their original resol
 
 <Tabs>
   <Tab title="iOS">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/76a284b9764d4c0d70a150fc0a30c1cc`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/76a284b9764d4c0d70a150fc0a30c1cc" />
   </Tab>
   <Tab title="Android">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/a713152f2c45c58b4b3eb103705b088a`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/a713152f2c45c58b4b3eb103705b088a" />
   </Tab>
   <Tab title="JavaScript">
     Supported ✅ (please wait while we prepare a real example!)
   </Tab>
   <Tab title="TypeScript">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/0d1ade38440b9d08fc942b8af5c09079`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/0d1ade38440b9d08fc942b8af5c09079" />
   </Tab>
   <Tab title="Flutter">
     Here's an example of getting a specific video resolution from a post.
 
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/e1ba4f88bf33a3421c9863a354720c6a`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/e1ba4f88bf33a3421c9863a354720c6a" />
   </Tab>
 </Tabs>
 
@@ -162,11 +130,7 @@ Additionally, you can display a video preview in the user interface by utilizing
     Supported ✅ (please wait while we prepare a real example!)
   </Tab>
   <Tab title="TypeScript">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/dea45af62feca26e0c8f76b4874d560d`}
-      </CodeBlock>
-    </CodeGroup>
+    <Embed url="https://gist.github.com/amythee/dea45af62feca26e0c8f76b4874d560d" />
   </Tab>
   <Tab title="Flutter">
     The functionality isn't currently supported by this SDK.

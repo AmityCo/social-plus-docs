@@ -54,19 +54,11 @@ https://gist.github.com/amythee/73a5a476abada38f33bf0ba6613b8a6c#file-createcomm
 </Tab>
 
 <Tab title="TypeScript">
-<CodeGroup>
-```typescript
-https://gist.github.com/2e38f085497fa8cec7177976edb8b549
-```
-</CodeGroup>
+<Embed url="https://gist.github.com/2e38f085497fa8cec7177976edb8b549" />
 </Tab>
 
 <Tab title="Flutter">
-<CodeGroup>
-```dart
-https://gist.github.com/amythee/99d02516b7f851d06100cfcfe9e3e177#file-amityposttextcreation-dart
-```
-</CodeGroup>
+<Embed url="https://gist.github.com/amythee/99d02516b7f851d06100cfcfe9e3e177#file-amityposttextcreation-dart" />
 </Tab>
 </Tabs>
 
@@ -180,27 +172,15 @@ https://gist.github.com/amythee/99d02516b7f851d06100cfcfe9e3e177#file-amitypostt
 
 <Tabs>
 <Tab title="iOS">
-<CodeGroup>
-```swift
-https://gist.github.com/amythee/b6a4f1f190552246334f228cc856e339
-```
-</CodeGroup>
+<Embed url="https://gist.github.com/amythee/b6a4f1f190552246334f228cc856e339" />
 </Tab>
 
 <Tab title="Android">
-<CodeGroup>
-```kotlin
-https://gist.github.com/amythee/1ad226283e7c5e1b4cf36e41b531a029
-```
-</CodeGroup>
+<Embed url="https://gist.github.com/amythee/1ad226283e7c5e1b4cf36e41b531a029" />
 </Tab>
 
 <Tab title="TypeScript">
-<CodeGroup>
-```typescript
-https://gist.github.com/93ae3275f1133d3580d00b9ae0110f3d
-```
-</CodeGroup>
+<Embed url="https://gist.github.com/93ae3275f1133d3580d00b9ae0110f3d" />
 </Tab>
 
 <Tab title="Flutter">

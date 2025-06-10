@@ -24,29 +24,19 @@ Flag reason is only available in iOS, Android, and TypeScript
 
 <Tabs>
   <Tab title="iOS">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/b4bcc958f7c4b6a5833a72df9c2ac164`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/b4bcc958f7c4b6a5833a72df9c2ac164" />
   </Tab>
   <Tab title="Android">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/697cdbb29e7a8747284624c4e048b1ea`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/697cdbb29e7a8747284624c4e048b1ea" />
   </Tab>
   <Tab title="JavaScript">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/200a8701bd118ecd5c8a411eea2a8ab9#file-flagpost-js`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/200a8701bd118ecd5c8a411eea2a8ab9#file-flagpost-js" />
   </Tab>
   <Tab title="TypeScript">
-    <CodeBlock>
-      {`https://gist.github.com/c288f36f9e555d2856c4bdc7811bef32`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/c288f36f9e555d2856c4bdc7811bef32" />
   </Tab>
   <Tab title="Flutter">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/a64f66b4df447fd87c4cbff25fea843e#file-amitypostflag-dart`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/a64f66b4df447fd87c4cbff25fea843e#file-amitypostflag-dart" />
   </Tab>
 </Tabs>
 
@@ -56,29 +46,19 @@ This method allows users to quickly determine whether they have previously flagg
 
 <Tabs>
   <Tab title="iOS">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/437fb49d723dc218de8ef9c40399e7fd`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/437fb49d723dc218de8ef9c40399e7fd" />
   </Tab>
   <Tab title="Android">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/d4e1d94fe26993c6f5b6f242b98b6b14#file-amitypostflagstatus-kt`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/d4e1d94fe26993c6f5b6f242b98b6b14#file-amitypostflagstatus-kt" />
   </Tab>
   <Tab title="JavaScript">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/d66526e025a3df33d2f50d66938b0427#file-checkflagged-js`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/d66526e025a3df33d2f50d66938b0427#file-checkflagged-js" />
   </Tab>
   <Tab title="TypeScript">
-    <CodeBlock>
-      {`https://gist.github.com/e2da84a72aa292268e1ddd5e52303330`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/e2da84a72aa292268e1ddd5e52303330" />
   </Tab>
   <Tab title="Flutter">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/524aceb00b5ff5bd6373628274f30c1d#file-amitypostflagstatus-dart`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/524aceb00b5ff5bd6373628274f30c1d#file-amitypostflagstatus-dart" />
   </Tab>
 </Tabs>
 
@@ -88,28 +68,18 @@ This method allows users to retract their earlier report if they believe that th
 
 <Tabs>
   <Tab title="iOS">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/feaa79e8b1de93423088da6967833e07`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/feaa79e8b1de93423088da6967833e07" />
   </Tab>
   <Tab title="Android">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/d51647f7997062c927764ecebffdb921#file-amitypostunflag-kt`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/d51647f7997062c927764ecebffdb921#file-amitypostunflag-kt" />
   </Tab>
   <Tab title="JavaScript">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/6541682774eb76badaf7f00d57caf68b#file-unflagpost-js`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/6541682774eb76badaf7f00d57caf68b#file-unflagpost-js" />
   </Tab>
   <Tab title="TypeScript">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/1056b48c740057806a5be6bed405f00a`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/1056b48c740057806a5be6bed405f00a" />
   </Tab>
   <Tab title="Flutter">
-    <CodeBlock>
-      {`https://gist.github.com/amythee/a2ca8917013886062803dc770224bf66#file-amitypostunflag-dart`}
-    </CodeBlock>
+    <Embed url="https://gist.github.com/amythee/a2ca8917013886062803dc770224bf66#file-amitypostunflag-dart" />
   </Tab>
 </Tabs>
