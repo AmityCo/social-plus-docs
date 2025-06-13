@@ -1,0 +1,637 @@
+Authentication is required to access Social+ features. This guide covers secure authentication patterns and best practices.
+
+## Overview
+
+Social+ uses a dual authentication approach:
+- **API Key**: Identifies your application
+- **Auth Token**: Secures individual user sessions
+
+<Warning>
+Always use auth tokens in production environments. Never expose API keys in client-side code.
+</Warning>
+
+## Authentication Flow
+
+<Steps>
+<Step title="Initialize SDK">
+Initialize the SDK with your API key:
+
+<CodeGroup>
+```swift iOS
+let client = try! AmityClient(apiKey: "your-api-key", region: .SG)
+```
+
+```kotlin Android
+AmityClient.initialize(
+    context = this,
+    apiKey = "your-api-key",
+    region = AmityRegion.SG
+)
+```
+
+```typescript Web/React Native
+const client = Client.create({
+  apiKey: 'your-api-key',
+  region: 'sg'
+});
+```
+
+```dart Flutter
+await AmityClient.initialize(
+  apiKey: 'your-api-key',
+  region: AmityRegion.SG,
+);
+```
+</CodeGroup>
+</Step>
+
+<Step title="Login User">
+Authenticate users with their credentials:
+
+<CodeGroup>
+```swift iOS
+client.login(
+    withUserId: "user123",
+    displayName: "John Doe",
+    authToken: "your-auth-token",
+    sessionHandler: sessionHandler
+) { success, error in
+    if success {
+        print("Login successful")
+    }
+}
+```
+
+```kotlin Android
+AmityClient.login(
+    userId = "user123",
+    displayName = "John Doe",
+    authToken = "your-auth-token",
+    sessionHandler = sessionHandler
+)
+```
+
+```typescript Web/React Native
+await client.login({
+  userId: 'user123',
+  displayName: 'John Doe',
+  authToken: 'your-auth-token',
+  sessionHandler: {
+    sessionWillRenewAccessToken: (renewal) => {
+      renewal.renew('refreshed-auth-token');
+    }
+  }
+});
+```
+
+```dart Flutter
+await AmityClient.login(
+  userId: 'user123',
+  displayName: 'John Doe',
+  authToken: 'your-auth-token',
+);
+```
+</CodeGroup>
+</Step>
+
+<Step title="Handle Token Refresh">
+Implement token refresh for long-lived sessions:
+
+<CodeGroup>
+```swift iOS
+class SessionHandler: AmitySessionHandler {
+    func sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Get fresh token from your backend
+        getRefreshToken { newToken in
+            renewal.renew(withAuthToken: newToken)
+        }
+    }
+}
+```
+
+```kotlin Android
+class SessionHandler : AmitySessionHandler {
+    override fun sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Get fresh token from your backend
+        getRefreshToken { newToken ->
+            renewal.renew(newToken)
+        }
+    }
+}
+```
+
+```typescript Web/React Native
+const sessionHandler = {
+  sessionWillRenewAccessToken: async (renewal) => {
+    try {
+      const newToken = await getRefreshToken();
+      renewal.renew(newToken);
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+    }
+  }
+};
+```
+
+```dart Flutter
+// Token refresh is handled automatically in Flutter SDK
+// Ensure your backend provides valid tokens
+```
+</CodeGroup>
+</Step>
+</Steps>
+
+## Session Management
+
+### Session Handler Implementation
+
+The session handler manages token lifecycle and renewal:
+
+<Tabs>
+<Tab title="iOS">
+```swift
+class MySessionHandler: AmitySessionHandler {
+    func sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Call your backend to get a fresh token
+        AuthService.refreshToken { result in
+            switch result {
+            case .success(let newToken):
+                renewal.renew(withAuthToken: newToken)
+            case .failure(let error):
+                print("Token refresh failed: \(error)")
+                // Handle refresh failure - might need to re-login
+            }
+        }
+    }
+}
+
+// Use in login
+let sessionHandler = MySessionHandler()
+client.login(
+    withUserId: userId,
+    displayName: displayName,
+    authToken: authToken,
+    sessionHandler: sessionHandler
+) { success, error in
+    // Handle login result
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+class MySessionHandler : AmitySessionHandler {
+    override fun sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Call your backend API
+        viewModel.refreshAuthToken { newToken ->
+            if (newToken != null) {
+                renewal.renew(newToken)
+            } else {
+                // Handle refresh failure
+                handleTokenRefreshFailure()
+            }
+        }
+    }
+    
+    private fun handleTokenRefreshFailure() {
+        // Navigate to login screen or show error
+        // User might need to re-authenticate
+    }
+}
+
+// Use in login
+val sessionHandler = MySessionHandler()
+AmityClient.login(
+    userId = userId,
+    displayName = displayName,
+    authToken = authToken,
+    sessionHandler = sessionHandler
+)
+```
+</Tab>
+
+<Tab title="Web/React Native">
+```typescript
+interface AuthService {
+  refreshToken(): Promise<string>;
+  logout(): void;
+}
+
+class MyAuthService implements AuthService {
+  async refreshToken(): Promise<string> {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Token refresh failed');
+    }
+    
+    const { token } = await response.json();
+    return token;
+  }
+  
+  logout() {
+    // Clear local storage, navigate to login, etc.
+  }
+}
+
+const authService = new MyAuthService();
+
+const sessionHandler = {
+  sessionWillRenewAccessToken: async (renewal) => {
+    try {
+      const newToken = await authService.refreshToken();
+      renewal.renew(newToken);
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      authService.logout();
+    }
+  }
+};
+```
+</Tab>
+</Tabs>
+
+### Checking Authentication Status
+
+Verify user authentication state:
+
+<CodeGroup>
+```swift iOS
+// Check if user is logged in
+if client.isLoggedIn() {
+    let currentUserId = client.getCurrentUserId()
+    print("Current user: \(currentUserId)")
+} else {
+    // Show login screen
+}
+```
+
+```kotlin Android
+// Check authentication status
+if (AmityClient.isLoggedIn()) {
+    val currentUserId = AmityClient.getCurrentUserId()
+    Log.d("Auth", "Current user: $currentUserId")
+} else {
+    // Navigate to login
+}
+```
+
+```typescript Web/React Native
+// Check login status
+if (client.isLoggedIn()) {
+    const currentUserId = client.getCurrentUserId();
+    console.log('Current user:', currentUserId);
+} else {
+    // Show login form
+}
+```
+
+```dart Flutter
+// Check if user is authenticated
+if (AmityClient.isLoggedIn()) {
+    final currentUserId = AmityClient.getCurrentUserId();
+    print('Current user: $currentUserId');
+} else {
+    // Navigate to login screen
+}
+```
+</CodeGroup>
+
+## Logout Strategies
+
+### Standard Logout
+
+Regular logout for normal user sessions:
+
+<CodeGroup>
+```swift iOS
+client.logout()
+```
+
+```kotlin Android
+AmityClient.logout()
+```
+
+```typescript Web/React Native
+await client.logout();
+```
+
+```dart Flutter
+await AmityClient.logout();
+```
+</CodeGroup>
+
+### Secure Logout
+
+Secure logout that revokes tokens server-side:
+
+<CodeGroup>
+```swift iOS
+client.secureLogout { result in
+    switch result {
+    case .success:
+        print("Secure logout successful")
+        // Navigate to login screen
+    case .failure(let error):
+        print("Logout failed: \(error)")
+        // Still perform local cleanup
+        client.logout()
+    }
+}
+```
+
+```kotlin Android
+AmityClient.secureLogout(
+    onSuccess = {
+        // Logout successful
+        navigateToLogin()
+    },
+    onError = { error ->
+        // Secure logout failed, perform regular logout
+        AmityClient.logout()
+        navigateToLogin()
+    }
+)
+```
+
+```typescript Web/React Native
+try {
+    await client.secureLogout();
+    console.log('Secure logout successful');
+} catch (error) {
+    console.error('Secure logout failed:', error);
+    // Fallback to regular logout
+    await client.logout();
+}
+```
+
+```dart Flutter
+try {
+    await AmityClient.secureLogout();
+    print('Secure logout successful');
+} catch (error) {
+    print('Secure logout failed: $error');
+    // Fallback to regular logout
+    await AmityClient.logout();
+}
+```
+</CodeGroup>
+
+## Security Best Practices
+
+### 1. Token Management
+
+<Card title="Backend Token Generation" icon="shield">
+Generate auth tokens on your secure backend server:
+
+```javascript
+// Example Node.js backend
+app.post('/api/auth/token', async (req, res) => {
+  const { userId } = req.body;
+  
+  // Verify user credentials
+  const user = await verifyUser(userId);
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  // Generate secure token
+  const authToken = generateSecureToken(userId);
+  
+  res.json({ authToken });
+});
+```
+</Card>
+
+### 2. Environment-Specific Configuration
+
+Use different configurations for development and production:
+
+<Tabs>
+<Tab title="Development">
+```typescript
+const config = {
+  apiKey: process.env.AMITY_API_KEY_DEV,
+  region: 'sg',
+  // Auth token can be optional for development
+  requireAuthToken: false
+};
+```
+</Tab>
+
+<Tab title="Production">
+```typescript
+const config = {
+  apiKey: process.env.AMITY_API_KEY_PROD,
+  region: 'sg',
+  // Always require auth token in production
+  requireAuthToken: true
+};
+```
+</Tab>
+</Tabs>
+
+### 3. Error Handling
+
+Implement comprehensive error handling:
+
+```typescript
+enum AuthError {
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+}
+
+class AuthErrorHandler {
+  static handle(error: any): AuthError {
+    switch (error.code) {
+      case 'UNAUTHORIZED':
+        return AuthError.INVALID_CREDENTIALS;
+      case 'TOKEN_EXPIRED':
+        return AuthError.TOKEN_EXPIRED;
+      case 'NETWORK_ERROR':
+        return AuthError.NETWORK_ERROR;
+      default:
+        return AuthError.UNKNOWN_ERROR;
+    }
+  }
+}
+```
+
+## Integration Examples
+
+### React Hook
+
+```typescript
+import { useState, useEffect } from 'react';
+import { Client } from '@amityco/ts-sdk';
+
+export const useAmityAuth = () => {
+  const [client, setClient] = useState<Client | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    initializeClient();
+  }, []);
+
+  const initializeClient = async () => {
+    const amityClient = Client.create({
+      apiKey: process.env.REACT_APP_AMITY_API_KEY!,
+      region: 'sg'
+    });
+    
+    setClient(amityClient);
+    setIsAuthenticated(amityClient.isLoggedIn());
+    setLoading(false);
+  };
+
+  const login = async (userId: string, displayName: string) => {
+    if (!client) return false;
+    
+    try {
+      const authToken = await getAuthToken(userId);
+      await client.login({
+        userId,
+        displayName,
+        authToken,
+        sessionHandler: {
+          sessionWillRenewAccessToken: async (renewal) => {
+            const newToken = await refreshAuthToken();
+            renewal.renew(newToken);
+          }
+        }
+      });
+      
+      setIsAuthenticated(true);
+      return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    if (!client) return;
+    
+    try {
+      await client.secureLogout();
+    } catch (error) {
+      await client.logout();
+    }
+    
+    setIsAuthenticated(false);
+  };
+
+  return {
+    client,
+    isAuthenticated,
+    loading,
+    login,
+    logout
+  };
+};
+```
+
+### Flutter Provider
+
+```dart
+class AuthProvider extends ChangeNotifier {
+  bool _isAuthenticated = false;
+  String? _currentUserId;
+
+  bool get isAuthenticated => _isAuthenticated;
+  String? get currentUserId => _currentUserId;
+
+  Future<bool> login(String userId, String displayName) async {
+    try {
+      final authToken = await _getAuthToken(userId);
+      
+      await AmityClient.login(
+        userId: userId,
+        displayName: displayName,
+        authToken: authToken,
+      );
+
+      _isAuthenticated = true;
+      _currentUserId = userId;
+      notifyListeners();
+      return true;
+    } catch (error) {
+      print('Login failed: $error');
+      return false;
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await AmityClient.secureLogout();
+    } catch (error) {
+      await AmityClient.logout();
+    }
+
+    _isAuthenticated = false;
+    _currentUserId = null;
+    notifyListeners();
+  }
+
+  Future<String> _getAuthToken(String userId) async {
+    // Call your backend to get auth token
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/auth/token'),
+      body: {'userId': userId},
+    );
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['authToken'];
+    }
+    
+    throw Exception('Failed to get auth token');
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+<Accordion title="Invalid API Key Error">
+Verify your API key in the Social+ Console under Settings → Security. Ensure you're using the correct key for your environment.
+</Accordion>
+
+<Accordion title="Token Refresh Failures">
+Check your backend token refresh endpoint. Ensure it returns valid tokens and handles expired refresh tokens properly.
+</Accordion>
+
+<Accordion title="Session Handler Not Called">
+Verify that you're passing the session handler during login and that your backend tokens have appropriate expiration times.
+</Accordion>
+
+<Accordion title="User Not Authenticated">
+Check that login was successful and that the user hasn't been logged out due to inactivity (90-day limit).
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="User Management" icon="user" href="/social-plus-sdk/core-concepts/user">
+Learn about user profiles and management
+</Card>
+
+<Card title="Social Features" icon="users" href="/social-plus-sdk/social">
+Start building social features
+</Card>
+
+<Card title="Chat Features" icon="comments" href="/social-plus-sdk/chat">
+Add real-time messaging
+</Card>
+
+<Card title="Security Settings" icon="shield" href="/console/settings/security">
+Configure security in the Console
+</Card>
+</CardGroup>
