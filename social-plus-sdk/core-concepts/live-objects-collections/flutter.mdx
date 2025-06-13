@@ -1,0 +1,852 @@
+---
+title: "Flutter Implementation"
+description: "Real-time reactive data handling with Streams and LiveCollection for Flutter applications"
+---
+
+Build reactive Flutter applications with real-time data synchronization using `Stream<T>` and `LiveCollection<T>` - the core reactive primitives in the Social+ Flutter SDK.
+
+## Overview
+
+The Flutter SDK provides reactive data handling through:
+
+- **`Stream<T>`** - Observes changes to individual objects
+- **`LiveCollection<T>`** - Observes changes to collections with pagination support
+
+These classes integrate with Flutter's reactive ecosystem, providing automatic synchronization across local cache, server updates, and real-time events.
+
+## Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Local Cache   │    │   Server API    │    │ Real-time Events│
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────▼───────────┐
+                    │     Stream<T> /         │
+                    │   LiveCollection<T>     │
+                    └─────────────┬───────────┘
+                                 │
+                    ┌─────────────▼───────────┐
+                    │   StreamBuilder /       │
+                    │   setState Listener     │
+                    └─────────────────────────┘
+```
+
+## Supported Data Types
+
+### Content Types
+- Posts (`Stream<AmityPost>`)
+- Comments (`LiveCollection<AmityComment>`)
+- Stories (`LiveCollection<AmityStory>`)
+
+### Social Types
+- User profiles (`Stream<AmityUser>`)
+- Reactions (`LiveCollection<AmityReaction>`)
+
+### Chat Types
+- Messages (`LiveCollection<AmityMessage>`)
+- Channels (`LiveCollection<AmityChannel>`)
+
+### Community Types
+- Communities (`Stream<AmityCommunity>`)
+- Community members (`LiveCollection<AmityCommunityMember>`)
+
+### Live Streaming
+- Streams (`LiveCollection<AmityStream>`)
+
+## Stream Objects - Single Object Observation
+
+Observe individual objects using Flutter's native `Stream<T>` with automatic updates.
+
+### Basic Stream Usage
+
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+class PostDetailPage extends StatefulWidget {
+  final String postId;
+  
+  const PostDetailPage({Key? key, required this.postId}) : super(key: key);
+
+  @override
+  _PostDetailPageState createState() => _PostDetailPageState();
+}
+
+class _PostDetailPageState extends State<PostDetailPage> {
+  late StreamSubscription<AmityPost> _postSubscription;
+  AmityPost? _post;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _observePost();
+  }
+
+  void _observePost() {
+    final repository = AmityPostRepository();
+    
+    _postSubscription = repository.getPost(widget.postId).listen(
+      (post) {
+        setState(() {
+          _post = post;
+          _isLoading = false;
+          _error = null;
+        });
+      },
+      onError: (error) {
+        setState(() {
+          _error = error.toString();
+          _isLoading = false;
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _postSubscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error'),
+              ElevatedButton(
+                onPressed: _observePost,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text(_post?.displayName ?? 'Post')),
+      body: _buildPostContent(),
+    );
+  }
+
+  Widget _buildPostContent() {
+    final post = _post!;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            post.displayName ?? 'Untitled',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 12),
+          
+          if (post.data?['text'] != null)
+            Text(
+              post.data!['text'],
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          
+          const SizedBox(height: 16),
+          
+          Row(
+            children: [
+              Icon(Icons.favorite, size: 16),
+              const SizedBox(width: 4),
+              Text('${post.reactionsCount}'),
+              const SizedBox(width: 16),
+              Icon(Icons.comment, size: 16),
+              const SizedBox(width: 4),
+              Text('${post.commentsCount}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### StreamBuilder Pattern
+
+Use `StreamBuilder` for cleaner reactive UI updates:
+
+```dart
+class PostStreamWidget extends StatelessWidget {
+  final String postId;
+  
+  const PostStreamWidget({Key? key, required this.postId}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = AmityPostRepository();
+    
+    return StreamBuilder<AmityPost>(
+      stream: repository.getPost(postId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Error: ${snapshot.error}'),
+                ElevatedButton(
+                  onPressed: () {
+                    // StreamBuilder automatically rebuilds on retry
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        if (!snapshot.hasData) {
+          return const Center(child: Text('Post not found'));
+        }
+        
+        return PostContentWidget(post: snapshot.data!);
+      },
+    );
+  }
+}
+
+class PostContentWidget extends StatelessWidget {
+  final AmityPost post;
+  
+  const PostContentWidget({Key? key, required this.post}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(16.0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              post.displayName ?? 'Untitled',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            
+            if (post.data?['text'] != null) ...[
+              const SizedBox(height: 8),
+              Text(post.data!['text']),
+            ],
+            
+            const SizedBox(height: 12),
+            
+            Row(
+              children: [
+                _buildStatChip(Icons.favorite, '${post.reactionsCount}'),
+                const SizedBox(width: 8),
+                _buildStatChip(Icons.comment, '${post.commentsCount}'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildStatChip(IconData icon, String count) {
+    return Chip(
+      avatar: Icon(icon, size: 16),
+      label: Text(count),
+    );
+  }
+}
+```
+
+## LiveCollection - Collection Observation
+
+Handle collections of objects with built-in pagination and real-time updates.
+
+### Basic LiveCollection Usage
+
+```dart
+class PostListPage extends StatefulWidget {
+  @override
+  _PostListPageState createState() => _PostListPageState();
+}
+
+class _PostListPageState extends State<PostListPage> {
+  late StreamSubscription<List<AmityPost>> _subscription;
+  final List<AmityPost> _posts = [];
+  late AmityPostLiveCollection _collection;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCollection();
+  }
+
+  void _initializeCollection() {
+    final repository = AmityPostRepository();
+    _collection = repository.getPosts();
+    
+    _subscription = _collection.asStream().listen(
+      (posts) {
+        setState(() {
+          _posts.clear();
+          _posts.addAll(posts);
+          _isLoading = false;
+          _error = null;
+        });
+      },
+      onError: (error) {
+        setState(() {
+          _error = error.toString();
+          _isLoading = false;
+        });
+      },
+    );
+    
+    // Handle collection errors separately
+    _collection.onError.listen((error) {
+      setState(() {
+        _error = error.toString();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Posts')),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading && _posts.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _posts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Error: $_error'),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _initializeCollection();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshPosts,
+      child: ListView.builder(
+        itemCount: _posts.length + (_collection.hasNext ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _posts.length) {
+            // Loading indicator for pagination
+            _loadMoreIfNeeded();
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          return PostListItem(
+            post: _posts[index],
+            onTap: () => _navigateToPostDetail(_posts[index].postId),
+          );
+        },
+      ),
+    );
+  }
+
+  void _loadMoreIfNeeded() {
+    if (_collection.hasNext && !_isLoading) {
+      _collection.loadNext();
+    }
+  }
+
+  Future<void> _refreshPosts() async {
+    _collection.reset();
+    // The stream listener will automatically update the UI
+  }
+
+  void _navigateToPostDetail(String postId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(postId: postId),
+      ),
+    );
+  }
+}
+```
+
+### Advanced LiveCollection with State Management
+
+Using Provider or Riverpod for better state management:
+
+```dart
+// Using Provider for state management
+class PostsProvider extends ChangeNotifier {
+  final AmityPostLiveCollection _collection;
+  StreamSubscription<List<AmityPost>>? _subscription;
+  
+  List<AmityPost> _posts = [];
+  bool _isLoading = true;
+  String? _error;
+
+  List<AmityPost> get posts => _posts;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  bool get hasMore => _collection.hasNext;
+
+  PostsProvider() : _collection = AmityPostRepository().getPosts() {
+    _initialize();
+  }
+
+  void _initialize() {
+    _subscription = _collection.asStream().listen(
+      (posts) {
+        _posts = posts;
+        _isLoading = false;
+        _error = null;
+        notifyListeners();
+      },
+      onError: (error) {
+        _error = error.toString();
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+
+    _collection.onError.listen((error) {
+      _error = error.toString();
+      notifyListeners();
+    });
+  }
+
+  void loadMore() {
+    if (_collection.hasNext && !_isLoading) {
+      _collection.loadNext();
+    }
+  }
+
+  void refresh() {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    _collection.reset();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+}
+
+// Using the provider
+class PostListWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => PostsProvider(),
+      child: Consumer<PostsProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading && provider.posts.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (provider.error != null && provider.posts.isEmpty) {
+            return ErrorWidget(
+              error: provider.error!,
+              onRetry: provider.refresh,
+            );
+          }
+
+          return ListView.builder(
+            itemCount: provider.posts.length + (provider.hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == provider.posts.length) {
+                provider.loadMore();
+                return const LoadingIndicator();
+              }
+
+              return PostListItem(post: provider.posts[index]);
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Pagination Controls
+
+Implement manual pagination controls:
+
+```dart
+class PaginatedPostList extends StatefulWidget {
+  @override
+  _PaginatedPostListState createState() => _PaginatedPostListState();
+}
+
+class _PaginatedPostListState extends State<PaginatedPostList> {
+  late AmityPostLiveCollection _collection;
+  late StreamSubscription<List<AmityPost>> _subscription;
+  List<AmityPost> _posts = [];
+  bool _isLoadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCollection();
+  }
+
+  void _initializeCollection() {
+    final repository = AmityPostRepository();
+    _collection = repository.getPosts();
+    
+    _subscription = _collection.asStream().listen((posts) {
+      setState(() {
+        _posts = posts;
+        _isLoadingMore = false;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            itemCount: _posts.length,
+            itemBuilder: (context, index) {
+              return PostListItem(post: _posts[index]);
+            },
+          ),
+        ),
+        
+        // Pagination controls
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: _collection.hasNext && !_isLoadingMore
+                    ? _loadNext
+                    : null,
+                child: _isLoadingMore
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Load More'),
+              ),
+              
+              ElevatedButton(
+                onPressed: _posts.isNotEmpty ? _resetToFirst : null,
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _loadNext() {
+    if (_collection.hasNext && !_isLoadingMore) {
+      setState(() {
+        _isLoadingMore = true;
+      });
+      _collection.loadNext();
+    }
+  }
+
+  void _resetToFirst() {
+    _collection.reset();
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+```
+
+## Error Handling
+
+Implement comprehensive error handling for production applications:
+
+```dart
+class AmityErrorHandler {
+  static void handleStreamError(Object error, [StackTrace? stackTrace]) {
+    if (error is AmityException) {
+      switch (error.code) {
+        case AmityErrorCode.networkError:
+          _showNetworkError();
+          break;
+        case AmityErrorCode.unauthorized:
+          _redirectToLogin();
+          break;
+        case AmityErrorCode.permissionDenied:
+          _showPermissionError();
+          break;
+        default:
+          _showGenericError(error.message);
+      }
+    } else {
+      _showGenericError(error.toString());
+    }
+  }
+
+  static void _showNetworkError() {
+    // Show network error dialog with retry
+  }
+
+  static void _redirectToLogin() {
+    // Navigate to login screen
+  }
+
+  static void _showPermissionError() {
+    // Show permission denied message
+  }
+
+  static void _showGenericError(String message) {
+    // Show generic error message
+  }
+}
+
+// Usage in streams
+Stream<AmityPost> getPostWithErrorHandling(String postId) {
+  final repository = AmityPostRepository();
+  
+  return repository.getPost(postId).handleError((error, stackTrace) {
+    AmityErrorHandler.handleStreamError(error, stackTrace);
+  });
+}
+```
+
+## Best Practices
+
+### Memory Management
+
+```dart
+class PostManager {
+  final List<StreamSubscription> _subscriptions = [];
+  
+  void addSubscription(StreamSubscription subscription) {
+    _subscriptions.add(subscription);
+  }
+  
+  void dispose() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
+  }
+}
+
+// Usage in StatefulWidget
+class MyWidget extends StatefulWidget {
+  @override
+  _MyWidgetState createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  final PostManager _postManager = PostManager();
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Add all subscriptions to manager
+    final subscription = repository.getPosts().asStream().listen((_) {});
+    _postManager.addSubscription(subscription);
+  }
+  
+  @override
+  void dispose() {
+    _postManager.dispose();
+    super.dispose();
+  }
+}
+```
+
+### Performance Optimization
+
+```dart
+class OptimizedPostList extends StatefulWidget {
+  @override
+  _OptimizedPostListState createState() => _OptimizedPostListState();
+}
+
+class _OptimizedPostListState extends State<PostList> {
+  final ScrollController _scrollController = ScrollController();
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Efficient pagination trigger
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent - 200) {
+        _loadMoreIfNeeded();
+      }
+    });
+  }
+  
+  void _loadMoreIfNeeded() {
+    if (_collection.hasNext && !_isLoading) {
+      _collection.loadNext();
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: _posts.length,
+      itemBuilder: (context, index) {
+        // Use itemExtent for better performance
+        return SizedBox(
+          height: 100, // Fixed height
+          child: PostListItem(post: _posts[index]),
+        );
+      },
+    );
+  }
+}
+```
+
+### State Management Integration
+
+```dart
+// With Riverpod
+final postsProvider = StreamProvider.autoDispose<List<AmityPost>>((ref) {
+  final repository = AmityPostRepository();
+  final collection = repository.getPosts();
+  
+  ref.onDispose(() {
+    // Automatic cleanup with autoDispose
+  });
+  
+  return collection.asStream();
+});
+
+// In widget
+class PostListWidget extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postsAsync = ref.watch(postsProvider);
+    
+    return postsAsync.when(
+      data: (posts) => ListView.builder(
+        itemCount: posts.length,
+        itemBuilder: (context, index) => PostListItem(post: posts[index]),
+      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => ErrorWidget(error: error.toString()),
+    );
+  }
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Stream Not Updating**
+   - Verify user authentication
+   - Check network connectivity
+   - Ensure proper subscription lifecycle
+
+2. **Memory Leaks**
+   - Always cancel subscriptions in `dispose()`
+   - Use `autoDispose` with Riverpod
+   - Implement proper cleanup in state managers
+
+3. **Pagination Issues**
+   - Check `hasNext` before calling `loadNext()`
+   - Handle loading states properly
+   - Implement proper error recovery
+
+4. **Performance Issues**
+   - Use `ListView.builder` instead of `ListView`
+   - Implement efficient scroll detection
+   - Consider item recycling for large lists
+
+### Debug Mode
+
+Enable detailed logging for development:
+
+```dart
+// Enable debug logging
+AmitySDK.enableDebugMode();
+
+// Monitor stream events
+final subscription = repository.getPosts().asStream().listen(
+  (posts) {
+    debugPrint('Posts updated: ${posts.length} items');
+  },
+  onError: (error) {
+    debugPrint('Posts error: $error');
+  },
+  onDone: () {
+    debugPrint('Posts stream completed');
+  },
+);
+```
+
+## Next Steps
+
+- **[Core Concepts](../core-concept.mdx)** - Understanding SDK fundamentals
+- **[Error Handling](../error-handling.mdx)** - Comprehensive error management
+- **[Session State](../session-state.mdx)** - Authentication and session management
+- **[Real-time Events](../realtime-events/README.mdx)** - Advanced event handling

@@ -1,0 +1,803 @@
+---
+title: "Android Implementation"
+description: "Real-time reactive data handling with data stream for Android applications"
+---
+
+Build reactive Android applications with RxJava3 data streams that automatically sync with Social+ real-time events.
+
+<Info>
+**RxJava3 Integration**: The Android SDK uses RxJava3 for reactive programming, providing powerful operators for data transformation and error handling.
+</Info>
+
+## Overview
+
+The Social+ Android SDK leverages [RxJava3](https://github.com/ReactiveX/RxJava) to implement Live Objects and Collections as reactive data streams. This enables you to build responsive Android applications where UI components automatically update when underlying data changes.
+
+### Key Benefits
+
+- **Reactive Programming**: Compose asynchronous and event-based programs with observable sequences
+- **Automatic Updates**: Data streams emit new values when server data changes
+- **Error Handling**: Built-in error propagation and recovery mechanisms
+- **Thread Management**: Automatic thread switching for UI updates
+- **Backpressure Support**: Handle high-frequency updates efficiently
+
+### RxJava3 Components
+
+| Component | Use Case | Description |
+|-----------|----------|-------------|
+| **Flowable** | Collections, Lists | Emits streams of elements with backpressure support |
+| **Single** | Individual Objects | Emits exactly one element or error |
+| **Completable** | Actions, Operations | Emits completion signal without data |
+
+## How It Works
+
+The SDK manages data from multiple sources and ensures consistency through reactive streams:
+
+1. **Local Cache**: Immediate data availability for offline scenarios
+2. **Server Queries**: Fresh data retrieval from API endpoints  
+3. **Real-time Events**: Live updates via WebSocket connections
+4. **Stream Synchronization**: Automatic merging of all data sources
+
+### Data Flow Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Local Cache   │───►│   RxJava3        │───►│   UI Components │
+├─────────────────┤    │   Data Stream    │    ├─────────────────┤
+│   Server API    │───►│                  │    │ • RecyclerView  │
+├─────────────────┤    │ ┌──────────────┐ │    │ • LiveData      │
+│ Real-time Events│───►│ │   Operators  │ │    │ • Compose UI    │
+└─────────────────┘    │ │ • merge()    │ │    │ • Data Binding  │
+                       │ │ • debounce() │ │    └─────────────────┘
+                       │ │ • retry()    │ │
+                       │ └──────────────┘ │
+                       └──────────────────┘
+```
+
+## Supported Live Collections
+
+Live Collections with automatic pagination are available for:
+
+<AccordionGroup>
+  <Accordion title="Social Content">
+    - **Post Collection**: User feeds, community posts, global feeds
+    - **Comment Collection**: Post comments, nested replies
+    - **Reaction Collection**: Likes, emojis, custom reactions
+    - **Story Collection**: User stories, community stories
+  </Accordion>
+  
+  <Accordion title="Communication">
+    - **Channel Collection**: Chat channels, channel lists
+    - **Message Collection**: Chat messages, message history  
+    - **Channel Member Collection**: Channel participants
+  </Accordion>
+  
+  <Accordion title="Community & Users">
+    - **Community Collection**: Community discovery, joined communities
+    - **Community Member Collection**: Community participants
+    - **User Collection**: User search, member lists
+    - **Followers/Following Collection**: Social connections
+  </Accordion>
+  
+  <Accordion title="Media & Streaming">
+    - **Live Stream Collection**: Active streams, stream history
+    - **File Collection**: Shared files, media galleries
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**PagingData Error Handling**: For specific error handling in PagingData implementations, refer to the [Android Paging Library documentation](https://developer.android.com/topic/libraries/architecture/paging/load-state#adapter).
+</Warning>
+
+## RxJava3 Data Stream Events
+
+### Event Types
+
+Understanding the different event types helps you handle data streams effectively:
+
+<Tabs>
+  <Tab title="Flowable Events">
+    ```kotlin
+    import io.reactivex.rxjava3.core.Flowable
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+    import io.reactivex.rxjava3.schedulers.Schedulers
+
+    // Flowable emits a stream of elements
+    val postsFlowable: Flowable<List<AmityPost>> = postRepository.getPosts()
+
+    postsFlowable
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { posts ->
+                // Handle new data emission
+                updateUI(posts)
+            },
+            { error ->
+                // Handle error emission
+                handleError(error)
+            },
+            {
+                // Handle completion (stream ended)
+                onStreamComplete()
+            }
+        )
+    ```
+  </Tab>
+  <Tab title="Single Events">
+    ```kotlin
+    import io.reactivex.rxjava3.core.Single
+
+    // Single emits exactly one element
+    val postSingle: Single<AmityPost> = postRepository.getPost(postId)
+
+    postSingle
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { post ->
+                // Handle successful data retrieval
+                displayPost(post)
+            },
+            { error ->
+                // Handle error
+                showErrorMessage(error.message)
+            }
+        )
+    ```
+  </Tab>
+  <Tab title="Completable Events">
+    ```kotlin
+    import io.reactivex.rxjava3.core.Completable
+
+    // Completable emits completion without data
+    val deletePost: Completable = postRepository.deletePost(postId)
+
+    deletePost
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            {
+                // Handle successful completion
+                showSuccessMessage("Post deleted successfully")
+                navigateBack()
+            },
+            { error ->
+                // Handle error
+                showErrorMessage("Failed to delete post: ${error.message}")
+            }
+        )
+    ```
+  </Tab>
+</Tabs>
+
+## Implementation Examples
+
+### Basic Post Collection
+
+<Tabs>
+  <Tab title="Basic RxJava3">
+    ```kotlin
+    import com.amity.socialcloud.sdk.social.feed.AmityPostRepository
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+    import io.reactivex.rxjava3.disposables.CompositeDisposable
+    import io.reactivex.rxjava3.schedulers.Schedulers
+
+    class PostsViewModel : ViewModel() {
+        private val compositeDisposable = CompositeDisposable()
+        private val postRepository = AmityPostRepository(AmityUIKitManager.client)
+        
+        private val _posts = MutableLiveData<List<AmityPost>>()
+        val posts: LiveData<List<AmityPost>> = _posts
+        
+        private val _loading = MutableLiveData<Boolean>()
+        val loading: LiveData<Boolean> = _loading
+        
+        private val _error = MutableLiveData<String?>()
+        val error: LiveData<String?> = _error
+
+        fun loadPosts(targetId: String, targetType: String) {
+            val disposable = postRepository
+                .getPosts()
+                .targetId(targetId)
+                .targetType(targetType)
+                .build()
+                .query()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSubscribe { _loading.value = true }
+                .doFinally { _loading.value = false }
+                .subscribe(
+                    { posts ->
+                        _posts.value = posts
+                        _error.value = null
+                    },
+                    { error ->
+                        _error.value = error.message
+                        Timber.e(error, "Failed to load posts")
+                    }
+                )
+            
+            compositeDisposable.add(disposable)
+        }
+
+        override fun onCleared() {
+            super.onCleared()
+            compositeDisposable.clear()
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="With Pagination">
+    ```kotlin
+    import androidx.paging.PagingData
+    import androidx.paging.rxjava3.flowable
+    import com.amity.socialcloud.sdk.social.feed.AmityPostRepository
+
+    class PaginatedPostsViewModel : ViewModel() {
+        private val postRepository = AmityPostRepository(AmityUIKitManager.client)
+        
+        fun getPostsPagingData(targetId: String): Flowable<PagingData<AmityPost>> {
+            return postRepository
+                .getPosts()
+                .targetId(targetId)
+                .targetType("community")
+                .build()
+                .getPagingData()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+        }
+    }
+
+    // In your Fragment/Activity
+    class PostsFragment : Fragment() {
+        private lateinit var viewModel: PaginatedPostsViewModel
+        private lateinit var adapter: PostsAdapter
+        
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            
+            setupRecyclerView()
+            observePosts()
+        }
+        
+        private fun setupRecyclerView() {
+            adapter = PostsAdapter()
+            binding.recyclerView.adapter = adapter
+        }
+        
+        private fun observePosts() {
+            val disposable = viewModel.getPostsPagingData("community123")
+                .subscribe(
+                    { pagingData ->
+                        adapter.submitData(lifecycle, pagingData)
+                    },
+                    { error ->
+                        showErrorMessage(error.message)
+                    }
+                )
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Error Handling">
+    ```kotlin
+    import io.reactivex.rxjava3.core.Flowable
+    import java.util.concurrent.TimeUnit
+
+    class RobustPostsViewModel : ViewModel() {
+        private val postRepository = AmityPostRepository(AmityUIKitManager.client)
+        
+        fun loadPostsWithRetry(targetId: String): Flowable<List<AmityPost>> {
+            return postRepository
+                .getPosts()
+                .targetId(targetId)
+                .build()
+                .query()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .retry(3) // Retry up to 3 times
+                .retryWhen { errors ->
+                    errors.flatMap { error ->
+                        when (error) {
+                            is IOException -> {
+                                // Retry network errors with exponential backoff
+                                Flowable.timer(2, TimeUnit.SECONDS)
+                            }
+                            else -> {
+                                // Don't retry other errors
+                                Flowable.error(error)
+                            }
+                        }
+                    }
+                }
+                .onErrorReturn { 
+                    // Return empty list on final failure
+                    emptyList()
+                }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Kotlin Coroutines Integration
+
+The SDK provides extension functions to bridge RxJava3 with Kotlin Coroutines:
+
+### Suspend Functions
+
+<Tabs>
+  <Tab title="Single to Suspend">
+    ```kotlin
+    import com.amity.socialcloud.sdk.extension.await
+
+    class PostService {
+        private val postRepository = AmityPostRepository(AmityUIKitManager.client)
+        
+        // Convert Single<AmityPost> to suspend function
+        suspend fun getPost(postId: String): AmityPost {
+            return postRepository.getPost(postId).await()
+        }
+        
+        // Convert Completable to suspend function
+        suspend fun deletePost(postId: String) {
+            postRepository.deletePost(postId).await()
+        }
+        
+        // Usage in ViewModel
+        fun deletePostAsync(postId: String) {
+            viewModelScope.launch {
+                try {
+                    deletePost(postId)
+                    _deleteResult.value = Result.success(Unit)
+                } catch (error: Exception) {
+                    _deleteResult.value = Result.failure(error)
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Flow Integration">
+    ```kotlin
+    import com.amity.socialcloud.sdk.extension.asFlow
+    import kotlinx.coroutines.flow.Flow
+    import kotlinx.coroutines.flow.catch
+    import kotlinx.coroutines.flow.map
+
+    class PostFlowService {
+        private val postRepository = AmityPostRepository(AmityUIKitManager.client)
+        
+        // Convert Flowable<List<AmityPost>> to Flow
+        fun getPostsFlow(targetId: String): Flow<List<AmityPost>> {
+            return postRepository
+                .getPosts()
+                .targetId(targetId)
+                .build()
+                .query()
+                .asFlow()
+                .catch { error ->
+                    // Handle errors in Flow
+                    emit(emptyList())
+                }
+                .map { posts ->
+                    // Transform data if needed
+                    posts.filter { it.isDeleted != true }
+                }
+        }
+        
+        // Usage in ViewModel
+        class PostsViewModel : ViewModel() {
+            private val postService = PostFlowService()
+            
+            val posts: StateFlow<List<AmityPost>> = postService
+                .getPostsFlow("community123")
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000),
+                    initialValue = emptyList()
+                )
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Jetpack Compose Integration
+
+Seamlessly integrate Social+ data streams with Jetpack Compose UI:
+
+### Basic Compose Integration
+
+<Tabs>
+  <Tab title="Simple List">
+    ```kotlin
+    import androidx.compose.foundation.layout.*
+    import androidx.compose.foundation.lazy.LazyColumn
+    import androidx.compose.foundation.lazy.items
+    import androidx.compose.material3.*
+    import androidx.compose.runtime.*
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+
+    @Composable
+    fun PostsList(
+        viewModel: PostsViewModel = hiltViewModel()
+    ) {
+        val posts by viewModel.posts.collectAsState()
+        val loading by viewModel.loading.collectAsState()
+        val error by viewModel.error.collectAsState()
+        
+        LaunchedEffect(Unit) {
+            viewModel.loadPosts("community123", "community")
+        }
+        
+        Column(modifier = Modifier.fillMaxSize()) {
+            when {
+                loading && posts.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                
+                error != null && posts.isEmpty() -> {
+                    ErrorMessage(
+                        message = error,
+                        onRetry = { viewModel.retry() }
+                    )
+                }
+                
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(posts) { post ->
+                            PostCard(post = post)
+                        }
+                        
+                        if (loading) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun PostCard(post: AmityPost) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = post.getData()?.getText() ?: "Post content",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("👍 ${post.getReactionCount()}")
+                    Text("💬 ${post.getCommentCount()}")
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Paging with Compose">
+    ```kotlin
+    import androidx.paging.compose.collectAsLazyPagingItems
+    import androidx.paging.compose.items
+
+    @Composable
+    fun PaginatedPostsList(
+        viewModel: PaginatedPostsViewModel = hiltViewModel()
+    ) {
+        val posts = viewModel.getPostsPagingData("community123")
+            .collectAsLazyPagingItems()
+        
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(posts) { post ->
+                post?.let { 
+                    PostCard(post = it)
+                }
+            }
+            
+            // Handle loading states
+            when (posts.loadState.append) {
+                is LoadState.Loading -> {
+                    item {
+                        LoadingIndicator()
+                    }
+                }
+                is LoadState.Error -> {
+                    item {
+                        ErrorRetryButton(
+                            onRetry = { posts.retry() }
+                        )
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    @Composable
+    fun LoadingIndicator() {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+    }
+
+    @Composable
+    fun ErrorRetryButton(onRetry: () -> Unit) {
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Retry")
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Real-time Updates">
+    ```kotlin
+    @Composable
+    fun RealTimePostsList(
+        targetId: String,
+        viewModel: RealTimePostsViewModel = hiltViewModel()
+    ) {
+        val posts by viewModel.posts.collectAsState()
+        val connectionStatus by viewModel.connectionStatus.collectAsState()
+        
+        LaunchedEffect(targetId) {
+            viewModel.observePosts(targetId)
+        }
+        
+        DisposableEffect(targetId) {
+            onDispose {
+                viewModel.stopObserving()
+            }
+        }
+        
+        Column {
+            // Connection status indicator
+            ConnectionStatusBar(status = connectionStatus)
+            
+            // Posts list
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = posts,
+                    key = { it.getPostId() }
+                ) { post ->
+                    PostCard(
+                        post = post,
+                        modifier = Modifier.animateItemPlacement()
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ConnectionStatusBar(status: ConnectionStatus) {
+        when (status) {
+            ConnectionStatus.CONNECTED -> {
+                // Show nothing or green indicator
+            }
+            ConnectionStatus.CONNECTING -> {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            ConnectionStatus.DISCONNECTED -> {
+                Surface(
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Disconnected - Retrying...",
+                        color = MaterialTheme.colorScheme.onError,
+                        modifier = Modifier.padding(8.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Resource Management">
+    **Proper Disposal**: Always dispose of RxJava subscriptions to prevent memory leaks.
+    
+    ```kotlin
+    class PostsFragment : Fragment() {
+        private val compositeDisposable = CompositeDisposable()
+        
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            
+            // Add all subscriptions to composite disposable
+            val disposable = postRepository.getPosts()
+                .subscribe(
+                    { posts -> updateUI(posts) },
+                    { error -> handleError(error) }
+                )
+            
+            compositeDisposable.add(disposable)
+        }
+        
+        override fun onDestroyView() {
+            super.onDestroyView()
+            // Dispose all subscriptions
+            compositeDisposable.clear()
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Thread Management">
+    **Proper Scheduling**: Use appropriate schedulers for I/O and UI operations.
+    
+    ```kotlin
+    postRepository.getPosts()
+        .subscribeOn(Schedulers.io()) // Background thread for network/database
+        .observeOn(AndroidSchedulers.mainThread()) // Main thread for UI updates
+        .subscribe(
+            { posts -> updateUI(posts) }, // Runs on main thread
+            { error -> showError(error) }  // Runs on main thread
+        )
+    ```
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    **Graceful Recovery**: Implement robust error handling with retries and fallbacks.
+    
+    ```kotlin
+    postRepository.getPosts()
+        .retry(3) // Retry failed operations
+        .timeout(30, TimeUnit.SECONDS) // Timeout for long operations
+        .onErrorReturn { emptyList() } // Fallback value
+        .subscribe(
+            { posts -> 
+                if (posts.isEmpty()) {
+                    showEmptyState()
+                } else {
+                    updateUI(posts)
+                }
+            },
+            { error -> 
+                Timber.e(error, "Unrecoverable error")
+                showErrorMessage(error.message)
+            }
+        )
+    ```
+  </Accordion>
+  
+  <Accordion title="Performance Optimization">
+    **Efficient Operations**: Use operators to reduce unnecessary emissions and processing.
+    
+    ```kotlin
+    postRepository.getPosts()
+        .distinctUntilChanged() // Only emit when data actually changes
+        .debounce(300, TimeUnit.MILLISECONDS) // Debounce rapid updates
+        .filter { it.isNotEmpty() } // Filter out empty results
+        .map { posts -> 
+            // Transform data efficiently
+            posts.filter { !it.isDeleted }
+        }
+        .subscribe { posts ->
+            updateUI(posts)
+        }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Memory Leaks">
+    **Issue**: App crashes with OutOfMemoryError after extended use.
+    
+    **Solution**: Ensure all RxJava subscriptions are properly disposed.
+    
+    ```kotlin
+    // Use CompositeDisposable for automatic cleanup
+    class MyViewModel : ViewModel() {
+        private val disposables = CompositeDisposable()
+        
+        fun loadData() {
+            disposables.add(
+                dataRepository.getData()
+                    .subscribe(::handleData, ::handleError)
+            )
+        }
+        
+        override fun onCleared() {
+            disposables.clear() // Dispose all subscriptions
+            super.onCleared()
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="UI Not Updating">
+    **Issue**: Data changes but UI doesn't reflect updates.
+    
+    **Solution**: Verify you're observing on the main thread and properly subscribing to real-time events.
+    
+    ```kotlin
+    // Ensure main thread observation
+    dataStream
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe { data ->
+            // This will run on main thread
+            updateUI(data)
+        }
+    ```
+  </Accordion>
+  
+  <Accordion title="Performance Issues">
+    **Issue**: App becomes slow with frequent data updates.
+    
+    **Solution**: Use debouncing and efficient diff algorithms.
+    
+    ```kotlin
+    dataStream
+        .debounce(200, TimeUnit.MILLISECONDS)
+        .distinctUntilChanged()
+        .subscribe { data ->
+            // Use DiffUtil for efficient RecyclerView updates
+            val diffResult = DiffUtil.calculateDiff(MyDiffCallback(oldData, data))
+            diffResult.dispatchUpdatesTo(adapter)
+        }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+**Development Tip**: Use [RxJava3 debugging tools](https://github.com/ReactiveX/RxJava/wiki/Debugging) and Android Studio's profiler to monitor subscription lifecycle and memory usage.
+</Tip>
+
+
+### Flow in Compose
+
+By using `collectAsState()` method, it can deliver asynchronous data updates to your Compose UI components.
+

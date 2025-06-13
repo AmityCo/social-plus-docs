@@ -1,510 +1,580 @@
+---
+title: "Session State"
+description: "Understand and manage user authentication states in Social+ SDK."
+---
+
 # Session State
 
-Session state is a key concept in the SDK that describes the authentication status of the client device. There are several session states that the SDK can be in, including:
+Session state represents the current authentication status of your Social+ client. Understanding session states is crucial for building reliable social applications that handle user authentication gracefully.
 
-* `notLoggedIn`
-* `establishing`
-* `established`
-* `tokenExpired`
-* `terminated`
+## Session States Overview
 
-The `established` state is the normal and fully authenticated state in which the SDK is usable. The other states represent different stages of the authentication process or an error condition.
+<CardGroup cols={2}>
+<Card title="notLoggedIn" icon="user-slash">
+Initial state - user needs to authenticate
+</Card>
+
+<Card title="establishing" icon="spinner">
+Authentication in progress
+</Card>
+
+<Card title="established" icon="check">
+User authenticated and SDK ready
+</Card>
+
+<Card title="tokenExpired" icon="clock">
+Authentication token needs refresh
+</Card>
+
+<Card title="terminated" icon="ban">
+Session ended due to ban or deletion
+</Card>
+</CardGroup>
+
+## Session Flow
+
+<Steps>
+<Step title="Initialization">
+When SDK initializes:
+- **New user**: Starts in `notLoggedIn` state
+- **Returning user**: Automatically moves to `established` state
+</Step>
+
+<Step title="Login Process">
+When user logs in:
+- **Success**: Moves to `established` state
+- **Failure**: Returns to `notLoggedIn` state
+</Step>
+
+<Step title="Active Session">
+During active use:
+- **Token expires**: Moves to `tokenExpired` state (auto-renewal attempted)
+- **User banned/deleted**: Moves to `terminated` state
+</Step>
+
+<Step title="Logout">
+When user logs out:
+- Always returns to `notLoggedIn` state
+</Step>
+</Steps>
 
 <Frame>
-  <img src="../../.gitbook/assets/SDK session management-State Diagram Public.drawio-2.png" alt="" />
-  <p>Session State Diagram</p>
+  <img src="../../.gitbook/assets/SDK session management-State Diagram Public.drawio-2.png" alt="Session State Flow Diagram" />
 </Frame>
 
-When SDK is initialized:
+## Observing Session State
 
-* If the user is not logged in, the SDK starts in the initial "`notLoggedIn`" state.
-* If the user is already logged in, the SDK automatically resumes the logged-in session and immediately switches to the `established` state.
-
-<Info>
-When TS SDK is initialized, the session state always begins as `notLoggedIn`.
-</Info>
-
-When logging in:
-
-* If login succeeds, it moves to `established` state.
-* If login fails, it moves to `notLoggedIn` state.
-
-When logging out manually:
-
-* It moves to `notLoggedIn` state.
-
-When the user is logged in, but the user is banned or deleted from the system.
-
-* It moves to `terminated` state.
-
-<Info>
-The error code will be presented in `terminated` state. Please refer to [error-handling.md](error-handling.md) for more details.
-</Info>
-
-When token has expired:
-
-* It moves to `tokenExpired` state.
-
-<Info>
-If the access token has expired, all network requests will fail. However, the SDK includes an automatic process for renewing the access token. As long as this process is implemented correctly, it is unlikely that the app will encounter this problem.
-
-Please refer to [#session-handler](#session-handler) for more details.
-</Info>
-
-## Read and Observe Session State
-
-The SDK provides APIs for reading and observing the session state.
+Monitor session state changes to handle authentication in your app:
 
 <Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-      ```swift
-      // Observe Session State
-      let subscription = sdk.sessionState.subscribe { state in
-          switch state {
-          case .notLoggedIn:
-              // Not logged in
-          case .establishing:
-              // Logging in
-          case .established:
-              // Logged in
-          case .tokenExpired:
-              // Access token expired
-          case .terminated:
-              // Session terminated
-          }
-      }
-      ```
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    // Observe Session State
-    val subscription = sdk.sessionState.subscribe { state ->
-        when (state) {
-            SessionState.NOT_LOGGED_IN -> {
-                // Not logged in
-            }
-            SessionState.ESTABLISHING -> {
-                // Logging in
-            }
-            SessionState.ESTABLISHED -> {
-                // Logged in
-            }
-            SessionState.TOKEN_EXPIRED -> {
-                // Access token expired
-            }
-            SessionState.TERMINATED -> {
-                // Session terminated
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class SessionManager {
+    private var subscription: AmityNotificationToken?
+    
+    func observeSessionState() {
+        subscription = client.sessionState.subscribe { [weak self] state in
+            DispatchQueue.main.async {
+                self?.handleSessionState(state)
             }
         }
     }
-    ```
-  </Tab>
-  <Tab title="JavaScript">
-    ```javascript
-    // Observe Session State
-    const subscription = sdk.sessionState.subscribe(state => {
-      switch (state) {
-        case 'notLoggedIn':
-          // Not logged in
-          break
-        case 'establishing':
-          // Logging in
-          break
-        case 'established':
-          // Logged in
-          break
-        case 'tokenExpired':
-          // Access token expired
-          break
-        case 'terminated':
-          // Session terminated
-          break
-      }
-    })
-    ```
-  </Tab>
-  <Tab title="TypeScript">
-    ```typescript
-    // Observe Session State
-    const subscription = sdk.sessionState.subscribe(state => {
-      switch (state) {
-        case 'notLoggedIn':
-          // Not logged in
-          break
-        case 'establishing':
-          // Logging in
-          break
-        case 'established':
-          // Logged in
-          break
-        case 'tokenExpired':
-          // Access token expired
-          break
-        case 'terminated':
-          // Session terminated
-          break
-      }
-    })
-    ```
-  </Tab>
-  <Tab title="Flutter">
-    ```dart
-    // Observe Session State
-    final subscription = sdk.sessionState.subscribe((state) {
-      switch (state) {
-        case SessionState.notLoggedIn:
-          // Not logged in
-          break;
-        case SessionState.establishing:
-          // Logging in
-          break;
-        case SessionState.established:
-          // Logged in
-          break;
-        case SessionState.tokenExpired:
-          // Access token expired
-          break;
-        case SessionState.terminated:
-          // Session terminated
-          break;
-      }
-    });
-    ```
-  </Tab>
-</Tabs>
-
-### Implementing an app based on session state
-
-Session state is designed to align with the typical flow of an app. For example, developers can use the session state to guide app navigation, like this:
-
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    let subscription = sdk.sessionState.subscribe { state in
+    
+    private func handleSessionState(_ state: AmitySessionState) {
         switch state {
         case .notLoggedIn:
-            // Show login screen
             showLoginScreen()
         case .establishing:
-            // Show loading screen
             showLoadingScreen()
         case .established:
-            // Show main screen
             showMainScreen()
         case .tokenExpired:
-            // Show login screen
-            showLoginScreen()
+            refreshTokenOrLogin()
         case .terminated:
-            // Show login screen with error
-            showLoginScreen(withError: "Session terminated")
+            handleTermination()
+        @unknown default:
+            break
         }
     }
-    ```
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    val subscription = sdk.sessionState.subscribe { state ->
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.core.session.SessionState
+
+class SessionManager {
+    private var subscription: Disposable? = null
+    
+    fun observeSessionState() {
+        subscription = client.sessionState.subscribe { state ->
+            runOnUiThread {
+                handleSessionState(state)
+            }
+        }
+    }
+    
+    private fun handleSessionState(state: SessionState) {
         when (state) {
-            SessionState.NOT_LOGGED_IN -> {
-                // Show login screen
-                showLoginScreen()
-            }
-            SessionState.ESTABLISHING -> {
-                // Show loading screen
-                showLoadingScreen()
-            }
-            SessionState.ESTABLISHED -> {
-                // Show main screen
-                showMainScreen()
-            }
-            SessionState.TOKEN_EXPIRED -> {
-                // Show login screen
-                showLoginScreen()
-            }
-            SessionState.TERMINATED -> {
-                // Show login screen with error
-                showLoginScreen("Session terminated")
-            }
+            SessionState.NOT_LOGGED_IN -> showLoginScreen()
+            SessionState.ESTABLISHING -> showLoadingScreen()
+            SessionState.ESTABLISHED -> showMainScreen()
+            SessionState.TOKEN_EXPIRED -> refreshTokenOrLogin()
+            SessionState.TERMINATED -> handleTermination()
         }
     }
-    ```
-  </Tab>
-  <Tab title="JavaScript">
-    ```javascript
-    const subscription = sdk.sessionState.subscribe(state => {
-      switch (state) {
-        case 'notLoggedIn':
-          // Show login screen
-          showLoginScreen()
-          break
-        case 'establishing':
-          // Show loading screen
-          showLoadingScreen()
-          break
-        case 'established':
-          // Show main screen
-          showMainScreen()
-          break
-        case 'tokenExpired':
-          // Show login screen
-          showLoginScreen()
-          break
-        case 'terminated':
-          // Show login screen with error
-          showLoginScreen('Session terminated')
-          break
-      }
-    })
-    ```
-  </Tab>
-  <Tab title="TypeScript">
-    ```typescript
-    const subscription = sdk.sessionState.subscribe(state => {
-      switch (state) {
-        case 'notLoggedIn':
-          // Show login screen
-          showLoginScreen()
-          break
-        case 'establishing':
-          // Show loading screen
-          showLoadingScreen()
-          break
-        case 'established':
-          // Show main screen
-          showMainScreen()
-          break
-        case 'tokenExpired':
-          // Show login screen
-          showLoginScreen()
-          break
-        case 'terminated':
-          // Show login screen with error
-          showLoginScreen('Session terminated')
-          break
-      }
-    })
-    ```
-  </Tab>
-  <Tab title="Flutter">
-    ```dart
-    final subscription = sdk.sessionState.subscribe((state) {
-      switch (state) {
-        case SessionState.notLoggedIn:
-          // Show login screen
-          showLoginScreen();
-          break;
-        case SessionState.establishing:
-          // Show loading screen
-          showLoadingScreen();
-          break;
-        case SessionState.established:
-          // Show main screen
-          showMainScreen();
-          break;
-        case SessionState.tokenExpired:
-          // Show login screen
-          showLoginScreen();
-          break;
-        case SessionState.terminated:
-          // Show login screen with error
-          showLoginScreen('Session terminated');
-          break;
-      }
-    });
-    ```
-  </Tab>
+}
+```
+</Tab>
+
+<Tab title="Web/React Native">
+```typescript
+import { Client, SessionState } from '@amityco/ts-sdk';
+
+class SessionManager {
+    private subscription?: () => void;
+    
+    observeSessionState(client: Client) {
+        this.subscription = client.onSessionStateChange((state: SessionState) => {
+            this.handleSessionState(state);
+        });
+    }
+    
+    private handleSessionState(state: SessionState) {
+        switch (state) {
+            case 'notLoggedIn':
+                this.showLoginScreen();
+                break;
+            case 'establishing':
+                this.showLoadingScreen();
+                break;
+            case 'established':
+                this.showMainScreen();
+                break;
+            case 'tokenExpired':
+                this.refreshTokenOrLogin();
+                break;
+            case 'terminated':
+                this.handleTermination();
+                break;
+        }
+    }
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+class SessionManager {
+    StreamSubscription? _subscription;
+    
+    void observeSessionState() {
+        _subscription = AmityClient.sessionState.listen((state) {
+            _handleSessionState(state);
+        });
+    }
+    
+    void _handleSessionState(SessionState state) {
+        switch (state) {
+            case SessionState.notLoggedIn:
+                _showLoginScreen();
+                break;
+            case SessionState.establishing:
+                _showLoadingScreen();
+                break;
+            case SessionState.established:
+                _showMainScreen();
+                break;
+            case SessionState.tokenExpired:
+                _refreshTokenOrLogin();
+                break;
+            case SessionState.terminated:
+                _handleTermination();
+                break;
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Practical Implementation Patterns
+
+### App Navigation Based on Session State
+
+Implement navigation that responds to authentication changes:
+
+<Tabs>
+<Tab title="React Navigation">
+```typescript
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { useAmity } from './AmityProvider';
+
+const AppNavigator = () => {
+    const { client, sessionState } = useAmity();
+    
+    const renderNavigator = () => {
+        switch (sessionState) {
+            case 'notLoggedIn':
+            case 'tokenExpired':
+                return <AuthStack />;
+            case 'establishing':
+                return <LoadingScreen />;
+            case 'established':
+                return <MainStack />;
+            case 'terminated':
+                return <TerminatedScreen />;
+            default:
+                return <LoadingScreen />;
+        }
+    };
+    
+    return (
+        <NavigationContainer>
+            {renderNavigator()}
+        </NavigationContainer>
+    );
+};
+```
+</Tab>
+
+<Tab title="SwiftUI">
+```swift
+struct ContentView: View {
+    @StateObject private var sessionManager = SessionManager()
+    
+    var body: some View {
+        Group {
+            switch sessionManager.sessionState {
+            case .notLoggedIn, .tokenExpired:
+                LoginView()
+            case .establishing:
+                LoadingView()
+            case .established:
+                MainTabView()
+            case .terminated:
+                TerminatedView()
+            @unknown default:
+                LoadingView()
+            }
+        }
+        .onAppear {
+            sessionManager.observeSessionState()
+        }
+    }
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+class MyApp extends StatelessWidget {
+    @override
+    Widget build(BuildContext context) {
+        return MaterialApp(
+            home: StreamBuilder<SessionState>(
+                stream: AmityClient.sessionState,
+                builder: (context, snapshot) {
+                    switch (snapshot.data) {
+                        case SessionState.notLoggedIn:
+                        case SessionState.tokenExpired:
+                            return LoginScreen();
+                        case SessionState.establishing:
+                            return LoadingScreen();
+                        case SessionState.established:
+                            return MainScreen();
+                        case SessionState.terminated:
+                            return TerminatedScreen();
+                        default:
+                            return LoadingScreen();
+                    }
+                },
+            ),
+        );
+    }
+}
+```
+</Tab>
 </Tabs>
 
 ## Session Handler
 
-For logging, the SDK requires `SessionHandler`. SDK uses this object to communicate with the app when session handling is required. Currently, `SessionHandler` is used for:
+The session handler manages token renewal automatically:
 
-* Initiate access token renewal when it is about to expire or has expired.
+<Warning>
+Session handlers are not yet available for Flutter SDK.
+</Warning>
 
 <Tabs>
-  <Tab title="iOS">
-    ```swift
-    class SessionHandler: SessionHandlerProtocol {
-        func sessionWillRenewAccessToken(_ renewal: AccessTokenRenewal) {
-            // Renew access token without auth token
-            renewal.renew()
+<Tab title="iOS">
+```swift
+class MySessionHandler: AmitySessionHandler {
+    func sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Get fresh token from your backend
+        AuthService.shared.refreshToken { result in
+            switch result {
+            case .success(let newToken):
+                renewal.renew(withAuthToken: newToken)
+            case .failure(let error):
+                print("Token refresh failed: \(error)")
+                // Handle refresh failure
+                self.handleTokenRefreshFailure()
+            }
         }
     }
-    ```
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    class SessionHandler : SessionHandlerProtocol {
-        override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            // Renew access token without auth token
-            renewal.renew()
+    
+    private func handleTokenRefreshFailure() {
+        // Navigate user to login or show error
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .authenticationRequired, 
+                object: nil
+            )
         }
     }
-    ```
-  </Tab>
-  <Tab title="JavaScript">
-    ```javascript
-    const sessionHandler = {
-      sessionWillRenewAccessToken: renewal => {
-        // Renew access token without auth token
-        renewal.renew()
-      }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+class MySessionHandler : AmitySessionHandler {
+    override fun sessionWillRenewAccessToken(renewal: AmityTokenRenewal) {
+        // Call your backend to refresh token
+        authRepository.refreshToken { newToken ->
+            if (newToken != null) {
+                renewal.renew(newToken)
+            } else {
+                handleTokenRefreshFailure()
+            }
+        }
     }
-    ```
-  </Tab>
-  <Tab title="TypeScript">
-    ```typescript
-    const sessionHandler: SessionHandler = {
-      sessionWillRenewAccessToken: renewal => {
-        // Renew access token without auth token
-        renewal.renew()
-      }
+    
+    private fun handleTokenRefreshFailure() {
+        // Navigate to login or show error
+        runOnUiThread {
+            EventBus.getDefault().post(AuthenticationRequiredEvent())
+        }
     }
+}
+```
+</Tab>
+
+<Tab title="Web/React Native">
+```typescript
+interface SessionHandler {
+    sessionWillRenewAccessToken: (renewal: TokenRenewal) => void;
+}
+
+const createSessionHandler = (): SessionHandler => ({
+    sessionWillRenewAccessToken: async (renewal) => {
+        try {
+            // Get fresh token from your backend
+            const newToken = await AuthService.refreshToken();
+            renewal.renew(newToken);
+        } catch (error) {
+            console.error('Token refresh failed:', error);
+            // Handle refresh failure
+            AuthService.logout();
+        }
+    }
+});
+
+// Use when logging in
+await client.login({
+    userId: 'user123',
+    displayName: 'John Doe',
+    authToken: 'auth-token',
+    sessionHandler: createSessionHandler()
+});
+```
+</Tab>
+</Tabs>
+
+## Error Handling
+
+Handle session-related errors gracefully:
+
+```typescript
+class SessionErrorHandler {
+    static handleSessionError(state: SessionState, error?: Error) {
+        switch (state) {
+            case 'tokenExpired':
+                // Attempt token refresh or redirect to login
+                this.handleTokenExpired();
+                break;
+            case 'terminated':
+                // Handle user ban or deletion
+                this.handleTermination(error);
+                break;
+            default:
+                console.warn('Unhandled session state:', state);
+        }
+    }
+    
+    private static handleTokenExpired() {
+        // Try to refresh token, fallback to login
+        AuthService.refreshToken()
+            .then(newToken => {
+                // Token refreshed successfully
+            })
+            .catch(() => {
+                // Redirect to login
+                NavigationService.navigateToLogin();
+            });
+    }
+    
+    private static handleTermination(error?: Error) {
+        // Show appropriate message based on error
+        const message = error?.code === 'USER_BANNED' 
+            ? 'Your account has been suspended.'
+            : 'Your session has ended. Please log in again.';
+            
+        AlertService.show(message);
+        NavigationService.navigateToLogin();
+    }
+}
+```
+
+## Best Practices
+
+### Do's ✅
+
+- **Monitor session state changes** in your app's main navigation logic
+- **Handle token expiration gracefully** with automatic refresh
+- **Provide clear feedback** to users during state transitions
+- **Clean up subscriptions** when components unmount
+- **Use secure logout** when security is critical
+
+### Don'ts ❌
+
+- **Don't ignore session state changes** - they indicate important authentication events
+- **Don't store sensitive data** when user is not authenticated
+- **Don't make API calls** before reaching `established` state
+- **Don't forget to handle the `terminated` state** - users may be banned
+
+### Memory Management
+
+<Tabs>
+<Tab title="iOS">
+```swift
+class ViewController: UIViewController {
+    private var sessionSubscription: AmityNotificationToken?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        observeSessionState()
+    }
+    
+    deinit {
+        // Clean up subscription
+        sessionSubscription?.invalidate()
+    }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+class MainActivity : AppCompatActivity() {
+    private var sessionSubscription: Disposable? = null
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up subscription
+        sessionSubscription?.dispose()
+    }
+}
+```
+</Tab>
+
+<Tab title="React">
+```typescript
+const App: React.FC = () => {
+    useEffect(() => {
+        const unsubscribe = client.onSessionStateChange(handleSessionState);
+        
+        // Cleanup on unmount
+        return () => {
+            unsubscribe?.();
+        };
+    }, []);
+    
+    return <div>Your app content</div>;
+};
+```
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+<Accordion title="Session state stuck in 'establishing'">
+This usually indicates a network connectivity issue or invalid credentials. Check your API key, network connection, and authentication token.
+</Accordion>
+
+<Accordion title="Frequent token expiration">
+If tokens expire too frequently, check your backend token generation logic and ensure appropriate expiration times are set.
+</Accordion>
+
+<Accordion title="Session handler not called">
+Verify that you're passing the session handler during login and that your implementation handles errors properly.
+</Accordion>
+
+<Accordion title="App crashes on session state change">
+Ensure you're updating UI on the main thread and handling all possible session states in your switch statements.
+</Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="Authentication Guide" icon="key" href="/social-plus-sdk/getting-started/authentication">
+Learn about secure authentication implementation
+</Card>
+
+<Card title="Error Handling" icon="exclamation-triangle" href="/social-plus-sdk/core-concepts/error-handling">
+Comprehensive error management strategies
+</Card>
+
+<Card title="User Management" icon="user" href="/social-plus-sdk/core-concepts/user">
+Understanding user identity and permissions
+</Card>
+
+<Card title="Live Objects" icon="refresh" href="/social-plus-sdk/core-concepts/live-objects-collections">
+Real-time data synchronization patterns
+</Card>
+</CardGroup>
+          // Session terminated
+          break
+      }
+    })
     ```
   </Tab>
   <Tab title="Flutter">
     ```dart
-    class SessionHandler extends SessionHandlerProtocol {
-      @override
-      void sessionWillRenewAccessToken(AccessTokenRenewal renewal) {
-        // Renew access token without auth token
-        renewal.renew();
-      }
-    }
-    ```
-  </Tab>
-</Tabs>
+    // Observe Session State
+    final subscription = sdk.sessionState.subscribe((state) {
+      switch (state) {
+        case SessionState.notLoggedIn:
+          // Not logged in
+          break;
+        case SessionState.establishing:
+          // Logging in
+          break;
+        case SessionState.established:
+          // Logged in
+          break;
+        case SessionState.tokenExpired:
+          // Access token expired
+          break;
+        case SessionState.terminated:
+          // Session terminated
+          break;
 
-The code above shows a simple session handler. Please note that each function in `SessionHandler` can be customized to your app logic.
-
-### Access Token Renewal
-
-When a user logs in to the SDK for the first time, an access token is issued that is valid for 30 days.
-
-If the access token is about to expire or has already expired, the SDK automatically initiates the renewal process through the `sessionWillRenewAccessToken` method of the `SessionHandler`.
-
-During the renewal process, the SDK passes an `AccessTokenRenewal` object to the app. The app must call either one of the following methods on this object to complete the process.
-
-<table>
-  <thead>
-    <tr>
-      <th width="344.5">Method on renewal object</th>
-      <th>Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>renew()</code></td>
-      <td>Indicates the SDK to renew the access token without an auth token.</td>
-    </tr>
-    <tr>
-      <td><code>renewWithAuthToken(...)</code></td>
-      <td>Indicates the SDK to renew the access token with an auth token. (Required for secure login)</td>
-    </tr>
-    <tr>
-      <td><code>unableToRetrieveAuthToken()</code></td>
-      <td>
-        Indicates the SDK to postpone renewal.
-        SDK will re-initiate access token renewal at a later time, but no sooner than 10 minutes.
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-The following code shows how the app can implement the `sessionWillRenewAccessToken` method by providing an auth token for renewal.
-
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    class SessionHandler: SessionHandlerProtocol {
-        func sessionWillRenewAccessToken(_ renewal: AccessTokenRenewal) {
-            // Get auth token from your auth system
-            getAuthToken { authToken in
-                if let authToken = authToken {
-                    // Renew access token with auth token
-                    renewal.renewWithAuthToken(authToken)
-                } else {
-                    // Unable to get auth token
-                    renewal.unableToRetrieveAuthToken()
-                }
-            }
-        }
-    }
-    ```
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    class SessionHandler : SessionHandlerProtocol {
-        override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            // Get auth token from your auth system
-            getAuthToken { authToken ->
-                if (authToken != null) {
-                    // Renew access token with auth token
-                    renewal.renewWithAuthToken(authToken)
-                } else {
-                    // Unable to get auth token
-                    renewal.unableToRetrieveAuthToken()
-                }
-            }
-        }
-    }
-    ```
-  </Tab>
-  <Tab title="JavaScript">
-    ```javascript
-    const sessionHandler = {
-      sessionWillRenewAccessToken: renewal => {
-        // Get auth token from your auth system
-        getAuthToken().then(authToken => {
-          if (authToken) {
-            // Renew access token with auth token
-            renewal.renewWithAuthToken(authToken)
-          } else {
-            // Unable to get auth token
-            renewal.unableToRetrieveAuthToken()
-          }
-        })
-      }
-    }
-    ```
-  </Tab>
-  <Tab title="TypeScript">
-    ```typescript
-    const sessionHandler: SessionHandler = {
-      sessionWillRenewAccessToken: renewal => {
-        // Get auth token from your auth system
-        getAuthToken().then(authToken => {
-          if (authToken) {
-            // Renew access token with auth token
-            renewal.renewWithAuthToken(authToken)
-          } else {
-            // Unable to get auth token
-            renewal.unableToRetrieveAuthToken()
-          }
-        })
-      }
-    }
-    ```
-  </Tab>
-  <Tab title="Flutter">
-    ```dart
-    class SessionHandler extends SessionHandlerProtocol {
-      @override
-      void sessionWillRenewAccessToken(AccessTokenRenewal renewal) {
-        // Get auth token from your auth system
-        getAuthToken().then((authToken) {
-          if (authToken != null) {
-            // Renew access token with auth token
-            renewal.renewWithAuthToken(authToken);
-          } else {
-            // Unable to get auth token
-            renewal.unableToRetrieveAuthToken();
-          }
-        });
-      }
-    }
-    ```
-  </Tab>
-</Tabs>
