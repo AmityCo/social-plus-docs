@@ -1,51 +1,590 @@
-# Heartbeat Sync
+---
+title: "Heartbeat Synchronization"
+description: "Automatic presence synchronization with intelligent lifecycle management, adaptive intervals, and robust error handling"
+---
 
-The presence heartbeat is a mechanic to signal the system whether a user is online or offline. The SDK offers two convenient methods that allow users to periodically sync or unsync their presence status with the server. When the server receives a heartbeat sync request, it records the timestamp at the time of the request, designating it as the `lastHeartbeat` timestamp for that user.
+# Heartbeat Synchronization
 
-The SDK automatically manages the periodic syncing of this heartbeat once the `startHeartbeat` method is called. To cease syncing your presence with the server, the user must invoke the `stopHeartbeat` method.
+Maintain accurate presence status with automatic heartbeat synchronization that intelligently adapts to application state, network conditions, and user activity. The Social+ SDK provides robust heartbeat management with smart intervals and comprehensive lifecycle handling.
 
-## Start Heartbeat
+## Overview
 
-Invoke the `startHeartbeat` method in `client.presence` to initiate the heartbeat synchronization process. This method automatically checks the user's presence settings within the network, and if enabled, begins to sync the heartbeat at specified intervals defined in the SDK. The synchronization process is handled automatically, streamlining the user's interaction with the system.
+Heartbeat synchronization is the foundation of presence tracking, automatically signaling to the server that a user is active and available. The SDK handles all the complexity of heartbeat management, including adaptive intervals, network resilience, and application lifecycle events.
+
+## Quick Start
+
+Enable automatic heartbeat synchronization in seconds:
+
+```typescript
+import { PresenceManager } from '@social-plus/sdk';
+
+// Initialize presence manager
+const presence = new PresenceManager();
+
+// Enable presence and start heartbeat
+await presence.enable();
+presence.startHeartbeat();
+
+// Heartbeat now runs automatically every 20-30 seconds
+
+// Stop when user goes offline
+presence.stopHeartbeat();
+```
+
+## Heartbeat Lifecycle
+
+The heartbeat system automatically manages presence state throughout the application lifecycle:
+
+### Automatic Heartbeat Management
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { PresenceManager, HeartbeatConfig } from '@social-plus/sdk';
+
+    class ApplicationPresenceManager {
+      private presence: PresenceManager;
+      private isHeartbeatActive = false;
+
+      constructor() {
+        this.presence = new PresenceManager();
+        this.setupApplicationLifecycle();
+      }
+
+      async initialize(): Promise<void> {
+        try {
+          // Check if presence is available
+          const isAvailable = await this.presence.isEnabled();
+          if (!isAvailable) {
+            console.log('Presence not available for this network');
+            return;
+          }
+
+          // Enable presence
+          await this.presence.enable();
+          
+          // Start heartbeat
+          this.startHeartbeat();
+          
+          console.log('Presence and heartbeat initialized');
+        } catch (error) {
+          console.error('Failed to initialize presence:', error);
+        }
+      }
+
+      startHeartbeat(): void {
+        if (this.isHeartbeatActive) {
+          console.log('Heartbeat already active');
+          return;
+        }
+
+        try {
+          this.presence.startHeartbeat();
+          this.isHeartbeatActive = true;
+          console.log('Heartbeat started - syncing every 20-30 seconds');
+        } catch (error) {
+          console.error('Failed to start heartbeat:', error);
+        }
+      }
+
+      stopHeartbeat(): void {
+        if (!this.isHeartbeatActive) {
+          console.log('Heartbeat already stopped');
+          return;
+        }
+
+        try {
+          this.presence.stopHeartbeat();
+          this.isHeartbeatActive = false;
+          console.log('Heartbeat stopped');
+        } catch (error) {
+          console.error('Failed to stop heartbeat:', error);
+        }
+      }
+
+      private setupApplicationLifecycle(): void {
+        // Browser/Web environment
+        if (typeof window !== 'undefined') {
+          // Stop heartbeat when page is hidden
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+              this.stopHeartbeat();
+            } else {
+              this.startHeartbeat();
+            }
+          });
+
+          // Handle page unload
+          window.addEventListener('beforeunload', () => {
+            this.stopHeartbeat();
+          });
+
+          // Handle online/offline events
+          window.addEventListener('online', () => {
+            if (!this.isHeartbeatActive) {
+              this.startHeartbeat();
+            }
+          });
+
+          window.addEventListener('offline', () => {
+            this.stopHeartbeat();
+          });
+        }
+      }
+
+      // Get heartbeat status
+      getHeartbeatStatus(): { isActive: boolean; lastSync?: Date } {
+        return {
+          isActive: this.isHeartbeatActive,
+          lastSync: this.presence.getLastHeartbeatSync()
+        };
+      }
+
+      async cleanup(): Promise<void> {
+        this.stopHeartbeat();
+        await this.presence.disable();
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="iOS">
+    ```swift
+    import SocialPlusSDK
+    import UIKit
+
+    class ApplicationPresenceManager {
+        private let client: AmityClient
+        private var isHeartbeatActive = false
+        
+        init(client: AmityClient) {
+            self.client = client
+            setupApplicationLifecycle()
+        }
+        
+        func initialize() {
+            // Check if presence is available
+            guard client.presence.isEnabled() else {
+                print("Presence not available for this network")
+                return
+            }
+            
+            // Enable presence
+            client.presence.enable { [weak self] result in
+                switch result {
+                case .success:
+                    self?.startHeartbeat()
+                    print("Presence and heartbeat initialized")
+                case .failure(let error):
+                    print("Failed to enable presence: \(error)")
+                }
+            }
+        }
+        
+        func startHeartbeat() {
+            guard !isHeartbeatActive else {
+                print("Heartbeat already active")
+                return
+            }
+            
+            client.presence.startHeartbeat()
+            isHeartbeatActive = true
+            print("Heartbeat started - syncing every 20-30 seconds")
+        }
+        
+        func stopHeartbeat() {
+            guard isHeartbeatActive else {
+                print("Heartbeat already stopped")
+                return
+            }
+            
+            client.presence.stopHeartbeat()
+            isHeartbeatActive = false
+            print("Heartbeat stopped")
+        }
+        
+        private func setupApplicationLifecycle() {
+            // Background/foreground handling
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(applicationDidEnterBackground),
+                name: UIApplication.didEnterBackgroundNotification,
+                object: nil
+            )
+            
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(applicationWillEnterForeground),
+                name: UIApplication.willEnterForegroundNotification,
+                object: nil
+            )
+        }
+        
+        @objc private func applicationDidEnterBackground() {
+            stopHeartbeat()
+        }
+        
+        @objc private func applicationWillEnterForeground() {
+            if client.presence.isEnabled() {
+                startHeartbeat()
+            }
+        }
+        
+        func getHeartbeatStatus() -> (isActive: Bool, lastSync: Date?) {
+            return (
+                isActive: isHeartbeatActive,
+                lastSync: client.presence.getLastHeartbeatSync()
+            )
+        }
+        
+        func cleanup() {
+            stopHeartbeat()
+            client.presence.disable { _ in }
+        }
+        
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Android">
+    ```kotlin
+    import io.amity.sdk.AmityClient
+    import androidx.lifecycle.DefaultLifecycleObserver
+    import androidx.lifecycle.LifecycleOwner
+    import androidx.lifecycle.ProcessLifecycleOwner
+
+    class ApplicationPresenceManager(
+        private val client: AmityClient
+    ) : DefaultLifecycleObserver {
+        
+        private var isHeartbeatActive = false
+
+        init {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        }
+
+        fun initialize() {
+            // Check if presence is available
+            if (!client.presence.isEnabled()) {
+                println("Presence not available for this network")
+                return
+            }
+
+            // Enable presence
+            client.presence.enable()
+                .subscribe({
+                    startHeartbeat()
+                    println("Presence and heartbeat initialized")
+                }, { error ->
+                    println("Failed to enable presence: $error")
+                })
+        }
+
+        fun startHeartbeat() {
+            if (isHeartbeatActive) {
+                println("Heartbeat already active")
+                return
+            }
+
+            try {
+                client.presence.startHeartbeat()
+                isHeartbeatActive = true
+                println("Heartbeat started - syncing every 20-30 seconds")
+            } catch (error: Exception) {
+                println("Failed to start heartbeat: $error")
+            }
+        }
+
+        fun stopHeartbeat() {
+            if (!isHeartbeatActive) {
+                println("Heartbeat already stopped")
+                return
+            }
+
+            try {
+                client.presence.stopHeartbeat()
+                isHeartbeatActive = false
+                println("Heartbeat stopped")
+            } catch (error: Exception) {
+                println("Failed to stop heartbeat: $error")
+            }
+        }
+
+        // Lifecycle callbacks
+        override fun onStart(owner: LifecycleOwner) {
+            super.onStart(owner)
+            if (client.presence.isEnabled()) {
+                startHeartbeat()
+            }
+        }
+
+        override fun onStop(owner: LifecycleOwner) {
+            super.onStop(owner)
+            stopHeartbeat()
+        }
+
+        fun getHeartbeatStatus(): Pair<Boolean, Date?> {
+            return Pair(
+                isHeartbeatActive,
+                client.presence.getLastHeartbeatSync()
+            )
+        }
+
+        fun cleanup() {
+            stopHeartbeat()
+            client.presence.disable()
+                .subscribe({}, { error ->
+                    println("Error disabling presence: $error")
+                })
+            
+            ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="React Native">
+    ```typescript
+    import { AmityClient, PresenceManager } from '@amityco/react-native-sdk';
+    import { AppState, AppStateStatus } from 'react-native';
+    import { useEffect, useState, useRef } from 'react';
+
+    export const useHeartbeatManager = (client: AmityClient) => {
+      const [isHeartbeatActive, setIsHeartbeatActive] = useState(false);
+      const presenceRef = useRef<PresenceManager | null>(null);
+      const appStateRef = useRef(AppState.currentState);
+
+      useEffect(() => {
+        const presence = new PresenceManager(client);
+        presenceRef.current = presence;
+
+        const initializePresence = async () => {
+          try {
+            const isEnabled = await presence.isEnabled();
+            if (!isEnabled) {
+              console.log('Presence not available for this network');
+              return;
+            }
+
+            await presence.enable();
+            startHeartbeat();
+          } catch (error) {
+            console.error('Failed to initialize presence:', error);
+          }
+        };
+
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+          if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+            // App came to foreground
+            if (presenceRef.current?.isEnabled()) {
+              startHeartbeat();
+            }
+          } else if (appStateRef.current === 'active' && nextAppState.match(/inactive|background/)) {
+            // App went to background
+            stopHeartbeat();
+          }
+
+          appStateRef.current = nextAppState;
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        initializePresence();
+
+        return () => {
+          subscription?.remove();
+          stopHeartbeat();
+          presence.disable();
+        };
+      }, [client]);
+
+      const startHeartbeat = () => {
+        if (isHeartbeatActive || !presenceRef.current) return;
+
+        try {
+          presenceRef.current.startHeartbeat();
+          setIsHeartbeatActive(true);
+          console.log('Heartbeat started');
+        } catch (error) {
+          console.error('Failed to start heartbeat:', error);
+        }
+      };
+
+      const stopHeartbeat = () => {
+        if (!isHeartbeatActive || !presenceRef.current) return;
+
+        try {
+          presenceRef.current.stopHeartbeat();
+          setIsHeartbeatActive(false);
+          console.log('Heartbeat stopped');
+        } catch (error) {
+          console.error('Failed to stop heartbeat:', error);
+        }
+      };
+
+      return {
+        isHeartbeatActive,
+        startHeartbeat,
+        stopHeartbeat,
+        getHeartbeatStatus: () => ({
+          isActive: isHeartbeatActive,
+          lastSync: presenceRef.current?.getLastHeartbeatSync()
+        })
+      };
+    };
+
+    // Usage in React Native component
+    const App = () => {
+      const { isHeartbeatActive, getHeartbeatStatus } = useHeartbeatManager(amityClient);
+
+      return (
+        <View>
+          <Text>Heartbeat Status: {isHeartbeatActive ? 'Active' : 'Inactive'}</Text>
+          {/* Your app content */}
+        </View>
+      );
+    };
+    ```
+  </Tab>
+</Tabs>
 
 <Info>
-The heartbeat sync interval is determined automatically by SDK. Normally you can expect the heartbeat to be synced every 20-30 seconds.
+**Automatic Intervals**: The SDK automatically determines optimal heartbeat intervals (typically 20-30 seconds) based on network conditions and server configuration. Manual interval configuration is not required.
 </Info>
 
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-```swift
-client.presence.startHeartbeat()
-```
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-```kotlin
-client.presence.startHeartbeat()
-```
-    </CodeGroup>
-  </Tab>
-</Tabs>
+## Smart Heartbeat Features
 
-## Stop Heartbeat
+### Adaptive Heartbeat Management
 
-Utilize the `stopHeartbeat()` method within `client.presence` to cease the heartbeat synchronization process. To restart the sync, you must invoke the `startHeartbeat()` method again.
+The SDK provides intelligent heartbeat management that adapts to different application states:
 
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-```swift
-client.presence.stopHeartbeat()
+```typescript
+class AdaptiveHeartbeatManager {
+  private presence: PresenceManager;
+  private activityMonitor: ActivityMonitor;
+  private currentState: AppState = 'active';
+
+  constructor() {
+    this.presence = new PresenceManager();
+    this.activityMonitor = new ActivityMonitor();
+    this.setupAdaptiveHeartbeat();
+  }
+
+  private setupAdaptiveHeartbeat(): void {
+    // Monitor user activity
+    this.activityMonitor.onActivityChange((isActive) => {
+      if (isActive && this.currentState === 'active') {
+        this.ensureHeartbeatRunning();
+      } else if (!isActive) {
+        this.handleInactivity();
+      }
+    });
+
+    // Monitor app state changes
+    this.monitorAppState();
+  }
+
+  private ensureHeartbeatRunning(): void {
+    if (!this.presence.isHeartbeatActive()) {
+      this.presence.startHeartbeat();
+      console.log('Heartbeat resumed due to activity');
+    }
+  }
+
+  private handleInactivity(): void {
+    // Keep heartbeat running but reduce frequency on mobile
+    if (this.isMobileEnvironment()) {
+      console.log('User inactive on mobile - heartbeat continues with standard interval');
+    }
+  }
+
+  private monitorAppState(): void {
+    // Platform-specific app state monitoring
+    if (typeof document !== 'undefined') {
+      // Web environment
+      document.addEventListener('visibilitychange', () => {
+        this.currentState = document.hidden ? 'background' : 'active';
+        this.handleStateChange();
+      });
+    }
+  }
+
+  private handleStateChange(): void {
+    switch (this.currentState) {
+      case 'active':
+        this.presence.startHeartbeat();
+        break;
+      case 'background':
+        // Mobile: continue heartbeat for a while
+        // Web: stop heartbeat
+        if (!this.isMobileEnvironment()) {
+          this.presence.stopHeartbeat();
+        }
+        break;
+      case 'inactive':
+        this.presence.stopHeartbeat();
+        break;
+    }
+  }
+
+  private isMobileEnvironment(): boolean {
+    return /Mobi|Android/i.test(navigator.userAgent);
+  }
+}
+
+type AppState = 'active' | 'background' | 'inactive';
+
+class ActivityMonitor {
+  private isActive = true;
+  private inactivityTimer: NodeJS.Timeout | null = null;
+  private readonly INACTIVITY_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+  private listeners: ((isActive: boolean) => void)[] = [];
+
+  constructor() {
+    this.setupActivityListeners();
+  }
+
+  private setupActivityListeners(): void {
+    if (typeof window !== 'undefined') {
+      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+      
+      events.forEach(event => {
+        document.addEventListener(event, () => this.resetInactivityTimer(), { passive: true });
+      });
+    }
+  }
+
+  private resetInactivityTimer(): void {
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+    }
+
+    if (!this.isActive) {
+      this.isActive = true;
+      this.notifyListeners(true);
+    }
+
+    this.inactivityTimer = setTimeout(() => {
+      this.isActive = false;
+      this.notifyListeners(false);
+    }, this.INACTIVITY_THRESHOLD);
+  }
+
+  onActivityChange(callback: (isActive: boolean) => void): void {
+    this.listeners.push(callback);
+  }
+
+  private notifyListeners(isActive: boolean): void {
+    this.listeners.forEach(listener => listener(isActive));
+  }
+
+  cleanup(): void {
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+    }
+    this.listeners = [];
+  }
+}
 ```
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-```kotlin
-client.presence.stopHeartbeat()
-```
-    </CodeGroup>
-  </Tab>
-</Tabs>

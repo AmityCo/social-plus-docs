@@ -1,0 +1,435 @@
+---
+title: "React Native Push Notification Setup"
+description: "Configure cross-platform push notifications for React Native apps using Firebase and APNs"
+---
+
+# React Native Push Notification Setup
+
+Set up push notifications for React Native apps with Firebase Cloud Messaging (FCM) for Android and Apple Push Notification service (APNs) for iOS. This guide covers installation, configuration, and Social+ UIKit integration.
+
+## Prerequisites
+
+- React Native project set up
+- Firebase project created
+- Social+ React Native SDK/UIKit integrated
+- iOS: Apple Developer Account with push notification certificates
+- Android: Firebase FCM configuration
+
+## Step 1: Install Dependencies
+
+### Firebase Setup
+
+```bash
+# Install React Native Firebase
+npm install @react-native-firebase/app @react-native-firebase/messaging
+
+# For iOS, install pods
+cd ios && pod install
+```
+
+### Configure Firebase
+
+1. **Add Firebase configuration files**:
+   - **Android**: Place `google-services.json` in `android/app/`
+   - **iOS**: Place `GoogleService-Info.plist` in iOS project
+
+2. **Update build files**:
+
+```gradle
+// android/build.gradle
+buildscript {
+  dependencies {
+    classpath 'com.google.gms:google-services:4.3.15'
+  }
+}
+
+// android/app/build.gradle
+apply plugin: 'com.google.gms.google-services'
+```
+
+## Step 2: Platform Configuration
+
+### iOS Configuration
+
+1. **Enable Push Notifications capability** in Xcode
+2. **Configure APNs** following the [iOS setup guide](./ios-setup)
+3. **Update AppDelegate**:
+
+```objc
+// ios/YourApp/AppDelegate.mm
+#import <Firebase.h>
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+  [FIRApp configure];
+  return YES;
+}
+```
+
+### Android Configuration
+
+1. **Add permissions** to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.VIBRATE" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+2. **Configure Firebase messaging service**:
+
+```xml
+<!-- android/app/src/main/AndroidManifest.xml -->
+<service
+  android:name="io.invertase.firebase.messaging.RNFirebaseMessagingService"
+  android:exported="false">
+  <intent-filter>
+    <action android:name="com.google.firebase.MESSAGING_EVENT" />
+  </intent-filter>
+</service>
+```
+
+## Step 3: Upload Certificates to Social+ Console
+
+### Android - FCM Service Account
+
+1. **Generate FCM service account JSON**:
+   - Go to Firebase Console → Project Settings → Service Accounts
+   - Click "Generate new private key"
+   - Download the JSON file
+
+2. **Upload to Social+ Console**:
+   - Navigate to **Settings → Push Notifications**
+   - Upload the FCM service account JSON file
+
+### iOS - APNs Certificate
+
+1. **Generate .p12 certificate** following the [iOS setup guide](./ios-setup)
+2. **Upload to Social+ Console**:
+   - Navigate to **Settings → Push Notifications**  
+   - Upload the .p12 file with password
+
+## Step 4: Implement Push Notifications
+
+### Basic Implementation
+
+```typescript
+import React, { useState, useEffect } from 'react';
+import messaging from '@react-native-firebase/messaging';
+import { Platform, PermissionsAndroid } from 'react-native';
+import { AmityUiKitProvider, AmityUiKitSocial } from '@amityco/asc-react-native-ui-kit';
+
+const App = () => {
+  const [pushToken, setPushToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    initializePushNotifications();
+  }, []);
+
+  const initializePushNotifications = async () => {
+    try {
+      // Request permission
+      await requestNotificationPermission();
+      
+      // Register for remote messages
+      await messaging().registerDeviceForRemoteMessages();
+      
+      // Get token
+      const token = await getDeviceToken();
+      setPushToken(token);
+      
+      // Listen for token refresh
+      const unsubscribe = messaging().onTokenRefresh(token => {
+        setPushToken(token);
+      });
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error('Push notification setup failed:', error);
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    if (Platform.OS === 'android') {
+      if (Platform.Version >= 33) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      return true;
+    } else {
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+      return enabled;
+    }
+  };
+
+  const getDeviceToken = async (): Promise<string | null> => {
+    if (Platform.OS === 'ios') {
+      // For iOS, get APNs token
+      const apnsToken = await messaging().getAPNSToken();
+      return apnsToken;
+    } else {
+      // For Android, get FCM token
+      const fcmToken = await messaging().getToken();
+      return fcmToken;
+    }
+  };
+
+  return (
+    <AmityUiKitProvider
+      configs={/* your configs */}
+      apiKey="your-api-key"
+      apiRegion="your-api-region"
+      userId="your-user-id"
+      displayName="your-display-name"
+      apiEndpoint="your-api-endpoint"
+      fcmToken={pushToken} // Pass the token here
+    >
+      <AmityUiKitSocial />
+    </AmityUiKitProvider>
+  );
+};
+
+export default App;
+```
+
+### Advanced Implementation with Custom Handling
+
+```typescript
+import { useEffect, useRef } from 'react';
+import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
+import { NavigationContainerRef } from '@react-navigation/native';
+
+const useNotificationHandler = (navigationRef: React.RefObject<NavigationContainerRef<any>>) => {
+  const notificationListener = useRef<() => void>();
+  const backgroundListener = useRef<() => void>();
+
+  useEffect(() => {
+    // Handle notifications when app is in foreground
+    notificationListener.current = messaging().onMessage(async remoteMessage => {
+      console.log('Foreground notification:', remoteMessage);
+      
+      // Show local notification
+      showLocalNotification(remoteMessage);
+    });
+
+    // Handle notifications when app is in background/quit
+    backgroundListener.current = messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log('Background notification opened:', remoteMessage);
+      
+      // Handle navigation
+      handleNotificationNavigation(remoteMessage);
+    });
+
+    // Check if app was opened from a notification
+    messaging()
+      .getInitialNotification()
+      .then(remoteMessage => {
+        if (remoteMessage) {
+          console.log('App opened from notification:', remoteMessage);
+          handleNotificationNavigation(remoteMessage);
+        }
+      });
+
+    return () => {
+      notificationListener.current?.();
+      backgroundListener.current?.();
+    };
+  }, []);
+
+  const showLocalNotification = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+    // Use a library like react-native-push-notification to show local notifications
+    // when app is in foreground
+  };
+
+  const handleNotificationNavigation = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+    const { data } = remoteMessage;
+    
+    if (data?.channelId) {
+      // Navigate to specific channel
+      navigationRef.current?.navigate('Channel', { channelId: data.channelId });
+    } else if (data?.communityId) {
+      // Navigate to community
+      navigationRef.current?.navigate('Community', { communityId: data.communityId });
+    }
+  };
+};
+```
+
+### Custom Notification Display
+
+```typescript
+import PushNotification from 'react-native-push-notification';
+
+class NotificationService {
+  
+  static configure() {
+    PushNotification.configure({
+      onNotification: function(notification) {
+        console.log('Local notification:', notification);
+      },
+      requestPermissions: Platform.OS === 'ios',
+    });
+
+    PushNotification.createChannel(
+      {
+        channelId: "social-plus-messages",
+        channelName: "Messages",
+        channelDescription: "Social+ message notifications",
+        playSound: true,
+        soundName: "default",
+        importance: 4,
+        vibrate: true,
+      },
+      (created) => console.log(`createChannel returned '${created}'`)
+    );
+  }
+
+  static showNotification(title: string, message: string, data: any = {}) {
+    PushNotification.localNotification({
+      channelId: "social-plus-messages",
+      title,
+      message,
+      playSound: true,
+      soundName: 'default',
+      userInfo: data,
+    });
+  }
+}
+```
+
+## Step 5: Handle Notification Permissions
+
+### Permission Request Component
+
+```typescript
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
+
+const NotificationPermissionRequest: React.FC = () => {
+  const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
+
+  useEffect(() => {
+    checkPermissionStatus();
+  }, []);
+
+  const checkPermissionStatus = async () => {
+    const authStatus = await messaging().hasPermission();
+    setPermissionStatus(getPermissionString(authStatus));
+  };
+
+  const requestPermission = async () => {
+    try {
+      const authStatus = await messaging().requestPermission();
+      setPermissionStatus(getPermissionString(authStatus));
+      
+      if (authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL) {
+        Alert.alert('Success', 'Notification permission granted!');
+      } else {
+        Alert.alert('Permission Denied', 'Please enable notifications in settings.');
+      }
+    } catch (error) {
+      console.error('Permission request failed:', error);
+    }
+  };
+
+  const getPermissionString = (status: number): string => {
+    switch (status) {
+      case messaging.AuthorizationStatus.AUTHORIZED:
+        return 'Authorized';
+      case messaging.AuthorizationStatus.PROVISIONAL:
+        return 'Provisional';
+      case messaging.AuthorizationStatus.DENIED:
+        return 'Denied';
+      default:
+        return 'Not Determined';
+    }
+  };
+
+  return (
+    <View style={{ padding: 20 }}>
+      <Text>Notification Permission: {permissionStatus}</Text>
+      {permissionStatus !== 'Authorized' && (
+        <TouchableOpacity onPress={requestPermission} style={{ marginTop: 10 }}>
+          <Text>Request Permission</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+```
+
+## Testing & Debugging
+
+### Debug Token and Messaging
+
+```typescript
+const DebugNotifications = () => {
+  const debugToken = async () => {
+    try {
+      const token = await messaging().getToken();
+      console.log('FCM Token:', token);
+      
+      // Copy to clipboard for testing
+      // You can use @react-native-clipboard/clipboard
+    } catch (error) {
+      console.error('Failed to get token:', error);
+    }
+  };
+
+  const testNotification = () => {
+    // Send test notification through Firebase Console
+    // Use the token logged above
+  };
+
+  return (
+    <View>
+      <TouchableOpacity onPress={debugToken}>
+        <Text>Log FCM Token</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={testNotification}>
+        <Text>Test Notification</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+```
+
+## Best Practices
+
+<Tip>
+**Token Management**: Always handle token refresh events and update the Social+ UIKit with the new token to ensure uninterrupted notifications.
+</Tip>
+
+- **Permission Timing** - Request permissions at an appropriate time in user flow
+- **Token Refresh** - Always handle token updates and pass to Social+ UIKit
+- **Background Handling** - Implement proper background notification handling
+- **Deep Linking** - Set up proper navigation for notification taps
+- **Local Notifications** - Show notifications when app is in foreground
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|--------|----------|
+| No token received | Firebase not configured | Verify Firebase setup and configuration files |
+| iOS notifications not working | APNs certificate missing | Upload .p12 certificate to Social+ Console |
+| Android notifications not working | FCM JSON not uploaded | Upload service account JSON to Social+ Console |
+| App crashes on notification | Missing permission handling | Implement proper permission requests |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Registration" href="../device-registration">
+    Learn how to register and manage device tokens
+  </Card>
+  <Card title="Notification Settings" href="../settings/user-settings">
+    Configure user notification preferences
+  </Card>
+</CardGroup>

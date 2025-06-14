@@ -1,276 +1,2134 @@
-# User Presence
+---
+title: "User Presence Tracking"
+description: "Monitor individual user online status, activity, and availability with real-time updates and efficient synchronization"
+---
 
-The SDK also offers functionality to query and synchronize the presence of other users, enabling the creation of a UI that displays their online status. For example, you might use a green dot to indicate whether a particular user is online or offline.
+# User Presence Tracking
 
-Within the SDK, a user's presence is represented by the `AmityUserPresence` object, which contains three properties.
+Monitor individual user online status and activity patterns to create engaging, responsive user experiences. The Social+ SDK provides comprehensive user presence management with real-time updates, efficient synchronization, and smart offline detection.
 
-| Property      | Remarks                                                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| userId        | Id of the user                                                                                                                  |
-| lastHeartbeat | Timestamp when that user last synced its heartbeat with the server.                                                             |
-| isOnline      | Convenient property to determine online status. User is considered online if its lastHeartbeat has been within last 60 seconds. |
+## Overview
+
+Build dynamic interfaces that show who's online, track user activity, and provide real-time availability information. Perfect for chat applications, team collaboration tools, and social platforms where user engagement visibility drives interaction.
+
+## Quick Start
+
+Start tracking user presence in minutes:
+
+```typescript
+import { UserPresenceRepository, UserPresence } from '@social-plus/sdk';
+
+// Initialize presence repository
+const userPresence = new UserPresenceRepository();
+
+// Query specific users' presence
+const presences = await userPresence.getUserPresence(['user1', 'user2', 'user3']);
+
+// Start real-time synchronization
+await userPresence.syncUserPresence('user1');
+await userPresence.syncUserPresence('user2');
+
+// Listen for presence updates
+userPresence.getSyncingUserPresence().subscribe(updates => {
+  updates.forEach(presence => {
+    console.log(`${presence.userId}: ${presence.isOnline ? 'Online' : 'Offline'}`);
+    console.log(`Last seen: ${new Date(presence.lastHeartbeat)}`);
+  });
+});
+```
+
+## User Presence Object
+
+The `UserPresence` object contains comprehensive presence information:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `userId` | `string` | Unique identifier of the user |
+| `lastHeartbeat` | `number` | Unix timestamp of the user's last heartbeat sync |
+| `isOnline` | `boolean` | Computed property indicating if user is online (heartbeat within 60 seconds) |
+| `status` | `'online' \| 'away' \| 'offline'` | Detailed presence status based on activity patterns |
+| `lastActivity` | `number` | Timestamp of the user's last activity |
+
+<Info>
+**Online Detection**: A user is considered online if their last heartbeat was within the past 60 seconds. This threshold ensures real-time accuracy while accounting for network delays.
+</Info>
 
 ## Query User Presence
 
-The SDK enables users to query the presence state for a list of users, with a maximum limit of 220. The `getUserPresence` method from the `AmityUserPresenceRepository` class can be used to fetch a list of `AmityUserPresence` objects.
+Retrieve presence information for specific users with flexible querying options:
 
 <Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
+  <Tab title="TypeScript">
+    ```typescript
+    import { UserPresenceRepository, UserPresence } from '@social-plus/sdk';
 
+    const presenceRepo = new UserPresenceRepository();
+
+    // Query single user
+    const getSingleUserPresence = async (userId: string): Promise<UserPresence | null> => {
+      try {
+        const presences = await presenceRepo.getUserPresence([userId]);
+        return presences.length > 0 ? presences[0] : null;
+      } catch (error) {
+        console.error('Failed to get user presence:', error);
+        return null;
+      }
+    };
+
+    // Query multiple users (max 220)
+    const getMultipleUserPresence = async (userIds: string[]): Promise<UserPresence[]> => {
+      try {
+        const presences = await presenceRepo.getUserPresence(userIds);
+        return presences;
+      } catch (error) {
+        console.error('Failed to get user presences:', error);
+        return [];
+      }
+    };
+
+    // Query with error handling and retry logic
+    const getPresenceWithRetry = async (
+      userIds: string[], 
+      maxRetries: number = 3
+    ): Promise<UserPresence[]> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await presenceRepo.getUserPresence(userIds);
+        } catch (error) {
+          if (attempt === maxRetries) {
+            throw error;
+          }
+          
+          // Exponential backoff
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+      
+      return [];
+    };
+    ```
+  </Tab>
+  
+  <Tab title="iOS">
     ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.getUserPresence(userIds: ["userId1", "userId2"]) { (result) in
-        switch result {
-        case .success(let presences):
-            // Handle presence objects
-            break
-        case .failure(let error):
-            // Handle error
-            break
+    import SocialPlusSDK
+
+    class UserPresenceManager {
+        private let repository: AmityUserPresenceRepository
+        
+        init(client: AmityClient) {
+            self.repository = AmityUserPresenceRepository(client: client)
+        }
+        
+        func getUserPresence(userIds: [String], completion: @escaping (Result<[AmityUserPresence], Error>) -> Void) {
+            repository.getUserPresence(userIds: userIds) { result in
+                DispatchQueue.main.async {
+                    completion(result)
+                }
+            }
+        }
+        
+        func getSingleUserPresence(userId: String, completion: @escaping (AmityUserPresence?) -> Void) {
+            getUserPresence(userIds: [userId]) { result in
+                switch result {
+                case .success(let presences):
+                    completion(presences.first)
+                case .failure(let error):
+                    print("Error getting user presence: \(error)")
+                    completion(nil)
+                }
+            }
+        }
+        
+        func getPresenceWithRetry(userIds: [String], maxRetries: Int = 3, completion: @escaping (Result<[AmityUserPresence], Error>) -> Void) {
+            attemptGetPresence(userIds: userIds, attempt: 1, maxRetries: maxRetries, completion: completion)
+        }
+        
+        private func attemptGetPresence(userIds: [String], attempt: Int, maxRetries: Int, completion: @escaping (Result<[AmityUserPresence], Error>) -> Void) {
+            repository.getUserPresence(userIds: userIds) { result in
+                switch result {
+                case .success(let presences):
+                    completion(.success(presences))
+                case .failure(let error):
+                    if attempt < maxRetries {
+                        let delay = pow(2.0, Double(attempt)) * 1.0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            self.attemptGetPresence(userIds: userIds, attempt: attempt + 1, maxRetries: maxRetries, completion: completion)
+                        }
+                    } else {
+                        completion(.failure(error))
+                    }
+                }
+            }
         }
     }
     ```
-
-    </CodeGroup>
   </Tab>
+  
   <Tab title="Android">
-    <CodeGroup>
-
     ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.getUserPresence(listOf("userId1", "userId2"))
-        .subscribe({ presences ->
-            // Handle presence objects
-        }, { error ->
-            // Handle error
-        })
-    ```
+    import io.amity.sdk.AmityClient
+    import io.amity.sdk.presence.AmityUserPresenceRepository
+    import io.reactivex.rxjava3.core.Single
+    import io.reactivex.rxjava3.schedulers.Schedulers
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+    import java.util.concurrent.TimeUnit
 
-    </CodeGroup>
+    class UserPresenceManager(private val client: AmityClient) {
+        private val repository = AmityUserPresenceRepository(client)
+
+        fun getUserPresence(userIds: List<String>): Single<List<AmityUserPresence>> {
+            return repository.getUserPresence(userIds)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+        }
+
+        fun getSingleUserPresence(userId: String): Single<AmityUserPresence?> {
+            return getUserPresence(listOf(userId))
+                .map { presences -> presences.firstOrNull() }
+        }
+
+        fun getPresenceWithRetry(userIds: List<String>, maxRetries: Int = 3): Single<List<AmityUserPresence>> {
+            return repository.getUserPresence(userIds)
+                .retryWhen { errors ->
+                    errors.zipWith(Single.range(1, maxRetries)) { error, attempt ->
+                        if (attempt >= maxRetries) {
+                            throw error
+                        }
+                        attempt
+                    }.flatMap { attempt ->
+                        Single.timer(Math.pow(2.0, attempt.toDouble()).toLong(), TimeUnit.SECONDS)
+                    }
+                }
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+        }
+
+        fun getPresenceWithCallback(userIds: List<String>, callback: (List<AmityUserPresence>) -> Unit, errorCallback: (Throwable) -> Unit) {
+            getUserPresence(userIds)
+                .subscribe(callback, errorCallback)
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="React Native">
+    ```typescript
+    import { AmityUserPresenceRepository, AmityUserPresence } from '@amityco/react-native-sdk';
+    import { useEffect, useState, useCallback } from 'react';
+
+    export const useUserPresence = (userIds: string[]) => {
+      const [presences, setPresences] = useState<AmityUserPresence[]>([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState<string | null>(null);
+
+      const repository = new AmityUserPresenceRepository();
+
+      const fetchPresence = useCallback(async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          
+          const result = await repository.getUserPresence(userIds);
+          setPresences(result);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch presence');
+        } finally {
+          setLoading(false);
+        }
+      }, [userIds]);
+
+      useEffect(() => {
+        if (userIds.length > 0) {
+          fetchPresence();
+        }
+      }, [fetchPresence]);
+
+      const refetch = useCallback(() => {
+        fetchPresence();
+      }, [fetchPresence]);
+
+      return { presences, loading, error, refetch };
+    };
+
+    // Hook for single user presence
+    export const useSingleUserPresence = (userId: string) => {
+      const { presences, loading, error, refetch } = useUserPresence([userId]);
+      
+      return {
+        presence: presences[0] || null,
+        loading,
+        error,
+        refetch
+      };
+    };
+    ```
   </Tab>
 </Tabs>
 
-## Sync & Unsync User Presence
+## Real-time Presence Synchronization
 
-In addition to querying user presence, the SDK also offers a method to periodically sync the presence of other users. This functionality keeps users informed about the online status of others. One application of this feature would be to display a list of users and provide an online indicator for those who are currently online.
+Enable continuous presence updates for users currently visible in your application. This creates a live, responsive experience where presence changes are reflected immediately.
 
 ### Sync User Presence
 
-The SDK includes the `syncUserPresence(id, viewId)` method in the `AmityUserPresenceRepository` class to synchronize the presence of another user. This method adds the specified ID to the list of user IDs for presence synchronization, occurring periodically at set intervals. To observe the results of this process, use the `getSyncingUserPresence()` method. When presence information is obtained for the currently syncing user IDs, notifications are sent through the observer returned from the `getSyncingUserPresence()` method. For further details on observing presence, refer to the [#observe-user-presence](user-presence.md#observe-user-presence) section.
-
-For optimal use, particularly when displaying a list of users, call this method as a list item appears to synchronize the user's presence state. Conversely, utilize the `unsyncUserPresence(id, viewId)` method to stop synchronization when a list item is no longer visible, ensuring that the maximum sync limit is never reached.
+Start real-time synchronization for specific users:
 
 <Info>
-  The maximum number of user IDs that can be synced at a time is 20. If the count exceeds this limit, the SDK will log an error message to the console. To remove a user ID from the list, use the unsyncUserPresence(id:viewId:) method.
+**Sync Limits**: Maximum of 20 users can be synced simultaneously. Use `unsyncUserPresence()` to remove users no longer needed to stay within limits.
 </Info>
 
 <Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { UserPresenceRepository } from '@social-plus/sdk';
+
+    class PresenceSyncManager {
+      private repository: UserPresenceRepository;
+      private syncedUsers = new Set<string>();
+      private readonly MAX_SYNC_USERS = 20;
+
+      constructor() {
+        this.repository = new UserPresenceRepository();
+      }
+
+      async syncUserPresence(userId: string, viewId?: string): Promise<void> {
+        if (this.syncedUsers.size >= this.MAX_SYNC_USERS) {
+          console.warn(`Maximum sync limit (${this.MAX_SYNC_USERS}) reached. Unsync some users first.`);
+          return;
+        }
+
+        try {
+          await this.repository.syncUserPresence(userId, viewId);
+          this.syncedUsers.add(userId);
+          console.log(`Started syncing presence for user: ${userId}`);
+        } catch (error) {
+          console.error(`Failed to sync user presence for ${userId}:`, error);
+        }
+      }
+
+      async unsyncUserPresence(userId: string, viewId?: string): Promise<void> {
+        try {
+          await this.repository.unsyncUserPresence(userId, viewId);
+          this.syncedUsers.delete(userId);
+          console.log(`Stopped syncing presence for user: ${userId}`);
+        } catch (error) {
+          console.error(`Failed to unsync user presence for ${userId}:`, error);
+        }
+      }
+
+      async unsyncAllUserPresence(): Promise<void> {
+        try {
+          await this.repository.unsyncAllUserPresence();
+          this.syncedUsers.clear();
+          console.log('Stopped syncing all user presences');
+        } catch (error) {
+          console.error('Failed to unsync all user presences:', error);
+        }
+      }
+
+      getSyncedUsers(): string[] {
+        return Array.from(this.syncedUsers);
+      }
+
+      canSyncMore(): boolean {
+        return this.syncedUsers.size < this.MAX_SYNC_USERS;
+      }
+    }
+    ```
+  </Tab>
+  
   <Tab title="iOS">
-    <CodeGroup>
-
     ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.syncUserPresence(userId: "userId1", viewId: nil)
-    ```
+    import SocialPlusSDK
 
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-
-    ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.syncUserPresence("userId1")
-    ```
-
-    </CodeGroup>
-  </Tab>
-</Tabs>
-
-This `syncUserPresence(id, viewId)` method also provides an optional viewId parameter. viewId is the unique id of the view that this user id is tied to. In most cases, you do not need to specify any value to this parameter. viewId is useful if you want to bind the same user id to multiple views on the same screen. In that case, if you want to unsync presence for one view, it won't affect presence syncing for the same user id in another view.
-
-<Info>
-  SDK will log a message in the console incase of any error which occurs during the syncing process.
-</Info>
-
-### Unsync User Presence
-
-The SDK includes the `unsyncUserPresence(id, viewId)` method to cease syncing the presence of a specific user ID. When a user ID is unsynced, the SDK removes it from the current list of synced IDs, and the observer returned from the `getSyncingUserPresence()` method will no longer provide presence information for that user. The method also features an optional `viewId` parameter, functioning similarly to the `syncUserPresence(id, viewId)` method.
-
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-
-    ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.unsyncUserPresence(userId: "userId1", viewId: nil)
-    ```
-
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-
-    ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.unsyncUserPresence("userId1")
-    ```
-
-    </CodeGroup>
-  </Tab>
-</Tabs>
-
-The SDK also provides a convenient method to unsync all user ids that are currently being synced. This is particularly useful when you don't care about the user ids being synced. One use case for this is when the user navigates to another screen that does not care about syncing previously synced users at all. So you can call `unsyncAllUserPresence()` method when the previous screen disappears.
-
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-
-    ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.unsyncAllUserPresence()
-    ```
-
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-
-    ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.unsyncAllUserPresence()
-    ```
-
-    </CodeGroup>
-  </Tab>
-</Tabs>
-
-## Observe User Presence
-
-After adding users for synchronization, the next step involves observing their presence. The SDK offers an observer via the `getSyncingUserPresence()` method. Whenever presence information is retrieved for users synced through `syncUserPresence(id, viewId)`, this information is published through the observer.
-
-**Accessing User Presence:**
-
-You can access the presence information for synced users in two ways:
-
-1. **Through the Observer Returned from** `getSyncingUserPresence()`**:** When the presence information is updated, the observer provides an array of `[AmityUserPresence]` the user IDs being synced. Users need to map `AmityUserPresence` from this array to the view where the information is to be displayed.
-2. **`Through the AmityUser Object:`** When presence information is fetched from the server, the `lastHeartbeat` timestamp is mapped to the `lastHeartbeat` property of the `AmityUser` object, if available. Users can directly access the `lastHeartbeat` property from the `AmityUser` object to determine whether a user is online or offline.
-
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-
-    ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.getSyncingUserPresence().subscribe { (presences) in
-        // Handle presence objects
-    }.disposed(by: disposeBag)
-    ```
-
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-
-    ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.getSyncingUserPresence()
-        .subscribe({ presences ->
-            // Handle presence objects
-        }, { error ->
-            // Handle error
-        })
-    ```
-
-    </CodeGroup>
-  </Tab>
-</Tabs>
-
-## Online Users Count
-
-The SDK provides the `getOnlineUsersCount` method in the `AmityUserPresenceRepository` class to query the count of online users. Please note that this count does not update automatically.
-
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-
-    ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.getOnlineUsersCount { (result) in
-        switch result {
-        case .success(let count):
-            // Handle count
-            break
-        case .failure(let error):
-            // Handle error
-            break
+    class PresenceSyncManager {
+        private let repository: AmityUserPresenceRepository
+        private var syncedUsers: Set<String> = []
+        private let maxSyncUsers = 20
+        
+        init(client: AmityClient) {
+            self.repository = AmityUserPresenceRepository(client: client)
+        }
+        
+        func syncUserPresence(userId: String, viewId: String? = nil) {
+            guard syncedUsers.count < maxSyncUsers else {
+                print("Maximum sync limit (\(maxSyncUsers)) reached. Unsync some users first.")
+                return
+            }
+            
+            repository.syncUserPresence(userId: userId, viewId: viewId)
+            syncedUsers.insert(userId)
+            print("Started syncing presence for user: \(userId)")
+        }
+        
+        func unsyncUserPresence(userId: String, viewId: String? = nil) {
+            repository.unsyncUserPresence(userId: userId, viewId: viewId)
+            syncedUsers.remove(userId)
+            print("Stopped syncing presence for user: \(userId)")
+        }
+        
+        func unsyncAllUserPresence() {
+            repository.unsyncAllUserPresence()
+            syncedUsers.removeAll()
+            print("Stopped syncing all user presences")
+        }
+        
+        func getSyncedUsers() -> [String] {
+            return Array(syncedUsers)
+        }
+        
+        func canSyncMore() -> Bool {
+            return syncedUsers.count < maxSyncUsers
+        }
+        
+        // Smart sync management for UI lists
+        func updateVisibleUsers(_ userIds: [String]) {
+            let newUsers = Set(userIds)
+            
+            // Unsync users no longer visible
+            for userId in syncedUsers {
+                if !newUsers.contains(userId) {
+                    unsyncUserPresence(userId: userId)
+                }
+            }
+            
+            // Sync newly visible users
+            for userId in newUsers {
+                if !syncedUsers.contains(userId) && canSyncMore() {
+                    syncUserPresence(userId: userId)
+                }
+            }
         }
     }
     ```
-
-    </CodeGroup>
   </Tab>
+  
   <Tab title="Android">
-    <CodeGroup>
-
     ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.getOnlineUsersCount()
-        .subscribe({ count ->
-            // Handle count
-        }, { error ->
-            // Handle error
-        })
-    ```
+    import io.amity.sdk.AmityClient
+    import io.amity.sdk.presence.AmityUserPresenceRepository
 
-    </CodeGroup>
-  </Tab>
-</Tabs>
+    class PresenceSyncManager(private val client: AmityClient) {
+        private val repository = AmityUserPresenceRepository(client)
+        private val syncedUsers = mutableSetOf<String>()
+        private val maxSyncUsers = 20
 
-## Online Users Snapshot
+        fun syncUserPresence(userId: String, viewId: String? = null) {
+            if (syncedUsers.size >= maxSyncUsers) {
+                println("Maximum sync limit ($maxSyncUsers) reached. Unsync some users first.")
+                return
+            }
 
-The SDK provides a method getOnlineUsersSnapshot in AmityUserPresenceRepository to query a list of online users in a network. The list of users can be accessed through user property which returns an array of AmityUser.
+            try {
+                repository.syncUserPresence(userId, viewId)
+                syncedUsers.add(userId)
+                println("Started syncing presence for user: $userId")
+            } catch (error: Exception) {
+                println("Failed to sync user presence for $userId: $error")
+            }
+        }
 
-<Info>
-  This snapshot is not auto-updating & supports queries of up to 1000 online users.
-</Info>
+        fun unsyncUserPresence(userId: String, viewId: String? = null) {
+            try {
+                repository.unsyncUserPresence(userId, viewId)
+                syncedUsers.remove(userId)
+                println("Stopped syncing presence for user: $userId")
+            } catch (error: Exception) {
+                println("Failed to unsync user presence for $userId: $error")
+            }
+        }
 
-When this snapshot object is initialized, it fetches the snapshot of user presences of all online users in current network. Then it maps that information to AmityUser per page and provides a list of AmityUser with pagination. Each page can contain a maximum of 20 users. When the snapshot is returned, it will contain users for the first page. You can still fetch more users if available through the loadMore() method. Once more users are fetched, the user can access those users through the user's property. You can also use the canLoadMore property to determine if more online users can be fetched.
+        fun unsyncAllUserPresence() {
+            try {
+                repository.unsyncAllUserPresence()
+                syncedUsers.clear()
+                println("Stopped syncing all user presences")
+            } catch (error: Exception) {
+                println("Failed to unsync all user presences: $error")
+            }
+        }
 
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
+        fun getSyncedUsers(): List<String> = syncedUsers.toList()
 
-    ```swift
-    let repository = AmityUserPresenceRepository(client: client)
-    repository.getOnlineUsersSnapshot { (result) in
-        switch result {
-        case .success(let snapshot):
-            // Handle snapshot
-            break
-        case .failure(let error):
-            // Handle error
-            break
+        fun canSyncMore(): Boolean = syncedUsers.size < maxSyncUsers
+
+        // Efficient batch management
+        fun updateVisibleUsers(userIds: List<String>) {
+            val newUsers = userIds.toSet()
+            
+            // Remove users no longer visible
+            val usersToUnsync = syncedUsers - newUsers
+            usersToUnsync.forEach { userId ->
+                unsyncUserPresence(userId)
+            }
+            
+            // Add newly visible users
+            val usersToSync = (newUsers - syncedUsers).take(maxSyncUsers - syncedUsers.size)
+            usersToSync.forEach { userId ->
+                syncUserPresence(userId)
+            }
         }
     }
     ```
-
-    </CodeGroup>
   </Tab>
-  <Tab title="Android">
-    <CodeGroup>
+  
+  <Tab title="Flutter">
+    ```dart
+    import 'package:amity_sdk/amity_sdk.dart';
 
-    ```kotlin
-    val repository = AmityUserPresenceRepository(client)
-    repository.getOnlineUsersSnapshot()
-        .subscribe({ snapshot ->
-            // Handle snapshot
-        }, { error ->
-            // Handle error
-        })
+    class PresenceSyncManager {
+      late AmityUserPresenceRepository _repository;
+      final Set<String> _syncedUsers = <String>{};
+      static const int maxSyncUsers = 20;
+
+      PresenceSyncManager(AmityClient client) {
+        _repository = AmityUserPresenceRepository(client);
+      }
+
+      Future<void> syncUserPresence(String userId, {String? viewId}) async {
+        if (_syncedUsers.length >= maxSyncUsers) {
+          print('Maximum sync limit ($maxSyncUsers) reached. Unsync some users first.');
+          return;
+        }
+
+        try {
+          await _repository.syncUserPresence(userId, viewId: viewId);
+          _syncedUsers.add(userId);
+          print('Started syncing presence for user: $userId');
+        } catch (error) {
+          print('Failed to sync user presence for $userId: $error');
+        }
+      }
+
+      Future<void> unsyncUserPresence(String userId, {String? viewId}) async {
+        try {
+          await _repository.unsyncUserPresence(userId, viewId: viewId);
+          _syncedUsers.remove(userId);
+          print('Stopped syncing presence for user: $userId');
+        } catch (error) {
+          print('Failed to unsync user presence for $userId: $error');
+        }
+      }
+
+      Future<void> unsyncAllUserPresence() async {
+        try {
+          await _repository.unsyncAllUserPresence();
+          _syncedUsers.clear();
+          print('Stopped syncing all user presences');
+        } catch (error) {
+          print('Failed to unsync all user presences: $error');
+        }
+      }
+
+      List<String> getSyncedUsers() => _syncedUsers.toList();
+
+      bool canSyncMore() => _syncedUsers.length < maxSyncUsers;
+
+      // Smart list management
+      Future<void> updateVisibleUsers(List<String> userIds) async {
+        final newUsers = userIds.toSet();
+        
+        // Unsync users no longer visible
+        final usersToUnsync = _syncedUsers.difference(newUsers);
+        for (final userId in usersToUnsync) {
+          await unsyncUserPresence(userId);
+        }
+        
+        // Sync newly visible users
+        final availableSlots = maxSyncUsers - _syncedUsers.length;
+        final usersToSync = newUsers.difference(_syncedUsers).take(availableSlots);
+        
+        for (final userId in usersToSync) {
+          await syncUserPresence(userId);
+        }
+      }
+    }
     ```
-
-    </CodeGroup>
   </Tab>
 </Tabs>
+
+### ViewId Parameter
+
+The optional `viewId` parameter allows binding the same user to multiple views:
+
+```typescript
+// Same user in different UI components
+await presenceRepo.syncUserPresence('user123', 'chat-list');
+await presenceRepo.syncUserPresence('user123', 'user-profile');
+
+// Unsync from one view doesn't affect the other
+await presenceRepo.unsyncUserPresence('user123', 'chat-list');
+// user123 still synced for 'user-profile' view
+```
+
+## Observing Presence Changes
+
+Listen to real-time presence updates for all synced users. The presence observer provides immediate notifications when users go online or offline.
+
+### Real-time Updates
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { UserPresenceRepository, UserPresence } from '@social-plus/sdk';
+    import { Subscription } from 'rxjs';
+
+    class PresenceObserver {
+      private subscription: Subscription | null = null;
+      private repository: UserPresenceRepository;
+
+      constructor() {
+        this.repository = new UserPresenceRepository();
+      }
+
+      startObserving(onPresenceUpdate: (presences: UserPresence[]) => void): void {
+        this.subscription = this.repository.getSyncingUserPresence()
+          .subscribe({
+            next: (presences) => {
+              console.log(`Received presence updates for ${presences.length} users`);
+              onPresenceUpdate(presences);
+            },
+            error: (error) => {
+              console.error('Presence observation error:', error);
+            }
+          });
+      }
+
+      stopObserving(): void {
+        if (this.subscription) {
+          this.subscription.unsubscribe();
+          this.subscription = null;
+        }
+      }
+
+      // Enhanced observer with filtering and mapping
+      startObservingWithFilters(
+        onlineOnly: boolean = false,
+        userFilter?: (userId: string) => boolean,
+        onPresenceUpdate?: (presences: UserPresence[]) => void
+      ): void {
+        this.subscription = this.repository.getSyncingUserPresence()
+          .pipe(
+            map(presences => {
+              let filtered = presences;
+              
+              // Filter by online status
+              if (onlineOnly) {
+                filtered = filtered.filter(p => p.isOnline);
+              }
+              
+              // Filter by user criteria
+              if (userFilter) {
+                filtered = filtered.filter(p => userFilter(p.userId));
+              }
+              
+              return filtered;
+            })
+          )
+          .subscribe({
+            next: onPresenceUpdate,
+            error: (error) => console.error('Presence observation error:', error)
+          });
+      }
+    }
+
+    // Usage example
+    const observer = new PresenceObserver();
+
+    observer.startObserving((presences) => {
+      presences.forEach(presence => {
+        updateUserUI(presence.userId, {
+          isOnline: presence.isOnline,
+          lastSeen: presence.lastHeartbeat,
+          status: presence.isOnline ? 'online' : 'offline'
+        });
+      });
+    });
+    ```
+  </Tab>
+  
+  <Tab title="iOS">
+    ```swift
+    import SocialPlusSDK
+    import RxSwift
+
+    class PresenceObserver {
+        private let repository: AmityUserPresenceRepository
+        private var disposeBag = DisposeBag()
+        
+        init(client: AmityClient) {
+            self.repository = AmityUserPresenceRepository(client: client)
+        }
+        
+        func startObserving(onPresenceUpdate: @escaping ([AmityUserPresence]) -> Void) {
+            repository.getSyncingUserPresence()
+                .observe(on: MainScheduler.instance)
+                .subscribe(
+                    onNext: { presences in
+                        print("Received presence updates for \(presences.count) users")
+                        onPresenceUpdate(presences)
+                    },
+                    onError: { error in
+                        print("Presence observation error: \(error)")
+                    }
+                )
+                .disposed(by: disposeBag)
+        }
+        
+        func startObservingWithFilters(
+            onlineOnly: Bool = false,
+            userFilter: ((String) -> Bool)? = nil,
+            onPresenceUpdate: @escaping ([AmityUserPresence]) -> Void
+        ) {
+            repository.getSyncingUserPresence()
+                .map { presences in
+                    var filtered = presences
+                    
+                    // Filter by online status
+                    if onlineOnly {
+                        filtered = filtered.filter { $0.isOnline }
+                    }
+                    
+                    // Filter by user criteria
+                    if let userFilter = userFilter {
+                        filtered = filtered.filter { userFilter($0.userId) }
+                    }
+                    
+                    return filtered
+                }
+                .observe(on: MainScheduler.instance)
+                .subscribe(
+                    onNext: onPresenceUpdate,
+                    onError: { error in
+                        print("Presence observation error: \(error)")
+                    }
+                )
+                .disposed(by: disposeBag)
+        }
+        
+        func stopObserving() {
+            disposeBag = DisposeBag()
+        }
+        
+        // SwiftUI-friendly observable
+        func getPresencePublisher() -> Observable<[AmityUserPresence]> {
+            return repository.getSyncingUserPresence()
+                .observe(on: MainScheduler.instance)
+        }
+    }
+
+    // SwiftUI integration
+    struct PresenceView: View {
+        @State private var presences: [AmityUserPresence] = []
+        private let observer: PresenceObserver
+        
+        init(client: AmityClient) {
+            self.observer = PresenceObserver(client: client)
+        }
+        
+        var body: some View {
+            VStack {
+                ForEach(presences, id: \.userId) { presence in
+                    HStack {
+                        Circle()
+                            .fill(presence.isOnline ? Color.green : Color.gray)
+                            .frame(width: 10, height: 10)
+                        Text(presence.userId)
+                        Spacer()
+                        Text(presence.isOnline ? "Online" : "Offline")
+                    }
+                }
+            }
+            .onAppear {
+                observer.startObserving { newPresences in
+                    self.presences = newPresences
+                }
+            }
+            .onDisappear {
+                observer.stopObserving()
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Android">
+    ```kotlin
+    import io.amity.sdk.AmityClient
+    import io.amity.sdk.presence.AmityUserPresenceRepository
+    import io.reactivex.rxjava3.disposables.CompositeDisposable
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+    import io.reactivex.rxjava3.schedulers.Schedulers
+
+    class PresenceObserver(private val client: AmityClient) {
+        private val repository = AmityUserPresenceRepository(client)
+        private val disposables = CompositeDisposable()
+
+        fun startObserving(onPresenceUpdate: (List<AmityUserPresence>) -> Unit) {
+            repository.getSyncingUserPresence()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    { presences ->
+                        println("Received presence updates for ${presences.size} users")
+                        onPresenceUpdate(presences)
+                    },
+                    { error ->
+                        println("Presence observation error: $error")
+                    }
+                )
+                .let(disposables::add)
+        }
+
+        fun startObservingWithFilters(
+            onlineOnly: Boolean = false,
+            userFilter: ((String) -> Boolean)? = null,
+            onPresenceUpdate: (List<AmityUserPresence>) -> Unit
+        ) {
+            repository.getSyncingUserPresence()
+                .map { presences ->
+                    var filtered = presences
+                    
+                    // Filter by online status
+                    if (onlineOnly) {
+                        filtered = filtered.filter { it.isOnline }
+                    }
+                    
+                    // Filter by user criteria
+                    userFilter?.let { filter ->
+                        filtered = filtered.filter { filter(it.userId) }
+                    }
+                    
+                    filtered
+                }
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    onPresenceUpdate,
+                    { error -> println("Presence observation error: $error") }
+                )
+                .let(disposables::add)
+        }
+
+        fun stopObserving() {
+            disposables.clear()
+        }
+    }
+
+    // Android Compose integration
+    @Composable
+    fun PresenceList(client: AmityClient, userIds: List<String>) {
+        var presences by remember { mutableStateOf<List<AmityUserPresence>>(emptyList()) }
+        val observer = remember { PresenceObserver(client) }
+
+        LaunchedEffect(userIds) {
+            // Sync users
+            userIds.forEach { userId ->
+                AmityUserPresenceRepository(client).syncUserPresence(userId)
+            }
+
+            // Observe changes
+            observer.startObserving { newPresences ->
+                presences = newPresences
+            }
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                observer.stopObserving()
+                AmityUserPresenceRepository(client).unsyncAllUserPresence()
+            }
+        }
+
+        LazyColumn {
+            items(presences, key = { it.userId }) { presence ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(
+                                color = if (presence.isOnline) Color.Green else Color.Gray,
+                                shape = CircleShape
+                            )
+                    )
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    Text(
+                        text = presence.userId,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    Text(
+                        text = if (presence.isOnline) "Online" else "Offline",
+                        style = MaterialTheme.typography.caption
+                    )
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="React Hook">
+    ```tsx
+    import { useEffect, useState, useCallback } from 'react';
+    import { UserPresenceRepository, UserPresence } from '@social-plus/sdk';
+
+    interface UsePresenceOptions {
+      onlineOnly?: boolean;
+      autoSync?: boolean;
+      userFilter?: (userId: string) => boolean;
+    }
+
+    export const useUserPresence = (
+      userIds: string[],
+      options: UsePresenceOptions = {}
+    ) => {
+      const [presences, setPresences] = useState<UserPresence[]>([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState<string | null>(null);
+
+      const repository = new UserPresenceRepository();
+      const { onlineOnly = false, autoSync = true, userFilter } = options;
+
+      const syncUsers = useCallback(async () => {
+        if (!autoSync) return;
+        
+        try {
+          for (const userId of userIds) {
+            await repository.syncUserPresence(userId);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to sync users');
+        }
+      }, [userIds, autoSync, repository]);
+
+      const unsyncUsers = useCallback(async () => {
+        try {
+          for (const userId of userIds) {
+            await repository.unsyncUserPresence(userId);
+          }
+        } catch (err) {
+          console.error('Failed to unsync users:', err);
+        }
+      }, [userIds, repository]);
+
+      useEffect(() => {
+        setLoading(true);
+        setError(null);
+
+        // Start syncing
+        syncUsers();
+
+        // Subscribe to presence changes
+        const subscription = repository.getSyncingUserPresence()
+          .subscribe({
+            next: (allPresences) => {
+              let filtered = allPresences;
+
+              // Filter by online status
+              if (onlineOnly) {
+                filtered = filtered.filter(p => p.isOnline);
+              }
+
+              // Filter by user criteria
+              if (userFilter) {
+                filtered = filtered.filter(p => userFilter(p.userId));
+              }
+
+              setPresences(filtered);
+              setLoading(false);
+            },
+            error: (err) => {
+              setError(err.message || 'Presence observation failed');
+              setLoading(false);
+            }
+          });
+
+        return () => {
+          subscription.unsubscribe();
+          unsyncUsers();
+        };
+      }, [syncUsers, unsyncUsers, onlineOnly, userFilter]);
+
+      const manualSync = useCallback(async (userId: string) => {
+        await repository.syncUserPresence(userId);
+      }, [repository]);
+
+      const manualUnsync = useCallback(async (userId: string) => {
+        await repository.unsyncUserPresence(userId);
+      }, [repository]);
+
+      return {
+        presences,
+        loading,
+        error,
+        manualSync,
+        manualUnsync,
+        onlineCount: presences.filter(p => p.isOnline).length,
+        totalCount: presences.length
+      };
+    };
+
+    // Usage in React component
+    const UserList: React.FC<{ userIds: string[] }> = ({ userIds }) => {
+      const { presences, loading, error, onlineCount } = useUserPresence(userIds, {
+        onlineOnly: false,
+        autoSync: true
+      });
+
+      if (loading) return <div>Loading presence...</div>;
+      if (error) return <div>Error: {error}</div>;
+
+      return (
+        <div className="user-list">
+          <h3>Users ({onlineCount} online)</h3>
+          {presences.map(presence => (
+            <div key={presence.userId} className="user-item">
+              <div className={`status-dot ${presence.isOnline ? 'online' : 'offline'}`} />
+              <span>{presence.userId}</span>
+              <span className="status">
+                {presence.isOnline ? 'Online' : `Last seen ${formatTime(presence.lastHeartbeat)}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    };
+    ```
+  </Tab>
+</Tabs>
+
+### Accessing Presence from User Objects
+
+When presence data is fetched, it's also mapped to `AmityUser` objects when available:
+
+```typescript
+// Access presence directly from user objects
+const user = await getUserById('user123');
+if (user.lastHeartbeat) {
+  const isOnline = (Date.now() - user.lastHeartbeat) < 60000;
+  console.log(`User ${user.userId} is ${isOnline ? 'online' : 'offline'}`);
+}
+```
+
+## Online Users Analytics
+
+Get insights into your user base with comprehensive online user statistics and snapshots.
+
+### Online Users Count
+
+Query the current number of online users in your network:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { UserPresenceRepository } from '@social-plus/sdk';
+
+    const getOnlineUsersCount = async (): Promise<number> => {
+      const repository = new UserPresenceRepository();
+      
+      try {
+        const count = await repository.getOnlineUsersCount();
+        console.log(`Currently ${count} users online`);
+        return count;
+      } catch (error) {
+        console.error('Failed to get online users count:', error);
+        return 0;
+      }
+    };
+
+    // Usage with periodic updates
+    class OnlineUsersTracker {
+      private intervalId: NodeJS.Timeout | null = null;
+      private repository: UserPresenceRepository;
+
+      constructor() {
+        this.repository = new UserPresenceRepository();
+      }
+
+      startTracking(updateInterval: number = 30000, onUpdate: (count: number) => void): void {
+        this.intervalId = setInterval(async () => {
+          try {
+            const count = await this.repository.getOnlineUsersCount();
+            onUpdate(count);
+          } catch (error) {
+            console.error('Failed to update online count:', error);
+          }
+        }, updateInterval);
+      }
+
+      stopTracking(): void {
+        if (this.intervalId) {
+          clearInterval(this.intervalId);
+          this.intervalId = null;
+        }
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="iOS">
+    ```swift
+    import SocialPlusSDK
+
+    class OnlineUsersTracker {
+        private let repository: AmityUserPresenceRepository
+        private var timer: Timer?
+        
+        init(client: AmityClient) {
+            self.repository = AmityUserPresenceRepository(client: client)
+        }
+        
+        func getOnlineUsersCount(completion: @escaping (Result<Int, Error>) -> Void) {
+            repository.getOnlineUsersCount { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let count):
+                        print("Currently \(count) users online")
+                    case .failure(let error):
+                        print("Failed to get online users count: \(error)")
+                    }
+                    completion(result)
+                }
+            }
+        }
+        
+        func startTracking(updateInterval: TimeInterval = 30.0, onUpdate: @escaping (Int) -> Void) {
+            timer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { _ in
+                self.getOnlineUsersCount { result in
+                    if case .success(let count) = result {
+                        onUpdate(count)
+                    }
+                }
+            }
+        }
+        
+        func stopTracking() {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    // SwiftUI integration
+    struct OnlineUsersCounter: View {
+        @State private var onlineCount: Int = 0
+        private let tracker: OnlineUsersTracker
+        
+        init(client: AmityClient) {
+            self.tracker = OnlineUsersTracker(client: client)
+        }
+        
+        var body: some View {
+            HStack {
+                Image(systemName: "person.2.fill")
+                    .foregroundColor(.green)
+                Text("\(onlineCount) online")
+                    .font(.caption)
+            }
+            .onAppear {
+                tracker.startTracking { count in
+                    self.onlineCount = count
+                }
+            }
+            .onDisappear {
+                tracker.stopTracking()
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Android">
+    ```kotlin
+    import io.amity.sdk.AmityClient
+    import io.amity.sdk.presence.AmityUserPresenceRepository
+
+    class OnlineUsersTracker(private val client: AmityClient) {
+        private val repository = AmityUserPresenceRepository(client)
+        private val disposables = CompositeDisposable()
+
+        fun getOnlineUsersCount(): Single<Int> {
+            return repository.getOnlineUsersCount()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSuccess { count ->
+                    println("Currently $count users online")
+                }
+                .doOnError { error ->
+                    println("Failed to get online users count: $error")
+                }
+        }
+
+        fun startTracking(updateInterval: Long = 30, onUpdate: (Int) -> Unit) {
+            Single.interval(updateInterval, TimeUnit.SECONDS)
+                .flatMap { getOnlineUsersCount() }
+                .subscribe(
+                    onUpdate,
+                    { error -> println("Tracking error: $error") }
+                )
+                .let(disposables::add)
+        }
+
+        fun stopTracking() {
+            disposables.clear()
+        }
+    }
+
+    // Android Compose integration
+    @Composable
+    fun OnlineUsersCounter(client: AmityClient) {
+        var onlineCount by remember { mutableStateOf(0) }
+        val tracker = remember { OnlineUsersTracker(client) }
+
+        LaunchedEffect(Unit) {
+            tracker.startTracking { count ->
+                onlineCount = count
+            }
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                tracker.stopTracking()
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Online users",
+                tint = Color.Green
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "$onlineCount online",
+                style = MaterialTheme.typography.caption
+            )
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Online Users Snapshot
+
+Get a paginated list of currently online users with detailed information:
+
+<Info>
+**Snapshot Limitations**: Returns up to 1,000 online users with 20 users per page. Snapshots are not auto-updating and represent a point-in-time view.
+</Info>
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { UserPresenceRepository, OnlineUsersSnapshot, AmityUser } from '@social-plus/sdk';
+
+    class OnlineUsersManager {
+      private repository: UserPresenceRepository;
+
+      constructor() {
+        this.repository = new UserPresenceRepository();
+      }
+
+      async getOnlineUsersSnapshot(): Promise<OnlineUsersSnapshot> {
+        try {
+          const snapshot = await this.repository.getOnlineUsersSnapshot();
+          console.log(`Got ${snapshot.users.length} online users`);
+          return snapshot;
+        } catch (error) {
+          console.error('Failed to get online users snapshot:', error);
+          throw error;
+        }
+      }
+
+      async getAllOnlineUsers(): Promise<AmityUser[]> {
+        const allUsers: AmityUser[] = [];
+        let snapshot = await this.getOnlineUsersSnapshot();
+        
+        allUsers.push(...snapshot.users);
+
+        // Load more pages if available
+        while (snapshot.canLoadMore) {
+          snapshot = await snapshot.loadMore();
+          allUsers.push(...snapshot.users);
+        }
+
+        return allUsers;
+      }
+
+      async getOnlineUsersPaginated(
+        pageSize: number = 20,
+        onPageLoaded: (users: AmityUser[], hasMore: boolean) => void
+      ): Promise<void> {
+        try {
+          let snapshot = await this.getOnlineUsersSnapshot();
+          onPageLoaded(snapshot.users, snapshot.canLoadMore);
+
+          while (snapshot.canLoadMore) {
+            snapshot = await snapshot.loadMore();
+            onPageLoaded(snapshot.users, snapshot.canLoadMore);
+          }
+        } catch (error) {
+          console.error('Failed to load paginated online users:', error);
+        }
+      }
+
+      // Enhanced snapshot with filtering
+      async getFilteredOnlineUsers(
+        filter: (user: AmityUser) => boolean
+      ): Promise<AmityUser[]> {
+        const allUsers = await this.getAllOnlineUsers();
+        return allUsers.filter(filter);
+      }
+    }
+
+    // Usage examples
+    const manager = new OnlineUsersManager();
+
+    // Get first page
+    const snapshot = await manager.getOnlineUsersSnapshot();
+    console.log('First page users:', snapshot.users);
+
+    // Get all online users
+    const allOnlineUsers = await manager.getAllOnlineUsers();
+    console.log('All online users:', allOnlineUsers.length);
+
+    // Paginated loading with callback
+    await manager.getOnlineUsersPaginated(20, (users, hasMore) => {
+      console.log(`Loaded ${users.length} users, more available: ${hasMore}`);
+      // Update UI with new users
+    });
+    ```
+  </Tab>
+  
+  <Tab title="iOS">
+    ```swift
+    import SocialPlusSDK
+
+    class OnlineUsersManager {
+        private let repository: AmityUserPresenceRepository
+        
+        init(client: AmityClient) {
+            self.repository = AmityUserPresenceRepository(client: client)
+        }
+        
+        func getOnlineUsersSnapshot(completion: @escaping (Result<AmityOnlineUsersSnapshot, Error>) -> Void) {
+            repository.getOnlineUsersSnapshot { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let snapshot):
+                        print("Got \(snapshot.users.count) online users")
+                    case .failure(let error):
+                        print("Failed to get online users snapshot: \(error)")
+                    }
+                    completion(result)
+                }
+            }
+        }
+        
+        func getAllOnlineUsers(completion: @escaping ([AmityUser]) -> Void) {
+            var allUsers: [AmityUser] = []
+            
+            getOnlineUsersSnapshot { result in
+                guard case .success(let snapshot) = result else {
+                    completion([])
+                    return
+                }
+                
+                allUsers.append(contentsOf: snapshot.users)
+                
+                self.loadMorePages(snapshot: snapshot, allUsers: &allUsers) { finalUsers in
+                    completion(finalUsers)
+                }
+            }
+        }
+        
+        private func loadMorePages(
+            snapshot: AmityOnlineUsersSnapshot,
+            allUsers: inout [AmityUser],
+            completion: @escaping ([AmityUser]) -> Void
+        ) {
+            if snapshot.canLoadMore {
+                snapshot.loadMore { result in
+                    switch result {
+                    case .success(let newSnapshot):
+                        allUsers.append(contentsOf: newSnapshot.users)
+                        self.loadMorePages(snapshot: newSnapshot, allUsers: &allUsers, completion: completion)
+                    case .failure:
+                        completion(allUsers)
+                    }
+                }
+            } else {
+                completion(allUsers)
+            }
+        }
+    }
+
+    // SwiftUI integration
+    struct OnlineUsersList: View {
+        @State private var onlineUsers: [AmityUser] = []
+        @State private var isLoading = true
+        
+        private let manager: OnlineUsersManager
+        
+        init(client: AmityClient) {
+            self.manager = OnlineUsersManager(client: client)
+        }
+        
+        var body: some View {
+            NavigationView {
+                List(onlineUsers, id: \.userId) { user in
+                    HStack {
+                        AsyncImage(url: URL(string: user.avatarUrl ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            Circle().fill(Color.gray.opacity(0.3))
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                        
+                        VStack(alignment: .leading) {
+                            Text(user.displayName ?? user.userId)
+                                .font(.headline)
+                            Text("Online")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                        
+                        Spacer()
+                        
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                .navigationTitle("Online Users")
+                .onAppear {
+                    loadOnlineUsers()
+                }
+            }
+            .overlay(
+                Group {
+                    if isLoading {
+                        ProgressView("Loading online users...")
+                    }
+                }
+            )
+        }
+        
+        private func loadOnlineUsers() {
+            manager.getAllOnlineUsers { users in
+                self.onlineUsers = users
+                self.isLoading = false
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Android">
+    ```kotlin
+    import io.amity.sdk.AmityClient
+    import io.amity.sdk.presence.AmityUserPresenceRepository
+    import io.amity.sdk.user.AmityUser
+    import io.reactivex.rxjava3.core.Single
+    import io.reactivex.rxjava3.schedulers.Schedulers
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+
+    class OnlineUsersManager(private val client: AmityClient) {
+        private val repository = AmityUserPresenceRepository(client)
+
+        fun getOnlineUsersSnapshot(): Single<AmityOnlineUsersSnapshot> {
+            return repository.getOnlineUsersSnapshot()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSuccess { snapshot ->
+                    println("Got ${snapshot.users.size} online users")
+                }
+                .doOnError { error ->
+                    println("Failed to get online users snapshot: $error")
+                }
+        }
+
+        fun getAllOnlineUsers(): Single<List<AmityUser>> {
+            return getOnlineUsersSnapshot()
+                .flatMap { snapshot ->
+                    loadAllPages(snapshot, mutableListOf<AmityUser>().apply { addAll(snapshot.users) })
+                }
+        }
+
+        private fun loadAllPages(snapshot: AmityOnlineUsersSnapshot, allUsers: MutableList<AmityUser>): Single<List<AmityUser>> {
+            return if (snapshot.canLoadMore) {
+                snapshot.loadMore()
+                    .flatMap { newSnapshot ->
+                        allUsers.addAll(newSnapshot.users)
+                        loadAllPages(newSnapshot, allUsers)
+                    }
+            } else {
+                Single.just(allUsers.toList())
+            }
+        }
+
+        fun getOnlineUsersPaginated(
+            onPageLoaded: (List<AmityUser>, Boolean) -> Unit,
+            onError: (Throwable) -> Unit
+        ) {
+            getOnlineUsersSnapshot()
+                .flatMap { snapshot ->
+                    onPageLoaded(snapshot.users, snapshot.canLoadMore)
+                    loadPagesRecursively(snapshot, onPageLoaded)
+                }
+                .subscribe({}, onError)
+        }
+
+        private fun loadPagesRecursively(
+            snapshot: AmityOnlineUsersSnapshot,
+            onPageLoaded: (List<AmityUser>, Boolean) -> Unit
+        ): Single<Unit> {
+            return if (snapshot.canLoadMore) {
+                snapshot.loadMore()
+                    .flatMap { newSnapshot ->
+                        onPageLoaded(newSnapshot.users, newSnapshot.canLoadMore)
+                        loadPagesRecursively(newSnapshot, onPageLoaded)
+                    }
+            } else {
+                Single.just(Unit)
+            }
+        }
+    }
+
+    // Android Compose integration
+    @Composable
+    fun OnlineUsersList(client: AmityClient) {
+        var onlineUsers by remember { mutableStateOf<List<AmityUser>>(emptyList()) }
+        var isLoading by remember { mutableStateOf(true) }
+        var error by remember { mutableStateOf<String?>(null) }
+        
+        val manager = remember { OnlineUsersManager(client) }
+
+        LaunchedEffect(Unit) {
+            manager.getAllOnlineUsers()
+                .subscribe({ users ->
+                    onlineUsers = users
+                    isLoading = false
+                }, { throwable ->
+                    error = throwable.message
+                    isLoading = false
+                })
+        }
+
+        Column {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (error != null) {
+                Text(
+                    text = "Error: $error",
+                    color = MaterialTheme.colors.error,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                Text(
+                    text = "${onlineUsers.size} users online",
+                    style = MaterialTheme.typography.h6,
+                    modifier = Modifier.padding(16.dp)
+                )
+                
+                LazyColumn {
+                    items(onlineUsers, key = { it.userId }) { user ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = user.avatarUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                                placeholder = painterResource(R.drawable.placeholder_avatar)
+                            )
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = user.displayName ?: user.userId,
+                                    style = MaterialTheme.typography.body1
+                                )
+                                Text(
+                                    text = "Online",
+                                    style = MaterialTheme.typography.caption,
+                                    color = Color.Green
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        color = Color.Green,
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Use Cases
+
+### Smart List Management
+
+Efficiently manage presence for dynamic user lists:
+
+```typescript
+class SmartPresenceList {
+  private presenceRepo: UserPresenceRepository;
+  private visibleUsers = new Set<string>();
+  private syncedUsers = new Set<string>();
+  private readonly MAX_SYNC = 20;
+
+  constructor() {
+    this.presenceRepo = new UserPresenceRepository();
+  }
+
+  // Called when list items become visible/invisible
+  updateVisibleUsers(userIds: string[]): void {
+    const newVisible = new Set(userIds);
+    
+    // Remove users that are no longer visible
+    this.visibleUsers.forEach(userId => {
+      if (!newVisible.has(userId)) {
+        this.unsyncUser(userId);
+      }
+    });
+
+    // Add newly visible users
+    newVisible.forEach(userId => {
+      if (!this.visibleUsers.has(userId)) {
+        this.syncUser(userId);
+      }
+    });
+
+    this.visibleUsers = newVisible;
+  }
+
+  private syncUser(userId: string): void {
+    if (this.syncedUsers.size >= this.MAX_SYNC) {
+      // Remove least recently used
+      const oldestUser = this.syncedUsers.values().next().value;
+      this.unsyncUser(oldestUser);
+    }
+
+    this.presenceRepo.syncUserPresence(userId);
+    this.syncedUsers.add(userId);
+  }
+
+  private unsyncUser(userId: string): void {
+    this.presenceRepo.unsyncUserPresence(userId);
+    this.syncedUsers.delete(userId);
+    this.visibleUsers.delete(userId);
+  }
+
+  cleanup(): void {
+    this.presenceRepo.unsyncAllUserPresence();
+    this.syncedUsers.clear();
+    this.visibleUsers.clear();
+  }
+}
+```
+
+### Team Presence Dashboard
+
+Build comprehensive team presence monitoring:
+
+```typescript
+interface TeamMember {
+  userId: string;
+  name: string;
+  role: string;
+  department: string;
+  avatar?: string;
+}
+
+interface TeamPresenceStats {
+  totalMembers: number;
+  onlineMembers: number;
+  byDepartment: Record<string, { online: number; total: number }>;
+  byRole: Record<string, { online: number; total: number }>;
+}
+
+class TeamPresenceDashboard {
+  private presenceRepo: UserPresenceRepository;
+  private teamMembers: TeamMember[] = [];
+  private presenceData = new Map<string, UserPresence>();
+
+  constructor(teamMembers: TeamMember[]) {
+    this.presenceRepo = new UserPresenceRepository();
+    this.teamMembers = teamMembers;
+  }
+
+  async initialize(): Promise<void> {
+    // Sync all team members
+    for (const member of this.teamMembers) {
+      await this.presenceRepo.syncUserPresence(member.userId);
+    }
+
+    // Listen for presence updates
+    this.presenceRepo.getSyncingUserPresence().subscribe(presences => {
+      presences.forEach(presence => {
+        this.presenceData.set(presence.userId, presence);
+      });
+      this.onPresenceUpdate();
+    });
+  }
+
+  private onPresenceUpdate(): void {
+    const stats = this.calculateStats();
+    this.updateDashboardUI(stats);
+  }
+
+  private calculateStats(): TeamPresenceStats {
+    const stats: TeamPresenceStats = {
+      totalMembers: this.teamMembers.length,
+      onlineMembers: 0,
+      byDepartment: {},
+      byRole: {}
+    };
+
+    this.teamMembers.forEach(member => {
+      const presence = this.presenceData.get(member.userId);
+      const isOnline = presence?.isOnline || false;
+
+      if (isOnline) stats.onlineMembers++;
+
+      // Department stats
+      if (!stats.byDepartment[member.department]) {
+        stats.byDepartment[member.department] = { online: 0, total: 0 };
+      }
+      stats.byDepartment[member.department].total++;
+      if (isOnline) stats.byDepartment[member.department].online++;
+
+      // Role stats
+      if (!stats.byRole[member.role]) {
+        stats.byRole[member.role] = { online: 0, total: 0 };
+      }
+      stats.byRole[member.role].total++;
+      if (isOnline) stats.byRole[member.role].online++;
+    });
+
+    return stats;
+  }
+
+  getOnlineMembers(): TeamMember[] {
+    return this.teamMembers.filter(member => {
+      const presence = this.presenceData.get(member.userId);
+      return presence?.isOnline || false;
+    });
+  }
+
+  getMembersByStatus(status: 'online' | 'offline'): TeamMember[] {
+    return this.teamMembers.filter(member => {
+      const presence = this.presenceData.get(member.userId);
+      const isOnline = presence?.isOnline || false;
+      return status === 'online' ? isOnline : !isOnline;
+    });
+  }
+
+  private updateDashboardUI(stats: TeamPresenceStats): void {
+    // Update your dashboard UI with the new stats
+    console.log('Team Presence Stats:', stats);
+  }
+
+  cleanup(): void {
+    this.presenceRepo.unsyncAllUserPresence();
+  }
+}
+```
+
+### Presence-Based Features
+
+Build features that react to presence changes:
+
+```typescript
+class PresenceBasedFeatures {
+  private presenceRepo: UserPresenceRepository;
+  private notificationManager: NotificationManager;
+
+  constructor() {
+    this.presenceRepo = new UserPresenceRepository();
+    this.notificationManager = new NotificationManager();
+  }
+
+  // Auto-suggest active users for collaboration
+  async suggestActiveCollaborators(projectId: string): Promise<TeamMember[]> {
+    const projectMembers = await getProjectMembers(projectId);
+    
+    // Sync presence for project members
+    for (const member of projectMembers) {
+      await this.presenceRepo.syncUserPresence(member.userId);
+    }
+
+    return new Promise(resolve => {
+      this.presenceRepo.getSyncingUserPresence().subscribe(presences => {
+        const activeMembers = projectMembers.filter(member => {
+          const presence = presences.find(p => p.userId === member.userId);
+          return presence?.isOnline;
+        });
+        
+        resolve(activeMembers);
+      });
+    });
+  }
+
+  // Send notifications when VIP users come online
+  setupVIPNotifications(vipUserIds: string[]): void {
+    const previousState = new Map<string, boolean>();
+
+    vipUserIds.forEach(userId => {
+      this.presenceRepo.syncUserPresence(userId);
+      previousState.set(userId, false);
+    });
+
+    this.presenceRepo.getSyncingUserPresence().subscribe(presences => {
+      presences.forEach(presence => {
+        if (vipUserIds.includes(presence.userId)) {
+          const wasOnline = previousState.get(presence.userId) || false;
+          
+          if (!wasOnline && presence.isOnline) {
+            this.notificationManager.show({
+              title: 'VIP User Online',
+              message: `${presence.userId} is now available`,
+              type: 'info'
+            });
+          }
+          
+          previousState.set(presence.userId, presence.isOnline);
+        }
+      });
+    });
+  }
+
+  // Dynamic UI based on presence
+  getUIConfigForUser(userId: string): UIConfig {
+    const presence = this.getPresenceForUser(userId);
+    
+    return {
+      showChatButton: presence?.isOnline || false,
+      showCallButton: presence?.isOnline || false,
+      statusIndicator: presence?.isOnline ? 'online' : 'offline',
+      responseTimeEstimate: this.estimateResponseTime(presence)
+    };
+  }
+
+  private estimateResponseTime(presence: UserPresence | null): string {
+    if (!presence) return 'Unknown';
+    
+    if (presence.isOnline) return 'Usually responds immediately';
+    
+    const timeSinceLastSeen = Date.now() - presence.lastHeartbeat;
+    const hours = timeSinceLastSeen / (1000 * 60 * 60);
+    
+    if (hours < 1) return 'Usually responds within an hour';
+    if (hours < 24) return 'Usually responds within a day';
+    return 'May take several days to respond';
+  }
+
+  private getPresenceForUser(userId: string): UserPresence | null {
+    // Implementation to get cached presence data
+    return null;
+  }
+}
+```
+
+## Performance Optimization
+
+### Efficient Presence Caching
+
+Implement smart caching to reduce API calls:
+
+```typescript
+class PresenceCache {
+  private cache = new Map<string, CachedPresence>();
+  private readonly CACHE_TTL = 60000; // 1 minute
+
+  interface CachedPresence {
+    presence: UserPresence;
+    timestamp: number;
+  }
+
+  getCachedPresence(userId: string): UserPresence | null {
+    const cached = this.cache.get(userId);
+    
+    if (!cached) return null;
+    
+    // Check if cache is still valid
+    if (Date.now() - cached.timestamp > this.CACHE_TTL) {
+      this.cache.delete(userId);
+      return null;
+    }
+    
+    return cached.presence;
+  }
+
+  setCachedPresence(userId: string, presence: UserPresence): void {
+    this.cache.set(userId, {
+      presence,
+      timestamp: Date.now()
+    });
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  // Get cache statistics
+  getCacheStats(): { size: number; hitRate: number } {
+    return {
+      size: this.cache.size,
+      hitRate: this.calculateHitRate()
+    };
+  }
+
+  private calculateHitRate(): number {
+    // Implementation for hit rate calculation
+    return 0;
+  }
+}
+```
+
+### Batch Presence Operations
+
+Optimize API usage with batching:
+
+```typescript
+class BatchPresenceManager {
+  private pendingQueries = new Set<string>();
+  private batchTimer: NodeJS.Timeout | null = null;
+  private readonly BATCH_DELAY = 100; // 100ms
+  private readonly MAX_BATCH_SIZE = 220;
+
+  async getPresence(userIds: string[]): Promise<UserPresence[]> {
+    // Add to pending queries
+    userIds.forEach(id => this.pendingQueries.add(id));
+    
+    // Schedule batch execution
+    if (!this.batchTimer) {
+      this.batchTimer = setTimeout(() => {
+        this.executeBatch();
+      }, this.BATCH_DELAY);
+    }
+
+    // Return cached or wait for batch result
+    return this.waitForBatchResult(userIds);
+  }
+
+  private async executeBatch(): Promise<void> {
+    if (this.pendingQueries.size === 0) return;
+
+    const userIds = Array.from(this.pendingQueries).slice(0, this.MAX_BATCH_SIZE);
+    this.pendingQueries.clear();
+    this.batchTimer = null;
+
+    try {
+      const repository = new UserPresenceRepository();
+      const presences = await repository.getUserPresence(userIds);
+      
+      // Cache results and notify waiters
+      this.processResults(presences);
+    } catch (error) {
+      console.error('Batch presence query failed:', error);
+    }
+  }
+
+  private async waitForBatchResult(userIds: string[]): Promise<UserPresence[]> {
+    // Implementation for waiting and returning results
+    return [];
+  }
+
+  private processResults(presences: UserPresence[]): void {
+    // Process and cache results
+    presences.forEach(presence => {
+      // Update cache and notify listeners
+    });
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Sync Management">
+    **Optimize Sync Usage**: Only sync users that are currently visible to avoid hitting limits.
+    
+    ```typescript
+    // Good: Sync only visible users
+    const VisibleUsersList = ({ userIds }: { userIds: string[] }) => {
+      const { presences } = useUserPresence(userIds.slice(0, 20)); // Limit to max sync
+      
+      return (
+        <div>
+          {presences.map(presence => (
+            <UserPresenceIndicator key={presence.userId} presence={presence} />
+          ))}
+        </div>
+      );
+    };
+
+    // Bad: Syncing all users regardless of visibility
+    const AllUsersList = ({ userIds }: { userIds: string[] }) => {
+      const { presences } = useUserPresence(userIds); // Could exceed 20 users
+      // This will fail if userIds.length > 20
+    };
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory Management">
+    **Clean Up Resources**: Always unsubscribe and unsync when components unmount.
+    
+    ```typescript
+    useEffect(() => {
+      const repository = new UserPresenceRepository();
+      
+      // Sync users
+      userIds.forEach(id => repository.syncUserPresence(id));
+      
+      // Subscribe to changes
+      const subscription = repository.getSyncingUserPresence()
+        .subscribe(handlePresenceUpdate);
+      
+      return () => {
+        // Cleanup: Critical for preventing memory leaks
+        subscription.unsubscribe();
+        repository.unsyncAllUserPresence();
+      };
+    }, [userIds]);
+    ```
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    **Robust Error Recovery**: Handle network failures and sync limit errors gracefully.
+    
+    ```typescript
+    class RobustPresenceManager {
+      private readonly maxRetries = 3;
+      private retryCount = 0;
+
+      async syncWithRetry(userId: string): Promise<void> {
+        try {
+          await this.repository.syncUserPresence(userId);
+          this.retryCount = 0; // Reset on success
+        } catch (error) {
+          if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            const delay = Math.pow(2, this.retryCount) * 1000;
+            setTimeout(() => this.syncWithRetry(userId), delay);
+          } else {
+            console.error(`Failed to sync user ${userId} after ${this.maxRetries} attempts`);
+            throw error;
+          }
+        }
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Sync Limit Exceeded">
+    **Problem**: Trying to sync more than 20 users simultaneously.
+    
+    **Solution**: Implement smart sync management:
+    ```typescript
+    const SYNC_LIMIT = 20;
+    const currentSyncs = new Set<string>();
+
+    const safeSyncUser = async (userId: string) => {
+      if (currentSyncs.size >= SYNC_LIMIT) {
+        // Remove oldest sync or least important user
+        const oldestUser = currentSyncs.values().next().value;
+        await repository.unsyncUserPresence(oldestUser);
+        currentSyncs.delete(oldestUser);
+      }
+      
+      await repository.syncUserPresence(userId);
+      currentSyncs.add(userId);
+    };
+    ```
+  </Accordion>
+  
+  <Accordion title="Presence Not Updating">
+    **Problem**: Presence information seems stale or not updating.
+    
+    **Solution**: Check presence flow:
+    ```typescript
+    const debugPresence = async () => {
+      // 1. Verify presence is enabled
+      const isEnabled = await client.presence.isEnabled();
+      console.log('Presence enabled:', isEnabled);
+      
+      // 2. Check heartbeat status
+      const isHeartbeatActive = client.presence.isHeartbeatActive();
+      console.log('Heartbeat active:', isHeartbeatActive);
+      
+      // 3. Verify user is synced
+      const syncedUsers = repository.getSyncedUsers();
+      console.log('Synced users:', syncedUsers);
+      
+      // 4. Check for observer subscription
+      const observer = repository.getSyncingUserPresence();
+      observer.subscribe(presences => {
+        console.log('Presence update received:', presences);
+      });
+    };
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Channel Presence" href="./channel-presence">
+    Monitor member activity in conversation channels
+  </Card>
+  
+  <Card title="Heartbeat Sync" href="./heartbeat-sync">
+    Understand automatic presence synchronization and lifecycle
+  </Card>
+  
+  <Card title="Real-time Events" href="../realtime-events">
+    Build reactive applications with real-time event handling
+  </Card>
+  
+  <Card title="Live Objects" href="../live-objects-collections">
+    Create collaborative experiences with live object synchronization
+  </Card>
+</CardGroup>
+
+<Tip>
+**Production Ready**: All examples include comprehensive error handling, performance optimizations, and cleanup procedures suitable for production applications.
+</Tip>

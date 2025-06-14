@@ -1,294 +1,1421 @@
-# File Handling
+---
+description: "Comprehensive guide to file handling in Social+ SDK with upload, download, and management capabilities"
+---
 
-Files are an essential component of modern software applications. Social Plus provides a powerful file management system that enables you to easily handle different types of files, such as document files, videos, and audio files. In this section, we will introduce you to the concept of a file in Social Plus and provide an overview of file handling in Social Plus.
+# File Management
 
-<Info>Note: The maximum file size limits are up to 1 GB per post.</Info>
+Social+ provides a robust file management system that enables seamless handling of various file types including documents, media files, and attachments. This guide covers comprehensive file operations with practical examples across all supported platforms.
 
-## File Data
+<Note>
+**File Size Limits**: Maximum file size is 1 GB per upload. Larger files should be chunked or compressed before upload.
+</Note>
 
-| Property     | Description                       |
-| ------------ | --------------------------------- |
-| `fileId`     | Root file key on cloud storage    |
-| `fileUrl`    | HTTP link for file download       |
-| `type`       | File type                         |
-| `createdAt`  | Date/time when a file is uploaded |
-| `updatedAt`  | Date/time when a file is updated  |
-| `attributes` | Information about the file        |
+## Overview
 
-## Upload Files
+The Social+ file system provides:
+- **Secure file uploads** with progress tracking
+- **Cloud-based storage** with global CDN distribution  
+- **File metadata management** with custom attributes
+- **Automatic file optimization** and format conversion
+- **Real-time upload progress** and status monitoring
+- **Cross-platform compatibility** with consistent APIs
 
-To upload a file to the system, you can use the Social Plus File Upload API provided by the SDK. The API allows you to upload a file to the Social Plus server by giving the file's data and the file metadata, such as the file name, file type, and file size. The SDK simplifies the process of uploading files by providing pre-built components that you can easily integrate into your application.
+## Quick Start
 
-<Tabs>
-<Tab title="iOS">
-<Frame>
-```swift
-let fileData = "file_data".data(using: .utf8)!
-let file = AmityFile(fileData: fileData, attributes: nil)
-AmityFileRepository().uploadFile(file) { (progress, file, error) in
-    if let error = error {
-        print("Error uploading file: \(error)")
-        return
+<CodeGroup>
+
+```typescript React/Next.js
+import { FileRepository } from '@amityco/js-sdk';
+
+// Upload a file
+const uploadFile = async (file: File) => {
+  const { data: uploadedFile } = await FileRepository.createFile(file);
+  return uploadedFile;
+};
+
+// Retrieve a file
+const getFile = async (fileId: string) => {
+  const { data: file } = await FileRepository.getFile(fileId);
+  return file;
+};
+```
+
+```swift iOS
+import AmitySDK
+
+// Upload a file
+func uploadFile(data: Data, name: String) {
+    let file = AmityFile(fileData: data, attributes: ["name": name])
+    AmityFileRepository().uploadFile(file) { progress, file, error in
+        if let file = file {
+            print("File uploaded: \(file.fileId)")
+        }
     }
-    
-    if let file = file {
-        print("File uploaded successfully: \(file)")
+}
+
+// Retrieve a file
+func getFile(fileId: String) {
+    AmityFileRepository().getFile(withFileId: fileId) { file, error in
+        if let file = file {
+            print("File retrieved: \(file.fileUrl)")
+        }
     }
 }
 ```
-</Frame>
+
+```kotlin Android
+import com.amity.socialcloud.sdk.core.file.AmityFileRepository
+
+// Upload a file
+val fileRepository = AmityFileRepository(amityClient)
+val file = File("path/to/file")
+
+fileRepository.uploadFile(file)
+    .subscribe { uploadedFile ->
+        println("File uploaded: ${uploadedFile.getFileId()}")
+    }
+
+// Retrieve a file
+fileRepository.getFile(fileId)
+    .subscribe { file ->
+        println("File retrieved: ${file.getFileUrl()}")
+    }
+```
+
+```dart Flutter
+import 'package:amity_sdk/amity_sdk.dart';
+
+// Upload a file
+Future<AmityFile> uploadFile(File file) async {
+  final result = await AmitySocialClient.newFileRepository()
+      .uploadFile(file);
+  return result;
+}
+
+// Retrieve a file
+Future<AmityFile> getFile(String fileId) async {
+  final file = await AmitySocialClient.newFileRepository()
+      .getFile(fileId);
+  return file;
+}
+```
+
+</CodeGroup>
+
+## File Properties
+
+The file object contains the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `fileId` | `string` | Unique identifier for the file |
+| `fileUrl` | `string` | Direct download URL for the file |
+| `filename` | `string` | Original filename with extension |
+| `type` | `string` | MIME type of the file |
+| `size` | `number` | File size in bytes |
+| `createdAt` | `Date` | Upload timestamp |
+| `updatedAt` | `Date` | Last modification timestamp |
+| `attributes` | `object` | Custom metadata and file information |
+| `isUploaded` | `boolean` | Upload completion status |
+
+### File Attributes Structure
+
+The `attributes` object provides detailed file information:
+
+```json
+{
+  "name": "document.pdf",
+  "extension": "pdf",
+  "size": 2048576,
+  "mimeType": "application/pdf",
+  "metadata": {
+    "duration": 120, // For video/audio files
+    "dimensions": {  // For image files
+      "width": 1920,
+      "height": 1080
+    }
+  }
+}
+```
+
+## File Upload
+
+Upload files to Social+ with progress tracking and error handling. The SDK provides optimized upload with automatic retry and resumable uploads for large files.
+
+### Basic Upload
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+import { FileRepository, LoadingStatus } from '@amityco/js-sdk';
+
+// Simple upload
+const uploadFile = async (file: File) => {
+  try {
+    const { data: uploadedFile } = await FileRepository.createFile(file);
+    console.log('File uploaded:', uploadedFile);
+    return uploadedFile;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+};
+
+// Upload with progress tracking
+const uploadWithProgress = (file: File) => {
+  const liveObject = FileRepository.createFile({ 
+    file,
+    onProgress: ({ currentFile, currentPercent }) => {
+      console.log(`Upload progress: ${currentPercent}%`);
+    }
+  });
+
+  liveObject.on('loadingStatusChanged', ({ newValue }) => {
+    if (newValue === LoadingStatus.Loaded) {
+      console.log('Upload completed:', liveObject.model);
+    }
+  });
+
+  liveObject.on('dataError', (error) => {
+    console.error('Upload error:', error);
+  });
+
+  return liveObject;
+};
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class FileUploadManager {
+    private let fileRepository = AmityFileRepository()
+    
+    func uploadFile(data: Data, filename: String, attributes: [String: Any]? = nil) {
+        let file = AmityFile(fileData: data, attributes: attributes)
+        
+        fileRepository.uploadFile(file) { [weak self] progress, uploadedFile, error in
+            if let error = error {
+                print("Upload error: \(error.localizedDescription)")
+                return
+            }
+            
+            if let uploadedFile = uploadedFile {
+                print("File uploaded successfully:")
+                print("File ID: \(uploadedFile.fileId)")
+                print("File URL: \(uploadedFile.fileUrl)")
+                print("File size: \(uploadedFile.attributes?["size"] ?? 0)")
+            }
+            
+            if let progress = progress {
+                DispatchQueue.main.async {
+                    // Update progress UI
+                    print("Upload progress: \(progress * 100)%")
+                }
+            }
+        }
+    }
+    
+    func uploadImage(image: UIImage, filename: String) {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("Failed to convert image to data")
+            return
+        }
+        
+        let attributes = [
+            "name": filename,
+            "type": "image",
+            "mimeType": "image/jpeg"
+        ]
+        
+        uploadFile(data: imageData, filename: filename, attributes: attributes)
+    }
+}
+```
 </Tab>
 
 <Tab title="Android">
-<Frame>
 ```kotlin
-val file = File("path/to/file")
-val fileRepository = AmityFileRepository(client)
-fileRepository.uploadFile(file).subscribe { file ->
-    // Handle the uploaded file
-}
-```
-</Frame>
+import com.amity.socialcloud.sdk.core.file.AmityFileRepository
+import com.amity.socialcloud.sdk.core.file.upload.AmityUploadState
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
 
-On Android, you can separately observe uploading states outside of the uploading method by using:
-
-<Frame>
-```kotlin
-fileRepository.getUploadInfo(fileId).subscribe { uploadInfo ->
-    when (uploadInfo.getState()) {
-        State.UPLOADING -> {
-            val progress = uploadInfo.getProgress()
-            // Handle upload progress
-        }
-        State.COMPLETED -> {
-            // Handle upload completion
-        }
-        State.FAILED -> {
-            val error = uploadInfo.getError()
-            // Handle upload failure
-        }
+class FileUploadManager(private val client: AmityClient) {
+    private val fileRepository = AmityFileRepository(client)
+    
+    fun uploadFile(file: File, onProgress: (Int) -> Unit = {}) {
+        fileRepository.uploadFile(file)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ uploadedFile ->
+                println("File uploaded successfully:")
+                println("File ID: ${uploadedFile.getFileId()}")
+                println("File URL: ${uploadedFile.getFileUrl()}")
+                
+                // Handle success
+                onUploadSuccess(uploadedFile)
+            }, { error ->
+                println("Upload failed: ${error.message}")
+                onUploadError(error)
+            })
+    }
+    
+    fun uploadFileWithProgress(file: File, fileId: String) {
+        // Monitor upload progress separately
+        fileRepository.getUploadInfo(fileId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { uploadInfo ->
+                when (uploadInfo.getState()) {
+                    AmityUploadState.UPLOADING -> {
+                        val progress = uploadInfo.getProgress()
+                        println("Upload progress: ${progress}%")
+                        // Update progress UI
+                    }
+                    AmityUploadState.COMPLETED -> {
+                        println("Upload completed successfully")
+                    }
+                    AmityUploadState.FAILED -> {
+                        val error = uploadInfo.getError()
+                        println("Upload failed: ${error?.message}")
+                    }
+                    else -> {
+                        // Handle other states
+                    }
+                }
+            }
+    }
+    
+    private fun onUploadSuccess(file: AmityFile) {
+        // Handle successful upload
+    }
+    
+    private fun onUploadError(error: Throwable) {
+        // Handle upload error
     }
 }
 ```
-</Frame>
-</Tab>
-
-<Tab title="JavaScript">
-```javascript
-import { FileRepository, LoadingStatus } from '@amityco/js-sdk';
-
-const liveObject = FileRepository.createFile({ 
-  file, // https://developer.mozilla.org/en-US/docs/Web/API/File
-  onProgress: ({ currentFile, currentPercent }) => {
-  },
-});
-
-liveObject.on('loadingStatusChanged', ({ newValue }) => {
-  if (newValue === LoadingStatus.Loaded) {
-    console.log('The file is uploaded', liveObject.model);
-  }
-});
-
-liveObject.on('dataError', (error) => {
-  console.error('can not upload the file', error);
-});
-
-// upload video
-const liveObject = FileRepository.createVideo({ 
-  file,
-  onProgress: ({ currentFile, currentPercent }) => {
-  },
-});
-Refer to the 
-file model
- for the description of the response after a successful file creation. If an error is encountered while creating the file, it will return the following errors:
-//Attached file payload is too large
-{
-  "status": "error",
-  "code": 500000,
-  "message": "Payload too large."
-}
-
-// Unexpected error
-{
-  "status": "error",
-  "code": 500000,
-  "message": "Unexpected error"
-}
-```
-</Tab>
-
-<Tab title="TypeScript">
-**Version 6 and Beta(v0.0.1)**
-
-<Frame>
-```typescript
-import { FileRepository } from '@amityco/js-sdk';
-
-const file = new File([''], 'filename');
-const { data: fileUpload } = await FileRepository.createFile(file);
-```
-</Frame>
 </Tab>
 
 <Tab title="Flutter">
-<Frame>
 ```dart
-final file = File('path/to/file');
-final result = await AmityFileRepository().uploadFile(file);
-```
-</Frame>
-</Tab>
-</Tabs>
+import 'package:amity_sdk/amity_sdk.dart';
+import 'dart:io';
 
-## Retrieve Files
-
-You can retrieve a file from Social Plus using the Social Plus File Retrieval API provided by the SDK. The API enables you to retrieve a file from the Social Plus server by supplying the file ID. The SDK streamlines the process of retrieving files by offering pre-made components that can be smoothly integrated into your app.
-
-<Tabs>
-<Tab title="iOS">
-<Frame>
-```swift
-AmityFileRepository().getFile(withFileId: "fileId") { (file, error) in
-    if let error = error {
-        print("Error retrieving file: \(error)")
-        return
+class FileUploadManager {
+  final AmityFileRepository _fileRepository = AmitySocialClient.newFileRepository();
+  
+  Future<AmityFile?> uploadFile(File file) async {
+    try {
+      final result = await _fileRepository.uploadFile(file);
+      print('File uploaded successfully: ${result.fileId}');
+      return result;
+    } catch (error) {
+      print('Upload failed: $error');
+      return null;
     }
-    
-    if let file = file {
-        print("File retrieved successfully: \(file)")
-    }
-}
-```
-</Frame>
-</Tab>
-
-<Tab title="Android">
-<Frame>
-```kotlin
-val fileRepository = AmityFileRepository(client)
-fileRepository.getFile(fileId).subscribe { file ->
-    // Handle the retrieved file
-}
-```
-</Frame>
-</Tab>
-
-<Tab title="JavaScript">
-```javascript
-import { FileRepository } from '@amityco/js-sdk';
-
-let file;
-const liveObject = FileRepository.getFile(fileId);
-
-liveObject.on('dataUpdated', (updatedModel) => {
-  file = updatedModel;
-});
-
-liveObject.on('dataError', (error) => {
-  console.error('Can not get the file', error);
-});
-
-file = liveObject.model;
-```
-</Tab>
-
-<Tab title="TypeScript">
-<Frame>
-```typescript
-import { FileRepository } from '@amityco/js-sdk';
-
-const { data: file } = await FileRepository.getFile(fileId);
-```
-</Frame>
-</Tab>
-</Tabs>
-
-## Delete Files
-
-In addition to uploading and retrieving files, Social Plus provides a deleting function to delete a file that is no longer needed.
-
-<Tabs>
-<Tab title="iOS">
-<Frame>
-```swift
-AmityFileRepository().deleteFile(withFileId: "fileId") { (success, error) in
-    if let error = error {
-        print("Error deleting file: \(error)")
-        return
-    }
-    
-    if success {
-        print("File deleted successfully")
-    }
-}
-```
-</Frame>
-</Tab>
-
-<Tab title="Android">
-<Frame>
-```kotlin
-val fileRepository = AmityFileRepository(client)
-fileRepository.deleteFile(fileId).subscribe { success ->
-    // Handle the deletion result
-}
-```
-</Frame>
-</Tab>
-
-<Tab title="JavaScript">
-```javascript
-import { FileRepository } from '@amityco/js-sdk';
-
-const success = await FileRepository.deleteFile(fileId);
-```
-
-The response will return `true` if the file deletion is successful.
-</Tab>
-
-<Tab title="TypeScript">
-**Version 6 and Beta(v0.0.1)**
-
-<Frame>
-```typescript
-import { FileRepository } from '@amityco/js-sdk';
-
-const { data } = await FileRepository.deleteFile(fileId);
-```
-</Frame>
-
-The response will return `true` if the file deletion is successful.
-
-```typescript
-"data": {
-    "success": true
   }
-```
-
-Otherwise, if an error is encountered during the deletion, it will return the following errors:
-
-```typescript
-//Permission denied error
-{
-  "status": "error",
-  "code": 400301,
-  "message": "Permission denied"
-}
-
-Resource Not Found error
-{
-  "status": "error",
-  "code": 400400,
-  "message": "Resource Not Found."
-}
-
-//Passed the wrong parameters error
-{
-  "status": "error",
-  "code": 500000,
-  "message": "Parameters error."
+  
+  Future<AmityFile?> uploadFileWithMetadata(File file, Map<String, dynamic> metadata) async {
+    try {
+      // Create file with custom attributes
+      final attributes = {
+        'name': file.path.split('/').last,
+        'size': await file.length(),
+        'type': file.path.split('.').last,
+        'metadata': metadata,
+      };
+      
+      final result = await _fileRepository.uploadFile(file, attributes: attributes);
+      print('File uploaded with metadata: ${result.fileId}');
+      return result;
+    } catch (error) {
+      print('Upload with metadata failed: $error');
+      return null;
+    }
+  }
+  
+  Stream<double> uploadWithProgress(File file) async* {
+    // Note: Progress tracking implementation depends on SDK version
+    try {
+      final result = await uploadFile(file);
+      if (result != null) {
+        yield 1.0; // 100% complete
+      }
+    } catch (error) {
+      yield 0.0; // Failed
+    }
+  }
 }
 ```
 </Tab>
 </Tabs>
+
+### Advanced Upload Options
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+// Upload with custom attributes
+const uploadWithAttributes = async (file: File, attributes: Record<string, any>) => {
+  const fileWithAttributes = new File([file], file.name, {
+    type: file.type,
+    lastModified: file.lastModified
+  });
+  
+  // Add custom attributes to file object
+  (fileWithAttributes as any).attributes = attributes;
+  
+  const { data } = await FileRepository.createFile(fileWithAttributes);
+  return data;
+};
+
+// Upload multiple files
+const uploadMultipleFiles = async (files: File[]) => {
+  const uploadPromises = files.map file => FileRepository.createFile(file));
+  const results = await Promise.allSettled(uploadPromises);
+  
+  return results.map((result, index) => ({
+    file: files[index],
+    success: result.status === 'fulfilled',
+    data: result.status === 'fulfilled' ? result.value.data : null,
+    error: result.status === 'rejected' ? result.reason : null
+  }));
+};
+
+// Upload with retry logic
+const uploadWithRetry = async (file: File, maxRetries: number = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { data } = await FileRepository.createFile(file);
+      return data;
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+};
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+// Upload with custom attributes
+func uploadFileWithAttributes(data: Data, filename: String, customAttributes: [String: Any]) {
+    var attributes = customAttributes
+    attributes["name"] = filename
+    attributes["uploadTime"] = ISO8601DateFormatter().string(from: Date())
+    
+    let file = AmityFile(fileData: data, attributes: attributes)
+    
+    fileRepository.uploadFile(file) { progress, uploadedFile, error in
+        // Handle upload result
+    }
+}
+
+// Batch upload multiple files
+func uploadMultipleFiles(files: [(data: Data, name: String)], completion: @escaping ([AmityFile]?, Error?) -> Void) {
+    let dispatchGroup = DispatchGroup()
+    var uploadedFiles: [AmityFile] = []
+    var uploadError: Error?
+    
+    for fileData in files {
+        dispatchGroup.enter()
+        
+        let file = AmityFile(fileData: fileData.data, attributes: ["name": fileData.name])
+        fileRepository.uploadFile(file) { _, uploadedFile, error in
+            defer { dispatchGroup.leave() }
+            
+            if let error = error {
+                uploadError = error
+                return
+            }
+            
+            if let uploadedFile = uploadedFile {
+                uploadedFiles.append(uploadedFile)
+            }
+        }
+    }
+    
+    dispatchGroup.notify(queue: .main) {
+        if let error = uploadError {
+            completion(nil, error)
+        } else {
+            completion(uploadedFiles, nil)
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## File Retrieval
+
+Retrieve uploaded files using their unique file ID. The SDK provides efficient caching and optimized delivery through CDN.
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+import { FileRepository } from '@amityco/js-sdk';
+
+// Get a single file
+const getFile = async (fileId: string) => {
+  try {
+    const { data: file } = await FileRepository.getFile(fileId);
+    return file;
+  } catch (error) {
+    console.error('Failed to retrieve file:', error);
+    throw error;
+  }
+};
+
+// Get file with live updates
+const getFileWithLiveUpdates = (fileId: string) => {
+  const liveObject = FileRepository.getFile(fileId);
+  
+  liveObject.on('dataUpdated', (updatedFile) => {
+    console.log('File updated:', updatedFile);
+    // Handle file updates
+  });
+  
+  liveObject.on('dataError', (error) => {
+    console.error('Error fetching file:', error);
+  });
+  
+  return liveObject.model; // Current file data
+};
+
+// Download file as blob
+const downloadFile = async (fileUrl: string, filename: string) => {
+  try {
+    const response = await fetch(fileUrl);
+    const blob = await response.blob();
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error('Download failed:', error);
+  }
+};
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class FileRetrievalManager {
+    private let fileRepository = AmityFileRepository()
+    
+    func getFile(fileId: String, completion: @escaping (AmityFile?, Error?) -> Void) {
+        fileRepository.getFile(withFileId: fileId) { file, error in
+            DispatchQueue.main.async {
+                completion(file, error)
+            }
+        }
+    }
+    
+    func downloadFileData(from fileUrl: String, completion: @escaping (Data?, Error?) -> Void) {
+        guard let url = URL(string: fileUrl) else {
+            completion(nil, NSError(domain: "InvalidURL", code: 0, userInfo: nil))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                completion(data, error)
+            }
+        }.resume()
+    }
+    
+    func getFileWithCaching(fileId: String) -> AmityObject<AmityFile> {
+        return fileRepository.getFile(fileId)
+    }
+    
+    // Download and save to device
+    func downloadAndSaveFile(fileUrl: String, filename: String, completion: @escaping (URL?, Error?) -> Void) {
+        guard let url = URL(string: fileUrl) else {
+            completion(nil, NSError(domain: "InvalidURL", code: 0, userInfo: nil))
+            return
+        }
+        
+        let downloadTask = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
+            guard let tempURL = tempURL, error == nil else {
+                DispatchQueue.main.async {
+                    completion(nil, error)
+                }
+                return
+            }
+            
+            // Save to Documents directory
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let savedURL = documentsURL.appendingPathComponent(filename)
+            
+            do {
+                if FileManager.default.fileExists(atPath: savedURL.path) {
+                    try FileManager.default.removeItem(at: savedURL)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: savedURL)
+                
+                DispatchQueue.main.async {
+                    completion(savedURL, nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(nil, error)
+                }
+            }
+        }
+        
+        downloadTask.resume()
+    }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.core.file.AmityFileRepository
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+class FileRetrievalManager(private val client: AmityClient) {
+    private val fileRepository = AmityFileRepository(client)
+    
+    fun getFile(fileId: String, callback: (AmityFile?, Throwable?) -> Unit) {
+        fileRepository.getFile(fileId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ file ->
+                callback(file, null)
+            }, { error ->
+                callback(null, error)
+            })
+    }
+    
+    fun getFileAsLiveData(fileId: String): LiveData<AmityFile> {
+        return fileRepository.getFile(fileId).asLiveData()
+    }
+    
+    fun downloadFile(fileUrl: String, context: Context, filename: String) {
+        val request = DownloadManager.Request(Uri.parse(fileUrl))
+            .setTitle("Downloading $filename")
+            .setDescription("Downloading file...")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+        
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        downloadManager.enqueue(request)
+    }
+    
+    fun getFileMetadata(fileId: String): Single<Map<String, Any>> {
+        return fileRepository.getFile(fileId)
+            .map { file ->
+                mapOf(
+                    "id" to file.getFileId(),
+                    "url" to file.getFileUrl(),
+                    "size" to (file.getAttributes()["size"] ?: 0),
+                    "type" to (file.getAttributes()["mimeType"] ?: "unknown"),
+                    "name" to (file.getAttributes()["name"] ?: "unknown")
+                )
+            }
+    }
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+
+class FileRetrievalManager {
+  final AmityFileRepository _fileRepository = AmitySocialClient.newFileRepository();
+  
+  Future<AmityFile?> getFile(String fileId) async {
+    try {
+      final file = await _fileRepository.getFile(fileId);
+      return file;
+    } catch (error) {
+      print('Failed to retrieve file: $error');
+      return null;
+    }
+  }
+  
+  Future<File?> downloadFile(String fileUrl, String filename) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$filename';
+      
+      final dio = Dio();
+      await dio.download(fileUrl, filePath);
+      
+      return File(filePath);
+    } catch (error) {
+      print('Download failed: $error');
+      return null;
+    }
+  }
+  
+  Future<File?> downloadFileWithProgress(
+    String fileUrl, 
+    String filename,
+    Function(double)? onProgress
+  ) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$filename';
+      
+      final dio = Dio();
+      await dio.download(
+        fileUrl, 
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1 && onProgress != null) {
+            final progress = received / total;
+            onProgress(progress);
+          }
+        }
+      );
+      
+      return File(filePath);
+    } catch (error) {
+      print('Download with progress failed: $error');
+      return null;
+    }
+  }
+  
+  Stream<AmityFile> getFileStream(String fileId) async* {
+    try {
+      final file = await getFile(fileId);
+      if (file != null) {
+        yield file;
+      }
+    } catch (error) {
+      print('File stream error: $error');
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## File Deletion
+
+Remove files from Social+ storage when they're no longer needed. Deletion is permanent and cannot be undone.
+
+<Warning>
+**Permanent Action**: File deletion cannot be undone. Ensure you have proper confirmation flows in your application before allowing users to delete files.
+</Warning>
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+import { FileRepository } from '@amityco/js-sdk';
+
+// Delete a single file
+const deleteFile = async (fileId: string) => {
+  try {
+    const { data } = await FileRepository.deleteFile(fileId);
+    if (data.success) {
+      console.log('File deleted successfully');
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Failed to delete file:', error);
+    throw error;
+  }
+};
+
+// Delete multiple files
+const deleteMultipleFiles = async (fileIds: string[]) => {
+  const results = await Promise.allSettled(
+    fileIds.map(id => FileRepository.deleteFile(id))
+  );
+  
+  return results.map((result, index) => ({
+    fileId: fileIds[index],
+    success: result.status === 'fulfilled' && result.value.data.success,
+    error: result.status === 'rejected' ? result.reason : null
+  }));
+};
+
+// Safe delete with confirmation
+const safeDeleteFile = async (fileId: string, confirmationText: string) => {
+  if (confirmationText !== 'DELETE') {
+    throw new Error('Invalid confirmation text');
+  }
+  
+  return await deleteFile(fileId);
+};
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class FileDeletionManager {
+    private let fileRepository = AmityFileRepository()
+    
+    func deleteFile(fileId: String, completion: @escaping (Bool, Error?) -> Void) {
+        fileRepository.deleteFile(withFileId: fileId) { success, error in
+            DispatchQueue.main.async {
+                completion(success, error)
+            }
+        }
+    }
+    
+    func deleteMultipleFiles(fileIds: [String], completion: @escaping ([String: Bool], [Error]) -> Void) {
+        let dispatchGroup = DispatchGroup()
+        var results: [String: Bool] = [:]
+        var errors: [Error] = []
+        
+        for fileId in fileIds {
+            dispatchGroup.enter()
+            
+            deleteFile(fileId: fileId) { success, error in
+                defer { dispatchGroup.leave() }
+                
+                results[fileId] = success
+                if let error = error {
+                    errors.append(error)
+                }
+            }
+        }
+        
+        dispatchGroup.notify(queue: .main) {
+            completion(results, errors)
+        }
+    }
+    
+    func safeDeleteFile(fileId: String, confirmationCallback: @escaping () -> Bool, completion: @escaping (Bool, Error?) -> Void) {
+        // Show confirmation dialog
+        DispatchQueue.main.async {
+            let confirmed = confirmationCallback()
+            if confirmed {
+                self.deleteFile(fileId: fileId, completion: completion)
+            } else {
+                completion(false, NSError(domain: "UserCancelled", code: 0, userInfo: [NSLocalizedDescriptionKey: "User cancelled deletion"]))
+            }
+        }
+    }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.core.file.AmityFileRepository
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+class FileDeletionManager(private val client: AmityClient) {
+    private val fileRepository = AmityFileRepository(client)
+    
+    fun deleteFile(fileId: String, callback: (Boolean, Throwable?) -> Unit) {
+        fileRepository.deleteFile(fileId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ success ->
+                callback(success, null)
+            }, { error ->
+                callback(false, error)
+            })
+    }
+    
+    fun deleteMultipleFiles(
+        fileIds: List<String>, 
+        callback: (Map<String, Boolean>, List<Throwable>) -> Unit
+    ) {
+        val results = mutableMapOf<String, Boolean>()
+        val errors = mutableListOf<Throwable>()
+        val completedCount = AtomicInteger(0)
+        
+        fileIds.forEach { fileId ->
+            deleteFile(fileId) { success, error ->
+                results[fileId] = success
+                error?.let { errors.add(it) }
+                
+                if (completedCount.incrementAndGet() == fileIds.size) {
+                    callback(results, errors)
+                }
+            }
+        }
+    }
+    
+    fun deleteFileWithConfirmation(
+        fileId: String,
+        context: Context,
+        callback: (Boolean, Throwable?) -> Unit
+    ) {
+        AlertDialog.Builder(context)
+            .setTitle("Delete File")
+            .setMessage("Are you sure you want to delete this file? This action cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                deleteFile(fileId, callback)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                callback(false, Exception("User cancelled deletion"))
+            }
+            .show()
+    }
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+import 'package:flutter/material.dart';
+
+class FileDeletionManager {
+  final AmityFileRepository _fileRepository = AmitySocialClient.newFileRepository();
+  
+  Future<bool> deleteFile(String fileId) async {
+    try {
+      final result = await _fileRepository.deleteFile(fileId);
+      return result;
+    } catch (error) {
+      print('Failed to delete file: $error');
+      return false;
+    }
+  }
+  
+  Future<Map<String, bool>> deleteMultipleFiles(List<String> fileIds) async {
+    final Map<String, bool> results = {};
+    
+    for (String fileId in fileIds) {
+      try {
+        final success = await deleteFile(fileId);
+        results[fileId] = success;
+      } catch (error) {
+        results[fileId] = false;
+        print('Failed to delete file $fileId: $error');
+      }
+    }
+    
+    return results;
+  }
+  
+  Future<bool> safeDeleteFile(
+    String fileId, 
+    BuildContext context, {
+    String title = 'Delete File',
+    String message = 'Are you sure you want to delete this file? This action cannot be undone.'
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (confirmed == true) {
+      return await deleteFile(fileId);
+    }
+    
+    return false;
+  }
+}
+```
+</Tab>
+</Tabs>
+
+### Error Handling
+
+Common deletion errors and how to handle them:
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+const handleDeletionError = (error: any) => {
+  switch (error.code) {
+    case 400301:
+      console.error('Permission denied - user cannot delete this file');
+      break;
+    case 400400:
+      console.error('File not found - file may have been already deleted');
+      break;
+    case 500000:
+      console.error('Server error - please try again later');
+      break;
+    default:
+      console.error('Unknown error:', error.message);
+  }
+};
+
+// Usage
+try {
+  await deleteFile(fileId);
+} catch (error) {
+  handleDeletionError(error);
+}
+```
+</Tab>
+</Tabs>
+
+## Best Practices
+
+### File Size and Performance
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+// Check file size before upload
+const validateFileSize = (file: File, maxSizeMB: number = 100) => {
+  const fileSizeMB = file.size / (1024 * 1024);
+  if (fileSizeMB > maxSizeMB) {
+    throw new Error(`File too large: ${fileSizeMB.toFixed(2)}MB. Maximum allowed: ${maxSizeMB}MB`);
+  }
+  return true;
+};
+
+// Compress large files before upload
+const compressFile = async (file: File, quality: number = 0.8): Promise<File> => {
+  if (!file.type.startsWith('image/')) {
+    return file; // Only compress images
+  }
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  const img = new Image();
+  
+  return new Promise((resolve) => {
+    img.onload = () => {
+      // Calculate new dimensions
+      const maxWidth = 1920;
+      const maxHeight = 1080;
+      let { width, height } = img;
+      
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width *= ratio;
+        height *= ratio;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(resolve, file.type, quality);
+    };
+    
+    img.src = URL.createObjectURL(file);
+  }) as Promise<File>;
+};
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+// File validation
+extension FileUploadManager {
+    func validateFile(data: Data, maxSizeMB: Double = 100) throws {
+        let fileSizeMB = Double(data.count) / (1024 * 1024)
+        guard fileSizeMB <= maxSizeMB else {
+            throw NSError(domain: "FileTooLarge", code: 413, userInfo: [
+                NSLocalizedDescriptionKey: "File size \(String(format: "%.2f", fileSizeMB))MB exceeds maximum \(maxSizeMB)MB"
+            ])
+        }
+    }
+    
+    func compressImage(_ image: UIImage, quality: CGFloat = 0.8) -> Data? {
+        return image.jpegData(compressionQuality: quality)
+    }
+    
+    func resizeImage(_ image: UIImage, maxWidth: CGFloat = 1920, maxHeight: CGFloat = 1080) -> UIImage {
+        let size = image.size
+        guard size.width > maxWidth || size.height > maxHeight else {
+            return image
+        }
+        
+        let ratio = min(maxWidth / size.width, maxHeight / size.height)
+        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        
+        return resizedImage ?? image
+    }
+}
+```
+</Tab>
+</Tabs>
+
+### Error Handling and Retry Logic
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+class FileManager {
+  private readonly MAX_RETRIES = 3;
+  private readonly RETRY_DELAY = 1000;
+  
+  async uploadWithRetry(file: File, attempt: number = 1): Promise<any> {
+    try {
+      return await FileRepository.createFile(file);
+    } catch (error: any) {
+      if (attempt >= this.MAX_RETRIES) {
+        throw new Error(`Upload failed after ${this.MAX_RETRIES} attempts: ${error.message}`);
+      }
+      
+      // Exponential backoff
+      await this.delay(this.RETRY_DELAY * Math.pow(2, attempt - 1));
+      return this.uploadWithRetry(file, attempt + 1);
+    }
+  }
+  
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  handleUploadError(error: any): string {
+    const errorMessages: Record<string, string> = {
+      '500000': 'File too large or server error',
+      '400301': 'Permission denied',
+      '400400': 'File not found',
+      'NETWORK_ERROR': 'Network connection failed',
+      'TIMEOUT': 'Upload timed out'
+    };
+    
+    return errorMessages[error.code] || error.message || 'Unknown error';
+  }
+}
+```
+</Tab>
+
+<Tab title="iOS">
+```swift
+enum FileError: Error, LocalizedError {
+    case fileTooLarge(size: Double)
+    case invalidFileType(type: String)
+    case networkError
+    case permissionDenied
+    case unknownError(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .fileTooLarge(let size):
+            return "File size \(String(format: "%.2f", size))MB exceeds maximum limit"
+        case .invalidFileType(let type):
+            return "File type '\(type)' is not supported"
+        case .networkError:
+            return "Network connection failed"
+        case .permissionDenied:
+            return "Permission denied"
+        case .unknownError(let message):
+            return message
+        }
+    }
+}
+
+extension FileUploadManager {
+    func uploadWithRetry(data: Data, filename: String, maxRetries: Int = 3) {
+        uploadWithRetryRecursive(data: data, filename: filename, attempt: 1, maxRetries: maxRetries)
+    }
+    
+    private func uploadWithRetryRecursive(data: Data, filename: String, attempt: Int, maxRetries: Int) {
+        let file = AmityFile(fileData: data, attributes: ["name": filename])
+        
+        fileRepository.uploadFile(file) { [weak self] progress, uploadedFile, error in
+            if let error = error {
+                if attempt < maxRetries {
+                    // Retry with exponential backoff
+                    let delay = pow(2.0, Double(attempt)) * 1000
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(delay))) {
+                        self?.uploadWithRetryRecursive(data: data, filename: filename, attempt: attempt + 1, maxRetries: maxRetries)
+                    }
+                } else {
+                    print("Upload failed after \(maxRetries) attempts: \(error)")
+                }
+                return
+            }
+            
+            if let uploadedFile = uploadedFile {
+                print("Upload successful: \(uploadedFile.fileId)")
+            }
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+### Security and Validation
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+class FileValidator {
+  private readonly ALLOWED_TYPES = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'video/mp4', 'video/webm', 'video/quicktime',
+    'audio/mp3', 'audio/wav', 'audio/ogg',
+    'application/pdf', 'text/plain',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  
+  private readonly MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
+  
+  validateFile(file: File): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    // Check file type
+    if (!this.ALLOWED_TYPES.includes(file.type)) {
+      errors.push(`File type '${file.type}' is not allowed`);
+    }
+    
+    // Check file size
+    if (file.size > this.MAX_FILE_SIZE) {
+      errors.push(`File size exceeds maximum limit of ${this.MAX_FILE_SIZE / (1024 * 1024)}MB`);
+    }
+    
+    // Check file name
+    if (this.hasInvalidCharacters(file.name)) {
+      errors.push('File name contains invalid characters');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+  
+  private hasInvalidCharacters(filename: string): boolean {
+    const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+    return invalidChars.test(filename);
+  }
+  
+  sanitizeFilename(filename: string): string {
+    return filename
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Advanced Topics
+
+### Chunked Upload for Large Files
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+class ChunkedFileUploader {
+  private readonly CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+  
+  async uploadLargeFile(file: File, onProgress?: (progress: number) => void): Promise<any> {
+    const chunks = this.createChunks(file);
+    const uploadPromises: Promise<any>[] = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkFile = new File([chunk], `${file.name}.chunk.${i}`, {
+        type: file.type
+      });
+      
+      const uploadPromise = FileRepository.createFile(chunkFile)
+        .then(() => {
+          if (onProgress) {
+            const progress = ((i + 1) / chunks.length) * 100;
+            onProgress(progress);
+          }
+        });
+      
+      uploadPromises.push(uploadPromise);
+    }
+    
+    await Promise.all(uploadPromises);
+    
+    // Merge chunks on server (implementation depends on backend)
+    return this.mergeChunks(file.name, chunks.length);
+  }
+  
+  private createChunks(file: File): Blob[] {
+    const chunks: Blob[] = [];
+    let start = 0;
+    
+    while (start < file.size) {
+      const end = Math.min(start + this.CHUNK_SIZE, file.size);
+      chunks.push(file.slice(start, end));
+      start = end;
+    }
+    
+    return chunks;
+  }
+  
+  private async mergeChunks(filename: string, chunkCount: number): Promise<any> {
+    // Implementation depends on your backend API
+    // This would typically call a merge endpoint
+    return { success: true, filename, chunkCount };
+  }
+}
+```
+</Tab>
+</Tabs>
+
+### File Caching and Offline Support
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+class FileCache {
+  private cache: Map<string, { data: Blob; timestamp: number }> = new Map();
+  private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+  
+  async getFile(fileId: string): Promise<Blob | null> {
+    // Check cache first
+    const cached = this.cache.get(fileId);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+    
+    try {
+      // Fetch from server
+      const { data: file } = await FileRepository.getFile(fileId);
+      const response = await fetch(file.fileUrl);
+      const blob = await response.blob();
+      
+      // Store in cache
+      this.storeInCache(fileId, blob);
+      
+      return blob;
+    } catch (error) {
+      // Return cached version if available (even if expired)
+      return cached?.data || null;
+    }
+  }
+  
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_DURATION;
+  }
+  
+  private storeInCache(fileId: string, data: Blob): void {
+    // Check cache size
+    if (this.getCacheSize() + data.size > this.MAX_CACHE_SIZE) {
+      this.evictOldestEntries();
+    }
+    
+    this.cache.set(fileId, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+  
+  private getCacheSize(): number {
+    return Array.from(this.cache.values())
+      .reduce((total, entry) => total + entry.data.size, 0);
+  }
+  
+  private evictOldestEntries(): void {
+    const entries = Array.from(this.cache.entries())
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+    
+    // Remove oldest 25% of entries
+    const toRemove = Math.ceil(entries.length * 0.25);
+    for (let i = 0; i < toRemove; i++) {
+      this.cache.delete(entries[i][0]);
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Upload fails with "Payload too large" | File exceeds 1GB limit | Compress file or use chunked upload |
+| Permission denied error | User lacks upload permissions | Check user permissions and authentication |
+| Network timeout | Poor connection or large file | Implement retry logic with exponential backoff |
+| File not found after upload | Upload not yet processed | Wait and retry, or check upload status |
+| Corrupted file after download | Network interruption | Validate file integrity using checksums |
+
+### Debug Mode
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+// Enable debug logging
+const FileManager = {
+  debug: true,
+  
+  log(...args: any[]) {
+    if (this.debug) {
+      console.log('[FileManager]', ...args);
+    }
+  },
+  
+  async uploadWithLogging(file: File) {
+    this.log('Starting upload:', file.name, file.size);
+    
+    try {
+      const result = await FileRepository.createFile(file);
+      this.log('Upload successful:', result);
+      return result;
+    } catch (error) {
+      this.log('Upload failed:', error);
+      throw error;
+    }
+  }
+};
+```
+</Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="Image Handling" href="./image-handling">
+Learn specialized image processing, compression, and thumbnail generation
+</Card>
+<Card title="Video Handling" href="./video-handling">
+Explore video upload, transcoding, and streaming capabilities
+</Card>
+<Card title="Posts Integration" href="../social/posts">
+Discover how to attach files to social posts and content
+</Card>
+<Card title="Chat Files" href="../chat/messaging/send-a-message">
+Learn about file sharing in chat messages and conversations
+</Card>
+</CardGroup>

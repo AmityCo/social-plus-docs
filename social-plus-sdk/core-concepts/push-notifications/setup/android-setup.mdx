@@ -1,0 +1,370 @@
+---
+title: "Android Push Notification Setup"
+description: "Configure Firebase Cloud Messaging (FCM) or Baidu push services for Android apps"
+---
+
+# Android Push Notification Setup
+
+Set up push notifications for Android using Firebase Cloud Messaging (FCM) or Baidu push services for users in China. This guide covers both standard FCM setup and Baidu configuration for Chinese markets.
+
+## Prerequisites
+
+- Android project with Firebase configured
+- Social+ Android SDK integrated
+- For China: Baidu Push account and credentials
+
+## FCM Setup (Standard)
+
+### Add Dependency
+
+```gradle
+dependencies {
+    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-fcm:x.y.z'
+}
+```
+
+### Configure Firebase
+
+1. **Add Firebase to your project** following the [official Firebase setup guide](https://firebase.google.com/docs/android/setup)
+2. **Download** `google-services.json` and place it in your app module
+3. **Add the Firebase SDK** to your app
+
+### Get FCM Token
+
+```kotlin
+import com.google.firebase.messaging.FirebaseMessaging
+
+class NotificationManager {
+    
+    fun initializePushNotifications() {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w(TAG, "Fetching FCM registration token failed", task.exception)
+                return@addOnCompleteListener
+            }
+
+            // Get new FCM registration token
+            val token = task.result
+            Log.d(TAG, "FCM Registration Token: $token")
+            
+            // Register with Social+ SDK
+            registerWithSocialPlus(token)
+        }
+    }
+    
+    private fun registerWithSocialPlus(token: String) {
+        AmityClient.newBuilder()
+            .enablePushNotification(token)
+            .build()
+            .connect("userId")
+    }
+}
+```
+
+### Handle Token Refresh
+
+```kotlin
+class MyFirebaseMessagingService : FirebaseMessagingService() {
+    
+    override fun onNewToken(token: String) {
+        Log.d(TAG, "Refreshed token: $token")
+        
+        // Send token to Social+ SDK
+        AmityClient.getInstance()?.updatePushNotificationToken(token)
+    }
+    
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        Log.d(TAG, "From: ${remoteMessage.from}")
+        
+        // Handle notification data
+        handleNotificationData(remoteMessage.data)
+        
+        // Handle notification payload
+        remoteMessage.notification?.let {
+            Log.d(TAG, "Message Notification Body: ${it.body}")
+            showNotification(it.title, it.body, remoteMessage.data)
+        }
+    }
+    
+    private fun handleNotificationData(data: Map<String, String>) {
+        // Extract Social+ specific data
+        val channelId = data["channelId"]
+        val messageId = data["messageId"]
+        val notificationType = data["type"]
+        
+        // Handle different notification types
+        when (notificationType) {
+            "message" -> handleMessageNotification(channelId, messageId)
+            "channel_join" -> handleChannelJoinNotification(channelId)
+            "mention" -> handleMentionNotification(channelId, messageId)
+        }
+    }
+}
+```
+
+### Manifest Configuration
+
+```xml
+<!-- Add to AndroidManifest.xml -->
+<service
+    android:name=".MyFirebaseMessagingService"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+    </intent-filter>
+</service>
+
+<!-- Notification permission (Android 13+) -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+## Baidu Setup (China)
+
+For users in China where Google Play Services are not available:
+
+### Add Dependency
+
+```gradle
+dependencies {
+    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-baidu:x.y.z'
+}
+```
+
+### Configure Baidu Push
+
+1. **Get Baidu Credentials**
+   - Register at [Baidu Push](https://push.baidu.com/)
+   - Create a new app and get API Key and Secret Key
+
+2. **Initialize Baidu Push**
+
+```kotlin
+class BaiduNotificationManager {
+    
+    fun initializeBaiduPush(context: Context, apiKey: String, secretKey: String) {
+        // Initialize Baidu Push
+        PushManager.startWork(context, PushConstants.LOGIN_TYPE_API_KEY, apiKey)
+        
+        // Set up push listener
+        PushManager.setPushListener(object : PushListener {
+            override fun onBind(context: Context, errorCode: Int, appid: String, 
+                              userId: String, channelId: String, requestId: String) {
+                if (errorCode == 0) {
+                    Log.d(TAG, "Baidu Push bind success: $channelId")
+                    // Register with Social+ SDK
+                    AmityClient.getInstance()?.enablePushNotification(channelId)
+                }
+            }
+            
+            override fun onMessage(context: Context, message: PushMessageReceiver, 
+                                 customContentString: String) {
+                // Handle Baidu push message
+                handleBaiduMessage(message, customContentString)
+            }
+        })
+    }
+    
+    private fun handleBaiduMessage(message: PushMessageReceiver, customContent: String) {
+        // Process Baidu push message
+        val title = message.title
+        val content = message.content
+        
+        // Parse custom content for Social+ data
+        val customData = parseCustomContent(customContent)
+        
+        // Show notification
+        showNotification(title, content, customData)
+    }
+}
+```
+
+### Baidu Permissions
+
+```xml
+<!-- Add to AndroidManifest.xml -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.VIBRATE" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+```
+
+## Unified Push Manager
+
+Create a unified manager that handles both FCM and Baidu:
+
+```kotlin
+class UnifiedPushManager(private val context: Context) {
+    
+    fun initializePushNotifications(baiduApiKey: String? = null, baiduSecretKey: String? = null) {
+        when {
+            isGooglePlayServicesAvailable() -> {
+                Log.d(TAG, "Initializing FCM")
+                initializeFCM()
+            }
+            baiduApiKey != null && baiduSecretKey != null -> {
+                Log.d(TAG, "Initializing Baidu Push")
+                initializeBaiduPush(baiduApiKey, baiduSecretKey)
+            }
+            else -> {
+                Log.w(TAG, "No push service available")
+            }
+        }
+    }
+    
+    private fun isGooglePlayServicesAvailable(): Boolean {
+        val googleApiAvailability = GoogleApiAvailability.getInstance()
+        val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(context)
+        return resultCode == ConnectionResult.SUCCESS
+    }
+    
+    private fun initializeFCM() {
+        // FCM initialization code
+    }
+    
+    private fun initializeBaiduPush(apiKey: String, secretKey: String) {
+        // Baidu initialization code
+    }
+}
+```
+
+## Advanced Configuration
+
+### Custom Notification Styling
+
+```kotlin
+class NotificationStyler {
+    
+    fun createStyledNotification(
+        context: Context,
+        title: String,
+        message: String,
+        data: Map<String, String>
+    ): Notification {
+        
+        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+        
+        // Add deep link intent
+        val intent = createDeepLinkIntent(context, data)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        notificationBuilder.setContentIntent(pendingIntent)
+        
+        return notificationBuilder.build()
+    }
+    
+    private fun createDeepLinkIntent(context: Context, data: Map<String, String>): Intent {
+        val intent = Intent(context, MainActivity::class.java)
+        
+        // Add Social+ specific data
+        data["channelId"]?.let { intent.putExtra("channelId", it) }
+        data["messageId"]?.let { intent.putExtra("messageId", it) }
+        
+        return intent
+    }
+}
+```
+
+### Notification Channels (Android 8.0+)
+
+```kotlin
+class NotificationChannelManager {
+    
+    fun createNotificationChannels(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            // Messages channel
+            val messagesChannel = NotificationChannel(
+                MESSAGES_CHANNEL_ID,
+                "Messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "New message notifications"
+                enableLights(true)
+                lightColor = Color.BLUE
+                enableVibration(true)
+            }
+            
+            // Mentions channel
+            val mentionsChannel = NotificationChannel(
+                MENTIONS_CHANNEL_ID,
+                "Mentions",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Mention notifications"
+                enableLights(true)
+                lightColor = Color.RED
+            }
+            
+            channelManager.createNotificationChannels(listOf(messagesChannel, mentionsChannel))
+        }
+    }
+}
+```
+
+## Testing & Debugging
+
+### Debug FCM Token
+
+```kotlin
+class DebugHelper {
+    
+    fun debugFCMToken() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            Log.d(TAG, "Current FCM Token: $token")
+            // Copy to clipboard for testing
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("FCM Token", token))
+        }
+    }
+    
+    fun testNotification() {
+        // Send test notification through Firebase Console
+        // or use your server to send test push
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+**Token Management**: Always handle token refresh events and update the Social+ SDK with the new token to ensure uninterrupted notifications.
+</Tip>
+
+- **Fallback Strategy** - Implement both FCM and Baidu for comprehensive coverage
+- **Token Refresh** - Always handle token updates and notify Social+ SDK
+- **Notification Channels** - Use appropriate channels for different notification types
+- **Deep Linking** - Implement proper deep linking for notification taps
+- **Permission Handling** - Request notification permissions at the right time
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|--------|----------|
+| No notifications received | Token not registered | Verify token registration with Social+ SDK |
+| Notifications not showing | Missing notification channel | Create notification channels for Android 8.0+ |
+| Deep links not working | Missing intent handling | Implement proper intent handling in activities |
+| Baidu not working | Google Play Services detected | Ensure proper fallback logic |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Registration" href="../device-registration">
+    Learn how to register and manage device tokens
+  </Card>
+  <Card title="React Native Setup" href="./react-native-setup">
+    Configure push notifications for React Native
+  </Card>
+</CardGroup>

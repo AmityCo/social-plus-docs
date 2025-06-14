@@ -1,0 +1,263 @@
+---
+title: "iOS Push Notification Setup"
+description: "Configure Apple Push Notification service (APNs) certificates and integrate push notifications in your iOS app"
+---
+
+# iOS Push Notification Setup
+
+Set up Apple Push Notification service (APNs) to deliver real-time notifications to your iOS users. This guide covers certificate generation, console configuration, and iOS SDK integration.
+
+<Info>
+**Certificate Lifecycle**: When you create a new .p12 certificate, the previous certificate is automatically revoked and cannot be used again.
+</Info>
+
+## Prerequisites
+
+- Apple Developer Account with appropriate permissions
+- Xcode project with Push Notifications capability enabled
+- Access to Social+ Console
+
+## Step 1: Generate APNs Certificate
+
+### Create Certificate in Apple Developer Console
+
+1. **Navigate to Certificates**
+   - Go to [Apple Developer Console](https://developer.apple.com/)
+   - Select **Certificates, Identifiers & Profiles**
+   - Click on **Certificates**
+
+2. **Create New Certificate**
+   - Click the **+** button to create a new certificate
+   - Select **Apple Push Notification Service SSL (Sandbox & Production)**
+
+<Info>
+**Universal Certificate**: This certificate works for both development (sandbox) and production environments, eliminating the need for separate certificates.
+</Info>
+
+3. **Select App ID**
+   - Choose your app's Bundle ID from the dropdown
+   - Follow Apple's certificate creation wizard
+   - Download the generated **.cer** file
+
+### Convert to .p12 Format
+
+1. **Install Certificate**
+   - Double-click the downloaded **.cer** file
+   - Keychain Access will open automatically
+
+2. **Export as .p12**
+   - In Keychain Access, go to **Login → My Certificates**
+   - Right-click on your **Apple Push Services** certificate
+   - Select **Export "Apple Push Services..."**
+   - Save with **.p12** extension
+   - Set a password (you'll need this for console upload)
+
+## Step 2: Upload to Social+ Console
+
+1. **Access Console**
+   - Open your Social+ Console
+   - Navigate to **Settings → Push Notifications**
+
+2. **Upload Certificate**
+   - Upload your **.p12** file
+   - Enter the password you set during export
+   - Save the configuration
+
+<Warning>
+**Production Only**: This certificate works with production builds distributed through App Store or TestFlight. Debug builds are not supported for push notifications.
+</Warning>
+
+## Step 3: iOS App Configuration
+
+### Enable Push Notifications Capability
+
+```swift
+// In your Xcode project:
+// 1. Select your app target
+// 2. Go to "Signing & Capabilities"
+// 3. Add "Push Notifications" capability
+```
+
+### Request Permission and Register Token
+
+```swift
+import UserNotifications
+import AmitySDK
+
+class NotificationManager: NSObject {
+    
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .badge, .sound]
+        ) { granted, error in
+            if granted {
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+        }
+    }
+}
+
+// In your AppDelegate
+func application(_ application: UIApplication, 
+                didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    
+    // Register with Social+ SDK
+    AmityManager.shared.client?.registerDeviceForPushNotification(deviceToken: tokenString) { success, error in
+        if success {
+            print("Successfully registered for push notifications")
+        } else {
+            print("Failed to register: \\(error?.localizedDescription ?? "Unknown error")")
+        }
+    }
+}
+```
+
+### Handle Incoming Notifications
+
+```swift
+// Handle notifications when app is in foreground
+func userNotificationCenter(_ center: UNUserNotificationCenter,
+                          willPresent notification: UNNotification,
+                          withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    // Show notification even when app is active
+    completionHandler([.banner, .sound, .badge])
+}
+
+// Handle notification taps
+func userNotificationCenter(_ center: UNUserNotificationCenter,
+                          didReceive response: UNNotificationResponse,
+                          withCompletionHandler completionHandler: @escaping () -> Void) {
+    let userInfo = response.notification.request.content.userInfo
+    
+    // Handle deep linking based on notification data
+    handleNotificationData(userInfo)
+    
+    completionHandler()
+}
+```
+
+## Advanced Configuration
+
+### Custom Notification Handling
+
+```swift
+class CustomNotificationHandler {
+    
+    func processNotification(_ userInfo: [AnyHashable: Any]) {
+        // Extract Social+ notification data
+        if let channelId = userInfo["channelId"] as? String {
+            // Navigate to specific channel
+            navigateToChannel(channelId)
+        }
+        
+        if let messageId = userInfo["messageId"] as? String {
+            // Highlight specific message
+            highlightMessage(messageId)
+        }
+    }
+    
+    private func navigateToChannel(_ channelId: String) {
+        // Implement channel navigation
+    }
+    
+    private func highlightMessage(_ messageId: String) {
+        // Implement message highlighting
+    }
+}
+```
+
+### Badge Management
+
+```swift
+extension NotificationManager {
+    
+    func updateBadgeCount() {
+        // Get unread count from Social+ SDK
+        AmityManager.shared.client?.getUnreadCount { [weak self] count, error in
+            DispatchQueue.main.async {
+                UIApplication.shared.applicationIconBadgeNumber = count ?? 0
+            }
+        }
+    }
+    
+    func clearBadge() {
+        UIApplication.shared.applicationIconBadgeNumber = 0
+    }
+}
+```
+
+## Testing & Debugging
+
+### Verify Certificate Installation
+
+```swift
+// Check if push notifications are enabled
+func checkPushPermissions() {
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+        switch settings.authorizationStatus {
+        case .authorized:
+            print("Push notifications authorized")
+        case .denied:
+            print("Push notifications denied")
+        case .notDetermined:
+            print("Push notifications not requested")
+        case .provisional:
+            print("Push notifications provisional")
+        @unknown default:
+            print("Unknown push notification status")
+        }
+    }
+}
+```
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|--------|----------|
+| Token registration fails | Invalid certificate | Re-generate and upload certificate |
+| No notifications received | Permission denied | Request notification permissions |
+| Badge not updating | Badge count not cleared | Implement proper badge management |
+| Deep links not working | Missing URL scheme | Configure URL schemes in app |
+
+## Production Checklist
+
+<AccordionGroup>
+  <Accordion title="Certificate Validation">
+    - ✅ .p12 certificate uploaded to Social+ Console
+    - ✅ Certificate password correctly entered
+    - ✅ Bundle ID matches app configuration
+    - ✅ Certificate is not expired
+  </Accordion>
+  
+  <Accordion title="App Configuration">
+    - ✅ Push Notifications capability enabled in Xcode
+    - ✅ Notification permissions requested at appropriate time
+    - ✅ Device token registration implemented
+    - ✅ Notification handling implemented
+  </Accordion>
+  
+  <Accordion title="Testing">
+    - ✅ Test with TestFlight build (not debug)
+    - ✅ Verify notifications appear correctly
+    - ✅ Test deep linking functionality
+    - ✅ Validate badge count updates
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Registration" href="../device-registration">
+    Learn how to register and manage device tokens
+  </Card>
+  <Card title="Notification Settings" href="../settings/user-settings">
+    Configure user notification preferences
+  </Card>
+</CardGroup>
+
+<Tip>
+**Testing Environment**: Use TestFlight or App Store builds for testing push notifications. Development builds don't support push notifications with production certificates.
+</Tip>
