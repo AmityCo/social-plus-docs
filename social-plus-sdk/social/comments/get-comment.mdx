@@ -1,35 +1,1608 @@
 # Get Comment
 
-The Social Plus SDK provides functionality that allows you to work with social features in your application, including the ability to retrieve a comment. In this section, we'll explore how to use the Social Plus SDK to retrieve a single comment from your application. By using a specific function provided by the SDK, you can retrieve a comment based on its ID, which provides a convenient way to access specific comment data. The retrieved result is returned as a live object of a comment. For more information on live objects, please refer to [live-objects-collections](../../core-concepts/live-objects-collections/ "mention").
+Retrieve individual comments or multiple comments efficiently with comprehensive data access patterns, live object synchronization, and advanced querying capabilities.
+
+<CardGroup cols={2}>
+  <Card title="Single Comment" icon="message">
+    Fetch individual comments by ID with live object updates
+  </Card>
+  <Card title="Multiple Comments" icon="messages">
+    Retrieve multiple comments efficiently with batch operations
+  </Card>
+  <Card title="Live Objects" icon="refresh">
+    Real-time synchronization with automatic updates
+  </Card>
+  <Card title="Rich Data" icon="database">
+    Complete comment data including metadata and relationships
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+The comment retrieval system provides flexible access patterns with live object synchronization:
+
+<AccordionGroup>
+  <Accordion title="Single Comment Retrieval">
+    - **Direct Access**: Fetch comments by unique identifier
+    - **Live Objects**: Automatic updates when comment data changes
+    - **Eager Loading**: Includes related data (reactions, replies, user info)
+    - **Caching**: Efficient local storage for repeated access
+  </Accordion>
+  
+  <Accordion title="Batch Comment Retrieval">
+    - **Bulk Operations**: Fetch multiple comments in single request
+    - **Performance Optimization**: Reduced network overhead
+    - **Live Collections**: Synchronized collection updates
+    - **Error Handling**: Partial success handling for missing comments
+  </Accordion>
+  
+  <Accordion title="Data Consistency">
+    - **Real-time Updates**: Changes reflected across all clients
+    - **Conflict Resolution**: Handles concurrent modifications
+    - **Offline Support**: Local caching with sync on reconnection
+    - **Data Integrity**: Validation and error recovery
+  </Accordion>
+</AccordionGroup>
+
+## Comment Data Structure
+
+| Property | Type | Description | Live Updated |
+|----------|------|-------------|--------------|
+| `commentId` | `string` | Unique comment identifier | ❌ |
+| `text` | `string` | Comment text content | ✅ |
+| `userId` | `string` | Comment author ID | ❌ |
+| `user` | `AmityUser` | Comment author information | ✅ |
+| `images` | `AmityImage[]` | Attached images | ✅ |
+| `reactions` | `AmityReaction[]` | Comment reactions | ✅ |
+| `repliesCount` | `number` | Number of replies | ✅ |
+| `createdAt` | `Date` | Creation timestamp | ❌ |
+| `editedAt` | `Date` | Last edit timestamp | ✅ |
+| `isDeleted` | `boolean` | Deletion status | ✅ |
+| `isFlaggedByMe` | `boolean` | Flag status for current user | ✅ |
+
+<Info>
+Comment retrieval returns live objects that automatically update when the underlying data changes, providing real-time synchronization across your application.
+</Info>
+
+## Single Comment Retrieval
 
 <Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/amythee/0616ce28dba38ae160fcbd5d9440319d`}
-      </CodeBlock>
-    </CodeGroup>
-  </Tab>
-  <Tab title="Android">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/7c2548bae1c8c3e4ba8963200da73937`}
-      </CodeBlock>
-    </CodeGroup>
-  </Tab>
-  <Tab title="JavaScript">
-    Supported ✅ (Please wait while we prepare a real example!)
-  </Tab>
-  <Tab title="TypeScript">
-    <CodeGroup>
-      <CodeBlock>
-        {`https://gist.github.com/c5094b2a975ff1ffb2f3e156d996d6f3`}
-      </CodeBlock>
-    </CodeGroup>
-  </Tab>
-  <Tab title="Flutter">
-    Supported ✅ (Please wait while we prepare a real example!)
-  </Tab>
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class CommentRetrievalManager {
+    private let repository: AmityCommentRepository
+    private var commentToken: AmityNotificationToken?
+    
+    init(client: AmityClient) {
+        self.repository = AmityCommentRepository(client: client)
+    }
+    
+    // MARK: - Get Single Comment
+    func getComment(commentId: String) -> AmityObject<AmityComment> {
+        return repository.getComment(withId: commentId)
+    }
+    
+    // MARK: - Get Comment with Live Updates
+    func observeComment(
+        commentId: String,
+        onChange: @escaping (AmityComment?) -> Void
+    ) {
+        let commentObject = getComment(commentId: commentId)
+        
+        commentToken = commentObject.observe { liveObject, error in
+            if let error = error {
+                print("Comment observation error: \(error)")
+                onChange(nil)
+            } else {
+                onChange(liveObject.object)
+            }
+        }
+    }
+    
+    // MARK: - Async Comment Retrieval
+    func fetchComment(commentId: String) async throws -> AmityComment {
+        return try await withCheckedThrowingContinuation { continuation in
+            let commentObject = getComment(commentId: commentId)
+            
+            let token = commentObject.observe { liveObject, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let comment = liveObject.object {
+                    continuation.resume(returning: comment)
+                }
+            }
+            
+            // Clean up token after first result
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                token.invalidate()
+            }
+        }
+    }
+    
+    // MARK: - Get Comment with Full Details
+    func getCommentWithDetails(commentId: String) -> CommentDetails {
+        let commentObject = getComment(commentId: commentId)
+        
+        return CommentDetails(
+            commentObject: commentObject,
+            onCommentLoaded: { [weak self] comment in
+                self?.loadCommentRelatedData(comment)
+            }
+        )
+    }
+    
+    private func loadCommentRelatedData(_ comment: AmityComment) {
+        // Load additional data like user info, reactions, etc.
+        if let userId = comment.userId {
+            loadUserInfo(userId: userId)
+        }
+        
+        // Load reactions count
+        loadReactionsData(commentId: comment.commentId)
+        
+        // Load replies count
+        loadRepliesCount(commentId: comment.commentId)
+    }
+    
+    private func loadUserInfo(userId: String) {
+        // Implementation to load user information
+    }
+    
+    private func loadReactionsData(commentId: String) {
+        // Implementation to load reactions data
+    }
+    
+    private func loadRepliesCount(commentId: String) {
+        // Implementation to load replies count
+    }
+    
+    // MARK: - Error Handling
+    func safeGetComment(
+        commentId: String,
+        onSuccess: @escaping (AmityComment) -> Void,
+        onError: @escaping (Error) -> Void
+    ) {
+        let commentObject = getComment(commentId: commentId)
+        
+        commentToken = commentObject.observe { liveObject, error in
+            if let error = error {
+                onError(CommentRetrievalError.fetchFailed(error))
+            } else if let comment = liveObject.object {
+                if comment.isDeleted {
+                    onError(CommentRetrievalError.commentDeleted)
+                } else {
+                    onSuccess(comment)
+                }
+            } else {
+                onError(CommentRetrievalError.commentNotFound)
+            }
+        }
+    }
+    
+    deinit {
+        commentToken?.invalidate()
+    }
+}
+
+// Supporting Classes
+class CommentDetails {
+    let commentObject: AmityObject<AmityComment>
+    private let onCommentLoaded: (AmityComment) -> Void
+    private var token: AmityNotificationToken?
+    
+    init(
+        commentObject: AmityObject<AmityComment>,
+        onCommentLoaded: @escaping (AmityComment) -> Void
+    ) {
+        self.commentObject = commentObject
+        self.onCommentLoaded = onCommentLoaded
+        
+        startObserving()
+    }
+    
+    private func startObserving() {
+        token = commentObject.observe { [weak self] liveObject, error in
+            if let comment = liveObject.object {
+                self?.onCommentLoaded(comment)
+            }
+        }
+    }
+    
+    deinit {
+        token?.invalidate()
+    }
+}
+
+enum CommentRetrievalError: Error, LocalizedError {
+    case commentNotFound
+    case commentDeleted
+    case fetchFailed(Error)
+    case networkError
+    
+    var errorDescription: String? {
+        switch self {
+        case .commentNotFound:
+            return "Comment not found"
+        case .commentDeleted:
+            return "Comment has been deleted"
+        case .fetchFailed(let error):
+            return "Failed to fetch comment: \(error.localizedDescription)"
+        case .networkError:
+            return "Network error occurred"
+        }
+    }
+}
+
+// Usage Examples
+let retrievalManager = CommentRetrievalManager(client: amityClient)
+
+// Basic comment retrieval with live updates
+retrievalManager.observeComment(commentId: "comment123") { comment in
+    if let comment = comment {
+        print("Comment loaded: \(comment.text ?? "")")
+        updateUI(with: comment)
+    }
+}
+
+// Async comment retrieval
+Task {
+    do {
+        let comment = try await retrievalManager.fetchComment(commentId: "comment123")
+        print("Comment fetched: \(comment.text ?? "")")
+    } catch {
+        print("Failed to fetch comment: \(error)")
+    }
+}
+
+// Safe comment retrieval with error handling
+retrievalManager.safeGetComment(
+    commentId: "comment123",
+    onSuccess: { comment in
+        print("Comment loaded successfully: \(comment.text ?? "")")
+    },
+    onError: { error in
+        print("Error loading comment: \(error.localizedDescription)")
+    }
+)
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.api.social.comment.AmityCommentRepository
+import com.amity.socialcloud.sdk.model.social.comment.AmityComment
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+import io.reactivex.rxjava3.disposables.CompositeDisposable
+
+class CommentRetrievalManager(
+    private val commentRepository: AmityCommentRepository
+) {
+    private val disposables = CompositeDisposable()
+    
+    // Get single comment with live updates
+    fun getComment(
+        commentId: String,
+        onResult: (AmityComment?) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.getComment(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ comment ->
+                onResult(comment)
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Get comment with detailed information
+    fun getCommentWithDetails(
+        commentId: String,
+        onResult: (CommentDetails) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.getComment(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ comment ->
+                if (comment != null) {
+                    val details = CommentDetails(
+                        comment = comment,
+                        isDeleted = comment.isDeleted ?: false,
+                        hasImages = !comment.images.isNullOrEmpty(),
+                        reactionCount = comment.reactionCount ?: 0,
+                        repliesCount = comment.repliesCount ?: 0
+                    )
+                    onResult(details)
+                } else {
+                    onError(CommentRetrievalException("Comment not found"))
+                }
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Observe comment changes
+    fun observeComment(
+        commentId: String,
+        onChange: (AmityComment?) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.getComment(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ comment ->
+                onChange(comment)
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Safe comment retrieval with validation
+    fun safeGetComment(
+        commentId: String,
+        onSuccess: (AmityComment) -> Unit,
+        onError: (CommentRetrievalException) -> Unit
+    ) {
+        if (commentId.isBlank()) {
+            onError(CommentRetrievalException("Invalid comment ID"))
+            return
+        }
+        
+        commentRepository.getComment(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ comment ->
+                when {
+                    comment == null -> {
+                        onError(CommentRetrievalException("Comment not found"))
+                    }
+                    comment.isDeleted == true -> {
+                        onError(CommentRetrievalException("Comment has been deleted"))
+                    }
+                    else -> {
+                        onSuccess(comment)
+                    }
+                }
+            }, { error ->
+                onError(CommentRetrievalException("Failed to fetch comment: ${error.message}"))
+            })
+            .let(disposables::add)
+    }
+    
+    // Get comment with retry logic
+    fun getCommentWithRetry(
+        commentId: String,
+        maxRetries: Int = 3,
+        onResult: (AmityComment?) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.getComment(commentId)
+            .retry(maxRetries.toLong())
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ comment ->
+                onResult(comment)
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    fun cleanup() {
+        disposables.clear()
+    }
+}
+
+// Data class for detailed comment information
+data class CommentDetails(
+    val comment: AmityComment,
+    val isDeleted: Boolean,
+    val hasImages: Boolean,
+    val reactionCount: Int,
+    val repliesCount: Int
+) {
+    fun getDisplayText(): String {
+        return if (isDeleted) "[This comment has been deleted]" else comment.text ?: ""
+    }
+    
+    fun canEdit(currentUserId: String): Boolean {
+        return !isDeleted && comment.userId == currentUserId
+    }
+    
+    fun canReply(): Boolean {
+        return !isDeleted
+    }
+}
+
+// Custom exception for comment retrieval errors
+class CommentRetrievalException(message: String) : Exception(message)
+
+// Usage in Activity/Fragment
+class CommentDetailActivity : AppCompatActivity() {
+    private lateinit var retrievalManager: CommentRetrievalManager
+    private lateinit var commentId: String
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        retrievalManager = CommentRetrievalManager(AmityCommentRepository.get())
+        commentId = intent.getStringExtra("COMMENT_ID") ?: return
+        
+        loadCommentDetails()
+    }
+    
+    private fun loadCommentDetails() {
+        showLoading(true)
+        
+        retrievalManager.getCommentWithDetails(
+            commentId = commentId,
+            onResult = { details ->
+                showLoading(false)
+                displayCommentDetails(details)
+            },
+            onError = { error ->
+                showLoading(false)
+                showErrorMessage(error.message ?: "Failed to load comment")
+            }
+        )
+    }
+    
+    private fun displayCommentDetails(details: CommentDetails) {
+        findViewById<TextView>(R.id.commentText).text = details.getDisplayText()
+        findViewById<TextView>(R.id.reactionCount).text = "${details.reactionCount} reactions"
+        findViewById<TextView>(R.id.repliesCount).text = "${details.repliesCount} replies"
+        
+        // Show/hide action buttons based on permissions
+        findViewById<Button>(R.id.editButton).visibility = 
+            if (details.canEdit(getCurrentUserId())) View.VISIBLE else View.GONE
+        
+        findViewById<Button>(R.id.replyButton).visibility = 
+            if (details.canReply()) View.VISIBLE else View.GONE
+        
+        // Load images if available
+        if (details.hasImages) {
+            loadCommentImages(details.comment)
+        }
+    }
+    
+    private fun loadCommentImages(comment: AmityComment) {
+        val imageContainer = findViewById<LinearLayout>(R.id.imageContainer)
+        imageContainer.removeAllViews()
+        
+        comment.images?.forEach { image ->
+            val imageView = ImageView(this)
+            imageView.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                400
+            )
+            imageView.scaleType = ImageView.ScaleType.CENTER_CROP
+            
+            // Load image using your preferred image loading library
+            loadImage(image.fileUrl, imageView)
+            imageContainer.addView(imageView)
+        }
+    }
+    
+    private fun showLoading(show: Boolean) {
+        findViewById<ProgressBar>(R.id.progressBar).visibility = 
+            if (show) View.VISIBLE else View.GONE
+    }
+    
+    private fun showErrorMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+    
+    private fun getCurrentUserId(): String {
+        // Return current user ID
+        return "current_user_id"
+    }
+    
+    private fun loadImage(url: String?, imageView: ImageView) {
+        // Implement image loading (Glide, Picasso, etc.)
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        retrievalManager.cleanup()
+    }
+}
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { CommentRepository, AmityComment } from '@amityco/ts-sdk';
+
+interface CommentRetrievalOptions {
+  includeDeleted?: boolean;
+  includeUser?: boolean;
+  includeReactions?: boolean;
+  timeout?: number;
+}
+
+interface CommentDetails {
+  comment: AmityComment;
+  isDeleted: boolean;
+  hasImages: boolean;
+  reactionCount: number;
+  repliesCount: number;
+  canEdit: boolean;
+  canReply: boolean;
+}
+
+class CommentRetrievalService {
+  private cache = new Map<string, AmityComment>();
+  private readonly defaultTimeout = 10000; // 10 seconds
+  
+  // Get single comment
+  async getComment(
+    commentId: string,
+    options: CommentRetrievalOptions = {}
+  ): Promise<AmityComment | null> {
+    try {
+      // Check cache first
+      if (this.cache.has(commentId)) {
+        const cachedComment = this.cache.get(commentId)!;
+        if (this.isCacheValid(cachedComment)) {
+          return cachedComment;
+        }
+      }
+      
+      const comment = await CommentRepository.getComment(commentId);
+      
+      // Cache the result
+      if (comment) {
+        this.cache.set(commentId, comment);
+      }
+      
+      // Filter deleted comments if not requested
+      if (comment?.isDeleted && !options.includeDeleted) {
+        throw new CommentRetrievalError('Comment has been deleted', 'COMMENT_DELETED');
+      }
+      
+      return comment;
+      
+    } catch (error) {
+      throw new CommentRetrievalError(
+        `Failed to retrieve comment: ${error}`,
+        'FETCH_FAILED'
+      );
+    }
+  }
+  
+  // Get comment with comprehensive details
+  async getCommentWithDetails(
+    commentId: string,
+    currentUserId?: string
+  ): Promise<CommentDetails> {
+    const comment = await this.getComment(commentId, { 
+      includeDeleted: true,
+      includeUser: true,
+      includeReactions: true 
+    });
+    
+    if (!comment) {
+      throw new CommentRetrievalError('Comment not found', 'NOT_FOUND');
+    }
+    
+    return {
+      comment,
+      isDeleted: comment.isDeleted || false,
+      hasImages: (comment.images?.length || 0) > 0,
+      reactionCount: comment.reactionCount || 0,
+      repliesCount: comment.repliesCount || 0,
+      canEdit: this.canEditComment(comment, currentUserId),
+      canReply: !comment.isDeleted
+    };
+  }
+  
+  // Get comment with live updates
+  observeComment(
+    commentId: string,
+    onChange: (comment: AmityComment | null) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    let isActive = true;
+    
+    const pollForUpdates = async () => {
+      while (isActive) {
+        try {
+          const comment = await this.getComment(commentId);
+          onChange(comment);
+          
+          // Poll every 5 seconds for updates
+          await this.delay(5000);
+        } catch (error) {
+          if (onError) {
+            onError(error instanceof Error ? error : new Error(String(error)));
+          }
+          break;
+        }
+      }
+    };
+    
+    pollForUpdates();
+    
+    // Return cleanup function
+    return () => {
+      isActive = false;
+    };
+  }
+  
+  // Safe comment retrieval with validation
+  async safeGetComment(
+    commentId: string,
+    options: CommentRetrievalOptions = {}
+  ): Promise<CommentRetrievalResult> {
+    try {
+      // Validate input
+      if (!commentId || commentId.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Invalid comment ID',
+          errorCode: 'INVALID_ID'
+        };
+      }
+      
+      const comment = await this.getComment(commentId, options);
+      
+      if (!comment) {
+        return {
+          success: false,
+          error: 'Comment not found',
+          errorCode: 'NOT_FOUND'
+        };
+      }
+      
+      return {
+        success: true,
+        comment
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        errorCode: 'FETCH_FAILED'
+      };
+    }
+  }
+  
+  // Get comment with retry logic
+  async getCommentWithRetry(
+    commentId: string,
+    maxRetries: number = 3,
+    retryDelay: number = 1000
+  ): Promise<AmityComment | null> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.getComment(commentId);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt < maxRetries) {
+          await this.delay(retryDelay * attempt); // Exponential backoff
+        }
+      }
+    }
+    
+    throw lastError || new Error('Max retries exceeded');
+  }
+  
+  // Batch comment retrieval
+  async getCommentsByIds(commentIds: string[]): Promise<Map<string, AmityComment | null>> {
+    const results = new Map<string, AmityComment | null>();
+    
+    const promises = commentIds.map(async (commentId) => {
+      try {
+        const comment = await this.getComment(commentId);
+        return { commentId, comment };
+      } catch (error) {
+        console.warn(`Failed to fetch comment ${commentId}:`, error);
+        return { commentId, comment: null };
+      }
+    });
+    
+    const resolvedPromises = await Promise.allSettled(promises);
+    
+    resolvedPromises.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        results.set(result.value.commentId, result.value.comment);
+      } else {
+        results.set(commentIds[index], null);
+      }
+    });
+    
+    return results;
+  }
+  
+  // Helper methods
+  private canEditComment(comment: AmityComment, currentUserId?: string): boolean {
+    return !comment.isDeleted && 
+           currentUserId === comment.userId &&
+           this.isWithinEditWindow(comment);
+  }
+  
+  private isWithinEditWindow(comment: AmityComment, windowHours: number = 24): boolean {
+    if (!comment.createdAt) return true;
+    
+    const createdTime = comment.createdAt.getTime();
+    const now = Date.now();
+    const windowMs = windowHours * 60 * 60 * 1000;
+    
+    return (now - createdTime) <= windowMs;
+  }
+  
+  private isCacheValid(comment: AmityComment, maxAgeMs: number = 60000): boolean {
+    // Cache is valid for 1 minute
+    const cacheTime = comment.updatedAt?.getTime() || comment.createdAt?.getTime() || 0;
+    return (Date.now() - cacheTime) < maxAgeMs;
+  }
+  
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  // Clear cache
+  clearCache(): void {
+    this.cache.clear();
+  }
+  
+  // Get cache size
+  getCacheSize(): number {
+    return this.cache.size;
+  }
+}
+
+// Supporting interfaces and classes
+interface CommentRetrievalResult {
+  success: boolean;
+  comment?: AmityComment;
+  error?: string;
+  errorCode?: string;
+}
+
+class CommentRetrievalError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'CommentRetrievalError';
+  }
+}
+
+// Usage Examples
+const retrievalService = new CommentRetrievalService();
+
+// Basic comment retrieval
+try {
+  const comment = await retrievalService.getComment('comment123');
+  if (comment) {
+    console.log('Comment loaded:', comment.text);
+  }
+} catch (error) {
+  console.error('Failed to load comment:', error);
+}
+
+// Safe comment retrieval
+const result = await retrievalService.safeGetComment('comment123');
+if (result.success) {
+  console.log('Comment loaded safely:', result.comment?.text);
+} else {
+  console.error('Failed to load comment:', result.error);
+}
+
+// Get comment with details
+try {
+  const details = await retrievalService.getCommentWithDetails('comment123', 'user456');
+  console.log('Comment details:', {
+    text: details.comment.text,
+    canEdit: details.canEdit,
+    reactionCount: details.reactionCount
+  });
+} catch (error) {
+  console.error('Failed to load comment details:', error);
+}
+
+// Observe comment changes
+const stopObserving = retrievalService.observeComment(
+  'comment123',
+  (comment) => {
+    if (comment) {
+      updateCommentDisplay(comment);
+    }
+  },
+  (error) => {
+    console.error('Comment observation error:', error);
+  }
+);
+
+// Stop observing when done
+// stopObserving();
+
+// Batch retrieval
+const commentIds = ['comment1', 'comment2', 'comment3'];
+const comments = await retrievalService.getCommentsByIds(commentIds);
+
+comments.forEach((comment, commentId) => {
+  if (comment) {
+    console.log(`Comment ${commentId}:`, comment.text);
+  } else {
+    console.log(`Comment ${commentId}: Not found`);
+  }
+});
+
+// Helper function for UI updates
+function updateCommentDisplay(comment: AmityComment) {
+  const element = document.getElementById(`comment-${comment.commentId}`);
+  if (element) {
+    element.textContent = comment.text || '';
+    
+    // Update edit indicator
+    if (comment.editedAt) {
+      const editIndicator = element.querySelector('.edit-indicator');
+      if (editIndicator) {
+        editIndicator.textContent = `Edited ${formatDate(comment.editedAt)}`;
+      }
+    }
+  }
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString();
+}
+```
+</Tab>
+
+<Tab title="JavaScript">
+```javascript
+class CommentRetrievalService {
+  constructor() {
+    this.cache = new Map();
+    this.defaultTimeout = 10000; // 10 seconds
+  }
+  
+  // Get single comment
+  async getComment(commentId, options = {}) {
+    try {
+      // Check cache first
+      if (this.cache.has(commentId)) {
+        const cachedComment = this.cache.get(commentId);
+        if (this.isCacheValid(cachedComment)) {
+          return cachedComment;
+        }
+      }
+      
+      const comment = await CommentRepository.getComment(commentId);
+      
+      // Cache the result
+      if (comment) {
+        this.cache.set(commentId, comment);
+      }
+      
+      // Filter deleted comments if not requested
+      if (comment?.isDeleted && !options.includeDeleted) {
+        throw new Error('Comment has been deleted');
+      }
+      
+      return comment;
+      
+    } catch (error) {
+      throw new Error(`Failed to retrieve comment: ${error.message}`);
+    }
+  }
+  
+  // Get comment with details
+  async getCommentWithDetails(commentId, currentUserId) {
+    const comment = await this.getComment(commentId, { 
+      includeDeleted: true 
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    return {
+      comment,
+      isDeleted: comment.isDeleted || false,
+      hasImages: (comment.images?.length || 0) > 0,
+      reactionCount: comment.reactionCount || 0,
+      repliesCount: comment.repliesCount || 0,
+      canEdit: this.canEditComment(comment, currentUserId),
+      canReply: !comment.isDeleted
+    };
+  }
+  
+  // Safe comment retrieval
+  async safeGetComment(commentId, options = {}) {
+    try {
+      if (!commentId || commentId.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Invalid comment ID'
+        };
+      }
+      
+      const comment = await this.getComment(commentId, options);
+      
+      if (!comment) {
+        return {
+          success: false,
+          error: 'Comment not found'
+        };
+      }
+      
+      return {
+        success: true,
+        comment
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+  
+  // Get comment with retry
+  async getCommentWithRetry(commentId, maxRetries = 3, retryDelay = 1000) {
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.getComment(commentId);
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt < maxRetries) {
+          await this.delay(retryDelay * attempt);
+        }
+      }
+    }
+    
+    throw lastError || new Error('Max retries exceeded');
+  }
+  
+  // Batch retrieval
+  async getCommentsByIds(commentIds) {
+    const results = new Map();
+    
+    const promises = commentIds.map(async (commentId) => {
+      try {
+        const comment = await this.getComment(commentId);
+        return { commentId, comment };
+      } catch (error) {
+        console.warn(`Failed to fetch comment ${commentId}:`, error);
+        return { commentId, comment: null };
+      }
+    });
+    
+    const resolvedPromises = await Promise.allSettled(promises);
+    
+    resolvedPromises.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        results.set(result.value.commentId, result.value.comment);
+      } else {
+        results.set(commentIds[index], null);
+      }
+    });
+    
+    return results;
+  }
+  
+  // Helper methods
+  canEditComment(comment, currentUserId) {
+    return !comment.isDeleted && 
+           currentUserId === comment.userId &&
+           this.isWithinEditWindow(comment);
+  }
+  
+  isWithinEditWindow(comment, windowHours = 24) {
+    if (!comment.createdAt) return true;
+    
+    const createdTime = new Date(comment.createdAt).getTime();
+    const now = Date.now();
+    const windowMs = windowHours * 60 * 60 * 1000;
+    
+    return (now - createdTime) <= windowMs;
+  }
+  
+  isCacheValid(comment, maxAgeMs = 60000) {
+    const cacheTime = comment.updatedAt ? 
+      new Date(comment.updatedAt).getTime() : 
+      new Date(comment.createdAt).getTime();
+    return (Date.now() - cacheTime) < maxAgeMs;
+  }
+  
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+// Usage Examples
+const retrievalService = new CommentRetrievalService();
+
+// Basic usage
+async function loadComment(commentId) {
+  try {
+    const comment = await retrievalService.getComment(commentId);
+    if (comment) {
+      displayComment(comment);
+    }
+  } catch (error) {
+    showError(`Failed to load comment: ${error.message}`);
+  }
+}
+
+// Safe retrieval
+async function safeLoadComment(commentId) {
+  const result = await retrievalService.safeGetComment(commentId);
+  
+  if (result.success) {
+    displayComment(result.comment);
+  } else {
+    showError(result.error);
+  }
+}
+
+// Load comment details
+async function loadCommentDetails(commentId, currentUserId) {
+  try {
+    const details = await retrievalService.getCommentWithDetails(commentId, currentUserId);
+    
+    displayCommentDetails(details);
+    
+    // Show/hide action buttons
+    document.getElementById('editButton').style.display = 
+      details.canEdit ? 'block' : 'none';
+    document.getElementById('replyButton').style.display = 
+      details.canReply ? 'block' : 'none';
+      
+  } catch (error) {
+    showError(`Failed to load comment details: ${error.message}`);
+  }
+}
+
+// Batch loading
+async function loadMultipleComments(commentIds) {
+  const comments = await retrievalService.getCommentsByIds(commentIds);
+  
+  comments.forEach((comment, commentId) => {
+    if (comment) {
+      displayComment(comment);
+    } else {
+      showCommentNotFound(commentId);
+    }
+  });
+}
+
+// Helper functions
+function displayComment(comment) {
+  const container = document.getElementById('commentContainer');
+  const commentElement = document.createElement('div');
+  commentElement.className = 'comment';
+  commentElement.innerHTML = `
+    <div class="comment-text">${comment.text || ''}</div>
+    <div class="comment-meta">
+      ${comment.createdAt ? `Posted: ${new Date(comment.createdAt).toLocaleDateString()}` : ''}
+      ${comment.editedAt ? `Edited: ${new Date(comment.editedAt).toLocaleDateString()}` : ''}
+    </div>
+  `;
+  container.appendChild(commentElement);
+}
+
+function displayCommentDetails(details) {
+  const { comment, reactionCount, repliesCount, hasImages } = details;
+  
+  document.getElementById('commentText').textContent = comment.text || '';
+  document.getElementById('reactionCount').textContent = `${reactionCount} reactions`;
+  document.getElementById('repliesCount').textContent = `${repliesCount} replies`;
+  
+  if (hasImages) {
+    displayCommentImages(comment.images);
+  }
+}
+
+function displayCommentImages(images) {
+  const imageContainer = document.getElementById('imageContainer');
+  imageContainer.innerHTML = '';
+  
+  images?.forEach(image => {
+    const img = document.createElement('img');
+    img.src = image.fileUrl;
+    img.className = 'comment-image';
+    imageContainer.appendChild(img);
+  });
+}
+
+function showError(message) {
+  const errorElement = document.getElementById('errorMessage');
+  errorElement.textContent = message;
+  errorElement.style.display = 'block';
+  
+  setTimeout(() => {
+    errorElement.style.display = 'none';
+  }, 5000);
+}
+
+function showCommentNotFound(commentId) {
+  console.log(`Comment ${commentId} not found`);
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+class CommentRetrievalService {
+  final AmitySocialClient _socialClient;
+  final Map<String, AmityComment> _cache = {};
+  static const int _cacheMaxAgeMs = 60000; // 1 minute
+  
+  CommentRetrievalService(this._socialClient);
+  
+  // Get single comment
+  Future<AmityComment?> getComment(
+    String commentId, {
+    bool includeDeleted = false,
+  }) async {
+    try {
+      // Check cache first
+      if (_cache.containsKey(commentId)) {
+        final cachedComment = _cache[commentId]!;
+        if (_isCacheValid(cachedComment)) {
+          return cachedComment;
+        }
+      }
+      
+      final comment = await _socialClient
+          .newCommentRepository()
+          .getComment(commentId: commentId);
+      
+      // Cache the result
+      _cache[commentId] = comment;
+      
+      // Filter deleted comments if not requested
+      if ((comment.isDeleted ?? false) && !includeDeleted) {
+        throw Exception('Comment has been deleted');
+      }
+      
+      return comment;
+      
+    } catch (error) {
+      throw Exception('Failed to retrieve comment: $error');
+    }
+  }
+  
+  // Get comment with comprehensive details
+  Future<CommentDetails> getCommentWithDetails(
+    String commentId, {
+    String? currentUserId,
+  }) async {
+    final comment = await getComment(commentId, includeDeleted: true);
+    
+    if (comment == null) {
+      throw Exception('Comment not found');
+    }
+    
+    return CommentDetails(
+      comment: comment,
+      isDeleted: comment.isDeleted ?? false,
+      hasImages: (comment.images?.length ?? 0) > 0,
+      reactionCount: comment.reactionCount ?? 0,
+      repliesCount: comment.repliesCount ?? 0,
+      canEdit: _canEditComment(comment, currentUserId),
+      canReply: !(comment.isDeleted ?? false),
+    );
+  }
+  
+  // Safe comment retrieval with result wrapper
+  Future<CommentRetrievalResult> safeGetComment(
+    String commentId, {
+    bool includeDeleted = false,
+  }) async {
+    try {
+      if (commentId.trim().isEmpty) {
+        return CommentRetrievalResult.error('Invalid comment ID');
+      }
+      
+      final comment = await getComment(commentId, includeDeleted: includeDeleted);
+      
+      if (comment == null) {
+        return CommentRetrievalResult.error('Comment not found');
+      }
+      
+      return CommentRetrievalResult.success(comment);
+      
+    } catch (error) {
+      return CommentRetrievalResult.error(error.toString());
+    }
+  }
+  
+  // Get comment with retry logic
+  Future<AmityComment?> getCommentWithRetry(
+    String commentId, {
+    int maxRetries = 3,
+    Duration retryDelay = const Duration(seconds: 1),
+  }) async {
+    Exception? lastError;
+    
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await getComment(commentId);
+      } catch (error) {
+        lastError = Exception(error.toString());
+        
+        if (attempt < maxRetries) {
+          await Future.delayed(retryDelay * attempt);
+        }
+      }
+    }
+    
+    throw lastError ?? Exception('Max retries exceeded');
+  }
+  
+  // Batch comment retrieval
+  Future<Map<String, AmityComment?>> getCommentsByIds(
+    List<String> commentIds,
+  ) async {
+    final Map<String, AmityComment?> results = {};
+    
+    await Future.wait(
+      commentIds.map((commentId) async {
+        try {
+          final comment = await getComment(commentId);
+          results[commentId] = comment;
+        } catch (error) {
+          print('Failed to fetch comment $commentId: $error');
+          results[commentId] = null;
+        }
+      }),
+    );
+    
+    return results;
+  }
+  
+  // Stream comment updates
+  Stream<AmityComment?> watchComment(String commentId) async* {
+    try {
+      final comment = await getComment(commentId);
+      yield comment;
+      
+      // Poll for updates every 5 seconds
+      await for (final _ in Stream.periodic(Duration(seconds: 5))) {
+        try {
+          final updatedComment = await getComment(commentId);
+          yield updatedComment;
+        } catch (error) {
+          print('Error watching comment $commentId: $error');
+          break;
+        }
+      }
+    } catch (error) {
+      print('Failed to start watching comment $commentId: $error');
+      yield null;
+    }
+  }
+  
+  // Helper methods
+  bool _canEditComment(AmityComment comment, String? currentUserId) {
+    return !(comment.isDeleted ?? false) &&
+           currentUserId == comment.userId &&
+           _isWithinEditWindow(comment);
+  }
+  
+  bool _isWithinEditWindow(AmityComment comment, {int windowHours = 24}) {
+    if (comment.createdAt == null) return true;
+    
+    final createdTime = comment.createdAt!.millisecondsSinceEpoch;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final windowMs = windowHours * 60 * 60 * 1000;
+    
+    return (now - createdTime) <= windowMs;
+  }
+  
+  bool _isCacheValid(AmityComment comment) {
+    final cacheTime = comment.updatedAt?.millisecondsSinceEpoch ?? 
+                     comment.createdAt?.millisecondsSinceEpoch ?? 0;
+    return (DateTime.now().millisecondsSinceEpoch - cacheTime) < _cacheMaxAgeMs;
+  }
+  
+  void clearCache() {
+    _cache.clear();
+  }
+  
+  int get cacheSize => _cache.length;
+}
+
+// Data classes
+class CommentDetails {
+  final AmityComment comment;
+  final bool isDeleted;
+  final bool hasImages;
+  final int reactionCount;
+  final int repliesCount;
+  final bool canEdit;
+  final bool canReply;
+  
+  CommentDetails({
+    required this.comment,
+    required this.isDeleted,
+    required this.hasImages,
+    required this.reactionCount,
+    required this.repliesCount,
+    required this.canEdit,
+    required this.canReply,
+  });
+  
+  String get displayText {
+    return isDeleted ? '[This comment has been deleted]' : (comment.text ?? '');
+  }
+}
+
+class CommentRetrievalResult {
+  final bool success;
+  final AmityComment? comment;
+  final String? error;
+  
+  CommentRetrievalResult._({
+    required this.success,
+    this.comment,
+    this.error,
+  });
+  
+  factory CommentRetrievalResult.success(AmityComment comment) {
+    return CommentRetrievalResult._(success: true, comment: comment);
+  }
+  
+  factory CommentRetrievalResult.error(String error) {
+    return CommentRetrievalResult._(success: false, error: error);
+  }
+}
+
+// Usage Widget
+class CommentDetailWidget extends StatefulWidget {
+  final String commentId;
+  final String? currentUserId;
+  
+  const CommentDetailWidget({
+    Key? key,
+    required this.commentId,
+    this.currentUserId,
+  }) : super(key: key);
+  
+  @override
+  _CommentDetailWidgetState createState() => _CommentDetailWidgetState();
+}
+
+class _CommentDetailWidgetState extends State<CommentDetailWidget> {
+  late CommentRetrievalService _retrievalService;
+  CommentDetails? _commentDetails;
+  bool _isLoading = true;
+  String? _errorMessage;
+  
+  @override
+  void initState() {
+    super.initState();
+    _retrievalService = CommentRetrievalService(AmityCoreClient.newClient());
+    _loadCommentDetails();
+  }
+  
+  Future<void> _loadCommentDetails() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    
+    try {
+      final details = await _retrievalService.getCommentWithDetails(
+        widget.commentId,
+        currentUserId: widget.currentUserId,
+      );
+      
+      setState(() {
+        _commentDetails = details;
+        _isLoading = false;
+      });
+      
+    } catch (error) {
+      setState(() {
+        _errorMessage = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    
+    if (_errorMessage != null) {
+      return Card(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Icon(Icons.error, color: Colors.red),
+              SizedBox(height: 8),
+              Text(_errorMessage!),
+              SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loadCommentDetails,
+                child: Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    if (_commentDetails == null) {
+      return Center(child: Text('Comment not found'));
+    }
+    
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Comment text
+            Text(
+              _commentDetails!.displayText,
+              style: TextStyle(
+                fontSize: 16,
+                fontStyle: _commentDetails!.isDeleted ? FontStyle.italic : null,
+                color: _commentDetails!.isDeleted ? Colors.grey : null,
+              ),
+            ),
+            
+            SizedBox(height: 8),
+            
+            // Comment metadata
+            Row(
+              children: [
+                Text('${_commentDetails!.reactionCount} reactions'),
+                SizedBox(width: 16),
+                Text('${_commentDetails!.repliesCount} replies'),
+              ],
+            ),
+            
+            // Images
+            if (_commentDetails!.hasImages) ...[
+              SizedBox(height: 8),
+              _buildImageGallery(_commentDetails!.comment.images!),
+            ],
+            
+            SizedBox(height: 16),
+            
+            // Action buttons
+            Row(
+              children: [
+                if (_commentDetails!.canEdit)
+                  ElevatedButton(
+                    onPressed: () => _editComment(),
+                    child: Text('Edit'),
+                  ),
+                if (_commentDetails!.canEdit) SizedBox(width: 8),
+                if (_commentDetails!.canReply)
+                  OutlinedButton(
+                    onPressed: () => _replyToComment(),
+                    child: Text('Reply'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildImageGallery(List<AmityImage> images) {
+    return Container(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: images.length,
+        itemBuilder: (context, index) {
+          final image = images[index];
+          return Container(
+            width: 100,
+            margin: EdgeInsets.only(right: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                image.fileUrl ?? '',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey[300],
+                    child: Icon(Icons.error),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+  
+  void _editComment() {
+    // Navigate to edit comment screen
+    print('Edit comment: ${widget.commentId}');
+  }
+  
+  void _replyToComment() {
+    // Navigate to reply screen
+    print('Reply to comment: ${widget.commentId}');
+  }
+}
+
+// Usage examples
+void main() async {
+  final retrievalService = CommentRetrievalService(AmityCoreClient.newClient());
+  
+  // Basic retrieval
+  try {
+    final comment = await retrievalService.getComment('comment123');
+    if (comment != null) {
+      print('Comment loaded: ${comment.text}');
+    }
+  } catch (error) {
+    print('Failed to load comment: $error');
+  }
+  
+  // Safe retrieval
+  final result = await retrievalService.safeGetComment('comment123');
+  if (result.success) {
+    print('Comment loaded safely: ${result.comment?.text}');
+  } else {
+    print('Failed to load comment: ${result.error}');
+  }
+  
+  // Get comment details
+  try {
+    final details = await retrievalService.getCommentWithDetails(
+      'comment123',
+      currentUserId: 'user456',
+    );
+    print('Comment details: ${details.displayText}');
+    print('Can edit: ${details.canEdit}');
+    print('Reaction count: ${details.reactionCount}');
+  } catch (error) {
+    print('Failed to load comment details: $error');
+  }
+  
+  // Batch retrieval
+  final commentIds = ['comment1', 'comment2', 'comment3'];
+  final comments = await retrievalService.getCommentsByIds(commentIds);
+  
+  comments.forEach((commentId, comment) {
+    if (comment != null) {
+      print('Comment $commentId: ${comment.text}');
+    } else {
+      print('Comment $commentId: Not found');
+    }
+  });
+}
+```
+</Tab>
 </Tabs>
 
 To retrieve multiple comments, you can use `getCommentByIds` method provided by `CommentRepository`. This method accepts a collection of `commentId` as a parameter and returns a [Live Collection](../../core-concepts/live-objects-collections/) of `AmityComment`.
