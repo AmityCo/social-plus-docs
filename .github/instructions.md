@@ -402,3 +402,28 @@ Before completing any file, verify:
 - Developer-friendly explanations
 
 This instructions file should be used as the primary reference for continuing the documentation modernization work. Each new conversation should reference these instructions to maintain consistency and quality standards.
+
+# Social Plus SDK Documentation Structure
+
+## Overview
+This document describes the current organizational structure of the Social Plus SDK documentation, which has been modernized and restructured for better developer experience, logical grouping, and scalability.
+
+## Recent Changes - Core Concepts Module ✅ COMPLETED
+
+### New Core Concepts Structure
+The core-concepts module has been completely restructured into four workflow-based categories:
+
+#### 1. Foundation (`/social-plus-sdk/core-concepts/foundation/`)
+- **Purpose**: SDK fundamentals and infrastructure
+- **Contents**: 
+  - `overview.mdx` - Foundation concepts overview
+  - `core-concept.mdx` - Basic SDK architecture and principles
+  - `session-state.mdx` - Session management and lifecycle
+  - `error-handling.mdx` - Error handling patterns and best practices
+  - `logging.mdx` - Debugging and monitoring tools
+
+#### 2. User Management (`/social-plus-sdk/core-concepts/user-management/`)
+- **Purpose**: Complete user lifecycle and safety management
+- **Contents**:
+  - `overview.mdx` - User management overview
+  - `user-lifecycle`
