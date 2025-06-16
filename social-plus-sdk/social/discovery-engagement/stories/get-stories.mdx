@@ -1,0 +1,1235 @@
+# Get Stories
+
+Retrieve and display stories with real-time updates, comprehensive filtering, and optimized playback support. Perfect for building engaging story feeds, viewers, and analytics dashboards.
+
+## Architecture Overview
+
+<CardGroup>
+  <Card title="Live Objects" icon="refresh">
+    Real-time story updates with automatic synchronization
+  </Card>
+  <Card title="Active Stories" icon="clock">
+    Query non-expired stories with optimistic creation support
+  </Card>
+  <Card title="Collection Management" icon="layer-group">
+    Efficient pagination and sorting for large story sets
+  </Card>
+  <Card title="Multi-Platform Support" icon="devices">
+    Consistent API across iOS, Android, TypeScript, and Flutter
+  </Card>
+</CardGroup>
+
+## Story Retrieval Methods
+
+### Single Story Retrieval
+
+Get individual stories with live updates for real-time property changes including reactions and view status.
+
+**Use Cases:**
+- Story detail views
+- Direct story links
+- Story analytics tracking
+- Real-time reaction updates
+
+### Active Stories Collection
+
+Query collections of non-expired stories with advanced filtering, sorting, and pagination capabilities.
+
+**Use Cases:**
+- Story feeds and timelines
+- Community story browsers
+- Story carousels and galleries
+- Bulk story operations
+
+## Get Single Story
+
+Retrieve individual stories with real-time updates for detailed views and analytics tracking.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| **storyId** | `String` | ✅ | Unique identifier of the story |
+
+### Implementation
+
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift Basic Story Retrieval
+      import AmitySDK
+      
+      class StoryViewer {
+          private let storyRepository: AmityStoryRepository
+          private var storyToken: AmityNotificationToken?
+          
+          init(client: AmityClient) {
+              self.storyRepository = AmityStoryRepository(client: client)
+          }
+          
+          func getStory(storyId: String, completion: @escaping (AmityStory?) -> Void) {
+              // Get story with live updates
+              let liveStory = storyRepository.getStory(storyId: storyId)
+              
+              storyToken = liveStory.observe { liveObject, error in
+                  if let error = error {
+                      print("Error observing story: \(error)")
+                      completion(nil)
+                      return
+                  }
+                  
+                  guard let story = liveObject.object else {
+                      completion(nil)
+                      return
+                  }
+                  
+                  completion(story)
+              }
+          }
+          
+          deinit {
+              storyToken?.invalidate()
+          }
+      }
+      ```
+
+      ```swift Story with Real-time Updates
+      func observeStoryChanges(storyId: String) {
+          let liveStory = storyRepository.getStory(storyId: storyId)
+          
+          storyToken = liveStory.observe { [weak self] liveObject, error in
+              guard let story = liveObject.object else { return }
+              
+              // Handle different story states
+              switch story.syncState {
+              case .syncing:
+                  self?.showLoadingState()
+              case .synced:
+                  self?.displayStory(story)
+                  self?.updateReactionCount(story.reactionsCount)
+                  self?.updateSeenStatus(story.isSeen)
+              case .failed:
+                  self?.showErrorState()
+              @unknown default:
+                  break
+              }
+          }
+      }
+      ```
+
+      ```swift Advanced Story Loading
+      func loadStoryWithPreloading(
+          storyId: String,
+          preloadNext: Bool = true,
+          completion: @escaping (Result<AmityStory, Error>) -> Void
+      ) {
+          let liveStory = storyRepository.getStory(storyId: storyId)
+          
+          liveStory.observeOnce { liveObject, error in
+              if let error = error {
+                  completion(.failure(error))
+                  return
+              }
+              
+              guard let story = liveObject.object else {
+                  completion(.failure(StoryError.notFound))
+                  return
+              }
+              
+              // Preload content for smooth playback
+              self.preloadStoryContent(story) { preloadResult in
+                  switch preloadResult {
+                  case .success:
+                      completion(.success(story))
+                      
+                      // Preload next story if requested
+                      if preloadNext {
+                          self.preloadNextStory(currentStory: story)
+                      }
+                  case .failure(let preloadError):
+                      print("Preload failed: \(preloadError)")
+                      completion(.success(story)) // Still return story even if preload fails
+                  }
+              }
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin Basic Story Retrieval
+      import com.amity.socialcloud.sdk.social.story.*
+      
+      class StoryViewer(private val client: AmityClient) {
+          private val storyRepository = AmityStoryRepository(client)
+          private var storyDisposable: Disposable? = null
+          
+          fun getStory(storyId: String, callback: (AmityStory?) -> Unit) {
+              // Get story with live updates
+              storyDisposable = storyRepository.getStory(storyId)
+                  .observeOn(AndroidSchedulers.mainThread())
+                  .subscribe(
+                      { story ->
+                          callback(story)
+                      },
+                      { error ->
+                          println("Error observing story: $error")
+                          callback(null)
+                      }
+                  )
+          }
+          
+          fun cleanup() {
+              storyDisposable?.dispose()
+          }
+      }
+      ```
+
+      ```kotlin Story with Real-time Updates
+      fun observeStoryChanges(storyId: String) {
+          storyDisposable = storyRepository.getStory(storyId)
+              .observeOn(AndroidSchedulers.mainThread())
+              .subscribe { story ->
+                  // Handle different story states
+                  when (story.syncState) {
+                      AmitySyncState.SYNCING -> {
+                          showLoadingState()
+                      }
+                      AmitySyncState.SYNCED -> {
+                          displayStory(story)
+                          updateReactionCount(story.reactionsCount)
+                          updateSeenStatus(story.isSeen)
+                      }
+                      AmitySyncState.FAILED -> {
+                          showErrorState()
+                      }
+                  }
+              }
+      }
+      ```
+
+      ```kotlin Advanced Story Loading
+      fun loadStoryWithPreloading(
+          storyId: String,
+          preloadNext: Boolean = true,
+          callback: (Result<AmityStory>) -> Unit
+      ) {
+          storyRepository.getStory(storyId)
+              .take(1) // Take only first emission
+              .observeOn(AndroidSchedulers.mainThread())
+              .subscribe(
+                  { story ->
+                      // Preload content for smooth playback
+                      preloadStoryContent(story) { preloadResult ->
+                          when (preloadResult) {
+                              is Result.success -> {
+                                  callback(Result.success(story))
+                                  
+                                  // Preload next story if requested
+                                  if (preloadNext) {
+                                      preloadNextStory(story)
+                                  }
+                              }
+                              is Result.failure -> {
+                                  println("Preload failed: ${preloadResult.exception}")
+                                  callback(Result.success(story)) // Still return story
+                              }
+                          }
+                      }
+                  },
+                  { error ->
+                      callback(Result.failure(RuntimeException(error)))
+                  }
+              )
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="TypeScript">
+    <CodeGroup>
+      ```typescript Basic Story Retrieval
+      import { SocialPlus, Story } from '@amityco/sdk';
+
+      class StoryViewer {
+          private storyRepository = SocialPlus.getStoryRepository();
+          private unsubscribe?: () => void;
+
+          async getStory(storyId: string): Promise<Story | null> {
+              try {
+                  const story = await this.storyRepository.getStory(storyId);
+                  return story;
+              } catch (error) {
+                  console.error('Error retrieving story:', error);
+                  return null;
+              }
+          }
+
+          observeStory(storyId: string, callback: (story: Story | null) => void): void {
+              this.unsubscribe = this.storyRepository.getStory(storyId)
+                  .subscribe({
+                      next: (story) => callback(story),
+                      error: (error) => {
+                          console.error('Error observing story:', error);
+                          callback(null);
+                      }
+                  });
+          }
+
+          cleanup(): void {
+              this.unsubscribe?.();
+          }
+      }
+      ```
+
+      ```typescript Story with Real-time Updates
+      observeStoryChanges(storyId: string): void {
+          this.unsubscribe = this.storyRepository.getStory(storyId)
+              .subscribe({
+                  next: (story) => {
+                      // Handle different story states
+                      switch (story.syncState) {
+                          case 'SYNCING':
+                              this.showLoadingState();
+                              break;
+                          case 'SYNCED':
+                              this.displayStory(story);
+                              this.updateReactionCount(story.reactionsCount);
+                              this.updateSeenStatus(story.isSeen);
+                              break;
+                          case 'FAILED':
+                              this.showErrorState();
+                              break;
+                      }
+                  },
+                  error: (error) => {
+                      console.error('Story observation error:', error);
+                  }
+              });
+      }
+      ```
+
+      ```typescript Advanced Story Loading
+      async loadStoryWithPreloading(
+          storyId: string,
+          preloadNext: boolean = true
+      ): Promise<Story> {
+          try {
+              const story = await this.storyRepository.getStory(storyId);
+              
+              // Preload content for smooth playback
+              try {
+                  await this.preloadStoryContent(story);
+                  
+                  // Preload next story if requested
+                  if (preloadNext) {
+                      this.preloadNextStory(story);
+                  }
+              } catch (preloadError) {
+                  console.warn('Preload failed:', preloadError);
+                  // Continue even if preload fails
+              }
+              
+              return story;
+          } catch (error) {
+              throw new Error(`Failed to load story: ${error}`);
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="Flutter">
+    <CodeGroup>
+      ```dart Basic Story Retrieval
+      import 'package:amity_sdk/amity_sdk.dart';
+
+      class StoryViewer {
+        final AmityStoryRepository _storyRepository = AmitySocialClient.newStoryRepository();
+        StreamSubscription<AmityStory>? _storySubscription;
+
+        Future<AmityStory?> getStory(String storyId) async {
+          try {
+            final story = await _storyRepository.getStory(storyId);
+            return story;
+          } catch (error) {
+            print('Error retrieving story: $error');
+            return null;
+          }
+        }
+
+        void observeStory(String storyId, Function(AmityStory?) callback) {
+          _storySubscription = _storyRepository.getStory(storyId).listen(
+            (story) => callback(story),
+            onError: (error) {
+              print('Error observing story: $error');
+              callback(null);
+            },
+          );
+        }
+
+        void cleanup() {
+          _storySubscription?.cancel();
+        }
+      }
+      ```
+
+      ```dart Story with Real-time Updates
+      void observeStoryChanges(String storyId) {
+        _storySubscription = _storyRepository.getStory(storyId).listen(
+          (story) {
+            // Handle different story states
+            switch (story.syncState) {
+              case AmitySyncState.syncing:
+                _showLoadingState();
+                break;
+              case AmitySyncState.synced:
+                _displayStory(story);
+                _updateReactionCount(story.reactionsCount);
+                _updateSeenStatus(story.isSeen);
+                break;
+              case AmitySyncState.failed:
+                _showErrorState();
+                break;
+            }
+          },
+          onError: (error) {
+            print('Story observation error: $error');
+          },
+        );
+      }
+      ```
+
+      ```dart Advanced Story Loading
+      Future<AmityStory> loadStoryWithPreloading(
+        String storyId, {
+        bool preloadNext = true,
+      }) async {
+        try {
+          final story = await _storyRepository.getStory(storyId);
+          
+          // Preload content for smooth playback
+          try {
+            await _preloadStoryContent(story);
+            
+            // Preload next story if requested
+            if (preloadNext) {
+              _preloadNextStory(story);
+            }
+          } catch (preloadError) {
+            print('Preload failed: $preloadError');
+            // Continue even if preload fails
+          }
+          
+          return story;
+        } catch (error) {
+          throw Exception('Failed to load story: $error');
+        }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+        {/* embed url="https://gist.github.com/cdfefc39e4d2e67ede3418129371fa81" */}
+      </CodeBlock>
+    </CodeGroup>
+  </Tab>
+  <Tab title="Flutter">
+## Get Active Stories
+
+Query collections of non-expired stories with advanced filtering, sorting, and live updates.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| **targetType** | `Enum` | ✅ | Type of target (currently supports 'community') |
+| **targetId** | `String` | ✅ | ID of the designated target |
+| **sortOption** | `Enum` | ❌ | Sorting order: 'firstCreated' or 'lastCreated' |
+
+### Implementation
+
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift Basic Active Stories
+      func getActiveStories(
+          for communityId: String,
+          sortBy: AmityStorySortOption = .firstCreated
+      ) -> AmityCollection<AmityStory> {
+          return storyRepository.getActiveStories(
+              targetType: .community,
+              targetId: communityId,
+              sortOption: sortBy
+          )
+      }
+      ```
+
+      ```swift Active Stories with Live Updates
+      func observeActiveStories(communityId: String) {
+          let collection = storyRepository.getActiveStories(
+              targetType: .community,
+              targetId: communityId,
+              sortOption: .lastCreated
+          )
+          
+          collectionToken = collection.observe { [weak self] collection, changes, error in
+              guard let self = self else { return }
+              
+              if let error = error {
+                  self.handleError(error)
+                  return
+              }
+              
+              // Handle initial load
+              guard let changes = changes else {
+                  self.stories = collection.allObjects()
+                  self.reloadStoryView()
+                  return
+              }
+              
+              // Handle incremental changes
+              self.applyStoryChanges(changes)
+          }
+      }
+      
+      private func applyStoryChanges(_ changes: [AmityCollectionChange]) {
+          for change in changes {
+              switch change {
+              case .insert(let indexPath):
+                  // New story added
+                  insertStory(at: indexPath.item)
+              case .delete(let indexPath):
+                  // Story expired or deleted
+                  removeStory(at: indexPath.item)
+              case .update(let indexPath):
+                  // Story properties changed (reactions, seen status, etc.)
+                  updateStory(at: indexPath.item)
+              }
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin Basic Active Stories
+      fun getActiveStories(
+          communityId: String,
+          sortBy: AmityStorySortOption = AmityStorySortOption.FIRST_CREATED
+      ): LiveData<AmityCollection<AmityStory>> {
+          return storyRepository.getActiveStories(
+              targetType = AmityStoryTargetType.COMMUNITY,
+              targetId = communityId,
+              sortOption = sortBy
+          ).build()
+      }
+      ```
+
+      ```kotlin Active Stories with Live Updates
+      fun observeActiveStories(communityId: String) {
+          val collection = storyRepository.getActiveStories(
+              targetType = AmityStoryTargetType.COMMUNITY,
+              targetId = communityId,
+              sortOption = AmityStorySortOption.LAST_CREATED
+          ).build()
+          
+          collectionDisposable = collection.observeOn(AndroidSchedulers.mainThread())
+              .subscribe { amityCollection ->
+                  // Handle story collection updates
+                  val stories = amityCollection.data ?: emptyList()
+                  updateStoryList(stories)
+                  
+                  // Handle loading state
+                  when (amityCollection.loadingStatus) {
+                      AmityLoadingStatus.LOADING -> showLoading()
+                      AmityLoadingStatus.LOADED -> hideLoading()
+                      AmityLoadingStatus.ERROR -> showError()
+                  }
+              }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="TypeScript">
+    <CodeGroup>
+      ```typescript Basic Active Stories
+      async getActiveStories(
+          communityId: string,
+          sortBy: StorySortOption = 'firstCreated'
+      ): Promise<Story[]> {
+          return await this.storyRepository.getActiveStories({
+              targetType: 'community',
+              targetId: communityId,
+              sortOption: sortBy
+          });
+      }
+      ```
+
+      ```typescript Active Stories with Live Updates
+      observeActiveStories(communityId: string): void {
+          this.unsubscribe = this.storyRepository.getActiveStories({
+              targetType: 'community',
+              targetId: communityId,
+              sortOption: 'lastCreated'
+          }).subscribe({
+              next: (stories) => {
+                  this.updateStoryList(stories);
+              },
+              error: (error) => {
+                  console.error('Error observing active stories:', error);
+                  this.handleError(error);
+              }
+          });
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="Flutter">
+    <CodeGroup>
+      ```dart Basic Active Stories
+      Future<List<AmityStory>> getActiveStories(
+        String communityId, {
+        AmityStorySortOption sortBy = AmityStorySortOption.firstCreated,
+      }) async {
+        final collection = _storyRepository.getActiveStories(
+          targetType: AmityStoryTargetType.COMMUNITY,
+          targetId: communityId,
+          sortOption: sortBy,
+        );
+        
+        return collection.data ?? [];
+      }
+      ```
+
+      ```dart Active Stories with Live Updates
+      void observeActiveStories(String communityId) {
+        _storiesSubscription = _storyRepository.getActiveStories(
+          targetType: AmityStoryTargetType.COMMUNITY,
+          targetId: communityId,
+          sortOption: AmityStorySortOption.lastCreated,
+        ).listen(
+          (stories) {
+            _updateStoryList(stories);
+          },
+          onError: (error) {
+            print('Error observing active stories: $error');
+            _handleError(error);
+          },
+        );
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+## Get Stories by Multiple Targets
+
+Efficiently retrieve stories from multiple communities for comprehensive story feeds and preloading.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| **targets** | `Array<Target>` | ✅ | Array of target pairs (max 10) |
+| **sortOption** | `Enum` | ❌ | Collection sorting order |
+
+<Info>
+  The function accepts a maximum of 10 target pairs and returns only 'SYNCED' stories for optimal performance.
+</Info>
+
+### Implementation
+
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift Multi-Target Story Retrieval
+      func getStoriesFromMultipleCommunities(
+          communityIds: [String]
+      ) -> AmityCollection<AmityStory> {
+          // Create target pairs
+          let targets = communityIds.map { communityId in
+              AmityStoryTarget(targetType: .community, targetId: communityId)
+          }
+          
+          return storyRepository.getStoriesByTargets(
+              targets: targets,
+              sortOption: .lastCreated
+          )
+      }
+      ```
+
+      ```swift Bulk Story Preloading
+      func preloadStoriesForFeed(communityIds: [String]) {
+          let targets = communityIds.prefix(10).map { // Limit to 10
+              AmityStoryTarget(targetType: .community, targetId: $0)
+          }
+          
+          let collection = storyRepository.getStoriesByTargets(
+              targets: Array(targets),
+              sortOption: .lastCreated
+          )
+          
+          collection.observeOnce { [weak self] collection, _, error in
+              guard let stories = collection?.allObjects() else { return }
+              
+              // Preload content for smooth playback
+              self?.preloadStoryContent(stories)
+          }
+      }
+      
+      private func preloadStoryContent(_ stories: [AmityStory]) {
+          let preloadQueue = DispatchQueue(label: "story.preload", qos: .utility)
+          
+          for story in stories {
+              preloadQueue.async {
+                  self.downloadStoryContent(story)
+              }
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin Multi-Target Story Retrieval
+      fun getStoriesFromMultipleCommunities(
+          communityIds: List<String>
+      ): LiveData<AmityCollection<AmityStory>> {
+          // Create target pairs
+          val targets = communityIds.map { communityId ->
+              AmityStoryTarget(AmityStoryTargetType.COMMUNITY, communityId)
+          }
+          
+          return storyRepository.getStoriesByTargets(
+              targets = targets,
+              sortOption = AmityStorySortOption.LAST_CREATED
+          ).build()
+      }
+      ```
+
+      ```kotlin Bulk Story Preloading
+      fun preloadStoriesForFeed(communityIds: List<String>) {
+          val targets = communityIds.take(10).map { // Limit to 10
+              AmityStoryTarget(AmityStoryTargetType.COMMUNITY, it)
+          }
+          
+          val collection = storyRepository.getStoriesByTargets(
+              targets = targets,
+              sortOption = AmityStorySortOption.LAST_CREATED
+          ).build()
+          
+          collection.observeOn(Schedulers.io())
+              .take(1) // Take first emission only
+              .subscribe { amityCollection ->
+                  val stories = amityCollection.data ?: emptyList()
+                  preloadStoryContent(stories)
+              }
+      }
+      
+      private fun preloadStoryContent(stories: List<AmityStory>) {
+          stories.forEach { story ->
+              // Download content in background
+              when (story.dataType) {
+                  AmityDataType.IMAGE -> preloadImage(story)
+                  AmityDataType.VIDEO -> preloadVideo(story)
+              }
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="TypeScript">
+    <CodeGroup>
+      ```typescript Multi-Target Story Retrieval
+      async getStoriesFromMultipleCommunities(
+          communityIds: string[]
+      ): Promise<Story[]> {
+          // Create target pairs
+          const targets = communityIds.map(communityId => ({
+              targetType: 'community' as const,
+              targetId: communityId
+          }));
+          
+          return await this.storyRepository.getStoriesByTargets({
+              targets,
+              sortOption: 'lastCreated'
+          });
+      }
+      ```
+
+      ```typescript Bulk Story Preloading
+      async preloadStoriesForFeed(communityIds: string[]): Promise<void> {
+          const targets = communityIds.slice(0, 10).map(communityId => ({ // Limit to 10
+              targetType: 'community' as const,
+              targetId: communityId
+          }));
+          
+          try {
+              const stories = await this.storyRepository.getStoriesByTargets({
+                  targets,
+                  sortOption: 'lastCreated'
+              });
+              
+              // Preload content for smooth playback
+              await this.preloadStoryContent(stories);
+          } catch (error) {
+              console.error('Failed to preload stories:', error);
+          }
+      }
+      
+      private async preloadStoryContent(stories: Story[]): Promise<void> {
+          const preloadPromises = stories.map(story => this.downloadStoryContent(story));
+          await Promise.allSettled(preloadPromises);
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="Flutter">
+    <CodeGroup>
+      ```dart Multi-Target Story Retrieval
+      Future<List<AmityStory>> getStoriesFromMultipleCommunities(
+        List<String> communityIds,
+      ) async {
+        // Create target pairs
+        final targets = communityIds.map((communityId) => 
+          AmityStoryTarget(AmityStoryTargetType.COMMUNITY, communityId)
+        ).toList();
+        
+        final collection = await _storyRepository.getStoriesByTargets(
+          targets: targets,
+          sortOption: AmityStorySortOption.lastCreated,
+        );
+        
+        return collection.data ?? [];
+      }
+      ```
+
+      ```dart Bulk Story Preloading
+      Future<void> preloadStoriesForFeed(List<String> communityIds) async {
+        final targets = communityIds.take(10).map((communityId) => // Limit to 10
+          AmityStoryTarget(AmityStoryTargetType.COMMUNITY, communityId)
+        ).toList();
+        
+        try {
+          final stories = await _storyRepository.getStoriesByTargets(
+            targets: targets,
+            sortOption: AmityStorySortOption.lastCreated,
+          );
+          
+          // Preload content for smooth playback
+          await _preloadStoryContent(stories.data ?? []);
+        } catch (error) {
+          print('Failed to preload stories: $error');
+        }
+      }
+      
+      Future<void> _preloadStoryContent(List<AmityStory> stories) async {
+        final preloadFutures = stories.map((story) => _downloadStoryContent(story));
+        await Future.wait(preloadFutures, eagerError: false);
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+## Advanced Features
+
+<AccordionGroup>
+  <Accordion title="Story Feed Management">
+    Build comprehensive story feeds with intelligent preloading and caching.
+
+    ```swift
+    class StoryFeedManager {
+        private let storyRepository: AmityStoryRepository
+        private var feedCollections: [String: AmityCollection<AmityStory>] = [:]
+        private var preloadedContent: Set<String> = []
+        
+        func buildStoryFeed(communityIds: [String]) -> AmityCollection<AmityStory> {
+            // Limit to 10 communities for optimal performance
+            let targets = Array(communityIds.prefix(10)).map {
+                AmityStoryTarget(targetType: .community, targetId: $0)
+            }
+            
+            let collection = storyRepository.getStoriesByTargets(
+                targets: targets,
+                sortOption: .lastCreated
+            )
+            
+            collection.observe { [weak self] collection, changes, error in
+                guard let stories = collection?.allObjects() else { return }
+                
+                // Preload first few stories for instant playback
+                self?.preloadPriorityStories(stories.prefix(3))
+                
+                // Update UI
+                self?.updateFeedDisplay(stories)
+            }
+            
+            return collection
+        }
+        
+        private func preloadPriorityStories<T: Sequence>(_ stories: T) where T.Element == AmityStory {
+            for story in stories {
+                guard !preloadedContent.contains(story.storyId) else { continue }
+                
+                preloadStoryContent(story) { [weak self] success in
+                    if success {
+                        self?.preloadedContent.insert(story.storyId)
+                    }
+                }
+            }
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Optimistic Story Handling">
+    Manage optimistic story creation with proper sync state handling.
+
+    ```kotlin
+    class OptimisticStoryManager {
+        fun handleOptimisticStories(stories: List<AmityStory>) {
+            val (syncedStories, unsyncedStories) = stories.partition { 
+                it.syncState == AmitySyncState.SYNCED 
+            }
+            
+            // Prioritize unsynced stories (optimistic creation)
+            val sortedStories = unsyncedStories + syncedStories.sortedByDescending { 
+                it.createdAt 
+            }
+            
+            displayStories(sortedStories)
+            
+            // Monitor unsynced stories for state changes
+            unsyncedStories.forEach { story ->
+                observeStorySyncState(story)
+            }
+        }
+        
+        private fun observeStorySyncState(story: AmityStory) {
+            storyRepository.getStory(story.storyId)
+                .filter { it.syncState != AmitySyncState.SYNCING }
+                .take(1)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe { updatedStory ->
+                    when (updatedStory.syncState) {
+                        AmitySyncState.SYNCED -> {
+                            showSyncSuccess(updatedStory)
+                            refreshStoryInFeed(updatedStory)
+                        }
+                        AmitySyncState.FAILED -> {
+                            showSyncFailure(updatedStory)
+                            offerRetryOption(updatedStory)
+                        }
+                        else -> { /* Handle other states */ }
+                    }
+                }
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Story Pagination and Performance">
+    Implement efficient story pagination for large collections.
+
+    ```typescript
+    class StoryPaginationManager {
+        private readonly PAGE_SIZE = 20;
+        private currentPage = 0;
+        private allStories: Story[] = [];
+        private isLoading = false;
+
+        async loadNextPage(communityId: string): Promise<Story[]> {
+            if (this.isLoading) return [];
+            
+            this.isLoading = true;
+            
+            try {
+                const stories = await this.storyRepository.getActiveStories({
+                    targetType: 'community',
+                    targetId: communityId,
+                    limit: this.PAGE_SIZE,
+                    offset: this.currentPage * this.PAGE_SIZE
+                });
+
+                this.allStories.push(...stories);
+                this.currentPage++;
+                
+                // Preload content for next page
+                this.preloadNextPageContent(communityId);
+                
+                return stories;
+            } finally {
+                this.isLoading = false;
+            }
+        }
+
+        private async preloadNextPageContent(communityId: string): void {
+            const nextPageStories = await this.storyRepository.getActiveStories({
+                targetType: 'community',
+                targetId: communityId,
+                limit: 5, // Preload fewer stories
+                offset: (this.currentPage) * this.PAGE_SIZE
+            });
+
+            // Preload in background
+            nextPageStories.forEach(story => {
+                this.preloadStoryContent(story).catch(error => {
+                    console.warn('Preload failed for story:', story.storyId, error);
+                });
+            });
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Performance Optimization" icon="gauge-high">
+    - **Pagination**: Load stories in batches for large collections
+    - **Preloading**: Download content for first 3-5 stories
+    - **Caching**: Cache frequently accessed stories locally
+    - **Background Processing**: Handle sync operations off main thread
+  </Card>
+  <Card title="Real-time Updates" icon="bolt">
+    - **Live Collections**: Use live objects for automatic updates
+    - **Optimistic UI**: Show unsynced stories immediately
+    - **State Monitoring**: Track sync states for user feedback
+    - **Error Recovery**: Provide retry options for failed stories
+  </Card>
+  <Card title="User Experience" icon="heart">
+    - **Loading States**: Show progress during story retrieval
+    - **Smooth Transitions**: Preload content for seamless playback
+    - **Error Handling**: Graceful fallbacks for missing content
+    - **Offline Support**: Handle network connectivity issues
+  </Card>
+  <Card title="Memory Management" icon="memory">
+    - **Resource Cleanup**: Dispose observers and subscriptions
+    - **Content Disposal**: Clean up preloaded media when not needed
+    - **Collection Limits**: Limit active story collections
+    - **Background Cleanup**: Remove expired stories automatically
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+| Error Type | Description | Recommended Action |
+|------------|-------------|-------------------|
+| **STORY_NOT_FOUND** | Story doesn't exist or has expired | Remove from UI and show placeholder |
+| **PERMISSION_DENIED** | User cannot access story | Handle authentication or show access message |
+| **NETWORK_ERROR** | Connection issues during retrieval | Implement retry with exponential backoff |
+| **CONTENT_UNAVAILABLE** | Story media failed to load | Show error state with retry option |
+| **RATE_LIMITED** | Too many story requests | Implement request throttling |
+| **COLLECTION_ERROR** | Failed to load story collection | Refresh collection or show error state |
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Story Feed with Smart Preloading">
+    Build a comprehensive story feed with intelligent content preloading.
+
+    ```dart
+    class SmartStoryFeed extends StatefulWidget {
+      final List<String> communityIds;
+      
+      @override
+      _SmartStoryFeedState createState() => _SmartStoryFeedState();
+    }
+
+    class _SmartStoryFeedState extends State<SmartStoryFeed> {
+      final _storyRepository = AmitySocialClient.newStoryRepository();
+      List<AmityStory> _stories = [];
+      Set<String> _preloadedStories = {};
+
+      @override
+      void initState() {
+        super.initState();
+        _loadStoryFeed();
+      }
+
+      void _loadStoryFeed() async {
+        final targets = widget.communityIds.take(10).map((id) =>
+          AmityStoryTarget(AmityStoryTargetType.COMMUNITY, id)
+        ).toList();
+
+        _storyRepository.getStoriesByTargets(
+          targets: targets,
+          sortOption: AmityStorySortOption.lastCreated,
+        ).listen((stories) {
+          setState(() {
+            _stories = stories;
+          });
+          
+          // Preload first 3 stories
+          _preloadPriorityStories(stories.take(3));
+        });
+      }
+
+      void _preloadPriorityStories(Iterable<AmityStory> stories) {
+        for (final story in stories) {
+          if (!_preloadedStories.contains(story.storyId)) {
+            _preloadStoryContent(story);
+          }
+        }
+      }
+
+      @override
+      Widget build(BuildContext context) {
+        return ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _stories.length,
+          itemBuilder: (context, index) {
+            final story = _stories[index];
+            return StoryPreviewWidget(
+              story: story,
+              isPreloaded: _preloadedStories.contains(story.storyId),
+              onTap: () => _openStoryViewer(story, index),
+            );
+          },
+        );
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Multi-Community Story Analytics">
+    Track story performance across multiple communities.
+
+    ```typescript
+    class StoryAnalyticsManager {
+        private storyRepository = SocialPlus.getStoryRepository();
+
+        async getMultiCommunityAnalytics(
+            communityIds: string[]
+        ): Promise<CommunityStoryAnalytics[]> {
+            const targets = communityIds.map(id => ({
+                targetType: 'community' as const,
+                targetId: id
+            }));
+
+            const stories = await this.storyRepository.getStoriesByTargets({
+                targets,
+                sortOption: 'lastCreated'
+            });
+
+            // Group stories by community
+            const storiesByCommunity = new Map<string, Story[]>();
+            
+            stories.forEach(story => {
+                const existing = storiesByCommunity.get(story.targetId) || [];
+                existing.push(story);
+                storiesByCommunity.set(story.targetId, existing);
+            });
+
+            // Calculate analytics for each community
+            return Array.from(storiesByCommunity.entries()).map(([communityId, communityStories]) => ({
+                communityId,
+                totalStories: communityStories.length,
+                totalViews: communityStories.reduce((sum, story) => sum + story.impressionsCount, 0),
+                totalReach: communityStories.reduce((sum, story) => sum + story.reachCount, 0),
+                averageEngagement: this.calculateAverageEngagement(communityStories),
+                topPerformingStory: this.findTopPerformingStory(communityStories),
+                contentTypeBreakdown: this.analyzeContentTypes(communityStories)
+            }));
+        }
+
+        private calculateAverageEngagement(stories: Story[]): number {
+            if (stories.length === 0) return 0;
+            
+            const totalEngagement = stories.reduce((sum, story) => 
+                sum + story.reactionsCount + story.impressionsCount, 0
+            );
+            
+            return totalEngagement / stories.length;
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Offline Story Viewer">
+    Build a story viewer that works offline with cached content.
+
+    ```swift
+    class OfflineStoryViewer {
+        private let storyRepository: AmityStoryRepository
+        private let cacheManager: StoryCacheManager
+        
+        func loadStoriesWithOfflineSupport(
+            communityId: String,
+            completion: @escaping ([AmityStory]) -> Void
+        ) {
+            // Try to load from cache first
+            let cachedStories = cacheManager.getCachedStories(for: communityId)
+            if !cachedStories.isEmpty {
+                completion(cachedStories)
+            }
+            
+            // Fetch fresh stories if online
+            guard NetworkReachability.shared.isConnected else {
+                if cachedStories.isEmpty {
+                    completion([]) // No cached stories and offline
+                }
+                return
+            }
+            
+            let collection = storyRepository.getActiveStories(
+                targetType: .community,
+                targetId: communityId
+            )
+            
+            collection.observeOnce { [weak self] collection, _, error in
+                guard let stories = collection?.allObjects() else {
+                    completion(cachedStories) // Fallback to cache
+                    return
+                }
+                
+                // Cache fresh stories
+                self?.cacheManager.cacheStories(stories, for: communityId)
+                
+                // Preload content for offline viewing
+                self?.downloadStoriesForOfflineViewing(stories)
+                
+                completion(stories)
+            }
+        }
+        
+        private func downloadStoriesForOfflineViewing(_ stories: [AmityStory]) {
+            let downloadQueue = DispatchQueue(label: "offline.download", qos: .utility)
+            
+            for story in stories {
+                downloadQueue.async { [weak self] in
+                    self?.downloadStoryContent(story) { success in
+                        if success {
+                            self?.cacheManager.markContentAsDownloaded(story.storyId)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  **Real-time Updates**: To receive live updates for story properties like reactions and seen status, ensure you have subscribed to real-time events. Stories automatically sync state changes when connection is available.
+</Note>
+
+## Related Documentation
+
+- [Create Story](./create-story.mdx) - Learn how to create engaging stories
+- [Story Impressions](./story-impressions.mdx) - Track story analytics and engagement
+- [Story Targets](./get-story-targets.mdx) - Manage story organization and targeting
+- [Delete Story](./delete-story.mdx) - Remove and cleanup stories
+- [Real-time Events](../../core-concepts/realtime-events/) - Live updates and synchronization

@@ -1,0 +1,1098 @@
+# View Comment
+
+Display and render comments with support for rich content types including text, images, and multimedia. Provides comprehensive viewing capabilities with real-time updates, interaction tracking, and customizable presentation layers.
+
+## Architecture Overview
+
+<CardGroup>
+  <Card title="Multi-Content Support" icon="file-text">
+    Support for TEXT, IMAGE, and mixed content types
+  </Card>
+  <Card title="Real-time Rendering" icon="eye">
+    Live updates and automatic content refresh
+  </Card>
+  <Card title="Interaction Tracking" icon="mouse-pointer">
+    View counts, read status, and engagement metrics
+  </Card>
+  <Card title="Custom Presentation" icon="palette">
+    Flexible rendering with custom UI components
+  </Card>
+</CardGroup>
+
+## Supported Content Types
+
+| Content Type | Description | Features |
+|--------------|-------------|----------|
+| **TEXT** | Plain text and rich text comments | Markdown support, mentions, hashtags |
+| **IMAGE** | Image attachments with metadata | Thumbnails, captions, alt text |
+| **MIXED** | Combined text and image content | Rich media with text descriptions |
+| **CUSTOM** | Custom data types | Extensible for app-specific content |
+
+## Key Features
+
+- **Multi-format Content**: Support for text, images, and custom content types
+- **Real-time Updates**: Live comment data with automatic refresh
+- **View Tracking**: Automatic view count and read status updates
+- **Rich Rendering**: Advanced text formatting and media display
+- **Interaction Support**: Built-in reaction, reply, and sharing capabilities
+
+## Implementation Guide
+
+### Basic Comment Viewing
+
+<Tabs>
+  <Tab title="iOS">
+    <CodeGroup>
+      ```swift Basic Comment Display
+      // Display a comment with content type handling
+      func displayComment(_ comment: AmityComment, in cell: CommentCell) {
+          // Basic comment information
+          cell.authorLabel.text = comment.userId
+          cell.timestampLabel.text = formatTimestamp(comment.createdAt)
+          cell.editedLabel.isHidden = comment.editedAt == nil
+          
+          // Handle different content types
+          switch comment.dataType {
+          case .text:
+              displayTextComment(comment, in: cell)
+          case .image:
+              displayImageComment(comment, in: cell)
+          case .custom:
+              displayCustomComment(comment, in: cell)
+          @unknown default:
+              displayUnsupportedComment(in: cell)
+          }
+          
+          // Display interaction elements
+          setupInteractionElements(comment, in: cell)
+      }
+      ```
+
+      ```swift Text Comment Rendering
+      func displayTextComment(_ comment: AmityComment, in cell: CommentCell) {
+          guard let textData = comment.data as? AmityCommentTextData else { return }
+          
+          // Display text content
+          cell.textLabel.text = textData.text
+          cell.textLabel.isHidden = false
+          cell.imageContainer.isHidden = true
+          
+          // Handle mentions and hashtags
+          if let mentions = textData.mentions, !mentions.isEmpty {
+              highlightMentions(in: cell.textLabel, mentions: mentions)
+          }
+          
+          // Apply text formatting
+          applyTextFormatting(to: cell.textLabel, text: textData.text)
+      }
+      ```
+
+      ```swift Image Comment Rendering
+      func displayImageComment(_ comment: AmityComment, in cell: CommentCell) {
+          guard let imageData = comment.data as? AmityCommentImageData else { return }
+          
+          // Display image
+          cell.imageContainer.isHidden = false
+          cell.textLabel.isHidden = imageData.caption?.isEmpty ?? true
+          
+          // Load image with caching
+          if let imageUrl = imageData.fileUrl {
+              cell.imageView.loadImage(from: imageUrl) { [weak cell] result in
+                  switch result {
+                  case .success(let image):
+                      cell?.imageView.image = image
+                      cell?.imageView.accessibilityLabel = imageData.caption
+                  case .failure:
+                      cell?.showImageError()
+                  }
+              }
+          }
+          
+          // Display caption if available
+          if let caption = imageData.caption, !caption.isEmpty {
+              cell.textLabel.text = caption
+              cell.textLabel.isHidden = false
+          }
+      }
+      ```
+
+      ```swift Real-time Comment Updates
+      // Observe comment changes for live updates
+      class CommentViewController: UIViewController {
+          private var commentToken: AmityNotificationToken?
+          
+          func observeComment(_ commentId: String) {
+              commentToken = SocialPlus.shared.observeComment(commentId: commentId) { [weak self] liveObject, error in
+                  guard let comment = liveObject.object else { return }
+                  
+                  DispatchQueue.main.async {
+                      self?.updateCommentDisplay(comment)
+                      self?.updateInteractionCounts(comment)
+                  }
+              }
+          }
+          
+          deinit {
+              commentToken?.invalidate()
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="Android">
+    <CodeGroup>
+      ```kotlin Basic Comment Display
+      // Display a comment with content type handling
+      fun displayComment(comment: AmityComment, holder: CommentViewHolder) {
+          // Basic comment information
+          holder.authorText.text = comment.userId
+          holder.timestampText.text = formatTimestamp(comment.createdAt)
+          holder.editedIndicator.isVisible = comment.editedAt != null
+          
+          // Handle different content types
+          when (comment.dataType) {
+              AmityDataType.TEXT -> displayTextComment(comment, holder)
+              AmityDataType.IMAGE -> displayImageComment(comment, holder)
+              AmityDataType.CUSTOM -> displayCustomComment(comment, holder)
+              else -> displayUnsupportedComment(holder)
+          }
+          
+          // Display interaction elements
+          setupInteractionElements(comment, holder)
+      }
+      ```
+
+      ```kotlin Text Comment Rendering
+      fun displayTextComment(comment: AmityComment, holder: CommentViewHolder) {
+          val textData = comment.data as? AmityCommentTextData ?: return
+          
+          // Display text content
+          holder.textView.text = textData.text
+          holder.textView.isVisible = true
+          holder.imageContainer.isVisible = false
+          
+          // Handle mentions and hashtags
+          textData.mentions?.let { mentions ->
+              if (mentions.isNotEmpty()) {
+                  highlightMentions(holder.textView, mentions)
+              }
+          }
+          
+          // Apply text formatting
+          applyTextFormatting(holder.textView, textData.text)
+      }
+      ```
+
+      ```kotlin Image Comment Rendering
+      fun displayImageComment(comment: AmityComment, holder: CommentViewHolder) {
+          val imageData = comment.data as? AmityCommentImageData ?: return
+          
+          // Display image
+          holder.imageContainer.isVisible = true
+          holder.textView.isVisible = !imageData.caption.isNullOrEmpty()
+          
+          // Load image with caching
+          imageData.fileUrl?.let { imageUrl ->
+              Glide.with(holder.itemView.context)
+                  .load(imageUrl)
+                  .placeholder(R.drawable.image_placeholder)
+                  .error(R.drawable.image_error)
+                  .into(holder.imageView)
+              
+              holder.imageView.contentDescription = imageData.caption
+          }
+          
+          // Display caption if available
+          imageData.caption?.takeIf { it.isNotEmpty() }?.let { caption ->
+              holder.textView.text = caption
+              holder.textView.isVisible = true
+          }
+      }
+      ```
+
+      ```kotlin Real-time Comment Updates
+      // Observe comment changes for live updates
+      class CommentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+          private var commentDisposable: Disposable? = null
+          
+          fun bindWithLiveUpdates(commentId: String) {
+              commentDisposable = SocialPlus.getInstance()
+                  .observeComment(commentId)
+                  .observeOn(AndroidSchedulers.mainThread())
+                  .subscribe(
+                      { comment ->
+                          updateCommentDisplay(comment)
+                          updateInteractionCounts(comment)
+                      },
+                      { error ->
+                          handleError(error)
+                      }
+                  )
+          }
+          
+          fun cleanup() {
+              commentDisposable?.dispose()
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="TypeScript">
+    <CodeGroup>
+      ```typescript Basic Comment Display
+      // Display a comment with content type handling
+      function displayComment(comment: Comment, container: HTMLElement): void {
+          // Basic comment information
+          const authorElement = container.querySelector('.author') as HTMLElement;
+          const timestampElement = container.querySelector('.timestamp') as HTMLElement;
+          const editedIndicator = container.querySelector('.edited') as HTMLElement;
+          
+          authorElement.textContent = comment.userId;
+          timestampElement.textContent = formatTimestamp(comment.createdAt);
+          editedIndicator.style.display = comment.editedAt ? 'block' : 'none';
+          
+          // Handle different content types
+          switch (comment.dataType) {
+              case 'text':
+                  displayTextComment(comment, container);
+                  break;
+              case 'image':
+                  displayImageComment(comment, container);
+                  break;
+              case 'custom':
+                  displayCustomComment(comment, container);
+                  break;
+              default:
+                  displayUnsupportedComment(container);
+                  break;
+          }
+          
+          // Display interaction elements
+          setupInteractionElements(comment, container);
+      }
+      ```
+
+      ```typescript Text Comment Rendering
+      function displayTextComment(comment: Comment, container: HTMLElement): void {
+          const textData = comment.data as CommentTextData;
+          
+          // Display text content
+          const textElement = container.querySelector('.text-content') as HTMLElement;
+          const imageContainer = container.querySelector('.image-container') as HTMLElement;
+          
+          textElement.textContent = textData.text;
+          textElement.style.display = 'block';
+          imageContainer.style.display = 'none';
+          
+          // Handle mentions and hashtags
+          if (textData.mentions && textData.mentions.length > 0) {
+              highlightMentions(textElement, textData.mentions);
+          }
+          
+          // Apply text formatting
+          applyTextFormatting(textElement, textData.text);
+      }
+      ```
+
+      ```typescript Image Comment Rendering
+      function displayImageComment(comment: Comment, container: HTMLElement): void {
+          const imageData = comment.data as CommentImageData;
+          
+          // Display image
+          const imageContainer = container.querySelector('.image-container') as HTMLElement;
+          const textElement = container.querySelector('.text-content') as HTMLElement;
+          const imageElement = container.querySelector('.comment-image') as HTMLImageElement;
+          
+          imageContainer.style.display = 'block';
+          textElement.style.display = imageData.caption ? 'block' : 'none';
+          
+          // Load image with error handling
+          if (imageData.fileUrl) {
+              imageElement.src = imageData.fileUrl;
+              imageElement.alt = imageData.caption || 'Comment image';
+              imageElement.onerror = () => showImageError(container);
+          }
+          
+          // Display caption if available
+          if (imageData.caption) {
+              textElement.textContent = imageData.caption;
+          }
+      }
+      ```
+
+      ```typescript Real-time Comment Updates
+      // Observe comment changes for live updates
+      class CommentRenderer {
+          private subscriptions = new Map<string, () => void>();
+          
+          observeComment(commentId: string, container: HTMLElement): void {
+              const unsubscribe = SocialPlus.observeComment(commentId)
+                  .subscribe({
+                      next: (comment) => {
+                          this.updateCommentDisplay(comment, container);
+                          this.updateInteractionCounts(comment, container);
+                      },
+                      error: (error) => {
+                          this.handleError(error, container);
+                      }
+                  });
+              
+              this.subscriptions.set(commentId, unsubscribe);
+          }
+          
+          cleanup(): void {
+              this.subscriptions.forEach(unsubscribe => unsubscribe());
+              this.subscriptions.clear();
+          }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="Flutter">
+    <CodeGroup>
+      ```dart Basic Comment Display
+      // Display a comment with content type handling
+      Widget buildCommentWidget(AmityComment comment) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Comment header
+                buildCommentHeader(comment),
+                const SizedBox(height: 8),
+                
+                // Comment content based on type
+                buildCommentContent(comment),
+                const SizedBox(height: 8),
+                
+                // Interaction elements
+                buildInteractionElements(comment),
+              ],
+            ),
+          ),
+        );
+      }
+      ```
+
+      ```dart Text Comment Rendering
+      Widget buildTextComment(AmityComment comment) {
+        final textData = comment.data as AmityCommentTextData;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Text content with mentions
+            buildTextWithMentions(
+              text: textData.text,
+              mentions: textData.mentions ?? [],
+            ),
+            
+            // Show edited indicator if applicable
+            if (comment.editedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Edited',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
+        );
+      }
+      ```
+
+      ```dart Image Comment Rendering
+      Widget buildImageComment(AmityComment comment) {
+        final imageData = comment.data as AmityCommentImageData;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image display
+            if (imageData.fileUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: imageData.fileUrl!,
+                  placeholder: (context, url) => Container(
+                    height: 150,
+                    color: Colors.grey[300],
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 150,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.error),
+                  ),
+                ),
+              ),
+            
+            // Caption if available
+            if (imageData.caption?.isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(imageData.caption!),
+              ),
+          ],
+        );
+      }
+      ```
+
+      ```dart Real-time Comment Updates
+      // Observe comment changes for live updates
+      class CommentWidget extends StatefulWidget {
+        final String commentId;
+        
+        const CommentWidget({Key? key, required this.commentId}) : super(key: key);
+        
+        @override
+        _CommentWidgetState createState() => _CommentWidgetState();
+      }
+      
+      class _CommentWidgetState extends State<CommentWidget> {
+        StreamSubscription<AmityComment>? _commentSubscription;
+        AmityComment? _comment;
+        
+        @override
+        void initState() {
+          super.initState();
+          _observeComment();
+        }
+        
+        void _observeComment() {
+          _commentSubscription = SocialPlus.instance
+              .observeComment(widget.commentId)
+              .listen(
+                (comment) {
+                  setState(() {
+                    _comment = comment;
+                  });
+                },
+                onError: (error) {
+                  // Handle error
+                  print('Error observing comment: $error');
+                },
+              );
+        }
+        
+        @override
+        Widget build(BuildContext context) {
+          if (_comment == null) {
+            return const CircularProgressIndicator();
+          }
+          
+          return buildCommentWidget(_comment!);
+        }
+        
+        @override
+        void dispose() {
+          _commentSubscription?.cancel();
+          super.dispose();
+        }
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+### Advanced Viewing Features
+
+<AccordionGroup>
+  <Accordion title="Custom Content Renderers">
+    Create custom renderers for specialized content types and rich media.
+
+    ```typescript
+    interface ContentRenderer {
+        canRender(contentType: string): boolean;
+        render(comment: Comment, container: HTMLElement): void;
+    }
+
+    class CustomContentRenderer implements ContentRenderer {
+        canRender(contentType: string): boolean {
+            return ['poll', 'gif', 'video'].includes(contentType);
+        }
+
+        render(comment: Comment, container: HTMLElement): void {
+            switch (comment.dataType) {
+                case 'poll':
+                    this.renderPoll(comment, container);
+                    break;
+                case 'gif':
+                    this.renderGif(comment, container);
+                    break;
+                case 'video':
+                    this.renderVideo(comment, container);
+                    break;
+            }
+        }
+
+        private renderPoll(comment: Comment, container: HTMLElement): void {
+            const pollData = comment.data as PollData;
+            const pollElement = document.createElement('div');
+            pollElement.className = 'poll-container';
+            
+            // Render poll options
+            pollData.options.forEach((option, index) => {
+                const optionElement = document.createElement('div');
+                optionElement.className = 'poll-option';
+                optionElement.innerHTML = `
+                    <label>
+                        <input type="radio" name="poll-${comment.commentId}" value="${index}">
+                        <span>${option.text}</span>
+                        <span class="vote-count">${option.votes}</span>
+                    </label>
+                `;
+                pollElement.appendChild(optionElement);
+            });
+            
+            container.appendChild(pollElement);
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="View Tracking and Analytics">
+    Implement comprehensive view tracking for comments.
+
+    ```swift
+    class CommentViewTracker {
+        private var viewTrackingTimer: Timer?
+        private var viewStartTime: Date?
+        
+        func startViewTracking(for comment: AmityComment) {
+            viewStartTime = Date()
+            
+            // Track view after minimum view duration
+            viewTrackingTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+                self.recordCommentView(comment)
+            }
+        }
+        
+        func stopViewTracking() {
+            viewTrackingTimer?.invalidate()
+            viewTrackingTimer = nil
+            
+            if let startTime = viewStartTime {
+                let viewDuration = Date().timeIntervalSince(startTime)
+                recordViewDuration(viewDuration)
+            }
+        }
+        
+        private func recordCommentView(_ comment: AmityComment) {
+            // Record view event
+            AnalyticsManager.shared.trackEvent("comment_viewed", parameters: [
+                "comment_id": comment.commentId,
+                "post_id": comment.referenceId,
+                "content_type": comment.dataType.rawValue,
+                "view_duration": Date().timeIntervalSince(viewStartTime ?? Date())
+            ])
+            
+            // Update view count if supported
+            SocialPlus.shared.recordCommentView(commentId: comment.commentId)
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Accessibility Support">
+    Implement comprehensive accessibility features for comment viewing.
+
+    ```kotlin
+    class AccessibleCommentRenderer {
+        fun setupAccessibility(comment: AmityComment, view: View) {
+            // Set content description
+            view.contentDescription = generateContentDescription(comment)
+            
+            // Setup semantic nodes
+            ViewCompat.setAccessibilityDelegate(view, object : AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: AccessibilityNodeInfoCompat
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    
+                    // Add custom actions
+                    info.addAction(
+                        AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                            R.id.action_reply,
+                            "Reply to comment"
+                        )
+                    )
+                    
+                    info.addAction(
+                        AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                            R.id.action_react,
+                            "React to comment"
+                        )
+                    )
+                    
+                    // Set role and state
+                    info.roleDescription = "Comment"
+                    info.isClickable = true
+                }
+                
+                override fun performAccessibilityAction(
+                    host: View,
+                    action: Int,
+                    args: Bundle?
+                ): Boolean {
+                    when (action) {
+                        R.id.action_reply -> {
+                            showReplyDialog(comment)
+                            return true
+                        }
+                        R.id.action_react -> {
+                            showReactionPicker(comment)
+                            return true
+                        }
+                    }
+                    return super.performAccessibilityAction(host, action, args)
+                }
+            })
+        }
+        
+        private fun generateContentDescription(comment: AmityComment): String {
+            val author = comment.userId
+            val timestamp = formatTimestamp(comment.createdAt)
+            val content = when (comment.dataType) {
+                AmityDataType.TEXT -> (comment.data as? AmityCommentTextData)?.text
+                AmityDataType.IMAGE -> "Image comment with caption: ${(comment.data as? AmityCommentImageData)?.caption}"
+                else -> "Custom content comment"
+            }
+            
+            return "Comment by $author at $timestamp. $content. ${comment.reactionsCount} reactions."
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Performance Optimization" icon="gauge-high">
+    - Implement view recycling for comment lists
+    - Use lazy loading for images and media
+    - Cache rendered content for repeated views
+    - Optimize scroll performance with proper view holders
+  </Card>
+  <Card title="User Experience" icon="heart">
+    - Provide smooth scrolling and transitions
+    - Implement proper loading and error states
+    - Support accessibility features and screen readers
+    - Enable keyboard navigation for web platforms
+  </Card>
+  <Card title="Content Handling" icon="file-text">
+    - Sanitize and validate text content
+    - Handle malformed or corrupt media gracefully
+    - Implement proper image aspect ratio handling
+    - Support various image formats and sizes
+  </Card>
+  <Card title="Real-time Updates" icon="bolt">
+    - Use live objects for automatic content updates
+    - Handle network state changes gracefully
+    - Implement optimistic UI updates for interactions
+    - Provide visual feedback for real-time changes
+  </Card>
+</CardGroup>
+
+## Comment Data Structure
+
+```typescript
+interface Comment {
+    commentId: string;
+    postId: string;
+    userId: string;
+    dataType: 'text' | 'image' | 'custom';
+    data: CommentTextData | CommentImageData | CustomData;
+    createdAt: Date;
+    updatedAt: Date;
+    editedAt?: Date;
+    reactionsCount: number;
+    repliesCount: number;
+    myReactions: Reaction[];
+    isDeleted: boolean;
+    metadata?: Record<string, any>;
+}
+
+interface CommentTextData {
+    text: string;
+    mentions?: Mention[];
+    hashtags?: string[];
+}
+
+interface CommentImageData {
+    fileUrl: string;
+    thumbnailUrl?: string;
+    caption?: string;
+    width?: number;
+    height?: number;
+    fileSize?: number;
+    mimeType?: string;
+}
+```
+
+## Styling and Customization
+
+<AccordionGroup>
+  <Accordion title="CSS Styling for Web">
+    ```css
+    .comment-container {
+        border: 1px solid #e1e8ed;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: white;
+    }
+
+    .comment-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .comment-author {
+        font-weight: 600;
+        color: #1da1f2;
+        margin-right: 8px;
+    }
+
+    .comment-timestamp {
+        color: #657786;
+        font-size: 14px;
+    }
+
+    .comment-content {
+        line-height: 1.4;
+        word-wrap: break-word;
+    }
+
+    .comment-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        margin: 8px 0;
+    }
+
+    .comment-interactions {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1px solid #f1f3f4;
+    }
+
+    .interaction-button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border: none;
+        background: none;
+        color: #657786;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .interaction-button:hover {
+        background: #f7f9fa;
+        color: #1da1f2;
+    }
+
+    .interaction-button.active {
+        color: #1da1f2;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="iOS Theme Customization">
+    ```swift
+    struct CommentTheme {
+        let backgroundColor: UIColor
+        let textColor: UIColor
+        let authorColor: UIColor
+        let timestampColor: UIColor
+        let borderColor: UIColor
+        let font: UIFont
+        let authorFont: UIFont
+        
+        static let light = CommentTheme(
+            backgroundColor: .systemBackground,
+            textColor: .label,
+            authorColor: .systemBlue,
+            timestampColor: .secondaryLabel,
+            borderColor: .separator,
+            font: .systemFont(ofSize: 16),
+            authorFont: .boldSystemFont(ofSize: 16)
+        )
+        
+        static let dark = CommentTheme(
+            backgroundColor: .secondarySystemBackground,
+            textColor: .label,
+            authorColor: .systemBlue,
+            timestampColor: .secondaryLabel,
+            borderColor: .separator,
+            font: .systemFont(ofSize: 16),
+            authorFont: .boldSystemFont(ofSize: 16)
+        )
+    }
+
+    extension CommentCell {
+        func applyTheme(_ theme: CommentTheme) {
+            backgroundColor = theme.backgroundColor
+            textLabel.textColor = theme.textColor
+            textLabel.font = theme.font
+            authorLabel.textColor = theme.authorColor
+            authorLabel.font = theme.authorFont
+            timestampLabel.textColor = theme.timestampColor
+            layer.borderColor = theme.borderColor.cgColor
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Android Material Design">
+    ```kotlin
+    class MaterialCommentRenderer {
+        fun applyMaterialDesign(holder: CommentViewHolder, comment: AmityComment) {
+            // Apply Material Design styling
+            holder.itemView.apply {
+                val cardView = this as MaterialCardView
+                cardView.cardElevation = 2.dpToPx()
+                cardView.radius = 8.dpToPx()
+                cardView.strokeColor = ContextCompat.getColor(context, R.color.stroke_color)
+                cardView.strokeWidth = 1.dpToPx()
+            }
+            
+            // Apply typography
+            holder.authorText.apply {
+                setTextAppearance(R.style.TextAppearance_Material3_BodyLarge)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            
+            holder.contentText.apply {
+                setTextAppearance(R.style.TextAppearance_Material3_BodyMedium)
+            }
+            
+            holder.timestampText.apply {
+                setTextAppearance(R.style.TextAppearance_Material3_BodySmall)
+            }
+            
+            // Apply colors based on theme
+            val isDarkTheme = (context.resources.configuration.uiMode and 
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            
+            val textColor = ContextCompat.getColor(
+                context, 
+                if (isDarkTheme) R.color.text_primary_dark else R.color.text_primary_light
+            )
+            
+            holder.contentText.setTextColor(textColor)
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+| Error Type | Description | Recommended Action |
+|------------|-------------|-------------------|
+| **CONTENT_NOT_FOUND** | Comment content unavailable | Show placeholder content |
+| **IMAGE_LOAD_FAILED** | Image failed to load | Show error placeholder with retry |
+| **PERMISSION_DENIED** | User cannot view comment | Hide content or show access message |
+| **NETWORK_ERROR** | Connection issues during loading | Implement retry mechanism |
+| **MALFORMED_CONTENT** | Invalid or corrupt content data | Show error state gracefully |
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Social Media Feed">
+    Display comments in a social media timeline with rich content support.
+
+    ```dart
+    class SocialFeedWidget extends StatelessWidget {
+      final List<AmityComment> comments;
+      
+      @override
+      Widget build(BuildContext context) {
+        return ListView.builder(
+          itemCount: comments.length,
+          itemBuilder: (context, index) {
+            final comment = comments[index];
+            
+            return CommentCard(
+              comment: comment,
+              onReply: (comment) => _showReplyDialog(comment),
+              onReact: (comment, reaction) => _handleReaction(comment, reaction),
+              onShare: (comment) => _shareComment(comment),
+              onReport: (comment) => _reportComment(comment),
+            );
+          },
+        );
+      }
+      
+      void _showReplyDialog(AmityComment comment) {
+        showDialog(
+          context: context,
+          builder: (context) => ReplyDialog(parentComment: comment),
+        );
+      }
+      
+      void _handleReaction(AmityComment comment, String reaction) {
+        SocialPlus.instance.addReaction(
+          commentId: comment.commentId,
+          reactionName: reaction,
+        );
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Comment Moderation Dashboard">
+    Build a moderation interface for reviewing and managing comments.
+
+    ```typescript
+    class ModerationDashboard {
+        private flaggedComments: Comment[] = [];
+        
+        async loadFlaggedComments(): Promise<void> {
+            try {
+                const comments = await SocialPlus.queryComments({
+                    filter: { isFlagged: true },
+                    sortBy: 'flagCount',
+                    order: 'desc'
+                });
+                
+                this.flaggedComments = comments;
+                this.renderModerationInterface();
+            } catch (error) {
+                console.error('Error loading flagged comments:', error);
+            }
+        }
+        
+        renderModerationInterface(): void {
+            const container = document.getElementById('moderation-container');
+            
+            this.flaggedComments.forEach(comment => {
+                const moderationCard = this.createModerationCard(comment);
+                container?.appendChild(moderationCard);
+            });
+        }
+        
+        createModerationCard(comment: Comment): HTMLElement {
+            const card = document.createElement('div');
+            card.className = 'moderation-card';
+            
+            card.innerHTML = `
+                <div class="comment-preview">
+                    ${this.renderCommentPreview(comment)}
+                </div>
+                <div class="moderation-actions">
+                    <button onclick="this.approveComment('${comment.commentId}')">Approve</button>
+                    <button onclick="this.rejectComment('${comment.commentId}')">Reject</button>
+                    <button onclick="this.viewFullComment('${comment.commentId}')">View Details</button>
+                </div>
+                <div class="flag-info">
+                    <span>Flags: ${comment.flagCount}</span>
+                    <span>Reasons: ${comment.flagReasons?.join(', ')}</span>
+                </div>
+            `;
+            
+            return card;
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Live Comment Stream">
+    Create a live comment stream for real-time discussions.
+
+    ```swift
+    class LiveCommentStream: UIViewController {
+        @IBOutlet weak var commentsTableView: UITableView!
+        
+        private var comments: [AmityComment] = []
+        private var liveCollection: AmityCollection<AmityComment>?
+        private var collectionToken: AmityNotificationToken?
+        
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            setupLiveCommentStream()
+        }
+        
+        private func setupLiveCommentStream() {
+            let query = SocialPlus.shared.queryComments(postId: postId)
+                .sortBy(.createdAt, order: .descending)
+                .includeDeleted(false)
+            
+            liveCollection = query.build()
+            
+            collectionToken = liveCollection?.observe { [weak self] collection, changes, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    self.handleError(error)
+                    return
+                }
+                
+                guard let changes = changes else {
+                    // Initial load
+                    self.comments = collection.object
+                    self.commentsTableView.reloadData()
+                    return
+                }
+                
+                // Handle incremental changes
+                self.commentsTableView.performBatchUpdates({
+                    for change in changes {
+                        switch change {
+                        case .insert(let indexPath):
+                            self.comments.insert(collection.object[indexPath.item], at: indexPath.item)
+                            self.commentsTableView.insertRows(at: [IndexPath(row: indexPath.item, section: 0)], 
+                                                             with: .automatic)
+                            
+                        case .delete(let indexPath):
+                            self.comments.remove(at: indexPath.item)
+                            self.commentsTableView.deleteRows(at: [IndexPath(row: indexPath.item, section: 0)], 
+                                                             with: .automatic)
+                            
+                        case .update(let indexPath):
+                            self.comments[indexPath.item] = collection.object[indexPath.item]
+                            self.commentsTableView.reloadRows(at: [IndexPath(row: indexPath.item, section: 0)], 
+                                                             with: .none)
+                        }
+                    }
+                }, completion: nil)
+            }
+        }
+        
+        deinit {
+            collectionToken?.invalidate()
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  For comprehensive comment interaction features, see [Comment Reactions](./get-comment-reaction-data.mdx) and [Reply to Comments](./create-comment.mdx#reply-comments). For advanced rendering customization, refer to [UI Kit Components](../../uikit/).
+</Note>
+
+## Related Documentation
+
+- [Get Comment](./get-comment.mdx) - Retrieve comment data
+- [Comment Reactions](./get-comment-reaction-data.mdx) - Handle comment reactions
+- [Query Comments](./query-comment.mdx) - Advanced comment querying
+- [Real-time Events](../../core-concepts/realtime-events/) - Live updates
+- [UI Kit Components](../../uikit/) - Pre-built comment UI components

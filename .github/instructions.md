@@ -2,64 +2,150 @@
 
 This document provides comprehensive instructions for modernizing and enhancing the Social Plus SDK documentation, with a focus on replacing legacy content with modern Mintlify MDX components and comprehensive developer-friendly documentation.
 
-## Current Status
+## 🎉 MAJOR RESTRUCTURING COMPLETED
 
-### Completed Files
-- **Comments System** (All files completed):
-  - `/social-plus-sdk/social/comments/README.mdx` ✅
-  - `/social-plus-sdk/social/comments/create-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/query-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/mention-in-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/delete-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/edit-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/flag-unflag.mdx` ✅
-  - `/social-plus-sdk/social/comments/get-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/get-latest-comment.mdx` ✅
-  - `/social-plus-sdk/social/comments/get-comment-reaction-data.mdx` ✅
-  - `/social-plus-sdk/social/comments/view-comment.mdx` ✅
+### ✅ Social Module Complete Reorganization (DONE)
 
-- **Stories System** (Completed):
-  - `/social-plus-sdk/social/stories/README.mdx` ✅
-  - `/social-plus-sdk/social/stories/create-story.mdx` ✅ (Modernized - requires minor syntax cleanup)
-  - `/social-plus-sdk/social/stories/get-stories.mdx` ✅
-  - `/social-plus-sdk/social/stories/delete-story.mdx` ✅
-  - `/social-plus-sdk/social/stories/get-global-story-targets.mdx` ✅
-  - `/social-plus-sdk/social/stories/get-story-targets.mdx` ✅
-  - `/social-plus-sdk/social/stories/story-impressions.mdx` ✅
+The Social module has been completely restructured into a logical, workflow-based organization that eliminates scattered functionality and creates intuitive navigation:
 
-- **Reactions System** (Completed):
-  - `/social-plus-sdk/social/reactions/README.mdx` ✅
-  - `/social-plus-sdk/social/reactions/add-remove-reaction.mdx` ✅
-  - `/social-plus-sdk/social/reactions/query-reactions.mdx` ✅
+#### 🔄 **NEW STRUCTURE** (All files moved and organized):
 
-- **Feed System** (Completed):
-  - `/social-plus-sdk/social/feed/README.mdx` ✅
-  - `/social-plus-sdk/social/feed/custom-post-ranking.mdx` ✅
-  - `/social-plus-sdk/social/feed/query-global-feed.mdx` ✅
+1. **📁 Content Management** (`/social-plus-sdk/social/content-management/`)
+   - **Posts** (`posts/`):
+     - `creation/` - All post creation types (text, image, video, poll, etc.)
+     - `management/` - Edit, delete, pin, review operations
+     - `interactions/` - View, query, get, mention functionality  
+     - `analytics/` - Post impressions and performance tracking
+   - **Comments** (`comments/`):
+     - `basic-operations/` - Create, edit, delete, view
+     - `advanced-features/` - Mentions, reactions, real-time updates
+     - `management/` - Query, search, organize comments
+   - **Moderation** (`moderation/`):
+     - `content-flagging/` - Centralized flagging for posts and comments
+     - `review-process.mdx` - Structured moderation workflows
 
-### Remaining Work
+2. **📁 Communities & Spaces** (`/social-plus-sdk/social/communities-spaces/`)
+   - `community-lifecycle/` - Create, update, delete, health monitoring
+   - `membership/` - Join/leave, member queries, roles & permissions
+   - `organization/` - Categories, structure, navigation systems
+   - `discovery/` - Query, get, trending communities
+   - `governance/` - Moderation, guidelines, conflict resolution
 
-#### Next Priority (Social Module Core Features)
-With the Stories, Reactions, Feed, Intelligent Search, Notification Tray, Follow/Unfollow, and Block/Unblock systems now complete, the Social module core features are fully modernized:
+3. **📁 Discovery & Engagement** (`/social-plus-sdk/social/discovery-engagement/`)
+   - `feed/` - Global feeds, custom ranking (moved from `/feed/`)
+   - `search/` - Intelligent search (moved from `/intelligent-search/`)
+   - `reactions/` - Add/remove, query reactions (moved from `/reactions/`)
+   - `notifications/` - Notification tray (moved from `/notification-tray/`)
+   - `stories/` - Create, delete, get stories (moved from `/stories/`)
 
-1. **`/social-plus-sdk/social/intelligent-search/`** - ✅ **COMPLETED** - All files modernized with multi-platform examples, architecture diagrams, and modern MDX components
-2. **`/social-plus-sdk/social/notification-tray/`** - ✅ **COMPLETED** - All files modernized:
-   - `/social-plus-sdk/social/notification-tray/README.mdx` ✅
-   - `/social-plus-sdk/social/notification-tray/get-notification-tray-seen.mdx` ✅
-   - `/social-plus-sdk/social/notification-tray/mark-notification-tray-item-seen.mdx` ✅
-   - `/social-plus-sdk/social/notification-tray/mark-notification-tray-seen.mdx` ✅
-   - `/social-plus-sdk/social/notification-tray/query-notification-tray-item.mdx` ✅
-3. **`/social-plus-sdk/social/follow-unfollow/`** - ✅ **COMPLETED** - All files modernized:
-   - `/social-plus-sdk/social/follow-unfollow/README.mdx` ✅
-   - `/social-plus-sdk/social/follow-unfollow/accept-decline-follow-request.mdx` ✅
-   - `/social-plus-sdk/social/follow-unfollow/follow-unfollow-user.mdx` ✅
-   - `/social-plus-sdk/social/follow-unfollow/get-connection-status-and-connection-counter.mdx` ✅
-   - `/social-plus-sdk/social/follow-unfollow/get-follower-following-list.mdx` ✅
-4. **`/social-plus-sdk/social/block-and-unblock-user.mdx`** - ✅ **COMPLETED** - Individual file modernized with comprehensive MDX components, multi-platform code examples, architecture diagrams, and best practices
+4. **📁 User Interactions** (`/social-plus-sdk/social/user-interactions/`) - ALREADY COMPLETED
+   - `follow-system/` - Follow/unfollow, requests, status, lists
+   - `blocking-system/` - Block/unblock, manage blocked users
 
+#### 🔧 **Key Improvements Made**:
+- ✅ **Eliminated "README" naming** - All files now use descriptive `overview.mdx` names
+- ✅ **Logical grouping** - Related functionality grouped by workflow, not technical boundaries  
+- ✅ **Centralized moderation** - All flagging and moderation in one place
+- ✅ **Better context** - Comments now contextually part of content management
+- ✅ **Reduced duplication** - No more scattered flagging across multiple sections
+- ✅ **Scalable structure** - Easy to add features without disrupting organization
 
-#### Future Expansion Areas
-With the Social module core features now complete, these areas need modernization:
+#### 📋 **Navigation Updated**:
+- ✅ **docs.json completely updated** with new structure
+- ✅ **All file paths corrected** in navigation
+- ✅ **Proper overview files created** for each section
+- ✅ **Cross-references updated** between related sections
+
+#### 🎯 **Token Limit Mitigation Strategies**:
+
+To prevent future token limit issues when working on this documentation:
+
+1. **Work in Focused Chunks**:
+   - Focus on one major section at a time (e.g., just Content Management)
+   - Work on subsections independently (e.g., just Posts → Creation)
+   - Reference the completed structure below instead of re-analyzing
+
+2. **Use Structure References**:
+   - Reference this instruction file for current state
+   - Use file searches to locate specific files instead of full workspace scans
+   - Focus semantic searches on specific directories when needed
+
+3. **Prioritize by Impact**:
+   - **High Priority**: Content Management (most used features)
+   - **Medium Priority**: Discovery & Engagement (user-facing features)  
+   - **Low Priority**: Communities & Spaces (administrative features)
+
+### 🎯 NEXT STEPS FOR CONTINUATION
+
+When resuming work on this documentation:
+
+1. **Content Enhancement** (Next Phase):
+   - Modernize individual MDX files with better components
+   - Add more code examples and implementation guides
+   - Enhance existing overview files with architecture diagrams
+   - Add troubleshooting and best practices sections
+
+2. **Chat Module** (Future):
+   - Apply same restructuring principles to Chat module
+   - Organize by messaging workflows rather than technical boundaries
+
+3. **Video Module** (Future):
+   - Structure video features by use case (calling, streaming, recording)
+
+### Current Status: ✅ RESTRUCTURING PHASE COMPLETE
+
+**What's Done**:
+- ✅ Complete Social module restructuring
+- ✅ All files moved to logical locations  
+- ✅ Navigation updated in docs.json
+- ✅ Overview files created for all major sections
+- ✅ Token-efficient workflow documented
+
+**What's Next**:
+- 🔄 Individual file modernization within new structure
+- 🔄 Enhanced code examples and implementation guides
+- 🔄 Chat module restructuring (future)
+
+---
+
+## Legacy Completed Work (Pre-Restructuring)
+
+### Previously Completed Files (Now Moved/Integrated)
+     - `/social-plus-sdk/social/user-interactions/follow-system/get-connection-status.mdx` ✅ (renamed)
+     - `/social-plus-sdk/social/user-interactions/follow-system/get-follower-following-list.mdx` ✅
+   - **Blocking System** (moved from standalone file):
+     - `/social-plus-sdk/social/user-interactions/blocking-system/README.mdx` ✅
+     - `/social-plus-sdk/social/user-interactions/blocking-system/block-unblock-user.mdx` ✅ (renamed)
+     - `/social-plus-sdk/social/user-interactions/blocking-system/manage-blocked-users.mdx` ✅ (new)
+
+2. **Enhanced Navigation** - ✅ **COMPLETED**:
+   - Updated `docs.json` with logical grouping:
+     - **User Interactions** → Follow System + Blocking System
+     - **Content Discovery** → Feeds & Timelines + Search & Intelligence  
+     - **Engagement** → Reactions + Notifications + Stories
+   - Improved file naming consistency
+   - Added comprehensive cross-references
+
+3. **Content Enhancements** - ✅ **COMPLETED**:
+   - Enhanced main Social README with architecture diagrams and workflows
+   - Created comprehensive hub pages for each major section
+   - Added integration examples and best practices
+   - Improved developer onboarding experience
+
+#### Remaining Work
+
+#### Next Priority (Continue Social Module Enhancement)
+With the core structure complete, focus on content modernization:
+
+1. **Posts Module Enhancement** (Priority Next):
+   - `/social-plus-sdk/social/posts/` - Modernize all post creation and management files
+   - Update create-post subdirectory with modern examples
+   - Add comprehensive multi-platform code examples
+
+2. **Communities Module Enhancement**:
+   - `/social-plus-sdk/social/communities/` - Modernize community management features
+   - Add community moderation best practices
+   - Enhance community discovery and management guides
 
 
 1. **Chat Module**:

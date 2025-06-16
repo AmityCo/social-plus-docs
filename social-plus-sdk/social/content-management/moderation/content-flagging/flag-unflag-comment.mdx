@@ -1,0 +1,1860 @@
+---
+title: "Flag & Unflag Comments"
+description: "Comprehensive content moderation tools for reporting and managing inappropriate comments"
+---
+
+# Flag & Unflag Comments
+
+Empower your community with comprehensive content moderation tools that allow users to report inappropriate content and maintain a safe environment through structured flagging systems.
+
+<CardGroup cols={2}>
+  <Card title="Flag Content" icon="flag">
+    Report inappropriate comments with categorized reasons
+  </Card>
+  <Card title="Unflag Content" icon="flag-checkered">
+    Remove flags from previously reported comments
+  </Card>
+  <Card title="Flag Status" icon="eye">
+    Check if content has been flagged by current user
+  </Card>
+  <Card title="Moderation Workflow" icon="gavel">
+    Streamlined admin review and resolution process
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+The flagging system provides a structured approach to content moderation with multiple layers of protection:
+
+<AccordionGroup>
+  <Accordion title="User-Generated Reports">
+    - **Community Policing**: Users can report inappropriate content
+    - **Categorized Reasons**: Structured flagging with specific violation types
+    - **Context Preservation**: Maintains original content for moderator review
+    - **User Tracking**: Prevents spam reporting with user-specific tracking
+  </Accordion>
+  
+  <Accordion title="Moderation Workflow">
+    - **Admin Dashboard**: Centralized review interface for flagged content
+    - **Review Process**: Systematic evaluation of reported content
+    - **Resolution Actions**: Delete, approve, or escalate flagged content
+    - **Audit Trail**: Complete history of moderation decisions
+  </Accordion>
+  
+  <Accordion title="Community Safety">
+    - **Proactive Moderation**: User-driven content quality control
+    - **Transparent Process**: Clear flagging reasons and resolution feedback
+    - **Appeal System**: Mechanism for reviewing moderation decisions
+    - **Policy Enforcement**: Consistent application of community guidelines
+  </Accordion>
+</AccordionGroup>
+
+## Flag Reasons Reference
+
+| Flag Reason | Code | Description | Severity |
+|-------------|------|-------------|----------|
+| Community Guidelines | `CommunityGuidelines` | Violates community standards | Medium |
+| Harassment/Bullying | `HarassmentOrBullying` | Targeted harassment or bullying | High |
+| Self-Harm/Suicide | `SelfHarmOrSuicide` | Content promoting self-harm | Critical |
+| Violence/Threats | `ViolenceOrThreateningContent` | Violent or threatening content | High |
+| Restricted Items | `SellingRestrictedItems` | Selling prohibited items | Medium |
+| Sexual Content | `SexualContentOrNudity` | Inappropriate sexual content | High |
+| Spam/Scams | `SpamOrScams` | Spam or fraudulent content | Medium |
+| False Information | `FalseInformation` | Misinformation or fake news | Medium |
+| Others | `Others` | Custom reason (max 300 chars) | Variable |
+
+<Info>
+Flag reasons with structured categories are available in iOS, Android, and TypeScript SDKs. Other platforms support basic flagging functionality.
+</Info>
+
+## Flag Comments
+
+<Tabs>
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+enum CommentFlagReason {
+    case communityGuidelines
+    case harassmentOrBullying
+    case selfHarmOrSuicide
+    case violenceOrThreateningContent
+    case sellingRestrictedItems
+    case sexualContentOrNudity
+    case spamOrScams
+    case falseInformation
+    case others(String)
+    
+    var amityReason: AmityContentFlagReason {
+        switch self {
+        case .communityGuidelines:
+            return .communityGuidelines
+        case .harassmentOrBullying:
+            return .harassmentOrBullying
+        case .selfHarmOrSuicide:
+            return .selfHarmOrSuicide
+        case .violenceOrThreateningContent:
+            return .violenceOrThreateningContent
+        case .sellingRestrictedItems:
+            return .sellingRestrictedItems
+        case .sexualContentOrNudity:
+            return .sexualContentOrNudity
+        case .spamOrScams:
+            return .spamOrScams
+        case .falseInformation:
+            return .falseInformation
+        case .others(let description):
+            return .others(description)
+        }
+    }
+}
+
+class CommentModerationManager {
+    private let repository: AmityCommentRepository
+    
+    init(client: AmityClient) {
+        self.repository = AmityCommentRepository(client: client)
+    }
+    
+    // MARK: - Flag Comment
+    func flagComment(
+        commentId: String,
+        reason: CommentFlagReason,
+        customDescription: String? = nil
+    ) async throws -> Bool {
+        return try await withCheckedThrowingContinuation { continuation in
+            var flagReason = reason.amityReason
+            
+            // Handle custom reason with description
+            if case .others(_) = reason, let description = customDescription {
+                flagReason = .others(description)
+            }
+            
+            repository.flagComment(withId: commentId, reason: flagReason) { success, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Unflag Comment
+    func unflagComment(commentId: String) async throws -> Bool {
+        return try await withCheckedThrowingContinuation { continuation in
+            repository.unflagComment(withId: commentId) { success, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Check Flag Status
+    func isCommentFlaggedByMe(commentId: String) async throws -> Bool {
+        return try await withCheckedThrowingContinuation { continuation in
+            repository.isCommentFlaggedByMe(withId: commentId) { isFlagged, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: isFlagged)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Comprehensive Flag Management
+    func manageFlagStatus(
+        commentId: String,
+        shouldFlag: Bool,
+        reason: CommentFlagReason? = nil,
+        customDescription: String? = nil
+    ) async throws -> Bool {
+        
+        let currentlyFlagged = try await isCommentFlaggedByMe(commentId: commentId)
+        
+        if shouldFlag && !currentlyFlagged {
+            guard let reason = reason else {
+                throw ModerationError.reasonRequired
+            }
+            return try await flagComment(commentId: commentId, reason: reason, customDescription: customDescription)
+        } else if !shouldFlag && currentlyFlagged {
+            return try await unflagComment(commentId: commentId)
+        }
+        
+        return currentlyFlagged == shouldFlag
+    }
+    
+    // MARK: - Batch Flag Operations
+    func batchFlagComments(
+        commentIds: [String],
+        reason: CommentFlagReason,
+        customDescription: String? = nil
+    ) async -> [String: Bool] {
+        var results: [String: Bool] = [:]
+        
+        await withTaskGroup(of: (String, Bool).self) { group in
+            for commentId in commentIds {
+                group.addTask {
+                    do {
+                        let success = try await self.flagComment(
+                            commentId: commentId,
+                            reason: reason,
+                            customDescription: customDescription
+                        )
+                        return (commentId, success)
+                    } catch {
+                        print("Failed to flag comment \(commentId): \(error)")
+                        return (commentId, false)
+                    }
+                }
+            }
+            
+            for await (commentId, success) in group {
+                results[commentId] = success
+            }
+        }
+        
+        return results
+    }
+}
+
+// Error Types
+enum ModerationError: Error, LocalizedError {
+    case reasonRequired
+    case flaggingFailed
+    case alreadyFlagged
+    case notFlagged
+    
+    var errorDescription: String? {
+        switch self {
+        case .reasonRequired:
+            return "A reason is required for flagging content"
+        case .flaggingFailed:
+            return "Failed to flag the comment"
+        case .alreadyFlagged:
+            return "This comment is already flagged"
+        case .notFlagged:
+            return "This comment is not flagged"
+        }
+    }
+}
+
+// Usage Examples
+let moderationManager = CommentModerationManager(client: amityClient)
+
+Task {
+    do {
+        // Flag a comment for harassment
+        let flagged = try await moderationManager.flagComment(
+            commentId: "comment123",
+            reason: .harassmentOrBullying
+        )
+        print("Comment flagged: \(flagged)")
+        
+        // Flag with custom reason
+        let customFlagged = try await moderationManager.flagComment(
+            commentId: "comment456",
+            reason: .others("Inappropriate language"),
+            customDescription: "Contains profanity and offensive language"
+        )
+        
+        // Check if comment is flagged
+        let isFlagged = try await moderationManager.isCommentFlaggedByMe(commentId: "comment123")
+        print("Comment is flagged by me: \(isFlagged)")
+        
+        // Unflag if needed
+        if isFlagged {
+            let unflagged = try await moderationManager.unflagComment(commentId: "comment123")
+            print("Comment unflagged: \(unflagged)")
+        }
+        
+    } catch {
+        print("Moderation action failed: \(error)")
+    }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.api.social.comment.AmityCommentRepository
+import com.amity.socialcloud.sdk.model.core.content.AmityContentFlagReason
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+import io.reactivex.rxjava3.disposables.CompositeDisposable
+
+class CommentModerationManager(
+    private val commentRepository: AmityCommentRepository
+) {
+    private val disposables = CompositeDisposable()
+    
+    // Flag comment with reason
+    fun flagComment(
+        commentId: String,
+        reason: AmityContentFlagReason,
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.flagComment(commentId, reason)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                onSuccess()
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Unflag comment
+    fun unflagComment(
+        commentId: String,
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.unflagComment(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                onSuccess()
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Check if comment is flagged by current user
+    fun isCommentFlaggedByMe(
+        commentId: String,
+        onResult: (Boolean) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        commentRepository.isCommentFlaggedByMe(commentId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ isFlagged ->
+                onResult(isFlagged)
+            }, { error ->
+                onError(error)
+            })
+            .let(disposables::add)
+    }
+    
+    // Comprehensive flag management
+    fun manageFlagStatus(
+        commentId: String,
+        shouldFlag: Boolean,
+        reason: AmityContentFlagReason? = null,
+        onSuccess: (Boolean) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        isCommentFlaggedByMe(
+            commentId = commentId,
+            onResult = { currentlyFlagged ->
+                when {
+                    shouldFlag && !currentlyFlagged -> {
+                        if (reason != null) {
+                            flagComment(commentId, reason, 
+                                onSuccess = { onSuccess(true) },
+                                onError = onError
+                            )
+                        } else {
+                            onError(Exception("Reason is required for flagging"))
+                        }
+                    }
+                    !shouldFlag && currentlyFlagged -> {
+                        unflagComment(commentId,
+                            onSuccess = { onSuccess(false) },
+                            onError = onError
+                        )
+                    }
+                    else -> {
+                        onSuccess(currentlyFlagged)
+                    }
+                }
+            },
+            onError = onError
+        )
+    }
+    
+    // Batch flag operations
+    fun batchFlagComments(
+        commentIds: List<String>,
+        reason: AmityContentFlagReason,
+        onProgress: (Int, Int) -> Unit,
+        onComplete: (Map<String, Boolean>) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val results = mutableMapOf<String, Boolean>()
+        var completed = 0
+        val total = commentIds.size
+        
+        commentIds.forEach { commentId ->
+            flagComment(
+                commentId = commentId,
+                reason = reason,
+                onSuccess = {
+                    results[commentId] = true
+                    completed++
+                    onProgress(completed, total)
+                    
+                    if (completed == total) {
+                        onComplete(results.toMap())
+                    }
+                },
+                onError = { error ->
+                    results[commentId] = false
+                    completed++
+                    onProgress(completed, total)
+                    
+                    if (completed == total) {
+                        onComplete(results.toMap())
+                    }
+                }
+            )
+        }
+    }
+    
+    fun cleanup() {
+        disposables.clear()
+    }
+}
+
+// Usage in Activity/Fragment
+class CommentModerationActivity : AppCompatActivity() {
+    private lateinit var moderationManager: CommentModerationManager
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        moderationManager = CommentModerationManager(AmityCommentRepository.get())
+        
+        // Example: Flag comment for harassment
+        flagCommentForHarassment("comment123")
+    }
+    
+    private fun flagCommentForHarassment(commentId: String) {
+        moderationManager.flagComment(
+            commentId = commentId,
+            reason = AmityContentFlagReason.HARASSMENT_OR_BULLYING,
+            onSuccess = {
+                Toast.makeText(this, "Comment flagged successfully", Toast.LENGTH_SHORT).show()
+                updateFlagButton(true)
+            },
+            onError = { error ->
+                Toast.makeText(this, "Failed to flag comment: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+    
+    private fun unflagComment(commentId: String) {
+        moderationManager.unflagComment(
+            commentId = commentId,
+            onSuccess = {
+                Toast.makeText(this, "Comment unflagged", Toast.LENGTH_SHORT).show()
+                updateFlagButton(false)
+            },
+            onError = { error ->
+                Toast.makeText(this, "Failed to unflag comment: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+    
+    private fun checkFlagStatus(commentId: String) {
+        moderationManager.isCommentFlaggedByMe(
+            commentId = commentId,
+            onResult = { isFlagged ->
+                updateFlagButton(isFlagged)
+            },
+            onError = { error ->
+                Log.e("CommentModeration", "Failed to check flag status", error)
+            }
+        )
+    }
+    
+    private fun updateFlagButton(isFlagged: Boolean) {
+        val flagButton = findViewById<Button>(R.id.flagButton)
+        flagButton.text = if (isFlagged) "Unflag" else "Flag"
+        flagButton.setOnClickListener {
+            if (isFlagged) {
+                unflagComment(currentCommentId)
+            } else {
+                showFlagReasonDialog(currentCommentId)
+            }
+        }
+    }
+    
+    private fun showFlagReasonDialog(commentId: String) {
+        val reasons = arrayOf(
+            "Community Guidelines",
+            "Harassment or Bullying",
+            "Violence or Threats",
+            "Spam or Scams",
+            "Sexual Content",
+            "False Information",
+            "Other"
+        )
+        
+        AlertDialog.Builder(this)
+            .setTitle("Why are you flagging this comment?")
+            .setItems(reasons) { _, which ->
+                val reason = when (which) {
+                    0 -> AmityContentFlagReason.COMMUNITY_GUIDELINES
+                    1 -> AmityContentFlagReason.HARASSMENT_OR_BULLYING
+                    2 -> AmityContentFlagReason.VIOLENCE_OR_THREATENING_CONTENT
+                    3 -> AmityContentFlagReason.SPAM_OR_SCAMS
+                    4 -> AmityContentFlagReason.SEXUAL_CONTENT_OR_NUDITY
+                    5 -> AmityContentFlagReason.FALSE_INFORMATION
+                    else -> AmityContentFlagReason.OTHERS
+                }
+                
+                if (reason == AmityContentFlagReason.OTHERS) {
+                    showCustomReasonDialog(commentId)
+                } else {
+                    flagCommentWithReason(commentId, reason)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    private fun showCustomReasonDialog(commentId: String) {
+        val input = EditText(this)
+        input.hint = "Please describe the issue (max 300 characters)"
+        input.filters = arrayOf(InputFilter.LengthFilter(300))
+        
+        AlertDialog.Builder(this)
+            .setTitle("Custom Reason")
+            .setView(input)
+            .setPositiveButton("Flag") { _, _ ->
+                val customReason = input.text.toString().trim()
+                if (customReason.isNotEmpty()) {
+                    flagCommentWithReason(commentId, AmityContentFlagReason.OTHERS)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    private fun flagCommentWithReason(commentId: String, reason: AmityContentFlagReason) {
+        moderationManager.flagComment(
+            commentId = commentId,
+            reason = reason,
+            onSuccess = {
+                Toast.makeText(this, "Comment flagged successfully", Toast.LENGTH_SHORT).show()
+                updateFlagButton(true)
+            },
+            onError = { error ->
+                Toast.makeText(this, "Failed to flag comment: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        moderationManager.cleanup()
+    }
+}
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { CommentRepository, AmityContentFlagReason } from '@amityco/ts-sdk';
+
+interface FlagCommentOptions {
+  commentId: string;
+  reason: AmityContentFlagReason;
+  customDescription?: string;
+}
+
+interface FlagOperationResult {
+  success: boolean;
+  commentId: string;
+  error?: string;
+}
+
+class CommentModerationService {
+  
+  // Flag a comment with reason
+  async flagComment(options: FlagCommentOptions): Promise<boolean> {
+    const { commentId, reason, customDescription } = options;
+    
+    try {
+      let flagReason = reason;
+      
+      // Handle custom reason with description
+      if (reason === AmityContentFlagReason.Others && customDescription) {
+        flagReason = AmityContentFlagReason.Others;
+        // Note: Custom description handling depends on SDK implementation
+      }
+      
+      const result = await CommentRepository.flagComment(commentId, flagReason);
+      return result;
+      
+    } catch (error) {
+      throw new Error(`Failed to flag comment: ${error}`);
+    }
+  }
+  
+  // Unflag a comment
+  async unflagComment(commentId: string): Promise<boolean> {
+    try {
+      const result = await CommentRepository.unflagComment(commentId);
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to unflag comment: ${error}`);
+    }
+  }
+  
+  // Check if comment is flagged by current user
+  async isCommentFlaggedByMe(commentId: string): Promise<boolean> {
+    try {
+      const result = await CommentRepository.isCommentFlaggedByMe(commentId);
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to check flag status: ${error}`);
+    }
+  }
+  
+  // Comprehensive flag management
+  async manageFlagStatus(
+    commentId: string,
+    shouldFlag: boolean,
+    reason?: AmityContentFlagReason,
+    customDescription?: string
+  ): Promise<boolean> {
+    
+    const currentlyFlagged = await this.isCommentFlaggedByMe(commentId);
+    
+    if (shouldFlag && !currentlyFlagged) {
+      if (!reason) {
+        throw new Error('Reason is required for flagging content');
+      }
+      return await this.flagComment({ commentId, reason, customDescription });
+    } else if (!shouldFlag && currentlyFlagged) {
+      return await this.unflagComment(commentId);
+    }
+    
+    return currentlyFlagged === shouldFlag;
+  }
+  
+  // Batch flag operations
+  async batchFlagComments(
+    commentIds: string[],
+    reason: AmityContentFlagReason,
+    customDescription?: string,
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<Map<string, FlagOperationResult>> {
+    
+    const results = new Map<string, FlagOperationResult>();
+    const total = commentIds.length;
+    
+    const promises = commentIds.map(async (commentId, index) => {
+      try {
+        const success = await this.flagComment({ commentId, reason, customDescription });
+        const result: FlagOperationResult = { success, commentId };
+        results.set(commentId, result);
+        
+        onProgress?.(index + 1, total);
+        return result;
+        
+      } catch (error) {
+        const result: FlagOperationResult = {
+          success: false,
+          commentId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+        results.set(commentId, result);
+        
+        onProgress?.(index + 1, total);
+        return result;
+      }
+    });
+    
+    await Promise.allSettled(promises);
+    return results;
+  }
+  
+  // Get flag reasons for UI
+  getFlagReasons(): Array<{ code: AmityContentFlagReason; label: string; description: string }> {
+    return [
+      {
+        code: AmityContentFlagReason.CommunityGuidelines,
+        label: 'Community Guidelines',
+        description: 'Violates community standards'
+      },
+      {
+        code: AmityContentFlagReason.HarassmentOrBullying,
+        label: 'Harassment or Bullying',
+        description: 'Targeted harassment or bullying behavior'
+      },
+      {
+        code: AmityContentFlagReason.SelfHarmOrSuicide,
+        label: 'Self-Harm or Suicide',
+        description: 'Content promoting self-harm or suicide'
+      },
+      {
+        code: AmityContentFlagReason.ViolenceOrThreateningContent,
+        label: 'Violence or Threats',
+        description: 'Violent or threatening content'
+      },
+      {
+        code: AmityContentFlagReason.SellingRestrictedItems,
+        label: 'Restricted Items',
+        description: 'Selling or promoting restricted items'
+      },
+      {
+        code: AmityContentFlagReason.SexualContentOrNudity,
+        label: 'Sexual Content',
+        description: 'Inappropriate sexual content or nudity'
+      },
+      {
+        code: AmityContentFlagReason.SpamOrScams,
+        label: 'Spam or Scams',
+        description: 'Spam or fraudulent content'
+      },
+      {
+        code: AmityContentFlagReason.FalseInformation,
+        label: 'False Information',
+        description: 'Misinformation or fake news'
+      },
+      {
+        code: AmityContentFlagReason.Others,
+        label: 'Other',
+        description: 'Other reason (please specify)'
+      }
+    ];
+  }
+  
+  // Flag with user interaction
+  async flagCommentWithDialog(commentId: string): Promise<boolean> {
+    const reasons = this.getFlagReasons();
+    
+    // This would typically integrate with your UI framework
+    const selectedReason = await this.showReasonDialog(reasons);
+    
+    if (!selectedReason) {
+      return false; // User cancelled
+    }
+    
+    let customDescription: string | undefined;
+    
+    if (selectedReason === AmityContentFlagReason.Others) {
+      customDescription = await this.showCustomReasonDialog();
+      if (!customDescription) {
+        return false; // User cancelled custom description
+      }
+    }
+    
+    return await this.flagComment({
+      commentId,
+      reason: selectedReason,
+      customDescription
+    });
+  }
+  
+  private async showReasonDialog(reasons: Array<{ code: AmityContentFlagReason; label: string }>): Promise<AmityContentFlagReason | null> {
+    // Implementation depends on your UI framework
+    // This is a placeholder for the actual dialog implementation
+    return new Promise((resolve) => {
+      // Show dialog and resolve with selected reason or null if cancelled
+      resolve(AmityContentFlagReason.CommunityGuidelines); // Placeholder
+    });
+  }
+  
+  private async showCustomReasonDialog(): Promise<string | null> {
+    // Implementation depends on your UI framework
+    // This is a placeholder for the actual dialog implementation
+    return new Promise((resolve) => {
+      // Show input dialog and resolve with custom reason or null if cancelled
+      resolve('Custom reason'); // Placeholder
+    });
+  }
+}
+
+// Usage Examples
+const moderationService = new CommentModerationService();
+
+// Basic flagging
+try {
+  const flagged = await moderationService.flagComment({
+    commentId: 'comment123',
+    reason: AmityContentFlagReason.HarassmentOrBullying
+  });
+  
+  if (flagged) {
+    showNotification('Comment flagged successfully');
+  }
+} catch (error) {
+  showError(`Failed to flag comment: ${error.message}`);
+}
+
+// Check flag status and toggle
+const commentId = 'comment456';
+const isFlagged = await moderationService.isCommentFlaggedByMe(commentId);
+
+if (isFlagged) {
+  // Show unflag option
+  const unflagged = await moderationService.unflagComment(commentId);
+  if (unflagged) {
+    updateFlagButton(false);
+  }
+} else {
+  // Show flag options
+  const flagged = await moderationService.flagCommentWithDialog(commentId);
+  if (flagged) {
+    updateFlagButton(true);
+  }
+}
+
+// Batch flagging
+const commentIds = ['comment1', 'comment2', 'comment3'];
+const results = await moderationService.batchFlagComments(
+  commentIds,
+  AmityContentFlagReason.SpamOrScams,
+  undefined,
+  (completed, total) => {
+    console.log(`Progress: ${completed}/${total} comments processed`);
+  }
+);
+
+console.log('Batch flagging results:', results);
+
+// Helper functions (implementation depends on your UI framework)
+function showNotification(message: string) {
+  console.log(message);
+}
+
+function showError(message: string) {
+  console.error(message);
+}
+
+function updateFlagButton(isFlagged: boolean) {
+  const button = document.getElementById('flagButton');
+  if (button) {
+    button.textContent = isFlagged ? 'Unflag' : 'Flag';
+  }
+}
+```
+</Tab>
+
+<Tab title="JavaScript">
+```javascript
+class CommentModerationService {
+  
+  // Flag a comment
+  async flagComment(commentId, reason, customDescription = null) {
+    try {
+      const result = await CommentRepository.flagComment(commentId, reason);
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to flag comment: ${error.message}`);
+    }
+  }
+  
+  // Unflag a comment
+  async unflagComment(commentId) {
+    try {
+      const result = await CommentRepository.unflagComment(commentId);
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to unflag comment: ${error.message}`);
+    }
+  }
+  
+  // Check if comment is flagged by current user
+  async isCommentFlaggedByMe(commentId) {
+    try {
+      const result = await CommentRepository.isCommentFlaggedByMe(commentId);
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to check flag status: ${error.message}`);
+    }
+  }
+  
+  // Toggle flag status
+  async toggleFlagStatus(commentId, reason = 'spam') {
+    const isFlagged = await this.isCommentFlaggedByMe(commentId);
+    
+    if (isFlagged) {
+      return await this.unflagComment(commentId);
+    } else {
+      return await this.flagComment(commentId, reason);
+    }
+  }
+  
+  // Flag with confirmation
+  async flagCommentWithConfirmation(commentId, reason) {
+    const confirmed = confirm('Are you sure you want to flag this comment?');
+    
+    if (confirmed) {
+      return await this.flagComment(commentId, reason);
+    }
+    
+    return false;
+  }
+}
+
+// Usage Examples
+const moderationService = new CommentModerationService();
+
+// Flag a comment
+document.getElementById('flagButton').addEventListener('click', async (e) => {
+  const commentId = e.target.dataset.commentId;
+  
+  try {
+    const flagged = await moderationService.flagComment(commentId, 'harassment');
+    
+    if (flagged) {
+      e.target.textContent = 'Unflag';
+      e.target.classList.add('flagged');
+      showMessage('Comment flagged successfully');
+    }
+  } catch (error) {
+    showError(`Failed to flag comment: ${error.message}`);
+  }
+});
+
+// Check flag status on page load
+document.addEventListener('DOMContentLoaded', async () => {
+  const flagButtons = document.querySelectorAll('.flag-button');
+  
+  for (const button of flagButtons) {
+    const commentId = button.dataset.commentId;
+    
+    try {
+      const isFlagged = await moderationService.isCommentFlaggedByMe(commentId);
+      
+      if (isFlagged) {
+        button.textContent = 'Unflag';
+        button.classList.add('flagged');
+      }
+    } catch (error) {
+      console.error(`Failed to check flag status for ${commentId}:`, error);
+    }
+  }
+});
+
+// Utility functions
+function showMessage(message) {
+  const notification = document.createElement('div');
+  notification.className = 'notification success';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+function showError(message) {
+  const notification = document.createElement('div');
+  notification.className = 'notification error';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 5000);
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+enum CommentFlagReason {
+  communityGuidelines,
+  harassmentOrBullying,
+  selfHarmOrSuicide,
+  violenceOrThreateningContent,
+  sellingRestrictedItems,
+  sexualContentOrNudity,
+  spamOrScams,
+  falseInformation,
+  others,
+}
+
+class CommentModerationService {
+  final AmitySocialClient _socialClient;
+  
+  CommentModerationService(this._socialClient);
+  
+  // Flag a comment
+  Future<bool> flagComment({
+    required String commentId,
+    required CommentFlagReason reason,
+    String? customDescription,
+  }) async {
+    try {
+      await _socialClient.newCommentRepository().flagComment(
+        commentId: commentId,
+        flagReason: _mapToAmityFlagReason(reason),
+      );
+      return true;
+    } catch (error) {
+      print('Failed to flag comment: $error');
+      return false;
+    }
+  }
+  
+  // Unflag a comment
+  Future<bool> unflagComment(String commentId) async {
+    try {
+      await _socialClient.newCommentRepository().unflagComment(
+        commentId: commentId,
+      );
+      return true;
+    } catch (error) {
+      print('Failed to unflag comment: $error');
+      return false;
+    }
+  }
+  
+  // Check if comment is flagged by current user
+  Future<bool> isCommentFlaggedByMe(String commentId) async {
+    try {
+      final result = await _socialClient.newCommentRepository()
+          .isCommentFlaggedByMe(commentId: commentId);
+      return result;
+    } catch (error) {
+      print('Failed to check flag status: $error');
+      return false;
+    }
+  }
+  
+  // Manage flag status
+  Future<bool> manageFlagStatus({
+    required String commentId,
+    required bool shouldFlag,
+    CommentFlagReason? reason,
+    String? customDescription,
+  }) async {
+    final currentlyFlagged = await isCommentFlaggedByMe(commentId);
+    
+    if (shouldFlag && !currentlyFlagged) {
+      if (reason == null) {
+        throw Exception('Reason is required for flagging content');
+      }
+      return await flagComment(
+        commentId: commentId,
+        reason: reason,
+        customDescription: customDescription,
+      );
+    } else if (!shouldFlag && currentlyFlagged) {
+      return await unflagComment(commentId);
+    }
+    
+    return currentlyFlagged == shouldFlag;
+  }
+  
+  // Flag with user confirmation
+  Future<bool> flagCommentWithConfirmation({
+    required String commentId,
+    required CommentFlagReason reason,
+    required BuildContext context,
+    String? customDescription,
+  }) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Flag Comment'),
+          content: Text('Are you sure you want to flag this comment?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Flag'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (confirmed == true) {
+      return await flagComment(
+        commentId: commentId,
+        reason: reason,
+        customDescription: customDescription,
+      );
+    }
+    
+    return false;
+  }
+  
+  // Show flag reason selection dialog
+  Future<CommentFlagReason?> showFlagReasonDialog(BuildContext context) async {
+    return await showDialog<CommentFlagReason>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Why are you flagging this comment?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: CommentFlagReason.values.map((reason) {
+              return ListTile(
+                title: Text(_getFlagReasonLabel(reason)),
+                subtitle: Text(_getFlagReasonDescription(reason)),
+                onTap: () => Navigator.of(context).pop(reason),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+  
+  // Batch flag operations
+  Future<Map<String, bool>> batchFlagComments({
+    required List<String> commentIds,
+    required CommentFlagReason reason,
+    String? customDescription,
+    Function(int completed, int total)? onProgress,
+  }) async {
+    final Map<String, bool> results = {};
+    
+    for (int i = 0; i < commentIds.length; i++) {
+      final commentId = commentIds[i];
+      final success = await flagComment(
+        commentId: commentId,
+        reason: reason,
+        customDescription: customDescription,
+      );
+      
+      results[commentId] = success;
+      onProgress?.call(i + 1, commentIds.length);
+    }
+    
+    return results;
+  }
+  
+  // Helper methods
+  AmityContentFlagReason _mapToAmityFlagReason(CommentFlagReason reason) {
+    switch (reason) {
+      case CommentFlagReason.communityGuidelines:
+        return AmityContentFlagReason.COMMUNITY_GUIDELINES;
+      case CommentFlagReason.harassmentOrBullying:
+        return AmityContentFlagReason.HARASSMENT_OR_BULLYING;
+      case CommentFlagReason.selfHarmOrSuicide:
+        return AmityContentFlagReason.SELF_HARM_OR_SUICIDE;
+      case CommentFlagReason.violenceOrThreateningContent:
+        return AmityContentFlagReason.VIOLENCE_OR_THREATENING_CONTENT;
+      case CommentFlagReason.sellingRestrictedItems:
+        return AmityContentFlagReason.SELLING_RESTRICTED_ITEMS;
+      case CommentFlagReason.sexualContentOrNudity:
+        return AmityContentFlagReason.SEXUAL_CONTENT_OR_NUDITY;
+      case CommentFlagReason.spamOrScams:
+        return AmityContentFlagReason.SPAM_OR_SCAMS;
+      case CommentFlagReason.falseInformation:
+        return AmityContentFlagReason.FALSE_INFORMATION;
+      case CommentFlagReason.others:
+        return AmityContentFlagReason.OTHERS;
+    }
+  }
+  
+  String _getFlagReasonLabel(CommentFlagReason reason) {
+    switch (reason) {
+      case CommentFlagReason.communityGuidelines:
+        return 'Community Guidelines';
+      case CommentFlagReason.harassmentOrBullying:
+        return 'Harassment or Bullying';
+      case CommentFlagReason.selfHarmOrSuicide:
+        return 'Self-Harm or Suicide';
+      case CommentFlagReason.violenceOrThreateningContent:
+        return 'Violence or Threats';
+      case CommentFlagReason.sellingRestrictedItems:
+        return 'Restricted Items';
+      case CommentFlagReason.sexualContentOrNudity:
+        return 'Sexual Content';
+      case CommentFlagReason.spamOrScams:
+        return 'Spam or Scams';
+      case CommentFlagReason.falseInformation:
+        return 'False Information';
+      case CommentFlagReason.others:
+        return 'Other';
+    }
+  }
+  
+  String _getFlagReasonDescription(CommentFlagReason reason) {
+    switch (reason) {
+      case CommentFlagReason.communityGuidelines:
+        return 'Violates community standards';
+      case CommentFlagReason.harassmentOrBullying:
+        return 'Targeted harassment or bullying';
+      case CommentFlagReason.selfHarmOrSuicide:
+        return 'Content promoting self-harm';
+      case CommentFlagReason.violenceOrThreateningContent:
+        return 'Violent or threatening content';
+      case CommentFlagReason.sellingRestrictedItems:
+        return 'Selling prohibited items';
+      case CommentFlagReason.sexualContentOrNudity:
+        return 'Inappropriate sexual content';
+      case CommentFlagReason.spamOrScams:
+        return 'Spam or fraudulent content';
+      case CommentFlagReason.falseInformation:
+        return 'Misinformation or fake news';
+      case CommentFlagReason.others:
+        return 'Other reason (please specify)';
+    }
+  }
+}
+
+// Usage Widget
+class CommentFlagWidget extends StatefulWidget {
+  final AmityComment comment;
+  final String currentUserId;
+  
+  const CommentFlagWidget({
+    Key? key,
+    required this.comment,
+    required this.currentUserId,
+  }) : super(key: key);
+  
+  @override
+  _CommentFlagWidgetState createState() => _CommentFlagWidgetState();
+}
+
+class _CommentFlagWidgetState extends State<CommentFlagWidget> {
+  late CommentModerationService _moderationService;
+  bool _isFlagged = false;
+  bool _isLoading = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _moderationService = CommentModerationService(AmityCoreClient.newClient());
+    _checkFlagStatus();
+  }
+  
+  Future<void> _checkFlagStatus() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    final isFlagged = await _moderationService.isCommentFlaggedByMe(
+      widget.comment.commentId!,
+    );
+    
+    setState(() {
+      _isFlagged = isFlagged;
+      _isLoading = false;
+    });
+  }
+  
+  Future<void> _toggleFlag() async {
+    if (_isFlagged) {
+      // Unflag
+      final success = await _moderationService.unflagComment(
+        widget.comment.commentId!,
+      );
+      
+      if (success) {
+        setState(() {
+          _isFlagged = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Comment unflagged'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      // Show flag reason dialog
+      final reason = await _moderationService.showFlagReasonDialog(context);
+      
+      if (reason != null) {
+        String? customDescription;
+        
+        if (reason == CommentFlagReason.others) {
+          customDescription = await _showCustomReasonDialog();
+          if (customDescription == null) return;
+        }
+        
+        final success = await _moderationService.flagComment(
+          commentId: widget.comment.commentId!,
+          reason: reason,
+          customDescription: customDescription,
+        );
+        
+        if (success) {
+          setState(() {
+            _isFlagged = true;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Comment flagged successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    }
+  }
+  
+  Future<String?> _showCustomReasonDialog() async {
+    String? customReason;
+    
+    await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        final controller = TextEditingController();
+        
+        return AlertDialog(
+          title: Text('Custom Reason'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: 'Please describe the issue (max 300 characters)',
+              border: OutlineInputBorder(),
+            ),
+            maxLength: 300,
+            maxLines: 3,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                customReason = controller.text.trim();
+                Navigator.of(context).pop(customReason);
+              },
+              child: Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    return customReason?.isNotEmpty == true ? customReason : null;
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: _isLoading ? null : _toggleFlag,
+      icon: _isLoading
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              _isFlagged ? Icons.flag : Icons.flag_outlined,
+              color: _isFlagged ? Colors.red : Colors.grey,
+            ),
+      tooltip: _isFlagged ? 'Unflag Comment' : 'Flag Comment',
+    );
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Error Handling
+
+Comprehensive error handling for comment flagging operations:
+
+| Error Type | Cause | Resolution |
+|------------|-------|------------|
+| `ALREADY_FLAGGED` | Comment already flagged by user | Check flag status before flagging |
+| `NOT_FLAGGED` | Attempting to unflag non-flagged content | Verify flag status before unflagging |
+| `INVALID_REASON` | Invalid or missing flag reason | Use valid AmityContentFlagReason enum |
+| `PERMISSION_DENIED` | User lacks flagging permissions | Verify user authentication and permissions |
+| `RATE_LIMIT_EXCEEDED` | Too many flag requests | Implement request throttling |
+| `NETWORK_ERROR` | Connection issues | Implement retry logic with exponential backoff |
+
+<Tabs>
+<Tab title="iOS Error Handling">
+```swift
+extension ModerationError {
+    var userFriendlyMessage: String {
+        switch self {
+        case .alreadyFlagged:
+            return "You have already flagged this comment"
+        case .notFlagged:
+            return "This comment is not flagged by you"
+        case .reasonRequired:
+            return "Please select a reason for flagging this content"
+        case .flaggingFailed:
+            return "Failed to flag comment. Please try again"
+        }
+    }
+}
+
+// Enhanced error handling
+do {
+    let flagged = try await moderationManager.flagComment(
+        commentId: commentId,
+        reason: .harassmentOrBullying
+    )
+    showSuccess("Comment flagged successfully")
+} catch let error as ModerationError {
+    showError(error.userFriendlyMessage)
+} catch {
+    showError("An unexpected error occurred")
+}
+```
+</Tab>
+
+<Tab title="Android Error Handling">
+```kotlin
+sealed class ModerationError(val message: String, val userMessage: String) {
+    object AlreadyFlagged : ModerationError(
+        "Already flagged", 
+        "You have already flagged this comment"
+    )
+    object NotFlagged : ModerationError(
+        "Not flagged", 
+        "This comment is not flagged by you"
+    )
+    object ReasonRequired : ModerationError(
+        "Reason required", 
+        "Please select a reason for flagging this content"
+    )
+    object RateLimitExceeded : ModerationError(
+        "Rate limit exceeded", 
+        "Too many requests. Please wait before trying again"
+    )
+    data class NetworkError(val throwable: Throwable) : ModerationError(
+        "Network error: ${throwable.message}", 
+        "Network error. Please check your connection and try again"
+    )
+}
+
+// Usage with comprehensive error handling
+moderationManager.flagComment(
+    commentId = commentId,
+    reason = AmityContentFlagReason.SPAM_OR_SCAMS,
+    onSuccess = {
+        showSuccess("Comment flagged successfully")
+    },
+    onError = { throwable ->
+        val error = mapToModerationError(throwable)
+        showError(error.userMessage)
+        
+        if (error is ModerationError.RateLimitExceeded) {
+            disableFlagButton(60) // Disable for 1 minute
+        }
+    }
+)
+```
+</Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="User Experience" icon="user">
+    - Clear flagging reasons with descriptions
+    - Confirmation dialogs for irreversible actions
+    - Visual feedback for flag status
+    - Easy unflag mechanism for mistakes
+  </Card>
+  <Card title="Content Moderation" icon="shield">
+    - Structured flag reasons for consistent review
+    - Rate limiting to prevent flag spam
+    - Anonymous flagging to encourage reporting
+    - Clear escalation paths for serious violations
+  </Card>
+  <Card title="Community Safety" icon="heart">
+    - Educational content about community guidelines
+    - Transparent moderation policies
+    - Appeal processes for disputed flags
+    - Regular policy updates and communication
+  </Card>
+  <Card title="Technical Implementation" icon="code">
+    - Efficient flag status caching
+    - Batch operations for mass moderation
+    - Comprehensive error handling
+    - Audit trails for compliance
+  </Card>
+</CardGroup>
+
+### Implementation Guidelines
+
+1. **Flag Status Management**
+   ```typescript
+   // Always check current flag status before operations
+   const isFlagged = await moderationService.isCommentFlaggedByMe(commentId);
+   updateFlagButton(isFlagged);
+   ```
+
+2. **User Feedback**
+   ```typescript
+   // Provide clear feedback for all moderation actions
+   const result = await moderationService.flagComment({
+     commentId,
+     reason: selectedReason
+   });
+   
+   if (result) {
+     showNotification('Thank you for helping keep our community safe');
+   }
+   ```
+
+3. **Rate Limiting**
+   ```typescript
+   // Implement client-side rate limiting
+   const rateLimiter = new RateLimiter(5, 60000); // 5 flags per minute
+   
+   if (!rateLimiter.canProceed()) {
+     showError('Please wait before flagging more content');
+     return;
+   }
+   ```
+
+4. **Audit Trail**
+   ```typescript
+   // Log all moderation actions for compliance
+   await auditService.logModerationAction({
+     action: 'FLAG_COMMENT',
+     commentId,
+     userId,
+     reason,
+     timestamp: new Date()
+   });
+   ```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Community Self-Moderation">
+    **Scenario**: Users report inappropriate comments to help maintain community standards
+    
+    **Implementation**:
+    - Easy-to-use flag buttons with clear reasons
+    - Educational tooltips about community guidelines
+    - Recognition system for helpful community moderators
+    
+    ```typescript
+    // Flag comment with community guidelines education
+    const flagResult = await moderationService.flagCommentWithDialog(commentId);
+    if (flagResult) {
+      showCommunityAppreciation();
+      updateUserModerationScore(currentUser.id);
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Harassment Prevention">
+    **Scenario**: User experiences targeted harassment and needs quick reporting mechanism
+    
+    **Implementation**:
+    - Priority flagging for harassment reports
+    - Immediate hide option for flagged harassment
+    - Escalation to human moderators for review
+    
+    ```typescript
+    // High-priority harassment flag
+    const flagged = await moderationService.flagComment({
+      commentId,
+      reason: AmityContentFlagReason.HarassmentOrBullying,
+      priority: 'HIGH'
+    });
+    
+    if (flagged) {
+      await hideCommentFromReporter(commentId, reporterId);
+      await escalateToModerators(commentId, 'HARASSMENT');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Spam Detection and Reporting">
+    **Scenario**: Users identify spam or promotional content that shouldn't be allowed
+    
+    **Implementation**:
+    - Bulk flagging for spam patterns
+    - Automatic actions for confirmed spam
+    - User education about spam identification
+    
+    ```typescript
+    // Batch flag spam comments
+    const spamCommentIds = identifySpamPattern(comments);
+    const results = await moderationService.batchFlagComments(
+      spamCommentIds,
+      AmityContentFlagReason.SpamOrScams
+    );
+    
+    // Auto-hide if multiple users flag as spam
+    for (const [commentId, flagged] of results) {
+      if (flagged && await getSpamFlagCount(commentId) >= 3) {
+        await autoHideSpamComment(commentId);
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Content Policy Enforcement">
+    **Scenario**: Systematic enforcement of content policies across the platform
+    
+    **Implementation**:
+    - Categorized flagging aligned with policy violations
+    - Automated escalation for policy violations
+    - Clear communication about policy enforcement
+    
+    ```typescript
+    // Policy-aligned flagging system
+    const policyViolations = {
+      [AmityContentFlagReason.SexualContentOrNudity]: 'ADULT_CONTENT_POLICY',
+      [AmityContentFlagReason.ViolenceOrThreateningContent]: 'VIOLENCE_POLICY',
+      [AmityContentFlagReason.FalseInformation]: 'MISINFORMATION_POLICY'
+    };
+    
+    const flagged = await moderationService.flagComment({
+      commentId,
+      reason: selectedReason
+    });
+    
+    if (flagged) {
+      const policy = policyViolations[selectedReason];
+      await triggerPolicyEnforcement(commentId, policy);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+### Smart Flag Detection
+
+```typescript
+class SmartFlagDetection {
+  async analyzeCommentForAutoFlag(comment: AmityComment): Promise<string[]> {
+    const potentialViolations: string[] = [];
+    
+    // Text analysis for potential violations
+    const text = comment.text?.toLowerCase() || '';
+    
+    if (this.containsSpamPatterns(text)) {
+      potentialViolations.push('SPAM_DETECTED');
+    }
+    
+    if (this.containsHarassmentLanguage(text)) {
+      potentialViolations.push('HARASSMENT_DETECTED');
+    }
+    
+    if (this.containsInappropriateContent(text)) {
+      potentialViolations.push('INAPPROPRIATE_CONTENT');
+    }
+    
+    return potentialViolations;
+  }
+  
+  private containsSpamPatterns(text: string): boolean {
+    const spamPatterns = [
+      /buy now/gi,
+      /click here/gi,
+      /limited time/gi,
+      /act fast/gi
+    ];
+    return spamPatterns.some(pattern => pattern.test(text));
+  }
+  
+  private containsHarassmentLanguage(text: string): boolean {
+    // Implementation would use ML models or keyword detection
+    return false; // Placeholder
+  }
+  
+  private containsInappropriateContent(text: string): boolean {
+    // Implementation would use content filtering APIs
+    return false; // Placeholder
+  }
+}
+```
+
+### Moderation Analytics
+
+```typescript
+interface ModerationStats {
+  totalFlags: number;
+  flagsByReason: Record<string, number>;
+  falsePositiveRate: number;
+  averageReviewTime: number;
+  topFlaggers: Array<{ userId: string; flagCount: number }>;
+}
+
+class ModerationAnalytics {
+  async getModerationStats(timeRange: { start: Date; end: Date }): Promise<ModerationStats> {
+    // Implementation would aggregate flag data
+    return {
+      totalFlags: 0,
+      flagsByReason: {},
+      falsePositiveRate: 0,
+      averageReviewTime: 0,
+      topFlaggers: []
+    };
+  }
+  
+  async generateModerationReport(): Promise<string> {
+    const stats = await this.getModerationStats({
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+      end: new Date()
+    });
+    
+    return `
+      Moderation Report (Last 30 Days)
+      ================================
+      Total Flags: ${stats.totalFlags}
+      Most Common Reason: ${this.getMostCommonReason(stats.flagsByReason)}
+      False Positive Rate: ${(stats.falsePositiveRate * 100).toFixed(2)}%
+      Average Review Time: ${stats.averageReviewTime}h
+    `;
+  }
+  
+  private getMostCommonReason(flagsByReason: Record<string, number>): string {
+    return Object.entries(flagsByReason)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
+  }
+}
+```
+
+### Flag Queue Management
+
+```typescript
+interface FlagQueueItem {
+  flagId: string;
+  commentId: string;
+  reason: AmityContentFlagReason;
+  reporterId: string;
+  flaggedAt: Date;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  status: 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
+}
+
+class FlagQueueManager {
+  async getFlagQueue(
+    status: string = 'PENDING',
+    priority?: string,
+    limit: number = 50
+  ): Promise<FlagQueueItem[]> {
+    // Implementation would fetch from moderation queue
+    return [];
+  }
+  
+  async resolveFlaggedComment(
+    flagId: string,
+    action: 'APPROVE' | 'DELETE' | 'HIDE',
+    moderatorId: string,
+    notes?: string
+  ): Promise<boolean> {
+    // Implementation would handle moderation decision
+    return true;
+  }
+  
+  async escalateFlag(flagId: string, reason: string): Promise<boolean> {
+    // Implementation would escalate to senior moderators
+    return true;
+  }
+}
+```
+
+## Integration Examples
+
+### React Component
+
+```jsx
+import React, { useState, useEffect } from 'react';
+
+const CommentFlagButton = ({ comment, currentUser }) => {
+  const [isFlagged, setIsFlagged] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  
+  const moderationService = new CommentModerationService();
+  
+  useEffect(() => {
+    checkFlagStatus();
+  }, [comment.id]);
+  
+  const checkFlagStatus = async () => {
+    try {
+      const flagged = await moderationService.isCommentFlaggedByMe(comment.id);
+      setIsFlagged(flagged);
+    } catch (error) {
+      console.error('Failed to check flag status:', error);
+    }
+  };
+  
+  const handleFlagToggle = async () => {
+    if (isFlagged) {
+      // Unflag
+      setIsLoading(true);
+      try {
+        await moderationService.unflagComment(comment.id);
+        setIsFlagged(false);
+        showNotification('Comment unflagged');
+      } catch (error) {
+        showError('Failed to unflag comment');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Show reason selection
+      setShowReasonDialog(true);
+    }
+  };
+  
+  const handleFlagWithReason = async (reason, customDescription) => {
+    setIsLoading(true);
+    try {
+      await moderationService.flagComment({
+        commentId: comment.id,
+        reason,
+        customDescription
+      });
+      setIsFlagged(true);
+      setShowReasonDialog(false);
+      showNotification('Comment flagged successfully');
+    } catch (error) {
+      showError('Failed to flag comment');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <>
+      <button
+        onClick={handleFlagToggle}
+        disabled={isLoading}
+        className={`flag-button ${isFlagged ? 'flagged' : ''}`}
+      >
+        {isLoading ? 'Loading...' : (isFlagged ? 'Unflag' : 'Flag')}
+      </button>
+      
+      {showReasonDialog && (
+        <FlagReasonDialog
+          onSelect={handleFlagWithReason}
+          onCancel={() => setShowReasonDialog(false)}
+        />
+      )}
+    </>
+  );
+};
+```
+
+<Warning>
+Implement proper rate limiting and validation to prevent flag abuse. Consider requiring account verification or minimum account age for flagging privileges.
+</Warning>
+
+<Note>
+Flag operations are user-specific and help maintain community standards. Always provide clear feedback about the flagging process and community guidelines to users.
+</Note>
