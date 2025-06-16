@@ -70,13 +70,120 @@ When you create a message, SDK first creates the message locally. This locally c
 
 <Tabs>
   <Tab title="iOS">
-    <iframe src="https://gist.github.com/amythee/e4088b5e168246d371dbd8d85bccf989"></iframe>
+    ```swift
+    import AmitySDK
+
+    class MessageSyncManager {
+        private let messageRepository = AmityMessageRepository(client: AmityUIKitManager.client)
+        
+        func observeMessageSyncState(channelId: String) {
+            let liveCollection = messageRepository.getMessages(channelId: channelId)
+            
+            liveCollection.observe { [weak self] collection, _, error in
+                if let error = error {
+                    print("Error observing messages: \(error)")
+                    return
+                }
+                
+                collection.forEach { message in
+                    switch message.syncState {
+                    case .syncing:
+                        print("Message \(message.messageId) is syncing")
+                        // Show loading indicator
+                    case .synced:
+                        print("Message \(message.messageId) is synced")
+                        // Message successfully sent
+                    case .failed:
+                        print("Message \(message.messageId) failed to sync")
+                        // Show retry option or error indicator
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+    }
+    ```
   </Tab>
   <Tab title="Android">
-    <iframe src="https://gist.github.com/amythee/c97bf1d736565dc00d78f63cc27a1d65"></iframe>
+    ```kotlin
+    import com.amity.socialcloud.sdk.AmityCoreClient
+    import com.amity.socialcloud.sdk.chat.message.AmityMessageRepository
+    import io.reactivex.android.schedulers.AndroidSchedulers
+    import io.reactivex.schedulers.Schedulers
+
+    class MessageSyncManager {
+        private val messageRepository = AmityCoreClient.newMessageRepository()
+        
+        fun observeMessageSyncState(channelId: String) {
+            messageRepository.getMessages(channelId)
+                .build()
+                .query()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    { pagedList ->
+                        pagedList.forEach { message ->
+                            when (message.syncState) {
+                                AmityMessage.State.CREATED -> {
+                                    println("Message ${message.messageId} is syncing")
+                                    // Show loading indicator
+                                }
+                                AmityMessage.State.SYNCED -> {
+                                    println("Message ${message.messageId} is synced")
+                                    // Message successfully sent
+                                }
+                                AmityMessage.State.ERROR -> {
+                                    println("Message ${message.messageId} failed to sync")
+                                    // Show retry option or error indicator
+                                }
+                            }
+                        }
+                    },
+                    { error ->
+                        println("Error observing messages: $error")
+                    }
+                )
+        }
+    }
+    ```
   </Tab>
-  <Tab title="Typescript">
-    <iframe src="https://gist.github.com/amythee/280009117206ae0e8fddaa6cf63652f5"></iframe>
+  <Tab title="TypeScript">
+    ```typescript
+    import { MessageRepository, runQuery } from '@amityco/ts-sdk';
+
+    class MessageSyncManager {
+        async observeMessageSyncState(channelId: string) {
+            const liveCollection = MessageRepository.getMessages({
+                channelId,
+                limit: 20
+            });
+            
+            liveCollection.on('dataUpdated', (messages) => {
+                messages.forEach(message => {
+                    switch (message.syncState) {
+                        case 'syncing':
+                            console.log(`Message ${message.messageId} is syncing`);
+                            // Show loading indicator
+                            break;
+                        case 'synced':
+                            console.log(`Message ${message.messageId} is synced`);
+                            // Message successfully sent
+                            break;
+                        case 'failed':
+                            console.log(`Message ${message.messageId} failed to sync`);
+                            // Show retry option or error indicator
+                            break;
+                    }
+                });
+            });
+            
+            liveCollection.on('dataError', (error) => {
+                console.error('Error observing messages:', error);
+            });
+        }
+    }
+    ```
   </Tab>
 </Tabs>
 
@@ -152,10 +259,97 @@ If the network connection is interrupted during the request or the server return
 
 <Tabs>
   <Tab title="iOS">
-    <iframe src="https://gist.github.com/amythee/69df4ea51776448f36c1c9a12fbd8f60"></iframe>
+    ```swift
+    extension MessageSyncManager {
+        func handleMessageRetry(message: AmityMessage) {
+            // Check if message failed to sync
+            if message.syncState == .failed {
+                print("Message failed to sync after 3 retries")
+                
+                // Option 1: Retry manually
+                retryFailedMessage(message)
+                
+                // Option 2: Delete failed message
+                deleteFailedMessage(message)
+            }
+        }
+        
+        private func retryFailedMessage(_ message: AmityMessage) {
+            // Recreate the message to retry sending
+            let builder = AmityMessageBuilder()
+                .setChannelId(message.channelId)
+                .setText(message.data?["text"] as? String ?? "")
+            
+            messageRepository.createMessage(with: builder.build()) { result in
+                switch result {
+                case .success(let newMessage):
+                    print("Message retry successful: \(newMessage.messageId)")
+                case .failure(let error):
+                    print("Message retry failed: \(error)")
+                }
+            }
+        }
+        
+        private func deleteFailedMessage(_ message: AmityMessage) {
+            messageRepository.softDeleteMessage(messageId: message.messageId) { result in
+                switch result {
+                case .success:
+                    print("Failed message deleted successfully")
+                case .failure(let error):
+                    print("Failed to delete message: \(error)")
+                }
+            }
+        }
+    }
+    ```
   </Tab>
   <Tab title="Android">
-    <iframe src="https://gist.github.com/amythee/8af21da25840b2abc194e82b2a7dc0f7"></iframe>
+    ```kotlin
+    fun handleMessageRetry(message: AmityMessage) {
+        // Check if message failed to sync
+        if (message.syncState == AmityMessage.State.ERROR) {
+            println("Message failed to sync after 3 retries")
+            
+            // Option 1: Retry manually
+            retryFailedMessage(message)
+            
+            // Option 2: Delete failed message
+            deleteFailedMessage(message)
+        }
+    }
+    
+    private fun retryFailedMessage(message: AmityMessage) {
+        // Recreate the message to retry sending
+        val messageData = message.data as? Map<String, Any>
+        val text = messageData?.get("text") as? String ?: ""
+        
+        messageRepository.createTextMessage(message.channelId, text)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { newMessage ->
+                    println("Message retry successful: ${newMessage.messageId}")
+                },
+                { error ->
+                    println("Message retry failed: $error")
+                }
+            )
+    }
+    
+    private fun deleteFailedMessage(message: AmityMessage) {
+        messageRepository.softDeleteMessage(message.messageId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                {
+                    println("Failed message deleted successfully")
+                },
+                { error ->
+                    println("Failed to delete message: $error")
+                }
+            )
+    }
+    ```
   </Tab>
 </Tabs>
 
@@ -169,10 +363,116 @@ You can use existing `softDeleteMessage()` method in `AmityMessageRepository` cl
 
 <Tabs>
   <Tab title="iOS">
-    <iframe src="https://gist.github.com/amythee/fcc802b6b4b2d4731d2bd62a5b4f89a9"></iframe>
+    ```swift
+    extension MessageSyncManager {
+        func deleteFailedMessage(messageId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+            messageRepository.softDeleteMessage(messageId: messageId) { result in
+                switch result {
+                case .success:
+                    print("Failed message deleted successfully")
+                    completion(.success(()))
+                case .failure(let error):
+                    print("Failed to delete message: \(error.localizedDescription)")
+                    completion(.failure(error))
+                }
+            }
+        }
+        
+        // Delete all failed messages in a channel
+        func deleteAllFailedMessages(channelId: String, completion: @escaping (Result<Int, Error>) -> Void) {
+            let liveCollection = messageRepository.getMessages(channelId: channelId)
+            
+            liveCollection.observe { collection, _, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+                
+                let failedMessages = collection.filter { $0.syncState == .failed }
+                var deletedCount = 0
+                
+                let group = DispatchGroup()
+                
+                for message in failedMessages {
+                    group.enter()
+                    self.deleteFailedMessage(messageId: message.messageId) { result in
+                        switch result {
+                        case .success:
+                            deletedCount += 1
+                        case .failure(let error):
+                            print("Failed to delete message \(message.messageId): \(error)")
+                        }
+                        group.leave()
+                    }
+                }
+                
+                group.notify(queue: .main) {
+                    completion(.success(deletedCount))
+                }
+            }
+        }
+    }
+    ```
   </Tab>
   <Tab title="Android">
-    <iframe src="https://gist.github.com/amythee/3b6220333711696506a6cf88b1232589"></iframe>
+    ```kotlin
+    fun deleteFailedMessage(
+        messageId: String,
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        messageRepository.softDeleteMessage(messageId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                {
+                    println("Failed message deleted successfully")
+                    onSuccess()
+                },
+                { error ->
+                    println("Failed to delete message: $error")
+                    onError(error)
+                }
+            )
+    }
+    
+    // Delete all failed messages in a channel
+    fun deleteAllFailedMessages(
+        channelId: String,
+        onSuccess: (Int) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        messageRepository.getMessages(channelId)
+            .build()
+            .query()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { pagedList ->
+                    val failedMessages = pagedList.filter { 
+                        it.syncState == AmityMessage.State.ERROR 
+                    }
+                    
+                    var deletedCount = 0
+                    
+                    failedMessages.forEach { message ->
+                        deleteFailedMessage(
+                            message.messageId,
+                            onSuccess = { deletedCount++ },
+                            onError = { error ->
+                                println("Failed to delete message ${message.messageId}: $error")
+                            }
+                        )
+                    }
+                    
+                    onSuccess(deletedCount)
+                },
+                { error ->
+                    onError(error)
+                }
+            )
+    }
+    ```
   </Tab>
 </Tabs>
 
@@ -182,10 +482,70 @@ If you do not care about any failed messages, SDK also provides deleteFailedMess
 
 <Tabs>
   <Tab title="iOS">
-    <iframe src="https://gist.github.com/amythee/ad88242edcbe4abe2434563ded4545c7"></iframe>
+    ```swift
+    extension MessageSyncManager {
+        func deleteAllFailedMessages(completion: @escaping (Result<Void, Error>) -> Void) {
+            messageRepository.deleteAllFailedMessages { result in
+                switch result {
+                case .success:
+                    print("All failed messages deleted successfully")
+                    completion(.success(()))
+                case .failure(let error):
+                    print("Failed to delete all failed messages: \(error.localizedDescription)")
+                    completion(.failure(error))
+                }
+            }
+        }
+        
+        // Delete all failed messages on SDK initialization
+        func deleteFailedMessagesOnInit() {
+            // This is typically called during app startup or SDK initialization
+            deleteAllFailedMessages { result in
+                switch result {
+                case .success:
+                    print("Cleanup completed: All failed messages from previous session deleted")
+                case .failure(let error):
+                    print("Cleanup failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    ```
   </Tab>
   <Tab title="Android">
-    <iframe src="https://gist.github.com/amythee/ea3261edbfcc01a2605b2bbd0c6cbaa6"></iframe>
+    ```kotlin
+    fun deleteAllFailedMessages(
+        onSuccess: () -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        messageRepository.deleteAllFailedMessages()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                {
+                    println("All failed messages deleted successfully")
+                    onSuccess()
+                },
+                { error ->
+                    println("Failed to delete all failed messages: $error")
+                    onError(error)
+                }
+            )
+    }
+    
+    // Delete all failed messages on SDK initialization
+    fun deleteFailedMessagesOnInit() {
+        // This is typically called during app startup or SDK initialization
+        deleteAllFailedMessages(
+            onSuccess = {
+                println("Cleanup completed: All failed messages from previous session deleted")
+            },
+            onError = { error ->
+                println("Cleanup failed: $error")
+            }
+        )
+    }
+    ```
   </Tab>
 </Tabs>
 

@@ -20,14 +20,15 @@ Video messages enable users to share dynamic visual content, from quick clips to
 
 ## Key Features
 
-- **Automatic Compression**: Videos are automatically resized to 480p maximum
-- **Thumbnail Generation**: Video thumbnails are created automatically
-- **Caption Support**: Up to 1,000 characters of text with each video
-- **Cross-Platform**: Consistent playback across iOS, Android, and web
-- **Large File Support**: Support for videos up to 1GB in size
+- **Automatic Compression**: Videos are automatically resized to 480p maximum for optimal streaming
+- **Thumbnail Generation**: Video thumbnails are created automatically for quick previews
+- **Caption Support**: Add up to 1,000 characters of text with each video
+- **Cross-Platform**: Consistent playback across iOS, Android, and web platforms
+- **Large File Support**: Handle videos up to 1GB with efficient streaming
+- **Format Support**: MP4, MOV, AVI, and other common video formats
 
 <Info>
-**Automatic Processing**: Videos are automatically resized to a maximum of 480p resolution, and thumbnails are generated automatically for better user experience.
+**Automatic Processing**: Videos are automatically resized to a maximum of 480p resolution to balance quality and performance, with thumbnails generated for better user experience.
 </Info>
 
 ## Parameters
@@ -36,8 +37,8 @@ Video messages enable users to share dynamic visual content, from quick clips to
   The unique identifier of the subchannel where the video message will be sent
 </ParamField>
 
-<ParamField path="videoPath" type="string" required>
-  The local file path or URL of the video to be sent
+<ParamField path="videoId" type="string" required>
+  The file ID of the uploaded video. Upload the video file first to get this ID
 </ParamField>
 
 <ParamField path="caption" type="string">
@@ -47,6 +48,1467 @@ Video messages enable users to share dynamic visual content, from quick clips to
 <ParamField path="tags" type="string[]">
   Array of arbitrary strings for message categorization and querying
 </ParamField>
+
+## Implementation
+
+<Steps>
+<Step title="Upload Video">
+  Upload your video file to get a file ID
+</Step>
+<Step title="Create Message">
+  Use the file ID to create a video message with optional caption
+</Step>
+<Step title="Send to Subchannel">
+  The message is automatically sent to the specified subchannel
+</Step>
+</Steps>
+
+<Tabs>
+<Tab title="iOS">
+**Version 6**
+
+```swift
+import AmitySDK
+import AVKit
+import MobileCoreServices
+
+class VideoMessageManager {
+    private let messageRepository: AmityMessageRepository
+    private let fileRepository: AmityFileRepository
+    
+    init(client: AmityClient) {
+        self.messageRepository = AmityMessageRepository(client: client)
+        self.fileRepository = AmityFileRepository(client: client)
+    }
+    
+    // Upload and send video message
+    func sendVideoMessage(
+        videoURL: URL,
+        subchannelId: String,
+        caption: String? = nil,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        // First upload the video
+        uploadVideo(videoURL: videoURL) { [weak self] result in
+            switch result {
+            case .success(let fileId):
+                self?.createVideoMessage(
+                    fileId: fileId,
+                    subchannelId: subchannelId,
+                    caption: caption,
+                    completion: completion
+                )
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func uploadVideo(
+        videoURL: URL,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        fileRepository.uploadVideo(
+            videoURL: videoURL,
+            progressHandler: { progress in
+                print("Video upload progress: \(progress)%")
+            }
+        ) { result in
+            switch result {
+            case .success(let file):
+                completion(.success(file.fileId))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func createVideoMessage(
+        fileId: String,
+        subchannelId: String,
+        caption: String?,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        messageRepository.createVideoMessage(
+            subchannelId: subchannelId,
+            videoId: fileId,
+            caption: caption,
+            tags: ["video", "media"]
+        ) { message, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            if let message = message {
+                completion(.success(message))
+            } else {
+                completion(.failure(VideoError.messageCreationFailed))
+            }
+        }
+    }
+    
+    // Record video using camera
+    func recordVideo(
+        from viewController: UIViewController,
+        completion: @escaping (Result<URL, Error>) -> Void
+    ) {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            completion(.failure(VideoError.cameraNotAvailable))
+            return
+        }
+        
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.mediaTypes = [kUTTypeMovie as String]
+        picker.videoQuality = .typeMedium
+        picker.videoMaximumDuration = 300 // 5 minutes max
+        
+        let delegate = VideoPickerDelegate { url in
+            completion(.success(url))
+        }
+        picker.delegate = delegate
+        
+        viewController.present(picker, animated: true)
+    }
+}
+
+// Video picker delegate
+class VideoPickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let completion: (URL) -> Void
+    
+    init(completion: @escaping (URL) -> Void) {
+        self.completion = completion
+    }
+    
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true)
+        
+        if let videoURL = info[.mediaURL] as? URL {
+            completion(videoURL)
+        }
+    }
+}
+
+// Usage example
+class ChatViewController: UIViewController {
+    private var videoManager: VideoMessageManager!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        videoManager = VideoMessageManager(client: AmityManager.shared.client)
+    }
+    
+    @IBAction func recordVideoTapped() {
+        videoManager.recordVideo(from: self) { [weak self] result in
+            switch result {
+            case .success(let videoURL):
+                self?.sendVideo(videoURL)
+            case .failure(let error):
+                self?.showError("Failed to record video: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func sendVideo(_ videoURL: URL) {
+        showLoadingIndicator()
+        
+        videoManager.sendVideoMessage(
+            videoURL: videoURL,
+            subchannelId: currentSubchannelId,
+            caption: "Video message"
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.hideLoadingIndicator()
+                
+                switch result {
+                case .success(let message):
+                    print("Video sent successfully: \(message.messageId)")
+                    self?.refreshMessages()
+                case .failure(let error):
+                    self?.showError("Failed to send video: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+}
+
+enum VideoError: Error {
+    case cameraNotAvailable
+    case messageCreationFailed
+    case uploadFailed
+    case invalidVideoFormat
+}
+```
+</Tab>
+
+<Tab title="Android">
+**Version 6**
+
+```kotlin
+import com.amityco.socialcloud.sdk.AmityCoreClient
+import com.amityco.socialcloud.sdk.chat.message.AmityMessageRepository
+import com.amityco.socialcloud.sdk.core.file.AmityFileRepository
+import android.content.Intent
+import android.provider.MediaStore
+import kotlinx.coroutines.*
+import java.io.File
+
+class VideoMessageManager(private val client: AmityCoreClient) {
+    private val messageRepository = AmityMessageRepository(client)
+    private val fileRepository = AmityFileRepository(client)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    
+    fun sendVideoMessage(
+        videoFile: File,
+        subchannelId: String,
+        caption: String? = null,
+        onProgress: (Int) -> Unit = {},
+        onSuccess: (AmityMessage) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        scope.launch {
+            try {
+                // Validate video file
+                validateVideoFile(videoFile)
+                
+                // Upload video
+                val fileId = uploadVideo(videoFile, onProgress)
+                
+                // Create video message
+                val message = createVideoMessage(
+                    fileId = fileId,
+                    subchannelId = subchannelId,
+                    caption = caption
+                )
+                
+                onSuccess(message)
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
+    
+    private fun validateVideoFile(file: File) {
+        val allowedExtensions = listOf(".mp4", ".mov", ".avi", ".mkv")
+        val maxSizeBytes = 1024L * 1024L * 1024L // 1GB
+        
+        val extension = file.extension.toLowerCase()
+        if (!allowedExtensions.contains(".$extension")) {
+            throw IllegalArgumentException("Unsupported video format: $extension")
+        }
+        
+        if (file.length() > maxSizeBytes) {
+            throw IllegalArgumentException("Video file too large: ${file.length()} bytes")
+        }
+    }
+    
+    private suspend fun uploadVideo(
+        videoFile: File,
+        onProgress: (Int) -> Unit
+    ): String = withContext(Dispatchers.IO) {
+        return@withContext suspendCancellableCoroutine { continuation ->
+            fileRepository.uploadVideo(videoFile)
+                .progressHandler { progress ->
+                    onProgress(progress)
+                }
+                .build()
+                .upload()
+                .subscribe(
+                    onNext = { file ->
+                        continuation.resume(file.getFileId()) {}
+                    },
+                    onError = { error ->
+                        continuation.resumeWithException(error)
+                    }
+                )
+        }
+    }
+    
+    private suspend fun createVideoMessage(
+        fileId: String,
+        subchannelId: String,
+        caption: String?
+    ): AmityMessage = withContext(Dispatchers.IO) {
+        return@withContext suspendCancellableCoroutine { continuation ->
+            messageRepository.createVideoMessage(subchannelId)
+                .videoId(fileId)
+                .caption(caption)
+                .tags(listOf("video", "media"))
+                .build()
+                .send()
+                .subscribe(
+                    onNext = { message ->
+                        continuation.resume(message) {}
+                    },
+                    onError = { error ->
+                        continuation.resumeWithException(error)
+                    }
+                )
+        }
+    }
+}
+
+// Usage in Activity/Fragment
+class ChatActivity : AppCompatActivity() {
+    private lateinit var videoManager: VideoMessageManager
+    private val videoPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { sendVideoFromUri(it) }
+    }
+    
+    private val videoRecorderLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                sendVideoFromUri(uri)
+            }
+        }
+    }
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        videoManager = VideoMessageManager(AmityCoreClient.newClient())
+        
+        setupVideoButtons()
+    }
+    
+    private fun setupVideoButtons() {
+        findViewById<ImageButton>(R.id.btn_record_video).setOnClickListener {
+            recordVideo()
+        }
+        
+        findViewById<ImageButton>(R.id.btn_video_gallery).setOnClickListener {
+            selectVideoFromGallery()
+        }
+    }
+    
+    private fun recordVideo() {
+        val intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_DURATION_LIMIT, 300) // 5 minutes
+            putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1) // High quality
+        }
+        
+        if (intent.resolveActivity(packageManager) != null) {
+            videoRecorderLauncher.launch(intent)
+        } else {
+            showToast("Camera not available")
+        }
+    }
+    
+    private fun selectVideoFromGallery() {
+        videoPickerLauncher.launch("video/*")
+    }
+    
+    private fun sendVideoFromUri(uri: Uri) {
+        val file = createTempFileFromUri(uri)
+        showProgressDialog("Uploading video...")
+        
+        videoManager.sendVideoMessage(
+            videoFile = file,
+            subchannelId = currentSubchannelId,
+            caption = "Video message",
+            onProgress = { progress ->
+                runOnUiThread {
+                    updateProgressDialog("Uploading video... $progress%")
+                }
+            },
+            onSuccess = { message ->
+                runOnUiThread {
+                    hideProgressDialog()
+                    showToast("Video sent successfully")
+                    refreshMessages()
+                }
+            },
+            onError = { error ->
+                runOnUiThread {
+                    hideProgressDialog()
+                    showError("Failed to send video: ${error.message}")
+                }
+            }
+        )
+    }
+    
+    private fun createTempFileFromUri(uri: Uri): File {
+        val inputStream = contentResolver.openInputStream(uri)
+        val tempFile = File.createTempFile("video", ".mp4", cacheDir)
+        
+        inputStream?.use { input ->
+            tempFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        
+        return tempFile
+    }
+}
+```
+</Tab>
+
+<Tab title="JavaScript">
+**Version 6**
+
+```javascript
+import { Client, MessageRepository, FileRepository } from '@amityco/js-sdk';
+
+class VideoMessageManager {
+    constructor(client) {
+        this.messageRepository = new MessageRepository(client);
+        this.fileRepository = new FileRepository(client);
+    }
+    
+    async sendVideoMessage({
+        videoFile,
+        subchannelId,
+        caption = null,
+        onProgress = () => {},
+        tags = ['video', 'media']
+    }) {
+        try {
+            // Validate video file
+            this.validateVideoFile(videoFile);
+            
+            // Upload video
+            const fileId = await this.uploadVideo(videoFile, onProgress);
+            
+            // Create message
+            const message = await this.createVideoMessage({
+                fileId,
+                subchannelId,
+                caption,
+                tags
+            });
+            
+            return { success: true, message };
+        } catch (error) {
+            console.error('Failed to send video message:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    validateVideoFile(file) {
+        const allowedTypes = [
+            'video/mp4', 
+            'video/quicktime', 
+            'video/avi', 
+            'video/x-msvideo'
+        ];
+        const maxSize = 1024 * 1024 * 1024; // 1GB
+        
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error(`Unsupported video type: ${file.type}`);
+        }
+        
+        if (file.size > maxSize) {
+            throw new Error(`Video too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Max: 1GB`);
+        }
+    }
+    
+    async uploadVideo(file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.fileRepository.uploadVideo(file);
+            
+            liveObject.on('dataUpdated', (file) => {
+                if (file.uploadProgress) {
+                    onProgress(file.uploadProgress);
+                }
+                
+                if (file.fileId) {
+                    resolve(file.fileId);
+                }
+            });
+            
+            liveObject.on('dataError', (error) => {
+                reject(new Error(`Video upload failed: ${error.message}`));
+            });
+        });
+    }
+    
+    async createVideoMessage({ fileId, subchannelId, caption, tags }) {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.messageRepository.createVideoMessage({
+                subchannelId,
+                videoId: fileId,
+                caption,
+                tags
+            });
+            
+            liveObject.on('dataUpdated', (message) => {
+                if (message.messageId) {
+                    resolve(message);
+                }
+            });
+            
+            liveObject.on('dataError', (error) => {
+                reject(new Error(`Video message creation failed: ${error.message}`));
+            });
+        });
+    }
+    
+    // Record video using MediaRecorder API
+    async recordVideo(constraints = { video: true, audio: true }) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            return this.startRecording(stream);
+        } catch (error) {
+            throw new Error(`Failed to access camera: ${error.message}`);
+        }
+    }
+    
+    startRecording(stream) {
+        return new Promise((resolve, reject) => {
+            const mediaRecorder = new MediaRecorder(stream);
+            const chunks = [];
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const file = new File([blob], 'recorded-video.webm', { 
+                    type: 'video/webm' 
+                });
+                resolve(file);
+                
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+            };
+            
+            mediaRecorder.onerror = (event) => {
+                reject(new Error(`Recording failed: ${event.error}`));
+            };
+            
+            mediaRecorder.start();
+            
+            // Auto-stop after 5 minutes
+            setTimeout(() => {
+                if (mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+            }, 300000);
+            
+            // Return recorder for manual control
+            return mediaRecorder;
+        });
+    }
+}
+
+// Usage example
+class VideoChat {
+    constructor(client, subchannelId) {
+        this.videoManager = new VideoMessageManager(client);
+        this.subchannelId = subchannelId;
+        this.setupVideoControls();
+    }
+    
+    setupVideoControls() {
+        // Video file input
+        const videoInput = document.createElement('input');
+        videoInput.type = 'file';
+        videoInput.accept = 'video/mp4,video/quicktime,video/avi';
+        videoInput.style.display = 'none';
+        
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.handleVideoSelection(file);
+            }
+        });
+        
+        document.body.appendChild(videoInput);
+        this.videoInput = videoInput;
+        
+        // Record button
+        const recordButton = document.getElementById('record-button');
+        recordButton.addEventListener('click', () => this.startRecording());
+        
+        // Upload button
+        const uploadButton = document.getElementById('upload-button');
+        uploadButton.addEventListener('click', () => videoInput.click());
+    }
+    
+    async startRecording() {
+        try {
+            const recordButton = document.getElementById('record-button');
+            recordButton.textContent = 'Recording...';
+            recordButton.disabled = true;
+            
+            const mediaRecorder = await this.videoManager.recordVideo();
+            
+            // Add stop button
+            const stopButton = document.createElement('button');
+            stopButton.textContent = 'Stop Recording';
+            stopButton.onclick = () => {
+                mediaRecorder.stop();
+                stopButton.remove();
+                recordButton.textContent = 'Record Video';
+                recordButton.disabled = false;
+            };
+            
+            recordButton.parentNode.appendChild(stopButton);
+        } catch (error) {
+            this.showError(`Recording failed: ${error.message}`);
+        }
+    }
+    
+    async handleVideoSelection(file) {
+        const progressContainer = this.showProgressIndicator();
+        
+        try {
+            const result = await this.videoManager.sendVideoMessage({
+                videoFile: file,
+                subchannelId: this.subchannelId,
+                caption: 'Video message',
+                onProgress: (progress) => {
+                    this.updateProgress(progressContainer, progress);
+                }
+            });
+            
+            if (result.success) {
+                this.showSuccess('Video sent successfully!');
+                this.refreshMessages();
+            } else {
+                this.showError(result.error);
+            }
+        } catch (error) {
+            this.showError(`Failed to send video: ${error.message}`);
+        } finally {
+            this.hideProgressIndicator(progressContainer);
+        }
+    }
+    
+    showProgressIndicator() {
+        const container = document.createElement('div');
+        container.className = 'video-progress';
+        container.innerHTML = `
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span class="progress-text">Uploading video...</span>
+        `;
+        document.body.appendChild(container);
+        return container;
+    }
+    
+    updateProgress(container, progress) {
+        const fill = container.querySelector('.progress-fill');
+        const text = container.querySelector('.progress-text');
+        fill.style.width = `${progress}%`;
+        text.textContent = `Uploading video... ${progress}%`;
+    }
+}
+
+// Initialize
+const client = Client.newClient('<API_KEY>');
+const videoChat = new VideoChat(client, 'subchannel-id');
+```
+</Tab>
+
+<Tab title="TypeScript">
+**Version 6**
+
+```typescript
+import { 
+    Client, 
+    MessageRepository, 
+    FileRepository,
+    AmityMessage,
+    AmityFile 
+} from '@amityco/ts-sdk';
+
+interface VideoMessageParams {
+    videoFile: File;
+    subchannelId: string;
+    caption?: string;
+    tags?: string[];
+}
+
+interface SendVideoResult {
+    success: boolean;
+    message?: AmityMessage;
+    error?: string;
+}
+
+interface VideoConstraints {
+    video: MediaTrackConstraints;
+    audio: boolean;
+}
+
+class VideoMessageManager {
+    private messageRepository: MessageRepository;
+    private fileRepository: FileRepository;
+    
+    constructor(private client: Client) {
+        this.messageRepository = new MessageRepository(client);
+        this.fileRepository = new FileRepository(client);
+    }
+    
+    async sendVideoMessage({
+        videoFile,
+        subchannelId,
+        caption,
+        tags = ['video', 'media']
+    }: VideoMessageParams): Promise<SendVideoResult> {
+        try {
+            // Validate video file
+            this.validateVideoFile(videoFile);
+            
+            // Upload video and get file ID
+            const fileId = await this.uploadVideoFile(videoFile);
+            
+            // Create and send video message
+            const message = await this.createVideoMessage({
+                fileId,
+                subchannelId,
+                caption,
+                tags
+            });
+            
+            return { success: true, message };
+        } catch (error) {
+            console.error('Video message send failed:', error);
+            return { 
+                success: false, 
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+    
+    private validateVideoFile(file: File): void {
+        const allowedTypes = [
+            'video/mp4',
+            'video/quicktime',
+            'video/avi',
+            'video/x-msvideo',
+            'video/webm'
+        ];
+        const maxSizeBytes = 1024 * 1024 * 1024; // 1GB
+        
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error(
+                `Invalid video type: ${file.type}. Supported: ${allowedTypes.join(', ')}`
+            );
+        }
+        
+        if (file.size > maxSizeBytes) {
+            throw new Error(
+                `Video too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Maximum: 1GB`
+            );
+        }
+    }
+    
+    private async uploadVideoFile(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.fileRepository.uploadVideo(file);
+            
+            liveObject.on('dataUpdated', (uploadedFile: AmityFile) => {
+                if (uploadedFile.fileId) {
+                    resolve(uploadedFile.fileId);
+                }
+            });
+            
+            liveObject.on('dataError', (error: Error) => {
+                reject(new Error(`Video upload failed: ${error.message}`));
+            });
+        });
+    }
+    
+    private async createVideoMessage(params: {
+        fileId: string;
+        subchannelId: string;
+        caption?: string;
+        tags: string[];
+    }): Promise<AmityMessage> {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.messageRepository.createVideoMessage({
+                subchannelId: params.subchannelId,
+                videoId: params.fileId,
+                caption: params.caption,
+                tags: params.tags
+            });
+            
+            liveObject.on('dataUpdated', (message: AmityMessage) => {
+                if (message.messageId) {
+                    resolve(message);
+                }
+            });
+            
+            liveObject.on('dataError', (error: Error) => {
+                reject(new Error(`Message creation failed: ${error.message}`));
+            });
+        });
+    }
+    
+    // Record video using WebRTC
+    async recordVideo(
+        constraints: VideoConstraints = {
+            video: { width: 1280, height: 720 },
+            audio: true
+        }
+    ): Promise<File> {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            return this.captureVideoStream(stream);
+        } catch (error) {
+            throw new Error(`Camera access failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    
+    private async captureVideoStream(stream: MediaStream): Promise<File> {
+        return new Promise((resolve, reject) => {
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9'
+            });
+            
+            const chunks: Blob[] = [];
+            
+            mediaRecorder.addEventListener('dataavailable', (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            });
+            
+            mediaRecorder.addEventListener('stop', () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const file = new File([blob], `video-${Date.now()}.webm`, { 
+                    type: 'video/webm' 
+                });
+                
+                // Clean up stream
+                stream.getTracks().forEach(track => track.stop());
+                
+                resolve(file);
+            });
+            
+            mediaRecorder.addEventListener('error', (event) => {
+                stream.getTracks().forEach(track => track.stop());
+                reject(new Error(`Recording error: ${event.error}`));
+            });
+            
+            mediaRecorder.start(1000); // Capture chunks every second
+            
+            // Auto-stop after 5 minutes to prevent excessive file sizes
+            setTimeout(() => {
+                if (mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+            }, 300000);
+        });
+    }
+}
+
+// React TypeScript component example
+import React, { useState, useRef, useCallback } from 'react';
+
+interface VideoRecorderProps {
+    client: Client;
+    subchannelId: string;
+    onVideoSent: (message: AmityMessage) => void;
+    onError: (error: string) => void;
+}
+
+const VideoRecorder: React.FC<VideoRecorderProps> = ({
+    client,
+    subchannelId,
+    onVideoSent,
+    onError
+}) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    
+    const videoManager = new VideoMessageManager(client);
+    
+    const startRecording = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1280, height: 720 },
+                audio: true
+            });
+            
+            streamRef.current = stream;
+            
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+            
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            
+            const chunks: Blob[] = [];
+            
+            mediaRecorder.ondataavailable = (event) => {
+                chunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const file = new File([blob], 'recorded-video.webm', { 
+                    type: 'video/webm' 
+                });
+                
+                await sendVideo(file);
+            };
+            
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (error) {
+            onError(`Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }, []);
+    
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+        
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    }, [isRecording]);
+    
+    const sendVideo = async (file: File) => {
+        setUploading(true);
+        setUploadProgress(0);
+        
+        try {
+            const result = await videoManager.sendVideoMessage({
+                videoFile: file,
+                subchannelId,
+                caption: 'Recorded video',
+                tags: ['recorded', 'video']
+            });
+            
+            if (result.success && result.message) {
+                onVideoSent(result.message);
+            } else {
+                onError(result.error || 'Failed to send video');
+            }
+        } catch (error) {
+            onError(error instanceof Error ? error.message : 'Upload failed');
+        } finally {
+            setUploading(false);
+            setUploadProgress(0);
+        }
+    };
+    
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            await sendVideo(file);
+        }
+    };
+    
+    return (
+        <div className="video-recorder">
+            <video
+                ref={videoRef}
+                autoPlay
+                muted
+                style={{ display: isRecording ? 'block' : 'none' }}
+            />
+            
+            <div className="video-controls">
+                {!isRecording ? (
+                    <>
+                        <button onClick={startRecording} disabled={uploading}>
+                            Start Recording
+                        </button>
+                        <input
+                            type="file"
+                            accept="video/*"
+                            onChange={handleFileChange}
+                            disabled={uploading}
+                            style={{ display: 'none' }}
+                            id="video-upload"
+                        />
+                        <label htmlFor="video-upload">
+                            <button type="button" disabled={uploading}>
+                                Upload Video
+                            </button>
+                        </label>
+                    </>
+                ) : (
+                    <button onClick={stopRecording}>
+                        Stop Recording
+                    </button>
+                )}
+            </div>
+            
+            {uploading && (
+                <div className="upload-progress">
+                    <div className="progress-bar">
+                        <div 
+                            className="progress-fill" 
+                            style={{ width: `${uploadProgress}%` }}
+                        />
+                    </div>
+                    <span>Uploading video... {uploadProgress}%</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export { VideoMessageManager, VideoRecorder };
+```
+</Tab>
+
+<Tab title="Flutter">
+**Version 0.2**
+
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
+import 'dart:io';
+
+class VideoMessageService {
+  final AmityClient _client;
+  late final AmityMessageRepository _messageRepository;
+  late final AmityFileRepository _fileRepository;
+  
+  VideoMessageService(this._client) {
+    _messageRepository = AmityMessageRepository(_client);
+    _fileRepository = AmityFileRepository(_client);
+  }
+  
+  Future<AmityMessage> sendVideoMessage({
+    required String subchannelId,
+    required File videoFile,
+    String? caption,
+    List<String> tags = const ['video', 'media'],
+    Function(int)? onProgress,
+  }) async {
+    try {
+      // Validate video file
+      await _validateVideoFile(videoFile);
+      
+      // Upload video
+      final fileId = await _uploadVideo(videoFile, onProgress);
+      
+      // Create message
+      final message = await _createVideoMessage(
+        fileId: fileId,
+        subchannelId: subchannelId,
+        caption: caption,
+        tags: tags,
+      );
+      
+      return message;
+    } catch (e) {
+      throw VideoMessageException('Failed to send video: ${e.toString()}');
+    }
+  }
+  
+  Future<void> _validateVideoFile(File file) async {
+    const allowedExtensions = ['.mp4', '.mov', '.avi', '.mkv'];
+    const maxSizeBytes = 1024 * 1024 * 1024; // 1GB
+    
+    final extension = file.path.toLowerCase().split('.').last;
+    if (!allowedExtensions.any((ext) => ext.contains(extension))) {
+      throw ArgumentError('Unsupported video type. Use MP4, MOV, AVI, or MKV.');
+    }
+    
+    final fileSize = await file.length();
+    if (fileSize > maxSizeBytes) {
+      throw ArgumentError('Video too large. Maximum size is 1GB.');
+    }
+  }
+  
+  Future<String> _uploadVideo(File file, Function(int)? onProgress) async {
+    final completer = Completer<String>();
+    
+    _fileRepository.uploadVideo(file)
+      .progressHandler((progress) {
+        onProgress?.call(progress);
+      })
+      .build()
+      .upload()
+      .listen(
+        (fileData) {
+          if (fileData.fileId != null) {
+            completer.complete(fileData.fileId!);
+          }
+        },
+        onError: (error) {
+          completer.completeError(error);
+        },
+      );
+    
+    return completer.future;
+  }
+  
+  Future<AmityMessage> _createVideoMessage({
+    required String fileId,
+    required String subchannelId,
+    String? caption,
+    required List<String> tags,
+  }) async {
+    final completer = Completer<AmityMessage>();
+    
+    _messageRepository.createVideoMessage(subchannelId)
+      .videoId(fileId)
+      .caption(caption)
+      .tags(tags)
+      .build()
+      .send()
+      .listen(
+        (message) {
+          completer.complete(message);
+        },
+        onError: (error) {
+          completer.completeError(error);
+        },
+      );
+    
+    return completer.future;
+  }
+}
+
+class VideoRecorderWidget extends StatefulWidget {
+  final String subchannelId;
+  final Function(AmityMessage) onVideoSent;
+  final Function(String) onError;
+  
+  const VideoRecorderWidget({
+    Key? key,
+    required this.subchannelId,
+    required this.onVideoSent,
+    required this.onError,
+  }) : super(key: key);
+  
+  @override
+  _VideoRecorderWidgetState createState() => _VideoRecorderWidgetState();
+}
+
+class _VideoRecorderWidgetState extends State<VideoRecorderWidget> {
+  late final VideoMessageService _videoService;
+  CameraController? _cameraController;
+  bool _isRecording = false;
+  bool _sending = false;
+  int _uploadProgress = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _videoService = VideoMessageService(AmityClient.instance);
+    _initializeCamera();
+  }
+  
+  Future<void> _initializeCamera() async {
+    final cameras = await availableCameras();
+    if (cameras.isNotEmpty) {
+      _cameraController = CameraController(
+        cameras.first,
+        ResolutionPreset.high,
+        enableAudio: true,
+      );
+      
+      try {
+        await _cameraController!.initialize();
+        if (mounted) setState(() {});
+      } catch (e) {
+        widget.onError('Failed to initialize camera: $e');
+      }
+    }
+  }
+  
+  @override
+  void dispose() {
+    _cameraController?.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (_cameraController?.value.isInitialized == true)
+          Container(
+            height: 200,
+            child: CameraPreview(_cameraController!),
+          ),
+        
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              icon: Icon(_isRecording ? Icons.stop : Icons.videocam),
+              onPressed: _sending ? null : _toggleRecording,
+              color: _isRecording ? Colors.red : null,
+              tooltip: _isRecording ? 'Stop Recording' : 'Start Recording',
+            ),
+            IconButton(
+              icon: const Icon(Icons.video_library),
+              onPressed: _sending ? null : _selectFromGallery,
+              tooltip: 'Select from Gallery',
+            ),
+            if (_sending) ...[
+              CircularProgressIndicator(
+                value: _uploadProgress / 100,
+              ),
+              Text('$_uploadProgress%'),
+            ],
+          ],
+        ),
+        
+        if (_sending)
+          LinearProgressIndicator(
+            value: _uploadProgress / 100,
+            backgroundColor: Colors.grey[300],
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).primaryColor,
+            ),
+          ),
+      ],
+    );
+  }
+  
+  Future<void> _toggleRecording() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      widget.onError('Camera not available');
+      return;
+    }
+    
+    try {
+      if (_isRecording) {
+        final videoFile = await _cameraController!.stopVideoRecording();
+        setState(() => _isRecording = false);
+        await _sendVideo(File(videoFile.path));
+      } else {
+        await _cameraController!.startVideoRecording();
+        setState(() => _isRecording = true);
+        
+        // Auto-stop after 5 minutes
+        Timer(const Duration(minutes: 5), () {
+          if (_isRecording) {
+            _toggleRecording();
+          }
+        });
+      }
+    } catch (e) {
+      widget.onError('Recording failed: $e');
+      setState(() => _isRecording = false);
+    }
+  }
+  
+  Future<void> _selectFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickVideo(
+      source: ImageSource.gallery,
+      maxDuration: const Duration(minutes: 5),
+    );
+    
+    if (pickedFile != null) {
+      await _sendVideo(File(pickedFile.path));
+    }
+  }
+  
+  Future<void> _sendVideo(File videoFile) async {
+    setState(() {
+      _sending = true;
+      _uploadProgress = 0;
+    });
+    
+    try {
+      final message = await _videoService.sendVideoMessage(
+        subchannelId: widget.subchannelId,
+        videoFile: videoFile,
+        caption: 'Video message',
+        onProgress: (progress) {
+          setState(() {
+            _uploadProgress = progress;
+          });
+        },
+      );
+      
+      widget.onVideoSent(message);
+      
+      // Show success feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video sent successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      widget.onError(e.toString());
+      
+      // Show error feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send video: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _sending = false;
+        _uploadProgress = 0;
+      });
+    }
+  }
+}
+
+class VideoMessageException implements Exception {
+  final String message;
+  VideoMessageException(this.message);
+  
+  @override
+  String toString() => 'VideoMessageException: $message';
+}
+
+// Video player widget for displaying received videos
+class VideoPlayerWidget extends StatefulWidget {
+  final AmityMessage message;
+  
+  const VideoPlayerWidget({Key? key, required this.message}) : super(key: key);
+  
+  @override
+  _VideoPlayerWidgetState createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+  
+  Future<void> _initializeVideo() async {
+    final videoData = widget.message.data as Map<String, dynamic>?;
+    final videoUrl = videoData?['fileUrl'] as String?;
+    
+    if (videoUrl != null) {
+      _controller = VideoPlayerController.network(videoUrl);
+      await _controller!.initialize();
+      
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    }
+  }
+  
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized || _controller == null) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: _controller!.value.aspectRatio,
+          child: VideoPlayer(_controller!),
+        ),
+        VideoProgressIndicator(
+          _controller!,
+          allowScrubbing: true,
+          colors: VideoProgressColors(
+            playedColor: Theme.of(context).primaryColor,
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: Icon(
+                _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              ),
+              onPressed: () {
+                setState(() {
+                  _controller!.value.isPlaying
+                      ? _controller!.pause()
+                      : _controller!.play();
+                });
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// Usage in a chat screen
+class ChatScreen extends StatefulWidget {
+  final String subchannelId;
+  
+  const ChatScreen({Key? key, required this.subchannelId}) : super(key: key);
+  
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final List<AmityMessage> _messages = [];
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Video Chat')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
+                return message.dataType == AmityMessageDataType.VIDEO
+                    ? VideoPlayerWidget(message: message)
+                    : MessageTile(message: message);
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            child: VideoRecorderWidget(
+              subchannelId: widget.subchannelId,
+              onVideoSent: (message) {
+                setState(() {
+                  _messages.add(message);
+                });
+              },
+              onError: (error) {
+                print('Video send error: $error');
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 <Warning>
 **File Limitations**: Maximum video file size is 1GB. Videos are automatically compressed to 480p resolution for optimal performance.
@@ -897,59 +2359,784 @@ class VideoMetadata {
 // Usage in a widget
 class VideoMessageWidget extends StatefulWidget {
     final String subchannelId;
+```
+</Tab>
+</Tabs>
+
+## Video Processing & Optimization
+
+The SDK automatically handles video processing to provide optimal performance across different network conditions and device capabilities.
+
+### Automatic Processing
+
+<AccordionGroup>
+<Accordion title="Compression Settings">
+- **Resolution**: Automatically resized to maximum 480p (720p on high-end devices)
+- **Bitrate**: Optimized for streaming and mobile playback
+- **Format**: Converted to MP4 with H.264 codec for maximum compatibility
+- **Audio**: AAC compression with 128kbps bitrate
+</Accordion>
+
+<Accordion title="Thumbnail Generation">
+- **Automatic**: Thumbnail extracted from video at 1-second mark
+- **Fallback**: Multiple frames analyzed to find best representative image
+- **Resolution**: 320x240 pixels for quick loading
+- **Format**: JPEG with 80% quality for optimal size/quality balance
+</Accordion>
+
+<Accordion title="Streaming Optimization">
+- **Progressive Download**: Enables playback while downloading
+- **Adaptive Quality**: Adjusts based on network conditions
+- **Buffering**: Smart buffering to prevent interruptions
+- **Caching**: Local caching for frequently accessed videos
+</Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+<AccordionGroup>
+<Accordion title="Real-time Video Processing">
+```typescript
+// Monitor video processing status
+class VideoProcessingMonitor {
+    trackVideoProcessing(messageId: string): Observable<ProcessingStatus> {
+        return messageRepository.getVideoProcessingStatus(messageId)
+            .pipe(
+                map(status => ({
+                    isProcessing: status.isProcessing,
+                    thumbnailReady: status.thumbnailReady,
+                    videoReady: status.videoReady,
+                    processingProgress: status.progress,
+                    estimatedTimeRemaining: status.estimatedTime
+                }))
+            );
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Video Quality Control">
+```swift
+// iOS: Custom video quality settings
+class VideoQualityManager {
+    enum VideoQuality {
+        case low    // 240p
+        case medium // 480p
+        case high   // 720p
+        case auto   // Adaptive based on connection
+    }
     
-    const VideoMessageWidget({Key? key, required this.subchannelId}) : super(key: key);
+    func setVideoQuality(_ quality: VideoQuality) {
+        let settings: [String: Any]
+        
+        switch quality {
+        case .low:
+            settings = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 426,
+                AVVideoHeightKey: 240,
+                AVVideoCompressionPropertiesKey: [
+                    AVVideoAverageBitRateKey: 400_000
+                ]
+            ]
+        case .medium:
+            settings = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 854,
+                AVVideoHeightKey: 480,
+                AVVideoCompressionPropertiesKey: [
+                    AVVideoAverageBitRateKey: 1_000_000
+                ]
+            ]
+        case .high:
+            settings = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 1280,
+                AVVideoHeightKey: 720,
+                AVVideoCompressionPropertiesKey: [
+                    AVVideoAverageBitRateKey: 2_500_000
+                ]
+            ]
+        case .auto:
+            settings = getAdaptiveSettings()
+        }
+        
+        // Apply settings to video recorder
+        applyVideoSettings(settings)
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Background Video Upload">
+```kotlin
+// Android: Background video processing
+class BackgroundVideoUploader(private val context: Context) {
     
-    @override
-    _VideoMessageWidgetState createState() => _VideoMessageWidgetState();
+    fun uploadVideoInBackground(
+        videoFile: File,
+        subchannelId: String,
+        caption: String?
+    ) {
+        val workRequest = OneTimeWorkRequestBuilder<VideoUploadWorker>()
+            .setInputData(
+                Data.Builder()
+                    .putString("video_path", videoFile.absolutePath)
+                    .putString("subchannel_id", subchannelId)
+                    .putString("caption", caption)
+                    .build()
+            )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+            )
+            .build()
+        
+        WorkManager.getInstance(context).enqueue(workRequest)
+    }
 }
 
-class _VideoMessageWidgetState extends State<VideoMessageWidget> {
-    late final VideoMessageService _videoService;
-    bool _sending = false;
+class VideoUploadWorker(
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
     
-    @override
-    void initState() {
-        super.initState();
-        _videoService = VideoMessageService(AmityClient.instance);
-    }
-    
-    @override
-    Widget build(BuildContext context) {
-        return Row(
-            children: [
-                IconButton(
-                    icon: Icon(Icons.videocam),
-                    onPressed: _sending ? null : () => _recordVideo(),
-                ),
-                IconButton(
-                    icon: Icon(Icons.video_library),
-                    onPressed: _sending ? null : () => _sendFromGallery(),
-                ),
-                if (_sending)
-                    CircularProgressIndicator(),
-            ],
-        );
-    }
-    
-    Future<void> _recordVideo() async {
-        setState(() => _sending = true);
-        try {
-            await _videoService.recordAndSendVideo(widget.subchannelId);
-        } finally {
-            setState(() => _sending = false);
-        }
-    }
-    
-    Future<void> _sendFromGallery() async {
-        setState(() => _sending = true);
-        try {
-            await _videoService.sendVideoFromGallery(widget.subchannelId);
-        } finally {
-            setState(() => _sending = false);
+    override suspend fun doWork(): Result {
+        return try {
+            val videoPath = inputData.getString("video_path") ?: return Result.failure()
+            val subchannelId = inputData.getString("subchannel_id") ?: return Result.failure()
+            val caption = inputData.getString("caption")
+            
+            val videoFile = File(videoPath)
+            val videoManager = VideoMessageManager(AmityCoreClient.newClient())
+            
+            // Upload with progress notifications
+            videoManager.sendVideoMessage(
+                videoFile = videoFile,
+                subchannelId = subchannelId,
+                caption = caption,
+                onProgress = { progress ->
+                    setProgress(Data.Builder().putInt("progress", progress).build())
+                },
+                onSuccess = { message ->
+                    showNotification("Video sent successfully")
+                },
+                onError = { error ->
+                    showNotification("Failed to send video: ${error.message}")
+                }
+            )
+            
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
         }
     }
 }
 ```
-</Tab>
-</Tabs>
+</Accordion>
+
+<Accordion title="Video Streaming & Playback">
+```javascript
+// JavaScript: Advanced video player with streaming
+class AdvancedVideoPlayer {
+    constructor(container, videoUrl) {
+        this.container = container;
+        this.videoUrl = videoUrl;
+        this.setupPlayer();
+    }
+    
+    setupPlayer() {
+        this.video = document.createElement('video');
+        this.video.controls = true;
+        this.video.preload = 'metadata';
+        this.video.style.width = '100%';
+        this.video.style.maxHeight = '400px';
+        
+        // Add custom controls
+        this.addCustomControls();
+        
+        // Setup adaptive streaming
+        this.setupAdaptiveStreaming();
+        
+        // Add event listeners
+        this.setupEventListeners();
+        
+        this.container.appendChild(this.video);
+    }
+    
+    setupAdaptiveStreaming() {
+        // Check connection speed and adjust quality
+        if ('connection' in navigator) {
+            const connection = navigator.connection;
+            const effectiveType = connection.effectiveType;
+            
+            let quality = 'medium';
+            switch (effectiveType) {
+                case 'slow-2g':
+                case '2g':
+                    quality = 'low';
+                    break;
+                case '3g':
+                    quality = 'medium';
+                    break;
+                case '4g':
+                    quality = 'high';
+                    break;
+            }
+            
+            this.loadVideoWithQuality(quality);
+        } else {
+            this.video.src = this.videoUrl;
+        }
+    }
+    
+    loadVideoWithQuality(quality) {
+        const qualityParam = `?quality=${quality}`;
+        this.video.src = this.videoUrl + qualityParam;
+    }
+    
+    addCustomControls() {
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'video-controls';
+        
+        // Play/Pause button
+        const playButton = document.createElement('button');
+        playButton.textContent = '▶️';
+        playButton.onclick = () => this.togglePlay();
+        
+        // Progress bar
+        const progressBar = document.createElement('input');
+        progressBar.type = 'range';
+        progressBar.min = 0;
+        progressBar.max = 100;
+        progressBar.value = 0;
+        progressBar.oninput = (e) => this.seek(e.target.value);
+        
+        // Volume control
+        const volumeSlider = document.createElement('input');
+        volumeSlider.type = 'range';
+        volumeSlider.min = 0;
+        volumeSlider.max = 1;
+        volumeSlider.step = 0.1;
+        volumeSlider.value = 1;
+        volumeSlider.oninput = (e) => this.setVolume(e.target.value);
+        
+        controlsContainer.appendChild(playButton);
+        controlsContainer.appendChild(progressBar);
+        controlsContainer.appendChild(volumeSlider);
+        
+        this.container.appendChild(controlsContainer);
+        
+        this.playButton = playButton;
+        this.progressBar = progressBar;
+    }
+    
+    setupEventListeners() {
+        this.video.addEventListener('loadedmetadata', () => {
+            this.progressBar.max = this.video.duration;
+        });
+        
+        this.video.addEventListener('timeupdate', () => {
+            this.progressBar.value = this.video.currentTime;
+        });
+        
+        this.video.addEventListener('play', () => {
+            this.playButton.textContent = '⏸️';
+        });
+        
+        this.video.addEventListener('pause', () => {
+            this.playButton.textContent = '▶️';
+        });
+    }
+    
+    togglePlay() {
+        if (this.video.paused) {
+            this.video.play();
+        } else {
+            this.video.pause();
+        }
+    }
+    
+    seek(time) {
+        this.video.currentTime = time;
+    }
+    
+    setVolume(volume) {
+        this.video.volume = volume;
+    }
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+<AccordionGroup>
+<Accordion title="Comprehensive Error Management">
+```typescript
+enum VideoError {
+    INVALID_FORMAT = 'INVALID_FORMAT',
+    FILE_TOO_LARGE = 'FILE_TOO_LARGE',
+    UPLOAD_FAILED = 'UPLOAD_FAILED',
+    PROCESSING_FAILED = 'PROCESSING_FAILED',
+    CAMERA_UNAVAILABLE = 'CAMERA_UNAVAILABLE',
+    NETWORK_ERROR = 'NETWORK_ERROR',
+    CODEC_ERROR = 'CODEC_ERROR',
+    PLAYBACK_ERROR = 'PLAYBACK_ERROR'
+}
+
+class VideoErrorHandler {
+    handleError(error: Error): { message: string; recoverable: boolean; action?: string } {
+        switch (error.message) {
+            case VideoError.INVALID_FORMAT:
+                return {
+                    message: 'Video format not supported. Please use MP4, MOV, or AVI.',
+                    recoverable: true,
+                    action: 'convert'
+                };
+            
+            case VideoError.FILE_TOO_LARGE:
+                return {
+                    message: 'Video file is too large. Please compress or trim the video.',
+                    recoverable: true,
+                    action: 'compress'
+                };
+            
+            case VideoError.CAMERA_UNAVAILABLE:
+                return {
+                    message: 'Camera not available. Please check permissions.',
+                    recoverable: true,
+                    action: 'permissions'
+                };
+            
+            case VideoError.PROCESSING_FAILED:
+                return {
+                    message: 'Video processing failed. Please try again.',
+                    recoverable: true,
+                    action: 'retry'
+                };
+            
+            case VideoError.NETWORK_ERROR:
+                return {
+                    message: 'Network error. Video will be sent when connection is restored.',
+                    recoverable: true,
+                    action: 'queue'
+                };
+            
+            default:
+                return {
+                    message: 'An unexpected error occurred. Please try again.',
+                    recoverable: false
+                };
+        }
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Retry and Recovery">
+```swift
+// iOS: Robust retry mechanism
+class VideoRetryManager {
+    private let maxRetries = 3
+    private let retryDelay: TimeInterval = 5.0
+    
+    func sendVideoWithRetry(
+        videoURL: URL,
+        subchannelId: String,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        sendVideoAttempt(
+            videoURL: videoURL,
+            subchannelId: subchannelId,
+            attempt: 1,
+            completion: completion
+        )
+    }
+    
+    private func sendVideoAttempt(
+        videoURL: URL,
+        subchannelId: String,
+        attempt: Int,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        videoManager.sendVideoMessage(videoURL: videoURL, subchannelId: subchannelId) { result in
+            switch result {
+            case .success(let message):
+                completion(.success(message))
+            
+            case .failure(let error):
+                if attempt < self.maxRetries && self.isRetryableError(error) {
+                    print("Video send attempt \(attempt) failed, retrying in \(self.retryDelay)s")
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.retryDelay) {
+                        self.sendVideoAttempt(
+                            videoURL: videoURL,
+                            subchannelId: subchannelId,
+                            attempt: attempt + 1,
+                            completion: completion
+                        )
+                    }
+                } else {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+    
+    private func isRetryableError(_ error: Error) -> Bool {
+        // Check if error is network-related or temporary
+        if let videoError = error as? VideoError {
+            switch videoError {
+            case .networkError, .uploadFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Video Validation">
+```dart
+// Flutter: Comprehensive video validation
+class VideoValidator {
+  static const Map<String, List<String>> allowedFormats = {
+    'video/mp4': ['.mp4'],
+    'video/quicktime': ['.mov'],
+    'video/x-msvideo': ['.avi'],
+    'video/x-matroska': ['.mkv'],
+  };
+  
+  static const int maxFileSizeBytes = 1024 * 1024 * 1024; // 1GB
+  static const int maxDurationSeconds = 600; // 10 minutes
+  
+  static Future<ValidationResult> validateVideo(File videoFile) async {
+    try {
+      // Check file existence
+      if (!await videoFile.exists()) {
+        return ValidationResult.error('Video file does not exist');
+      }
+      
+      // Check file size
+      final fileSize = await videoFile.length();
+      if (fileSize > maxFileSizeBytes) {
+        return ValidationResult.error(
+          'Video too large: ${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB. Max: 1GB'
+        );
+      }
+      
+      // Check file format
+      final extension = videoFile.path.toLowerCase().split('.').last;
+      final isValidFormat = allowedFormats.values
+          .any((extensions) => extensions.contains('.$extension'));
+      
+      if (!isValidFormat) {
+        return ValidationResult.error(
+          'Unsupported format: .$extension. Use: ${allowedFormats.values.expand((e) => e).join(', ')}'
+        );
+      }
+      
+      // Check video properties using video_player
+      final controller = VideoPlayerController.file(videoFile);
+      await controller.initialize();
+      
+      final duration = controller.value.duration;
+      final aspectRatio = controller.value.aspectRatio;
+      
+      controller.dispose();
+      
+      // Check duration
+      if (duration.inSeconds > maxDurationSeconds) {
+        return ValidationResult.error(
+          'Video too long: ${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}. Max: 10 minutes'
+        );
+      }
+      
+      // Check aspect ratio (optional)
+      if (aspectRatio < 0.5 || aspectRatio > 2.0) {
+        return ValidationResult.warning(
+          'Unusual aspect ratio detected. Video may not display optimally.'
+        );
+      }
+      
+      return ValidationResult.success(
+        'Video validated successfully',
+        metadata: {
+          'duration': duration.inSeconds,
+          'aspectRatio': aspectRatio,
+          'fileSize': fileSize,
+        }
+      );
+      
+    } catch (e) {
+      return ValidationResult.error('Validation failed: ${e.toString()}');
+    }
+  }
+}
+
+class ValidationResult {
+  final bool isValid;
+  final String message;
+  final bool isWarning;
+  final Map<String, dynamic>? metadata;
+  
+  ValidationResult._({
+    required this.isValid,
+    required this.message,
+    this.isWarning = false,
+    this.metadata,
+  });
+  
+  factory ValidationResult.success(String message, {Map<String, dynamic>? metadata}) {
+    return ValidationResult._(
+      isValid: true,
+      message: message,
+      metadata: metadata,
+    );
+  }
+  
+  factory ValidationResult.warning(String message) {
+    return ValidationResult._(
+      isValid: true,
+      message: message,
+      isWarning: true,
+    );
+  }
+  
+  factory ValidationResult.error(String message) {
+    return ValidationResult._(
+      isValid: false,
+      message: message,
+    );
+  }
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+<Accordion title="Performance Optimization">
+- **Video Compression**: Compress videos client-side before upload when possible
+- **Thumbnail Caching**: Cache video thumbnails locally for quick loading
+- **Progressive Loading**: Enable progressive download for large videos
+- **Background Processing**: Handle video uploads in background threads
+- **Memory Management**: Release video resources promptly to prevent memory issues
+
+```kotlin
+// Android: Memory-efficient video handling
+class VideoMemoryManager {
+    private val videoCache = LruCache<String, Bitmap>(50) // Cache up to 50 thumbnails
+    
+    fun getThumbnail(videoUrl: String): Bitmap? {
+        return videoCache.get(videoUrl) ?: generateThumbnail(videoUrl)
+    }
+    
+    private fun generateThumbnail(videoUrl: String): Bitmap? {
+        return try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(videoUrl)
+            
+            val thumbnail = retriever.getFrameAtTime(1000000) // 1 second
+            retriever.release()
+            
+            // Cache the thumbnail
+            if (thumbnail != null) {
+                videoCache.put(videoUrl, thumbnail)
+            }
+            
+            thumbnail
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    fun clearCache() {
+        videoCache.evictAll()
+    }
+}
+```
+</Accordion>
+
+<Accordion title="User Experience Guidelines">
+- **Progress Indicators**: Show detailed upload progress with time estimates
+- **Preview Functionality**: Allow users to preview and trim videos before sending
+- **Quality Selection**: Provide quality options based on connection speed
+- **Accessibility**: Support captions and audio descriptions where possible
+- **Offline Support**: Queue videos for sending when connection is restored
+
+```javascript
+// Web: Enhanced UX with video preview
+class VideoPreviewManager {
+    showVideoPreview(file, container) {
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'video-preview-container';
+        
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+        video.controls = true;
+        video.muted = true;
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '300px';
+        
+        const controls = this.createPreviewControls(file);
+        
+        previewContainer.appendChild(video);
+        previewContainer.appendChild(controls);
+        container.appendChild(previewContainer);
+        
+        // Auto-play for quick preview
+        video.addEventListener('loadedmetadata', () => {
+            video.currentTime = 1; // Start at 1 second
+        });
+        
+        return previewContainer;
+    }
+    
+    createPreviewControls(file) {
+        const controls = document.createElement('div');
+        controls.className = 'preview-controls';
+        
+        // Quality selector
+        const qualitySelect = document.createElement('select');
+        qualitySelect.innerHTML = `
+            <option value="auto">Auto Quality</option>
+            <option value="high">High (720p)</option>
+            <option value="medium">Medium (480p)</option>
+            <option value="low">Low (240p)</option>
+        `;
+        
+        // Send button
+        const sendButton = document.createElement('button');
+        sendButton.textContent = 'Send Video';
+        sendButton.onclick = () => {
+            const quality = qualitySelect.value;
+            this.sendVideoWithQuality(file, quality);
+        };
+        
+        // Cancel button
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.onclick = () => {
+            controls.parentElement.remove();
+        };
+        
+        controls.appendChild(qualitySelect);
+        controls.appendChild(sendButton);
+        controls.appendChild(cancelButton);
+        
+        return controls;
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Security Considerations">
+- **File Validation**: Always validate file types, sizes, and content
+- **Content Scanning**: Implement malware and inappropriate content detection
+- **Privacy Protection**: Respect user privacy settings and permissions
+- **Secure Streaming**: Use HTTPS and proper authentication for all video streams
+- **Data Retention**: Follow data retention policies and user deletion requests
+
+```typescript
+// Security-focused video handling
+class SecureVideoHandler {
+    private readonly ALLOWED_MIME_TYPES = [
+        'video/mp4',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/webm'
+    ];
+    
+    private readonly MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
+    private readonly MAX_DURATION = 600; // 10 minutes
+    
+    async validateVideoSecurity(file: File): Promise<boolean> {
+        // Check MIME type
+        if (!this.ALLOWED_MIME_TYPES.includes(file.type)) {
+            throw new Error('Invalid video format');
+        }
+        
+        // Check file size
+        if (file.size > this.MAX_FILE_SIZE) {
+            throw new Error('Video file too large');
+        }
+        
+        // Check video duration
+        const duration = await this.getVideoDuration(file);
+        if (duration > this.MAX_DURATION) {
+            throw new Error('Video too long');
+        }
+        
+        // Check for malicious content (basic check)
+        const hasValidHeader = await this.validateVideoHeader(file);
+        if (!hasValidHeader) {
+            throw new Error('Invalid video file structure');
+        }
+        
+        return true;
+    }
+    
+    private async getVideoDuration(file: File): Promise<number> {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            
+            video.onloadedmetadata = () => {
+                URL.revokeObjectURL(video.src);
+                resolve(video.duration);
+            };
+            
+            video.onerror = () => {
+                URL.revokeObjectURL(video.src);
+                reject(new Error('Failed to load video metadata'));
+            };
+            
+            video.src = URL.createObjectURL(file);
+        });
+    }
+    
+    private async validateVideoHeader(file: File): Promise<boolean> {
+        const buffer = await file.slice(0, 12).arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        
+        // Check for common video file signatures
+        const signatures = {
+            mp4: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], // MP4
+            mov: [0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70], // MOV
+            avi: [0x52, 0x49, 0x46, 0x46], // AVI (RIFF)
+            webm: [0x1A, 0x45, 0xDF, 0xA3] // WebM
+        };
+        
+        return Object.values(signatures).some(signature =>
+            signature.every((byte, index) => bytes[index] === byte)
+        );
+    }
+}
+```
+</Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="File Upload Guide" icon="cloud-arrow-up" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos">
+    Learn about file upload mechanisms and video optimization strategies
+  </Card>
+  <Card title="Message Types Overview" icon="message" href="/social-plus-sdk/chat/messaging-features/message-types">
+    Explore all available message types and their capabilities
+  </Card>
+  <Card title="Real-time Events" icon="bolt" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events">
+    Handle real-time video processing and delivery events
+  </Card>
+  <Card title="Content Moderation" icon="shield-check" href="/social-plus-sdk/chat/moderation-safety/content-moderation">
+    Implement content filtering and safety measures for videos
+  </Card>
+</CardGroup>

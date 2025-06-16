@@ -47,88 +47,719 @@ Text messages form the foundation of chat communication. The SDK provides optimi
 ## Implementation Examples
 
 <Tabs>
-  <Tab title="iOS">
-    **Version 6**
-
-    <Frame>
-      <img src="https://gist.github.com/amythee/8caf4860ff3c6255b8c4b825e26cc089" />
-    </Frame>
-
-    **Version 5 (Maintained)**
-
-    <Frame>
-      <img src="https://gist.github.com/amythee/3abe32253b20e25ee4b710942a4f806f" />
-    </Frame>
+  <Tab title="iOS Swift">
+    ```swift
+    import AmitySDK
+    
+    class TextMessageManager {
+        private let messageRepository: AmityMessageRepository
+        
+        init() {
+            self.messageRepository = AmityMessageRepository(client: AmityUIKitManagerInternal.shared.client)
+        }
+        
+        func sendTextMessage(
+            text: String,
+            subChannelId: String,
+            metadata: [String: Any]? = nil,
+            tags: [String]? = nil,
+            parentId: String? = nil,
+            mentionUsers: [AmityMentionUser]? = nil
+        ) {
+            // Create message data
+            let messageData = AmityMessageTextData(text: text)
+            
+            // Create message builder
+            var builder = messageRepository.createMessage(
+                subChannelId: subChannelId,
+                messageType: .text,
+                data: messageData
+            )
+            
+            // Add optional parameters
+            if let metadata = metadata {
+                builder = builder.metadata(metadata)
+            }
+            
+            if let tags = tags {
+                builder = builder.tags(tags)
+            }
+            
+            if let parentId = parentId {
+                builder = builder.parentId(parentId)
+            }
+            
+            if let mentions = mentionUsers {
+                builder = builder.mentionUsers(mentions)
+            }
+            
+            // Send message
+            builder.create { [weak self] result in
+                switch result {
+                case .success(let message):
+                    self?.handleMessageSuccess(message)
+                case .failure(let error):
+                    self?.handleMessageError(error)
+                }
+            }
+        }
+        
+        private func handleMessageSuccess(_ message: AmityMessage) {
+            print("Text message sent successfully: \(message.messageId)")
+            
+            DispatchQueue.main.async {
+                // Update UI with new message
+                self.updateMessageList(with: message)
+                self.showMessageStatus(.sent)
+            }
+        }
+        
+        private func handleMessageError(_ error: AmityError) {
+            print("Failed to send text message: \(error.localizedDescription)")
+            
+            DispatchQueue.main.async {
+                // Show error state to user
+                self.showMessageStatus(.failed)
+                self.showRetryOption()
+            }
+        }
+        
+        // Send reply message
+        func sendReplyMessage(
+            text: String,
+            subChannelId: String,
+            parentMessageId: String
+        ) {
+            sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                parentId: parentMessageId
+            )
+        }
+        
+        // Send message with custom metadata
+        func sendEnhancedTextMessage(
+            text: String,
+            subChannelId: String,
+            customData: [String: Any]
+        ) {
+            let metadata = [
+                "type": "enhanced",
+                "customData": customData,
+                "timestamp": Date().timeIntervalSince1970
+            ]
+            
+            sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                metadata: metadata
+            )
+        }
+    }
+    ```
   </Tab>
 
-  <Tab title="Android">
-    **Version 6**
-
-    <Frame>
-      <img src="https://gist.github.com/amythee/284bdf467ea8fe7a136400d3b13287ea" />
-    </Frame>
-
-    **Version 5 (Maintained)**
-
-    <Frame>
-      <img src="https://gist.github.com/amythee/6bc19f3db1e24e8a31af236f1823f961" />
-    </Frame>
+  <Tab title="Android Kotlin">
+    ```kotlin
+    import com.amity.socialcloud.sdk.api.chat.AmityMessageRepository
+    import com.amity.socialcloud.sdk.model.chat.message.AmityMessage
+    import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+    import io.reactivex.rxjava3.disposables.CompositeDisposable
+    
+    class TextMessageManager {
+        private val messageRepository = AmityMessageRepository()
+        private val disposables = CompositeDisposable()
+        
+        fun sendTextMessage(
+            text: String,
+            subChannelId: String,
+            metadata: Map<String, Any>? = null,
+            tags: List<String>? = null,
+            parentId: String? = null,
+            mentionUsers: List<AmityMentionees>? = null
+        ) {
+            var builder = messageRepository.createTextMessage(subChannelId, text)
+            
+            // Add optional parameters
+            metadata?.let { builder = builder.metadata(it) }
+            tags?.let { builder = builder.tags(it) }
+            parentId?.let { builder = builder.parentId(it) }
+            mentionUsers?.let { builder = builder.mentionUsers(it) }
+            
+            val disposable = builder.build()
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    { message ->
+                        handleMessageSuccess(message)
+                    },
+                    { error ->
+                        handleMessageError(error)
+                    }
+                )
+            
+            disposables.add(disposable)
+        }
+        
+        private fun handleMessageSuccess(message: AmityMessage) {
+            Log.d("TextMessage", "Message sent successfully: ${message.getMessageId()}")
+            
+            // Update UI with new message
+            updateMessageList(message)
+            showMessageStatus(MessageStatus.SENT)
+        }
+        
+        private fun handleMessageError(error: Throwable) {
+            Log.e("TextMessage", "Failed to send text message", error)
+            
+            // Show error state to user
+            showMessageStatus(MessageStatus.FAILED)
+            showRetryOption()
+        }
+        
+        // Send reply message
+        fun sendReplyMessage(
+            text: String,
+            subChannelId: String,
+            parentMessageId: String
+        ) {
+            sendTextMessage(
+                text = text,
+                subChannelId = subChannelId,
+                parentId = parentMessageId
+            )
+        }
+        
+        // Send message with formatting
+        fun sendFormattedMessage(
+            text: String,
+            subChannelId: String,
+            formatting: Map<String, Any>
+        ) {
+            val metadata = mapOf(
+                "formatting" to formatting,
+                "type" to "formatted",
+                "timestamp" to System.currentTimeMillis()
+            )
+            
+            sendTextMessage(
+                text = text,
+                subChannelId = subChannelId,
+                metadata = metadata
+            )
+        }
+        
+        // Send message with tags for categorization
+        fun sendCategorizedMessage(
+            text: String,
+            subChannelId: String,
+            category: String,
+            priority: String = "normal"
+        ) {
+            val tags = listOf(category, priority, "text-message")
+            
+            sendTextMessage(
+                text = text,
+                subChannelId = subChannelId,
+                tags = tags
+            )
+        }
+        
+        fun dispose() {
+            disposables.clear()
+        }
+    }
+    ```
   </Tab>
 
   <Tab title="JavaScript">
     ```javascript
     import { MessageRepository } from '@amityco/js-sdk';
-
-    const liveObject = MessageRepository.createTextMessage({
-      channelId: 'channel1',
-      text: 'Hello World!',
-    });
-
-    liveObject.on('dataUpdate', message => {
-      console.log('message is created', message);
-    });
-    ```
-
-    When creating a message, we can also pass the `parentId` to make it appear under a parent.
-
-    ```javascript
-    import { MessageRepository } from '@amityco/js-sdk';
-
-    const messageLiveObject = MessageRepository.createTextMessage({
-      channelId: 'channel1',
-      text: 'Hello World!',
-      parentId: 'exampleParentMessageId',
-      tags: ['tag1', 'tag2'],
-      mentionees: [
-        {
-          "type": "user",
-          "userIds": [
-            "user1", "user2"
-          ]
+    
+    class TextMessageManager {
+        async sendTextMessage({
+            text,
+            subChannelId,
+            metadata = null,
+            tags = null,
+            parentId = null,
+            mentionees = null
+        }) {
+            try {
+                // Validate message length
+                if (text.length > 10000) {
+                    throw new Error('Message text exceeds 10,000 character limit');
+                }
+                
+                // Prepare message parameters
+                const messageParams = {
+                    channelId: subChannelId,
+                    text
+                };
+                
+                // Add optional parameters
+                if (metadata) messageParams.metadata = metadata;
+                if (tags) messageParams.tags = tags;
+                if (parentId) messageParams.parentId = parentId;
+                if (mentionees) messageParams.mentionees = mentionees;
+                
+                // Create and send message
+                const messageLiveObject = MessageRepository.createTextMessage(messageParams);
+                
+                // Handle message updates
+                messageLiveObject.on('dataUpdate', (message) => {
+                    this.handleMessageUpdate(message);
+                });
+                
+                messageLiveObject.on('dataError', (error) => {
+                    this.handleMessageError(error);
+                });
+                
+                return messageLiveObject;
+                
+            } catch (error) {
+                this.handleMessageError(error);
+                throw error;
+            }
         }
-      ]
-    });
+        
+        handleMessageUpdate(message) {
+            console.log('Message created/updated:', message.messageId);
+            
+            // Update UI based on sync state
+            switch (message.syncState) {
+                case 'synced':
+                    this.showMessageStatus('sent');
+                    break;
+                case 'syncing':
+                    this.showMessageStatus('sending');
+                    break;
+                case 'failed':
+                    this.showMessageStatus('failed');
+                    this.showRetryOption(message);
+                    break;
+                default:
+                    this.showMessageStatus('queued');
+            }
+        }
+        
+        handleMessageError(error) {
+            console.error('Text message error:', error);
+            this.showErrorNotification('Failed to send message');
+        }
+        
+        // Send reply message
+        async sendReplyMessage(text, subChannelId, parentMessageId) {
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                parentId: parentMessageId
+            });
+        }
+        
+        // Send message with mentions
+        async sendMessageWithMentions(text, subChannelId, userIds) {
+            const mentionees = [{
+                type: 'user',
+                userIds: userIds
+            }];
+            
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                mentionees
+            });
+        }
+        
+        // Send message with custom metadata
+        async sendEnhancedMessage(text, subChannelId, customData) {
+            const metadata = {
+                type: 'enhanced',
+                customData,
+                timestamp: Date.now()
+            };
+            
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                metadata
+            });
+        }
+        
+        showMessageStatus(status) {
+            // Update UI to show message status
+        }
+        
+        showRetryOption(message) {
+            // Show retry button for failed messages
+        }
+        
+        showErrorNotification(message) {
+            // Display error notification to user
+        }
+    }
     ```
   </Tab>
 
   <Tab title="TypeScript">
-    Version 6
-
-    <Frame>
-      <img src="https://gist.github.com/amythee/59381404ca924023929f1042c315b5ae#file-createtextmessage-ts" />
-    </Frame>
-
-    Beta (v0.0.1)
-
-    <Frame>
-      <img src="https://gist.github.com/f0ccc6a26f58792e70738a026bdfa8ad" />
-    </Frame>
+    ```typescript
+    import { 
+        MessageRepository, 
+        AmityMessage, 
+        CreateTextMessageRequest,
+        MessageSyncState
+    } from '@amityco/ts-sdk';
+    
+    interface TextMessageOptions {
+        text: string;
+        subChannelId: string;
+        metadata?: Record<string, any>;
+        tags?: string[];
+        parentId?: string;
+        mentionees?: Array<{
+            type: 'user' | 'channel';
+            userIds?: string[];
+        }>;
+    }
+    
+    interface MessageStatus {
+        id: string;
+        state: MessageSyncState;
+        timestamp: number;
+    }
+    
+    class TextMessageManager {
+        private messageStatusMap = new Map<string, MessageStatus>();
+        
+        async sendTextMessage(options: TextMessageOptions): Promise<AmityMessage> {
+            try {
+                // Validate input
+                this.validateMessageInput(options);
+                
+                const {
+                    text,
+                    subChannelId,
+                    metadata,
+                    tags,
+                    parentId,
+                    mentionees
+                } = options;
+                
+                // Prepare request
+                const request: CreateTextMessageRequest = {
+                    channelId: subChannelId,
+                    text
+                };
+                
+                if (metadata) request.metadata = metadata;
+                if (tags) request.tags = tags;
+                if (parentId) request.parentId = parentId;
+                if (mentionees) request.mentionees = mentionees;
+                
+                // Create message
+                const messageLiveObject = MessageRepository.createTextMessage(request);
+                
+                // Set up message tracking
+                messageLiveObject.on('dataUpdate', (message: AmityMessage) => {
+                    this.handleMessageUpdate(message);
+                });
+                
+                messageLiveObject.on('dataError', (error: Error) => {
+                    this.handleMessageError(error);
+                });
+                
+                return messageLiveObject.model;
+                
+            } catch (error) {
+                this.handleMessageError(error as Error);
+                throw error;
+            }
+        }
+        
+        private validateMessageInput(options: TextMessageOptions): void {
+            if (!options.text.trim()) {
+                throw new Error('Message text cannot be empty');
+            }
+            
+            if (options.text.length > 10000) {
+                throw new Error('Message text exceeds 10,000 character limit');
+            }
+            
+            if (!options.subChannelId) {
+                throw new Error('SubChannel ID is required');
+            }
+        }
+        
+        private handleMessageUpdate(message: AmityMessage): void {
+            const status: MessageStatus = {
+                id: message.messageId,
+                state: message.syncState,
+                timestamp: Date.now()
+            };
+            
+            this.messageStatusMap.set(message.messageId, status);
+            
+            // Update UI based on sync state
+            switch (message.syncState) {
+                case MessageSyncState.SYNCED:
+                    this.showMessageStatus(message.messageId, 'sent');
+                    break;
+                case MessageSyncState.SYNCING:
+                    this.showMessageStatus(message.messageId, 'sending');
+                    break;
+                case MessageSyncState.FAILED:
+                    this.showMessageStatus(message.messageId, 'failed');
+                    this.showRetryOption(message);
+                    break;
+                default:
+                    this.showMessageStatus(message.messageId, 'queued');
+            }
+        }
+        
+        private handleMessageError(error: Error): void {
+            console.error('Text message error:', error.message);
+            this.showErrorNotification(this.getFriendlyErrorMessage(error));
+        }
+        
+        private getFriendlyErrorMessage(error: Error): string {
+            if (error.message.includes('character limit')) {
+                return 'Message is too long. Please shorten your message.';
+            } else if (error.message.includes('permission')) {
+                return 'You do not have permission to send messages in this channel.';
+            } else if (error.message.includes('network')) {
+                return 'Network error. Please check your connection.';
+            } else {
+                return 'Failed to send message. Please try again.';
+            }
+        }
+        
+        // Convenience methods
+        async sendReplyMessage(
+            text: string,
+            subChannelId: string,
+            parentMessageId: string
+        ): Promise<AmityMessage> {
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                parentId: parentMessageId
+            });
+        }
+        
+        async sendMessageWithMentions(
+            text: string,
+            subChannelId: string,
+            userIds: string[]
+        ): Promise<AmityMessage> {
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                mentionees: [{
+                    type: 'user',
+                    userIds
+                }]
+            });
+        }
+        
+        async sendTaggedMessage(
+            text: string,
+            subChannelId: string,
+            tags: string[]
+        ): Promise<AmityMessage> {
+            return this.sendTextMessage({
+                text,
+                subChannelId,
+                tags
+            });
+        }
+        
+        // Status tracking methods
+        getMessageStatus(messageId: string): MessageStatus | undefined {
+            return this.messageStatusMap.get(messageId);
+        }
+        
+        private showMessageStatus(messageId: string, status: string): void {
+            // Type-safe UI updates
+        }
+        
+        private showRetryOption(message: AmityMessage): void {
+            // Show retry option for failed messages
+        }
+        
+        private showErrorNotification(message: string): void {
+            // Display error notification
+        }
+    }
+    ```
   </Tab>
 
-  <Tab title="Flutter">
-    <Frame>
-      <img src="https://gist.github.com/amythee/cdfb7544aea37943da47bf688266ce6d#file-amitymessagetextcreate-dart" />
-    </Frame>
+  <Tab title="Flutter Dart">
+    ```dart
+    import 'package:amity_sdk/amity_sdk.dart';
+    
+    class TextMessageManager {
+        Future<AmityMessage> sendTextMessage({
+            required String text,
+            required String subChannelId,
+            Map<String, dynamic>? metadata,
+            List<String>? tags,
+            String? parentId,
+            List<AmityMentionees>? mentionUsers,
+        }) async {
+            try {
+                // Validate message input
+                _validateMessageInput(text, subChannelId);
+                
+                // Create message builder
+                var builder = AmitySocialClient.newMessageRepository()
+                    .createTextMessage(
+                        subChannelId: subChannelId,
+                        text: text,
+                    );
+                
+                // Add optional parameters
+                if (metadata != null) {
+                    builder = builder.metadata(metadata);
+                }
+                
+                if (tags != null) {
+                    builder = builder.tags(tags);
+                }
+                
+                if (parentId != null) {
+                    builder = builder.parentId(parentId);
+                }
+                
+                if (mentionUsers != null) {
+                    builder = builder.mentionUsers(mentionUsers);
+                }
+                
+                // Send message
+                final message = await builder.send();
+                
+                _handleMessageSuccess(message);
+                return message;
+                
+            } catch (error) {
+                _handleMessageError(error);
+                rethrow;
+            }
+        }
+        
+        void _validateMessageInput(String text, String subChannelId) {
+            if (text.trim().isEmpty) {
+                throw ArgumentError('Message text cannot be empty');
+            }
+            
+            if (text.length > 10000) {
+                throw ArgumentError('Message text exceeds 10,000 character limit');
+            }
+            
+            if (subChannelId.isEmpty) {
+                throw ArgumentError('SubChannel ID is required');
+            }
+        }
+        
+        void _handleMessageSuccess(AmityMessage message) {
+            print('Text message sent successfully: ${message.messageId}');
+            
+            // Update UI with new message
+            _updateMessageList(message);
+            _showMessageStatus(MessageStatus.sent);
+        }
+        
+        void _handleMessageError(dynamic error) {
+            print('Failed to send text message: $error');
+            
+            // Show error state to user
+            _showMessageStatus(MessageStatus.failed);
+            _showRetryOption();
+        }
+        
+        // Send reply message
+        Future<AmityMessage> sendReplyMessage({
+            required String text,
+            required String subChannelId,
+            required String parentMessageId,
+        }) async {
+            return sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                parentId: parentMessageId,
+            );
+        }
+        
+        // Send message with mentions
+        Future<AmityMessage> sendMessageWithMentions({
+            required String text,
+            required String subChannelId,
+            required List<String> userIds,
+        }) async {
+            final mentionUsers = [
+                AmityMentionees.users(userIds),
+            ];
+            
+            return sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                mentionUsers: mentionUsers,
+            );
+        }
+        
+        // Send message with custom metadata
+        Future<AmityMessage> sendEnhancedMessage({
+            required String text,
+            required String subChannelId,
+            required Map<String, dynamic> customData,
+        }) async {
+            final metadata = {
+                'type': 'enhanced',
+                'customData': customData,
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+            };
+            
+            return sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                metadata: metadata,
+            );
+        }
+        
+        // Send message with tags for categorization
+        Future<AmityMessage> sendCategorizedMessage({
+            required String text,
+            required String subChannelId,
+            required String category,
+            String priority = 'normal',
+        }) async {
+            final tags = [category, priority, 'text-message'];
+            
+            return sendTextMessage(
+                text: text,
+                subChannelId: subChannelId,
+                tags: tags,
+            );
+        }
+        
+        void _updateMessageList(AmityMessage message) {
+            // Update UI with new message
+        }
+        
+        void _showMessageStatus(MessageStatus status) {
+            // Update UI to show message status
+        }
+        
+        void _showRetryOption() {
+            // Show retry button for failed messages
+        }
+    }
+    
+    enum MessageStatus {
+        queued,
+        sending,
+        sent,
+        failed,
+    }
+    ```
   </Tab>
 </Tabs>
 

@@ -75,29 +75,1021 @@ Image messages enable rich visual communication by allowing users to share photo
 ```swift
 import AmitySDK
 
-// Upload and send image message
-func sendImageMessage(imagePath: String, subchannelId: String, caption: String?) {
-    let messageRepository = AmityMessageRepository(client: client)
+class ImageMessageManager {
+    private let messageRepository: AmityMessageRepository
+    private let fileRepository: AmityFileRepository
     
-    // Create image message with full size option
-    messageRepository.createImageMessage(
-        subchannelId: subchannelId,
-        imagePath: imagePath,
-        caption: caption,
-        tags: ["photo", "shared"],
-        isFullImage: true
-    ) { [weak self] message, error in
-        if let error = error {
-            print("Failed to send image: \(error.localizedDescription)")
+    init(client: AmityClient) {
+        self.messageRepository = AmityMessageRepository(client: client)
+        self.fileRepository = AmityFileRepository(client: client)
+    }
+    
+    // Upload and send image message
+    func sendImageMessage(
+        image: UIImage,
+        subchannelId: String,
+        caption: String? = nil,
+        isFullImage: Bool = false,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        // First upload the image
+        uploadImage(image: image) { [weak self] result in
+            switch result {
+            case .success(let fileId):
+                self?.createImageMessage(
+                    fileId: fileId,
+                    subchannelId: subchannelId,
+                    caption: caption,
+                    isFullImage: isFullImage,
+                    completion: completion
+                )
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func uploadImage(
+        image: UIImage,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            completion(.failure(ImageError.invalidImageData))
             return
         }
         
-        if let message = message {
-            print("Image message sent: \(message.messageId)")
-            print("Caption: \(message.data?["caption"] as? String ?? "No caption")")
+        fileRepository.uploadImage(
+            imageData: imageData,
+            progressHandler: { progress in
+                print("Upload progress: \(progress)%")
+            }
+        ) { result in
+            switch result {
+            case .success(let file):
+                completion(.success(file.fileId))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func createImageMessage(
+        fileId: String,
+        subchannelId: String,
+        caption: String?,
+        isFullImage: Bool,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        messageRepository.createImageMessage(
+            subchannelId: subchannelId,
+            imageId: fileId,
+            caption: caption,
+            tags: ["photo", "image"],
+            isFullImage: isFullImage
+        ) { message, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
             
-            // Update UI
+            if let message = message {
+                completion(.success(message))
+            } else {
+                completion(.failure(ImageError.messageCreationFailed))
+            }
+        }
+    }
+}
+
+// Usage example
+class ChatViewController: UIViewController {
+    private var imageManager: ImageMessageManager!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        imageManager = ImageMessageManager(client: AmityManager.shared.client)
+    }
+    
+    @IBAction func sendImageTapped() {
+        presentImagePicker()
+    }
+    
+    private func presentImagePicker() {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true
+        present(picker, animated: true)
+    }
+}
+
+extension ChatViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        guard let image = info[.originalImage] as? UIImage else { return }
+        
+        picker.dismiss(animated: true) { [weak self] in
+            self?.sendImage(image)
+        }
+    }
+    
+    private func sendImage(_ image: UIImage) {
+        showLoadingIndicator()
+        
+        imageManager.sendImageMessage(
+            image: image,
+            subchannelId: currentSubchannelId,
+            caption: "Shared image",
+            isFullImage: false
+        ) { [weak self] result in
             DispatchQueue.main.async {
+                self?.hideLoadingIndicator()
+                
+                switch result {
+                case .success(let message):
+                    print("Image sent successfully: \(message.messageId)")
+                    self?.refreshMessages()
+                case .failure(let error):
+                    self?.showError("Failed to send image: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+}
+
+enum ImageError: Error {
+    case invalidImageData
+    case messageCreationFailed
+    case uploadFailed
+}
+```
+</Tab>
+
+<Tab title="Android">
+**Version 6**
+
+```kotlin
+import com.amityco.socialcloud.sdk.AmityCoreClient
+import com.amityco.socialcloud.sdk.chat.message.AmityMessageRepository
+import com.amityco.socialcloud.sdk.core.file.AmityFileRepository
+import kotlinx.coroutines.*
+import java.io.File
+
+class ImageMessageManager(private val client: AmityCoreClient) {
+    private val messageRepository = AmityMessageRepository(client)
+    private val fileRepository = AmityFileRepository(client)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    
+    fun sendImageMessage(
+        imageFile: File,
+        subchannelId: String,
+        caption: String? = null,
+        isFullImage: Boolean = false,
+        onProgress: (Int) -> Unit = {},
+        onSuccess: (AmityMessage) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        scope.launch {
+            try {
+                // Upload image first
+                val fileId = uploadImage(imageFile, onProgress)
+                
+                // Create image message
+                val message = createImageMessage(
+                    fileId = fileId,
+                    subchannelId = subchannelId,
+                    caption = caption,
+                    isFullImage = isFullImage
+                )
+                
+                onSuccess(message)
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
+    
+    private suspend fun uploadImage(
+        imageFile: File,
+        onProgress: (Int) -> Unit
+    ): String = withContext(Dispatchers.IO) {
+        return@withContext suspendCancellableCoroutine { continuation ->
+            fileRepository.uploadImage(imageFile)
+                .progressHandler { progress ->
+                    onProgress(progress)
+                }
+                .build()
+                .upload()
+                .subscribe(
+                    onNext = { file ->
+                        continuation.resume(file.getFileId()) {}
+                    },
+                    onError = { error ->
+                        continuation.resumeWithException(error)
+                    }
+                )
+        }
+    }
+    
+    private suspend fun createImageMessage(
+        fileId: String,
+        subchannelId: String,
+        caption: String?,
+        isFullImage: Boolean
+    ): AmityMessage = withContext(Dispatchers.IO) {
+        return@withContext suspendCancellableCoroutine { continuation ->
+            messageRepository.createImageMessage(subchannelId)
+                .imageId(fileId)
+                .caption(caption)
+                .tags(listOf("photo", "image"))
+                .isFullImage(isFullImage)
+                .build()
+                .send()
+                .subscribe(
+                    onNext = { message ->
+                        continuation.resume(message) {}
+                    },
+                    onError = { error ->
+                        continuation.resumeWithException(error)
+                    }
+                )
+        }
+    }
+}
+
+// Usage in Activity/Fragment
+class ChatActivity : AppCompatActivity() {
+    private lateinit var imageManager: ImageMessageManager
+    private val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { sendImageFromUri(it) }
+    }
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        imageManager = ImageMessageManager(AmityCoreClient.newClient())
+        
+        setupImageButton()
+    }
+    
+    private fun setupImageButton() {
+        findViewById<ImageButton>(R.id.btn_image).setOnClickListener {
+            imagePickerLauncher.launch("image/*")
+        }
+    }
+    
+    private fun sendImageFromUri(uri: Uri) {
+        val file = createTempFileFromUri(uri)
+        showProgressDialog()
+        
+        imageManager.sendImageMessage(
+            imageFile = file,
+            subchannelId = currentSubchannelId,
+            caption = "Shared from gallery",
+            isFullImage = false,
+            onProgress = { progress ->
+                runOnUiThread {
+                    updateProgressDialog(progress)
+                }
+            },
+            onSuccess = { message ->
+                runOnUiThread {
+                    hideProgressDialog()
+                    showToast("Image sent successfully")
+                    refreshMessages()
+                }
+            },
+            onError = { error ->
+                runOnUiThread {
+                    hideProgressDialog()
+                    showError("Failed to send image: ${error.message}")
+                }
+            }
+        )
+    }
+    
+    private fun createTempFileFromUri(uri: Uri): File {
+        val inputStream = contentResolver.openInputStream(uri)
+        val tempFile = File.createTempFile("image", ".jpg", cacheDir)
+        
+        inputStream?.use { input ->
+            tempFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        
+        return tempFile
+    }
+}
+```
+</Tab>
+
+<Tab title="JavaScript">
+**Version 6**
+
+```javascript
+import { Client, MessageRepository, FileRepository } from '@amityco/js-sdk';
+
+class ImageMessageManager {
+    constructor(client) {
+        this.messageRepository = new MessageRepository(client);
+        this.fileRepository = new FileRepository(client);
+    }
+    
+    async sendImageMessage({
+        imageFile,
+        subchannelId,
+        caption = null,
+        isFullImage = false,
+        onProgress = () => {},
+        tags = ['photo', 'image']
+    }) {
+        try {
+            // Validate file
+            this.validateImageFile(imageFile);
+            
+            // Upload image
+            const fileId = await this.uploadImage(imageFile, onProgress);
+            
+            // Create message
+            const message = await this.createImageMessage({
+                fileId,
+                subchannelId,
+                caption,
+                isFullImage,
+                tags
+            });
+            
+            return { success: true, message };
+        } catch (error) {
+            console.error('Failed to send image message:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    validateImageFile(file) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/heic'];
+        const maxSize = 1024 * 1024 * 1024; // 1GB
+        
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error('Unsupported file type. Please use JPG, PNG, or HEIC.');
+        }
+        
+        if (file.size > maxSize) {
+            throw new Error('File too large. Maximum size is 1GB.');
+        }
+    }
+    
+    async uploadImage(file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.fileRepository.uploadImage(file);
+            
+            liveObject.on('dataUpdated', (file) => {
+                if (file.uploadProgress) {
+                    onProgress(file.uploadProgress);
+                }
+                
+                if (file.fileId) {
+                    resolve(file.fileId);
+                }
+            });
+            
+            liveObject.on('dataError', (error) => {
+                reject(new Error(`Upload failed: ${error.message}`));
+            });
+        });
+    }
+    
+    async createImageMessage({ fileId, subchannelId, caption, isFullImage, tags }) {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.messageRepository.createImageMessage({
+                subchannelId,
+                imageId: fileId,
+                caption,
+                tags,
+                isFullImage
+            });
+            
+            liveObject.on('dataUpdated', (message) => {
+                if (message.messageId) {
+                    resolve(message);
+                }
+            });
+            
+            liveObject.on('dataError', (error) => {
+                reject(new Error(`Message creation failed: ${error.message}`));
+            });
+        });
+    }
+}
+
+// Usage example
+class ChatInterface {
+    constructor(client, subchannelId) {
+        this.imageManager = new ImageMessageManager(client);
+        this.subchannelId = subchannelId;
+        this.setupImageInput();
+    }
+    
+    setupImageInput() {
+        const imageInput = document.createElement('input');
+        imageInput.type = 'file';
+        imageInput.accept = 'image/jpeg,image/png,image/heic';
+        imageInput.style.display = 'none';
+        
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.handleImageSelection(file);
+            }
+        });
+        
+        document.body.appendChild(imageInput);
+        this.imageInput = imageInput;
+        
+        // Add image button
+        const imageButton = document.getElementById('image-button');
+        imageButton.addEventListener('click', () => {
+            this.imageInput.click();
+        });
+    }
+    
+    async handleImageSelection(file) {
+        const progressBar = this.showProgressBar();
+        
+        try {
+            const result = await this.imageManager.sendImageMessage({
+                imageFile: file,
+                subchannelId: this.subchannelId,
+                caption: 'Shared image',
+                isFullImage: false,
+                onProgress: (progress) => {
+                    this.updateProgressBar(progressBar, progress);
+                }
+            });
+            
+            if (result.success) {
+                this.showSuccess('Image sent successfully!');
+                this.refreshMessages();
+            } else {
+                this.showError(result.error);
+            }
+        } catch (error) {
+            this.showError(`Failed to send image: ${error.message}`);
+        } finally {
+            this.hideProgressBar(progressBar);
+        }
+    }
+    
+    showProgressBar() {
+        const progressContainer = document.createElement('div');
+        progressContainer.className = 'progress-container';
+        progressContainer.innerHTML = `
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span class="progress-text">Uploading image...</span>
+        `;
+        document.body.appendChild(progressContainer);
+        return progressContainer;
+    }
+    
+    updateProgressBar(container, progress) {
+        const fill = container.querySelector('.progress-fill');
+        const text = container.querySelector('.progress-text');
+        fill.style.width = `${progress}%`;
+        text.textContent = `Uploading image... ${progress}%`;
+    }
+    
+    hideProgressBar(container) {
+        container.remove();
+    }
+}
+
+// Initialize
+const client = Client.newClient('<API_KEY>');
+const chatInterface = new ChatInterface(client, 'subchannel-id');
+```
+</Tab>
+
+<Tab title="TypeScript">
+**Version 6**
+
+```typescript
+import { 
+    Client, 
+    MessageRepository, 
+    FileRepository,
+    AmityMessage,
+    AmityFile 
+} from '@amityco/ts-sdk';
+
+interface ImageMessageParams {
+    imageFile: File;
+    subchannelId: string;
+    caption?: string;
+    isFullImage?: boolean;
+    tags?: string[];
+}
+
+interface SendImageResult {
+    success: boolean;
+    message?: AmityMessage;
+    error?: string;
+}
+
+class ImageMessageManager {
+    private messageRepository: MessageRepository;
+    private fileRepository: FileRepository;
+    
+    constructor(private client: Client) {
+        this.messageRepository = new MessageRepository(client);
+        this.fileRepository = new FileRepository(client);
+    }
+    
+    async sendImageMessage({
+        imageFile,
+        subchannelId,
+        caption,
+        isFullImage = false,
+        tags = ['photo', 'image']
+    }: ImageMessageParams): Promise<SendImageResult> {
+        try {
+            // Validate file before upload
+            this.validateImageFile(imageFile);
+            
+            // Upload image and get file ID
+            const fileId = await this.uploadImageFile(imageFile);
+            
+            // Create and send image message
+            const message = await this.createImageMessage({
+                fileId,
+                subchannelId,
+                caption,
+                isFullImage,
+                tags
+            });
+            
+            return { success: true, message };
+        } catch (error) {
+            console.error('Image message send failed:', error);
+            return { 
+                success: false, 
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+    
+    private validateImageFile(file: File): void {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/heic'];
+        const maxSizeBytes = 1024 * 1024 * 1024; // 1GB
+        
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error(
+                `Invalid file type: ${file.type}. Supported types: ${allowedTypes.join(', ')}`
+            );
+        }
+        
+        if (file.size > maxSizeBytes) {
+            throw new Error(
+                `File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Maximum size: 1GB`
+            );
+        }
+    }
+    
+    private async uploadImageFile(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.fileRepository.uploadImage(file);
+            
+            liveObject.on('dataUpdated', (uploadedFile: AmityFile) => {
+                if (uploadedFile.fileId) {
+                    resolve(uploadedFile.fileId);
+                }
+            });
+            
+            liveObject.on('dataError', (error: Error) => {
+                reject(new Error(`Image upload failed: ${error.message}`));
+            });
+        });
+    }
+    
+    private async createImageMessage(params: {
+        fileId: string;
+        subchannelId: string;
+        caption?: string;
+        isFullImage: boolean;
+        tags: string[];
+    }): Promise<AmityMessage> {
+        return new Promise((resolve, reject) => {
+            const liveObject = this.messageRepository.createImageMessage({
+                subchannelId: params.subchannelId,
+                imageId: params.fileId,
+                caption: params.caption,
+                tags: params.tags,
+                isFullImage: params.isFullImage
+            });
+            
+            liveObject.on('dataUpdated', (message: AmityMessage) => {
+                if (message.messageId) {
+                    resolve(message);
+                }
+            });
+            
+            liveObject.on('dataError', (error: Error) => {
+                reject(new Error(`Message creation failed: ${error.message}`));
+            });
+        });
+    }
+}
+
+// React TypeScript component example
+import React, { useState, useCallback } from 'react';
+
+interface ChatImageUploaderProps {
+    client: Client;
+    subchannelId: string;
+    onMessageSent: (message: AmityMessage) => void;
+    onError: (error: string) => void;
+}
+
+const ChatImageUploader: React.FC<ChatImageUploaderProps> = ({
+    client,
+    subchannelId,
+    onMessageSent,
+    onError
+}) => {
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const imageManager = new ImageMessageManager(client);
+    
+    const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        
+        setUploading(true);
+        setUploadProgress(0);
+        
+        try {
+            const result = await imageManager.sendImageMessage({
+                imageFile: file,
+                subchannelId,
+                caption: 'Shared image',
+                isFullImage: false,
+                tags: ['photo', 'shared']
+            });
+            
+            if (result.success && result.message) {
+                onMessageSent(result.message);
+            } else {
+                onError(result.error || 'Failed to send image');
+            }
+        } catch (error) {
+            onError(error instanceof Error ? error.message : 'Upload failed');
+        } finally {
+            setUploading(false);
+            setUploadProgress(0);
+        }
+    }, [imageManager, subchannelId, onMessageSent, onError]);
+    
+    return (
+        <div className="image-uploader">
+            <input
+                type="file"
+                accept="image/jpeg,image/png,image/heic"
+                onChange={handleFileChange}
+                disabled={uploading}
+                style={{ display: 'none' }}
+                id="image-input"
+            />
+            <label htmlFor="image-input" className="upload-button">
+                {uploading ? `Uploading... ${uploadProgress}%` : 'Send Image'}
+            </label>
+            {uploading && (
+                <div className="progress-bar">
+                    <div 
+                        className="progress-fill" 
+                        style={{ width: `${uploadProgress}%` }}
+                    />
+                </div>
+            )}
+        </div>
+    );
+};
+
+export { ImageMessageManager, ChatImageUploader };
+```
+</Tab>
+
+<Tab title="Flutter">
+**Version 0.2**
+
+```dart
+import 'package:amity_sdk/amity_sdk.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+class ImageMessageService {
+  final AmityClient _client;
+  late final AmityMessageRepository _messageRepository;
+  late final AmityFileRepository _fileRepository;
+  
+  ImageMessageService(this._client) {
+    _messageRepository = AmityMessageRepository(_client);
+    _fileRepository = AmityFileRepository(_client);
+  }
+  
+  Future<AmityMessage> sendImageMessage({
+    required String subchannelId,
+    required File imageFile,
+    String? caption,
+    bool isFullImage = false,
+    List<String> tags = const ['photo', 'image'],
+    Function(int)? onProgress,
+  }) async {
+    try {
+      // Validate image file
+      await _validateImageFile(imageFile);
+      
+      // Upload image
+      final fileId = await _uploadImage(imageFile, onProgress);
+      
+      // Create message
+      final message = await _createImageMessage(
+        fileId: fileId,
+        subchannelId: subchannelId,
+        caption: caption,
+        isFullImage: isFullImage,
+        tags: tags,
+      );
+      
+      return message;
+    } catch (e) {
+      throw ImageMessageException('Failed to send image: ${e.toString()}');
+    }
+  }
+  
+  Future<void> _validateImageFile(File file) async {
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.heic'];
+    const maxSizeBytes = 1024 * 1024 * 1024; // 1GB
+    
+    final extension = file.path.toLowerCase().split('.').last;
+    if (!allowedExtensions.any((ext) => ext.contains(extension))) {
+      throw ArgumentError('Unsupported file type. Use JPG, PNG, or HEIC.');
+    }
+    
+    final fileSize = await file.length();
+    if (fileSize > maxSizeBytes) {
+      throw ArgumentError('File too large. Maximum size is 1GB.');
+    }
+  }
+  
+  Future<String> _uploadImage(File file, Function(int)? onProgress) async {
+    final completer = Completer<String>();
+    
+    _fileRepository.uploadImage(file)
+      .progressHandler((progress) {
+        onProgress?.call(progress);
+      })
+      .build()
+      .upload()
+      .listen(
+        (fileData) {
+          if (fileData.fileId != null) {
+            completer.complete(fileData.fileId!);
+          }
+        },
+        onError: (error) {
+          completer.completeError(error);
+        },
+      );
+    
+    return completer.future;
+  }
+  
+  Future<AmityMessage> _createImageMessage({
+    required String fileId,
+    required String subchannelId,
+    String? caption,
+    required bool isFullImage,
+    required List<String> tags,
+  }) async {
+    final completer = Completer<AmityMessage>();
+    
+    _messageRepository.createImageMessage(subchannelId)
+      .imageId(fileId)
+      .caption(caption)
+      .tags(tags)
+      .isFullImage(isFullImage)
+      .build()
+      .send()
+      .listen(
+        (message) {
+          completer.complete(message);
+        },
+        onError: (error) {
+          completer.completeError(error);
+        },
+      );
+    
+    return completer.future;
+  }
+}
+
+class ImageMessageWidget extends StatefulWidget {
+  final String subchannelId;
+  final Function(AmityMessage) onMessageSent;
+  final Function(String) onError;
+  
+  const ImageMessageWidget({
+    Key? key,
+    required this.subchannelId,
+    required this.onMessageSent,
+    required this.onError,
+  }) : super(key: key);
+  
+  @override
+  _ImageMessageWidgetState createState() => _ImageMessageWidgetState();
+}
+
+class _ImageMessageWidgetState extends State<ImageMessageWidget> {
+  late final ImageMessageService _imageService;
+  bool _sending = false;
+  int _uploadProgress = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _imageService = ImageMessageService(AmityClient.instance);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.photo_library),
+              onPressed: _sending ? null : () => _sendFromGallery(),
+              tooltip: 'Send from Gallery',
+            ),
+            IconButton(
+              icon: const Icon(Icons.camera_alt),
+              onPressed: _sending ? null : () => _sendFromCamera(),
+              tooltip: 'Take Photo',
+            ),
+            if (_sending) ...[
+              const SizedBox(width: 8),
+              CircularProgressIndicator(
+                value: _uploadProgress / 100,
+              ),
+              const SizedBox(width: 8),
+              Text('$_uploadProgress%'),
+            ],
+          ],
+        ),
+        if (_sending)
+          LinearProgressIndicator(
+            value: _uploadProgress / 100,
+            backgroundColor: Colors.grey[300],
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).primaryColor,
+            ),
+          ),
+      ],
+    );
+  }
+  
+  Future<void> _sendFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
+    
+    if (pickedFile != null) {
+      await _sendImage(File(pickedFile.path));
+    }
+  }
+  
+  Future<void> _sendFromCamera() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
+    
+    if (pickedFile != null) {
+      await _sendImage(File(pickedFile.path));
+    }
+  }
+  
+  Future<void> _sendImage(File imageFile) async {
+    setState(() {
+      _sending = true;
+      _uploadProgress = 0;
+    });
+    
+    try {
+      final message = await _imageService.sendImageMessage(
+        subchannelId: widget.subchannelId,
+        imageFile: imageFile,
+        caption: 'Shared image',
+        isFullImage: false,
+        onProgress: (progress) {
+          setState(() {
+            _uploadProgress = progress;
+          });
+        },
+      );
+      
+      widget.onMessageSent(message);
+      
+      // Show success feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Image sent successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      widget.onError(e.toString());
+      
+      // Show error feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _sending = false;
+        _uploadProgress = 0;
+      });
+    }
+  }
+}
+
+class ImageMessageException implements Exception {
+  final String message;
+  ImageMessageException(this.message);
+  
+  @override
+  String toString() => 'ImageMessageException: $message';
+}
+
+// Usage in a chat screen
+class ChatScreen extends StatefulWidget {
+  final String subchannelId;
+  
+  const ChatScreen({Key? key, required this.subchannelId}) : super(key: key);
+  
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final List<AmityMessage> _messages = [];
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chat')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                return MessageTile(message: _messages[index]);
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            child: ImageMessageWidget(
+              subchannelId: widget.subchannelId,
+              onMessageSent: (message) {
+                setState(() {
+                  _messages.add(message);
+                });
+              },
+              onError: (error) {
+                print('Image send error: $error');
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
                 self?.updateMessageList(with: message)
             }
         }
@@ -632,147 +1624,526 @@ class ImageMessageService {
 
 // Usage in a widget
 class ImageMessageWidget extends StatefulWidget {
-    final String subchannelId;
-    
-    const ImageMessageWidget({Key? key, required this.subchannelId}) : super(key: key);
-    
-    @override
-    _ImageMessageWidgetState createState() => _ImageMessageWidgetState();
+  final String subchannelId;
+  
+  const ImageMessageWidget({Key? key, required this.subchannelId}) : super(key: key);
+  
+  @override
+  _ImageMessageWidgetState createState() => _ImageMessageWidgetState();
 }
 
 class _ImageMessageWidgetState extends State<ImageMessageWidget> {
-    late final ImageMessageService _imageService;
-    bool _sending = false;
-    
-    @override
-    void initState() {
-        super.initState();
-        _imageService = ImageMessageService(AmityClient.instance);
+  late final ImageMessageService _imageService;
+  bool _sending = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _imageService = ImageMessageService(AmityClient.instance);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+        children: [
+            IconButton(
+                icon: Icon(Icons.photo_library),
+                onPressed: _sending ? null : () => _sendFromGallery(),
+            ),
+            IconButton(
+                icon: Icon(Icons.camera_alt),
+                onPressed: _sending ? null : () => _sendFromCamera(),
+            ),
+            if (_sending)
+                CircularProgressIndicator(),
+        ],
+    );
+  }
+  
+  Future<void> _sendFromGallery() async {
+    setState(() => _sending = true);
+    try {
+      await _imageService.sendImageFromPicker(widget.subchannelId);
+    } finally {
+      setState(() => _sending = false);
     }
-    
-    @override
-    Widget build(BuildContext context) {
-        return Row(
-            children: [
-                IconButton(
-                    icon: Icon(Icons.photo_library),
-                    onPressed: _sending ? null : () => _sendFromGallery(),
-                ),
-                IconButton(
-                    icon: Icon(Icons.camera_alt),
-                    onPressed: _sending ? null : () => _sendFromCamera(),
-                ),
-                if (_sending)
-                    CircularProgressIndicator(),
-            ],
-        );
+  }
+  
+  Future<void> _sendFromCamera() async {
+    setState(() => _sending = true);
+    try {
+      await _imageService.captureAndSendImage(widget.subchannelId);
+    } finally {
+      setState(() => _sending = false);
     }
-    
-    Future<void> _sendFromGallery() async {
-        setState(() => _sending = true);
-        try {
-            await _imageService.sendImageFromPicker(widget.subchannelId);
-        } finally {
-            setState(() => _sending = false);
-        }
-    }
-    
-    Future<void> _sendFromCamera() async {
-        setState(() => _sending = true);
-        try {
-            await _imageService.captureAndSendImage(widget.subchannelId);
-        } finally {
-            setState(() => _sending = false);
-        }
-    }
+  }
 }
 ```
 </Tab>
 </Tabs>
 
-## Image Processing & Optimization
-
-The SDK automatically handles image processing to provide optimal performance across different network conditions and device capabilities.
-
-### Automatic Sizing
-
-When an image is uploaded, it's automatically processed into multiple size variants:
+## Advanced Features
 
 <AccordionGroup>
-<Accordion title="Size Options">
-- **Small**: Optimized for thumbnails and previews
-- **Medium**: Balanced quality and size for general viewing
-- **Large**: High quality for detailed viewing
-- **Full Size**: Original image (only if `isFullImage` is enabled)
+<Accordion title="Real-time Image Processing">
+```typescript
+// Monitor image processing status
+class ImageProcessingMonitor {
+    trackImageProcessing(messageId: string): Observable<ProcessingStatus> {
+        return messageRepository.getImageProcessingStatus(messageId)
+            .pipe(
+                map(status => ({
+                    isProcessing: status.isProcessing,
+                    thumbnailReady: status.thumbnailReady,
+                    optimizedReady: status.optimizedReady,
+                    fullSizeReady: status.fullSizeReady,
+                    processingProgress: status.progress
+                }))
+            );
+    }
+}
+```
 </Accordion>
 
-<Accordion title="Processing Rules">
-- Size is determined by the longest dimension in pixels
-- Aspect ratio is always preserved during resizing
-- Maximum file size limit is 1GB for original images
-- Optimized versions are automatically compressed for efficiency
+<Accordion title="Batch Image Upload">
+```swift
+// iOS: Send multiple images efficiently
+func sendMultipleImages(imagePaths: [String], subchannelId: String) {
+    let group = DispatchGroup()
+    var sentMessages: [AmityMessage] = []
+    
+    for imagePath in imagePaths {
+        group.enter()
+        
+        imageManager.sendImageMessage(
+            imagePath: imagePath,
+            subchannelId: subchannelId,
+            caption: nil,
+            isFullImage: false
+        ) { result in
+            defer { group.leave() }
+            
+            switch result {
+            case .success(let message):
+                sentMessages.append(message)
+            case .failure(let error):
+                print("Failed to send image: \(error)")
+            }
+        }
+    }
+    
+    group.notify(queue: .main) {
+        print("All images sent: \(sentMessages.count)")
+    }
+}
+```
 </Accordion>
 
-<Accordion title="Performance Impact">
-- **Full Size Enabled**: May significantly slow message sending
-- **Optimized Only**: Faster sending, maximum 1500x1500 pixels
-- **Smart Compression**: Maintains visual quality while reducing file size
+<Accordion title="Image Compression Control">
+```kotlin
+// Android: Custom compression settings
+class ImageCompressionManager {
+    fun compressImage(
+        imageFile: File,
+        quality: Int = 80,
+        maxWidth: Int = 1920,
+        maxHeight: Int = 1920
+    ): File {
+        val bitmap = BitmapFactory.decodeFile(imageFile.path)
+        val scaledBitmap = Bitmap.createScaledBitmap(
+            bitmap, 
+            calculateScaledWidth(bitmap, maxWidth),
+            calculateScaledHeight(bitmap, maxHeight),
+            true
+        )
+        
+        val compressedFile = File(imageFile.parent, "compressed_${imageFile.name}")
+        FileOutputStream(compressedFile).use { out ->
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        }
+        
+        return compressedFile
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Offline Image Management">
+```javascript
+// JavaScript: Handle offline image queuing
+class OfflineImageManager {
+    constructor() {
+        this.pendingImages = [];
+        this.setupOfflineHandling();
+    }
+    
+    queueImageForSending(imageData) {
+        const queueItem = {
+            id: generateId(),
+            imageData,
+            timestamp: Date.now(),
+            retryCount: 0
+        };
+        
+        this.pendingImages.push(queueItem);
+        this.savePendingImages();
+        
+        // Try to send when online
+        if (navigator.onLine) {
+            this.processPendingImages();
+        }
+    }
+    
+    setupOfflineHandling() {
+        window.addEventListener('online', () => {
+            this.processPendingImages();
+        });
+    }
+    
+    async processPendingImages() {
+        const failedImages = [];
+        
+        for (const item of this.pendingImages) {
+            try {
+                await this.sendImage(item.imageData);
+                console.log(`Sent queued image: ${item.id}`);
+            } catch (error) {
+                item.retryCount++;
+                if (item.retryCount < 3) {
+                    failedImages.push(item);
+                }
+            }
+        }
+        
+        this.pendingImages = failedImages;
+        this.savePendingImages();
+    }
+}
+```
 </Accordion>
 </AccordionGroup>
 
-### Caption Support
+## Error Handling
 
-Image messages support rich captions with the following features:
-- **Length**: Up to 1,000 characters per message
-- **Accessibility**: Available under the `data.caption` property
-- **Formatting**: Supports basic text formatting and emojis
-- **Searchability**: Captions are indexed for message search
+<AccordionGroup>
+<Accordion title="Comprehensive Error Management">
+```typescript
+enum ImageError {
+    INVALID_FILE_TYPE = 'INVALID_FILE_TYPE',
+    FILE_TOO_LARGE = 'FILE_TOO_LARGE',
+    UPLOAD_FAILED = 'UPLOAD_FAILED',
+    PROCESSING_FAILED = 'PROCESSING_FAILED',
+    NETWORK_ERROR = 'NETWORK_ERROR',
+    PERMISSION_DENIED = 'PERMISSION_DENIED'
+}
+
+class ImageErrorHandler {
+    handleError(error: Error): { message: string; recoverable: boolean } {
+        switch (error.message) {
+            case ImageError.INVALID_FILE_TYPE:
+                return {
+                    message: 'Please select a JPG, PNG, or HEIC image file.',
+                    recoverable: true
+                };
+            
+            case ImageError.FILE_TOO_LARGE:
+                return {
+                    message: 'Image file is too large. Please choose a smaller image.',
+                    recoverable: true
+                };
+            
+            case ImageError.UPLOAD_FAILED:
+                return {
+                    message: 'Upload failed. Please check your connection and try again.',
+                    recoverable: true
+                };
+            
+            case ImageError.NETWORK_ERROR:
+                return {
+                    message: 'Network error. The image will be sent when connection is restored.',
+                    recoverable: true
+                };
+            
+            default:
+                return {
+                    message: 'An unexpected error occurred. Please try again.',
+                    recoverable: false
+                };
+        }
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Retry Logic">
+```swift
+// iOS: Implement retry mechanism
+class ImageRetryManager {
+    private let maxRetries = 3
+    private let retryDelay: TimeInterval = 2.0
+    
+    func sendImageWithRetry(
+        imagePath: String,
+        subchannelId: String,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        sendImageAttempt(
+            imagePath: imagePath,
+            subchannelId: subchannelId,
+            attempt: 1,
+            completion: completion
+        )
+    }
+    
+    private func sendImageAttempt(
+        imagePath: String,
+        subchannelId: String,
+        attempt: Int,
+        completion: @escaping (Result<AmityMessage, Error>) -> Void
+    ) {
+        imageManager.sendImageMessage(imagePath: imagePath, subchannelId: subchannelId) { result in
+            switch result {
+            case .success(let message):
+                completion(.success(message))
+            
+            case .failure(let error):
+                if attempt < self.maxRetries {
+                    print("Retry attempt \(attempt) failed, retrying in \(self.retryDelay)s")
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.retryDelay) {
+                        self.sendImageAttempt(
+                            imagePath: imagePath,
+                            subchannelId: subchannelId,
+                            attempt: attempt + 1,
+                            completion: completion
+                        )
+                    }
+                } else {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+}
+```
+</Accordion>
+
+<Accordion title="Validation and Sanitization">
+```kotlin
+// Android: Comprehensive validation
+class ImageValidator {
+    private val allowedMimeTypes = setOf(
+        "image/jpeg",
+        "image/png", 
+        "image/heic"
+    )
+    
+    private val maxFileSizeBytes = 1024L * 1024L * 1024L // 1GB
+    
+    data class ValidationResult(
+        val isValid: Boolean,
+        val error: String? = null,
+        val sanitizedFile: File? = null
+    )
+    
+    fun validateAndSanitize(file: File): ValidationResult {
+        // Check file existence
+        if (!file.exists()) {
+            return ValidationResult(false, "File does not exist")
+        }
+        
+        // Check file size
+        if (file.length() > maxFileSizeBytes) {
+            return ValidationResult(false, "File size exceeds 1GB limit")
+        }
+        
+        // Check MIME type
+        val mimeType = getMimeType(file)
+        if (mimeType !in allowedMimeTypes) {
+            return ValidationResult(false, "Unsupported file type: $mimeType")
+        }
+        
+        // Sanitize filename
+        val sanitizedFile = sanitizeFile(file)
+        
+        return ValidationResult(true, sanitizedFile = sanitizedFile)
+    }
+    
+    private fun getMimeType(file: File): String? {
+        return try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(file.path, options)
+            options.outMimeType
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    private fun sanitizeFile(file: File): File {
+        val sanitizedName = file.name
+            .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .take(255)
+        
+        return if (sanitizedName != file.name) {
+            val newFile = File(file.parent, sanitizedName)
+            file.copyTo(newFile)
+            newFile
+        } else {
+            file
+        }
+    }
+}
+```
+</Accordion>
+</AccordionGroup>
 
 ## Best Practices
 
 <AccordionGroup>
-<Accordion title="Image Optimization">
-- Use `isFullImage: false` for faster sending in most cases
-- Pre-compress images on the client side for very large files
-- Consider image quality vs. file size trade-offs
-- Test performance with different image sizes and formats
+<Accordion title="Performance Optimization">
+- **Image Compression**: Compress images client-side before upload to reduce bandwidth
+- **Progressive Loading**: Show thumbnails first, load full resolution on demand
+- **Caching Strategy**: Implement smart caching for frequently accessed images
+- **Background Processing**: Upload images in background threads to maintain UI responsiveness
+- **Memory Management**: Release image resources promptly to prevent memory leaks
+
+```dart
+// Flutter: Memory-efficient image handling
+class MemoryEfficientImageHandler {
+  static Future<Uint8List> compressImage(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: 1920,
+      targetHeight: 1920,
+    );
+    
+    final frame = await codec.getNextFrame();
+    final compressedBytes = await frame.image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+    
+    return compressedBytes!.buffer.asUint8List();
+  }
+}
+```
 </Accordion>
 
-<Accordion title="User Experience">
-- Show upload progress indicators for large images
-- Provide image preview before sending
-- Implement image compression settings for users
-- Support both camera capture and gallery selection
+<Accordion title="User Experience Guidelines">
+- **Progress Indicators**: Always show upload progress for better user feedback
+- **Preview Functionality**: Allow users to preview images before sending
+- **Accessibility**: Provide alt text and proper accessibility labels
+- **Error Recovery**: Offer clear options for handling failed uploads
+- **Offline Support**: Queue images for sending when connection is restored
+
+```javascript
+// Web: Enhanced user experience
+class ImageUXManager {
+    showImagePreview(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const preview = document.createElement('img');
+            preview.src = e.target.result;
+            preview.className = 'image-preview';
+            
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.appendChild(preview);
+            
+            // Add send/cancel buttons
+            this.addPreviewControls(file, previewContainer);
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    addPreviewControls(file, container) {
+        const controls = document.createElement('div');
+        controls.className = 'preview-controls';
+        
+        const sendButton = document.createElement('button');
+        sendButton.textContent = 'Send Image';
+        sendButton.onclick = () => this.sendImage(file);
+        
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.onclick = () => container.remove();
+        
+        controls.appendChild(sendButton);
+        controls.appendChild(cancelButton);
+        container.appendChild(controls);
+    }
+}
+```
 </Accordion>
 
-<Accordion title="Error Handling">
-- Validate file types and sizes before upload
-- Handle network failures gracefully with retry options
-- Provide clear error messages for unsupported formats
-- Implement fallback mechanisms for failed uploads
-</Accordion>
+<Accordion title="Security Considerations">
+- **File Validation**: Always validate file types and sizes on both client and server
+- **Content Scanning**: Implement malware and inappropriate content detection
+- **Privacy Protection**: Respect user privacy settings and permissions
+- **Secure Upload**: Use HTTPS and proper authentication for all uploads
+- **Data Retention**: Follow data retention policies and user deletion requests
 
-<Accordion title="Performance Considerations">
-- Batch multiple images efficiently
-- Use appropriate image quality settings for mobile
-- Consider lazy loading for image message history
-- Implement proper memory management for large images
+```typescript
+// Security-focused image handling
+class SecureImageHandler {
+    private readonly ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic'];
+    private readonly MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
+    
+    async validateImageSecurity(file: File): Promise<boolean> {
+        // Check file extension
+        const extension = this.getFileExtension(file.name).toLowerCase();
+        if (!this.ALLOWED_EXTENSIONS.includes(extension)) {
+            throw new Error('Invalid file extension');
+        }
+        
+        // Check file signature (magic bytes)
+        const isValidSignature = await this.validateFileSignature(file);
+        if (!isValidSignature) {
+            throw new Error('Invalid file signature');
+        }
+        
+        // Check file size
+        if (file.size > this.MAX_FILE_SIZE) {
+            throw new Error('File size exceeds limit');
+        }
+        
+        return true;
+    }
+    
+    private async validateFileSignature(file: File): Promise<boolean> {
+        const buffer = await file.slice(0, 4).arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        
+        // Check for common image signatures
+        const signatures = {
+            jpeg: [0xFF, 0xD8, 0xFF],
+            png: [0x89, 0x50, 0x4E, 0x47],
+            // Add more as needed
+        };
+        
+        return Object.values(signatures).some(signature =>
+            signature.every((byte, index) => bytes[index] === byte)
+        );
+    }
+}
+```
 </Accordion>
 </AccordionGroup>
 
-## Use Cases
+## Related Documentation
 
 <CardGroup cols={2}>
-  <Card title="Social Sharing" icon="share">
-    Share photos, moments, and experiences with friends and communities
+  <Card title="File Upload Guide" icon="cloud-arrow-up" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos">
+    Learn about file upload mechanisms and optimization strategies
   </Card>
-  <Card title="Visual Documentation" icon="file-image">
-    Send screenshots, documents, and visual information for work or projects
+  <Card title="Message Types Overview" icon="message" href="/social-plus-sdk/chat/messaging-features/message-types">
+    Explore all available message types and their capabilities
   </Card>
-  <Card title="Product Showcase" icon="store">
-    Display products, services, or portfolio items in business communications
+  <Card title="Content Moderation" icon="shield-check" href="/social-plus-sdk/chat/moderation-safety/content-moderation">
+    Implement content filtering and safety measures for images
   </Card>
-  <Card title="Creative Expression" icon="palette">
-    Share artwork, designs, and creative content with visual impact
+  <Card title="Real-time Events" icon="bolt" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events">
+    Handle real-time image processing and delivery events
   </Card>
 </CardGroup>
