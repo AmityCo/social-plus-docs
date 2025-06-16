@@ -1,0 +1,1102 @@
+---
+title: "First Integration"
+description: "Build your first Social Plus SDK integration with step-by-step examples for common use cases."
+---
+
+# First Integration
+
+Now that your SDK is installed and verified, let's build your first integration! This guide walks you through creating simple but functional social features to get you started.
+
+## Choose Your First Feature
+
+<CardGroup cols={2}>
+  <Card title="User Profile" icon="user" href="#user-profile-integration">
+    Create and display user profiles with basic information
+  </Card>
+  
+  <Card title="Simple Chat" icon="comments" href="#simple-chat-integration">
+    Build a basic chat interface with message sending
+  </Card>
+  
+  <Card title="Social Feed" icon="feed" href="#social-feed-integration">
+    Display and create posts in a community feed
+  </Card>
+  
+  <Card title="Live Presence" icon="circle-dot" href="#presence-integration">
+    Show user online/offline status in real-time
+  </Card>
+</CardGroup>
+
+## User Profile Integration
+
+Let's start with a basic user profile feature:
+
+<Tabs>
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class UserProfileViewController: UIViewController {
+    @IBOutlet weak var profileImageView: UIImageView!
+    @IBOutlet weak var displayNameLabel: UILabel!
+    @IBOutlet weak var userIdLabel: UILabel!
+    @IBOutlet weak var statusLabel: UILabel!
+    
+    private var client: AmityClient!
+    private var userRepository: AmityUserRepository!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupSDK()
+        authenticateUser()
+    }
+    
+    private func setupSDK() {
+        do {
+            client = try AmityClient(
+                apiKey: "your-api-key",
+                region: .SG
+            )
+            userRepository = AmityUserRepository(client: client)
+        } catch {
+            showAlert("Setup failed: \(error)")
+        }
+    }
+    
+    private func authenticateUser() {
+        client.login(
+            userId: "user123",
+            displayName: "John Doe"
+        ) { [weak self] success, error in
+            if success {
+                self?.loadUserProfile()
+            } else {
+                self?.showAlert("Login failed: \(error?.localizedDescription ?? "Unknown error")")
+            }
+        }
+    }
+    
+    private func loadUserProfile() {
+        let userQuery = userRepository.getUser("user123")
+        
+        userQuery.observe { [weak self] liveObject, error in
+            DispatchQueue.main.async {
+                if let user = liveObject.object {
+                    self?.displayUserProfile(user)
+                } else if let error = error {
+                    self?.showAlert("Profile load failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func displayUserProfile(_ user: AmityUser) {
+        displayNameLabel.text = user.displayName
+        userIdLabel.text = "ID: \(user.userId)"
+        statusLabel.text = user.isGlobalBan ? "Banned" : "Active"
+        
+        // Load profile image if available
+        if let avatarUrl = user.getAvatarInfo()?.fileUrl {
+            loadImage(from: avatarUrl, into: profileImageView)
+        }
+    }
+    
+    @IBAction func updateProfileTapped(_ sender: UIButton) {
+        let alert = UIAlertController(title: "Update Profile", message: "Enter new display name", preferredStyle: .alert)
+        
+        alert.addTextField { textField in
+            textField.placeholder = "Display Name"
+            textField.text = self.displayNameLabel.text
+        }
+        
+        alert.addAction(UIAlertAction(title: "Update", style: .default) { _ in
+            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else { return }
+            self.updateUserProfile(displayName: newName)
+        })
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+    
+    private func updateUserProfile(displayName: String) {
+        let builder = AmityUserUpdateBuilder()
+        builder.setDisplayName(displayName)
+        
+        userRepository.updateUser(builder) { [weak self] user, error in
+            DispatchQueue.main.async {
+                if let user = user {
+                    self?.displayUserProfile(user)
+                    self?.showAlert("Profile updated successfully!")
+                } else {
+                    self?.showAlert("Update failed: \(error?.localizedDescription ?? "Unknown error")")
+                }
+            }
+        }
+    }
+    
+    private func showAlert(_ message: String) {
+        let alert = UIAlertController(title: "Info", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    private func loadImage(from urlString: String, into imageView: UIImageView) {
+        // Simple image loading - use a proper image loading library in production
+        guard let url = URL(string: urlString) else { return }
+        
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async {
+                imageView.image = image
+            }
+        }.resume()
+    }
+}
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+import com.amity.socialcloud.sdk.*
+
+class UserProfileActivity : AppCompatActivity() {
+    private lateinit var profileImageView: ImageView
+    private lateinit var displayNameText: TextView
+    private lateinit var userIdText: TextView
+    private lateinit var statusText: TextView
+    private lateinit var updateButton: Button
+    
+    private lateinit var userRepository: AmityUserRepository
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_user_profile)
+        
+        initViews()
+        setupSDK()
+        authenticateUser()
+    }
+    
+    private fun initViews() {
+        profileImageView = findViewById(R.id.profileImageView)
+        displayNameText = findViewById(R.id.displayNameText)
+        userIdText = findViewById(R.id.userIdText)
+        statusText = findViewById(R.id.statusText)
+        updateButton = findViewById(R.id.updateButton)
+        
+        updateButton.setOnClickListener { showUpdateDialog() }
+    }
+    
+    private fun setupSDK() {
+        try {
+            AmityClient.initialize(
+                context = this,
+                apiKey = "your-api-key",
+                region = AmityRegion.SG
+            )
+            userRepository = AmityUserRepository(AmityClient.getClient())
+        } catch (e: Exception) {
+            showToast("Setup failed: ${e.message}")
+        }
+    }
+    
+    private fun authenticateUser() {
+        AmityClient.login(
+            userId = "user123",
+            displayName = "John Doe"
+        ).subscribe(
+            onComplete = { loadUserProfile() },
+            onError = { error -> showToast("Login failed: ${error.message}") }
+        )
+    }
+    
+    private fun loadUserProfile() {
+        val userLiveData = userRepository.getUser("user123")
+        
+        userLiveData.observe(this) { user ->
+            user?.let { displayUserProfile(it) }
+        }
+    }
+    
+    private fun displayUserProfile(user: AmityUser) {
+        displayNameText.text = user.getDisplayName()
+        userIdText.text = "ID: ${user.getUserId()}"
+        statusText.text = if (user.isGlobalBan()) "Banned" else "Active"
+        
+        // Load profile image if available
+        user.getAvatar()?.getUrl()?.let { avatarUrl ->
+            loadImage(avatarUrl, profileImageView)
+        }
+    }
+    
+    private fun showUpdateDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Update Profile")
+        
+        val input = EditText(this)
+        input.setText(displayNameText.text)
+        input.hint = "Display Name"
+        builder.setView(input)
+        
+        builder.setPositiveButton("Update") { _, _ ->
+            val newName = input.text.toString().trim()
+            if (newName.isNotEmpty()) {
+                updateUserProfile(newName)
+            }
+        }
+        
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.cancel()
+        }
+        
+        builder.show()
+    }
+    
+    private fun updateUserProfile(displayName: String) {
+        val builder = AmityUserUpdateBuilder()
+            .displayName(displayName)
+        
+        userRepository.updateUser(builder)
+            .subscribe(
+                onComplete = { user ->
+                    displayUserProfile(user)
+                    showToast("Profile updated successfully!")
+                },
+                onError = { error ->
+                    showToast("Update failed: ${error.message}")
+                }
+            )
+    }
+    
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun loadImage(url: String, imageView: ImageView) {
+        // Use Glide, Picasso, or similar library in production
+        // This is a simplified example
+        Thread {
+            try {
+                val bitmap = BitmapFactory.decodeStream(URL(url).openConnection().getInputStream())
+                runOnUiThread {
+                    imageView.setImageBitmap(bitmap)
+                }
+            } catch (e: Exception) {
+                // Handle image loading error
+            }
+        }.start()
+    }
+}
+```
+</Tab>
+
+<Tab title="React">
+```typescript
+import React, { useState, useEffect } from 'react';
+import { Client, User } from '@amityco/ts-sdk';
+
+interface UserProfileProps {
+  apiKey: string;
+}
+
+const UserProfile: React.FC<UserProfileProps> = ({ apiKey }) => {
+  const [client, setClient] = useState<Client | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState('');
+
+  useEffect(() => {
+    initializeSDK();
+  }, []);
+
+  const initializeSDK = async () => {
+    try {
+      const sdkClient = Client.create({
+        apiKey: apiKey,
+        region: 'sg'
+      });
+
+      await sdkClient.login({
+        userId: 'user123',
+        displayName: 'John Doe'
+      });
+
+      setClient(sdkClient);
+      await loadUserProfile(sdkClient);
+    } catch (err) {
+      setError(`SDK initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
+
+  const loadUserProfile = async (sdkClient: Client) => {
+    try {
+      const userData = await sdkClient.User.getUser('user123');
+      setUser(userData);
+      setNewDisplayName(userData?.displayName || '');
+      setLoading(false);
+    } catch (err) {
+      setError(`Profile load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
+
+  const updateProfile = async () => {
+    if (!client || !newDisplayName.trim()) return;
+
+    try {
+      setLoading(true);
+      await client.User.updateUser({
+        userId: 'user123',
+        displayName: newDisplayName.trim()
+      });
+
+      // Reload profile
+      await loadUserProfile(client);
+      setIsEditing(false);
+      setError(null);
+    } catch (err) {
+      setError(`Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="user-profile loading">
+        <div className="spinner">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="user-profile error">
+        <h3>Error</h3>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="user-profile">
+      <div className="profile-header">
+        <div className="avatar">
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Profile" />
+          ) : (
+            <div className="avatar-placeholder">
+              {user?.displayName?.charAt(0).toUpperCase() || 'U'}
+            </div>
+          )}
+        </div>
+        
+        <div className="profile-info">
+          {isEditing ? (
+            <div className="edit-form">
+              <input
+                type="text"
+                value={newDisplayName}
+                onChange={(e) => setNewDisplayName(e.target.value)}
+                placeholder="Display Name"
+                className="name-input"
+              />
+              <div className="edit-actions">
+                <button onClick={updateProfile} disabled={!newDisplayName.trim()}>
+                  Save
+                </button>
+                <button onClick={() => {
+                  setIsEditing(false);
+                  setNewDisplayName(user?.displayName || '');
+                }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="profile-display">
+              <h2>{user?.displayName || 'Unknown User'}</h2>
+              <p className="user-id">ID: {user?.userId}</p>
+              <p className="user-status">
+                Status: {user?.isGlobalBan ? 'Banned' : 'Active'}
+              </p>
+              <button onClick={() => setIsEditing(true)}>
+                Edit Profile
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="profile-stats">
+        <div className="stat">
+          <span className="stat-label">Posts</span>
+          <span className="stat-value">{user?.postsCount || 0}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Followers</span>
+          <span className="stat-value">{user?.followersCount || 0}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Following</span>
+          <span className="stat-value">{user?.followingCount || 0}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UserProfile;
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+import 'package:flutter/material.dart';
+import 'package:amity_sdk/amity_sdk.dart';
+
+class UserProfileScreen extends StatefulWidget {
+  final String apiKey;
+  
+  const UserProfileScreen({Key? key, required this.apiKey}) : super(key: key);
+  
+  @override
+  _UserProfileScreenState createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  AmityUser? _user;
+  bool _loading = true;
+  String? _error;
+  bool _isEditing = false;
+  final _displayNameController = TextEditingController();
+  
+  @override
+  void initState() {
+    super.initState();
+    _initializeSDK();
+  }
+  
+  Future<void> _initializeSDK() async {
+    try {
+      await AmityClient.initialize(
+        apiKey: widget.apiKey,
+        region: AmityRegion.SG,
+      );
+      
+      await AmityClient.login(
+        userId: 'user123',
+        displayName: 'John Doe',
+      );
+      
+      await _loadUserProfile();
+    } catch (e) {
+      setState(() {
+        _error = 'SDK initialization failed: $e';
+        _loading = false;
+      });
+    }
+  }
+  
+  Future<void> _loadUserProfile() async {
+    try {
+      final userRepository = AmityUserRepository();
+      final user = await userRepository.getUser('user123');
+      
+      setState(() {
+        _user = user;
+        _displayNameController.text = user?.displayName ?? '';
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Profile load failed: $e';
+        _loading = false;
+      });
+    }
+  }
+  
+  Future<void> _updateProfile() async {
+    if (_displayNameController.text.trim().isEmpty) return;
+    
+    try {
+      setState(() => _loading = true);
+      
+      final userRepository = AmityUserRepository();
+      await userRepository.updateUser(
+        userId: 'user123',
+        displayName: _displayNameController.text.trim(),
+      );
+      
+      await _loadUserProfile();
+      
+      setState(() {
+        _isEditing = false;
+        _error = null;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully!')),
+      );
+    } catch (e) {
+      setState(() {
+        _error = 'Update failed: $e';
+        _loading = false;
+      });
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('User Profile'),
+        actions: [
+          if (!_isEditing && _user != null)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => setState(() => _isEditing = true),
+            ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
+  
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _initializeSDK,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    if (_user == null) {
+      return const Center(
+        child: Text('No user data available'),
+      );
+    }
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildProfileHeader(),
+          const SizedBox(height: 24),
+          _buildProfileStats(),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildProfileHeader() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 50,
+              backgroundImage: _user!.avatarUrl != null
+                  ? NetworkImage(_user!.avatarUrl!)
+                  : null,
+              child: _user!.avatarUrl == null
+                  ? Text(
+                      _user!.displayName?.substring(0, 1).toUpperCase() ?? 'U',
+                      style: const TextStyle(fontSize: 24),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            
+            if (_isEditing) ...[
+              TextField(
+                controller: _displayNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Display Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: _updateProfile,
+                    child: const Text('Save'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        _isEditing = false;
+                        _displayNameController.text = _user?.displayName ?? '';
+                      });
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Text(
+                _user!.displayName ?? 'Unknown User',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'ID: ${_user!.userId}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Status: ${_user!.isGlobalBan ? "Banned" : "Active"}',
+                style: TextStyle(
+                  color: _user!.isGlobalBan ? Colors.red : Colors.green,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildProfileStats() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildStatItem('Posts', _user!.postsCount?.toString() ?? '0'),
+            _buildStatItem('Followers', _user!.followersCount?.toString() ?? '0'),
+            _buildStatItem('Following', _user!.followingCount?.toString() ?? '0'),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildStatItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+  
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    super.dispose();
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Simple Chat Integration
+
+Create a basic chat interface:
+
+<Tabs>
+<Tab title="iOS">
+```swift
+import AmitySDK
+
+class SimpleChatViewController: UIViewController {
+    @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var messageTextField: UITextField!
+    @IBOutlet weak var sendButton: UIButton!
+    
+    private var client: AmityClient!
+    private var channelRepository: AmityChannelRepository!
+    private var messageRepository: AmityMessageRepository!
+    private var channel: AmityChannel?
+    private var messages: [AmityMessage] = []
+    private var messagesQuery: AmityLiveCollection<AmityMessage>?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+        setupSDK()
+        authenticateAndJoinChannel()
+    }
+    
+    private func setupUI() {
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "MessageCell")
+        
+        sendButton.addTarget(self, action: #selector(sendMessage), for: .touchUpInside)
+    }
+    
+    private func setupSDK() {
+        do {
+            client = try AmityClient(apiKey: "your-api-key", region: .SG)
+            channelRepository = AmityChannelRepository(client: client)
+            messageRepository = AmityMessageRepository(client: client)
+        } catch {
+            showAlert("SDK setup failed: \(error)")
+        }
+    }
+    
+    private func authenticateAndJoinChannel() {
+        client.login(userId: "user123", displayName: "John Doe") { [weak self] success, error in
+            if success {
+                self?.createOrJoinChannel()
+            } else {
+                self?.showAlert("Authentication failed: \(error?.localizedDescription ?? "Unknown error")")
+            }
+        }
+    }
+    
+    private func createOrJoinChannel() {
+        let channelBuilder = AmityChannelBuilder()
+        channelBuilder.setChannelId("simple-chat-demo")
+        channelBuilder.setDisplayName("Simple Chat Demo")
+        channelBuilder.setType(.conversation)
+        
+        channelRepository.createChannel(channelBuilder) { [weak self] channel, error in
+            if let channel = channel {
+                self?.channel = channel
+                self?.loadMessages()
+            } else if let error = error {
+                self?.showAlert("Channel creation failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func loadMessages() {
+        guard let channel = channel else { return }
+        
+        messagesQuery = messageRepository.getMessages(channelId: channel.channelId)
+        
+        messagesQuery?.observe { [weak self] liveCollection, error in
+            if let error = error {
+                self?.showAlert("Message loading failed: \(error.localizedDescription)")
+            } else {
+                self?.messages = liveCollection.allObjects()
+                DispatchQueue.main.async {
+                    self?.tableView.reloadData()
+                    self?.scrollToBottom()
+                }
+            }
+        }
+    }
+    
+    @objc private func sendMessage() {
+        guard let channel = channel,
+              let messageText = messageTextField.text,
+              !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
+        let messageBuilder = AmityTextMessageBuilder()
+        messageBuilder.setText(messageText)
+        
+        messageRepository.sendMessage(messageBuilder, channelId: channel.channelId) { [weak self] message, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.showAlert("Send failed: \(error.localizedDescription)")
+                } else {
+                    self?.messageTextField.text = ""
+                }
+            }
+        }
+    }
+    
+    private func scrollToBottom() {
+        guard messages.count > 0 else { return }
+        let indexPath = IndexPath(row: messages.count - 1, section: 0)
+        tableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
+    }
+    
+    private func showAlert(_ message: String) {
+        let alert = UIAlertController(title: "Info", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}
+
+extension SimpleChatViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return messages.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath)
+        let message = messages[indexPath.row]
+        
+        let senderName = message.user?.displayName ?? "Unknown"
+        let messageText = message.data?["text"] as? String ?? ""
+        let timestamp = DateFormatter.localizedString(from: message.createdAt, dateStyle: .none, timeStyle: .short)
+        
+        cell.textLabel?.text = "\(senderName): \(messageText)"
+        cell.detailTextLabel?.text = timestamp
+        
+        return cell
+    }
+}
+```
+</Tab>
+
+<Tab title="React">
+```typescript
+import React, { useState, useEffect, useRef } from 'react';
+import { Client, Channel, Message } from '@amityco/ts-sdk';
+
+interface SimpleChatProps {
+  apiKey: string;
+}
+
+const SimpleChat: React.FC<SimpleChatProps> = ({ apiKey }) => {
+  const [client, setClient] = useState<Client | null>(null);
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    initializeChat();
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const initializeChat = async () => {
+    try {
+      const sdkClient = Client.create({
+        apiKey: apiKey,
+        region: 'sg'
+      });
+
+      await sdkClient.login({
+        userId: 'user123',
+        displayName: 'John Doe'
+      });
+
+      setClient(sdkClient);
+      await createOrJoinChannel(sdkClient);
+    } catch (err) {
+      setError(`Chat initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
+
+  const createOrJoinChannel = async (sdkClient: Client) => {
+    try {
+      const chatChannel = await sdkClient.Channel.createChannel({
+        channelId: 'simple-chat-demo',
+        displayName: 'Simple Chat Demo',
+        type: 'conversation'
+      });
+
+      setChannel(chatChannel);
+      await loadMessages(sdkClient, chatChannel.channelId);
+    } catch (err) {
+      setError(`Channel creation failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
+
+  const loadMessages = async (sdkClient: Client, channelId: string) => {
+    try {
+      const messagesCollection = sdkClient.Message.getMessages(channelId);
+      
+      messagesCollection.subscribe((messageList) => {
+        setMessages(messageList);
+        setLoading(false);
+      });
+    } catch (err) {
+      setError(`Message loading failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!client || !channel || !messageText.trim()) return;
+
+    try {
+      await client.Message.sendTextMessage({
+        channelId: channel.channelId,
+        text: messageText.trim()
+      });
+
+      setMessageText('');
+    } catch (err) {
+      setError(`Send failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  if (loading) {
+    return (
+      <div className="simple-chat loading">
+        <div className="spinner">Loading chat...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="simple-chat error">
+        <h3>Chat Error</h3>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="simple-chat">
+      <div className="chat-header">
+        <h3>{channel?.displayName || 'Simple Chat'}</h3>
+        <span className="member-count">{messages.length} messages</span>
+      </div>
+      
+      <div className="messages-container">
+        {messages.length === 0 ? (
+          <div className="no-messages">
+            <p>No messages yet. Start the conversation!</p>
+          </div>
+        ) : (
+          messages.map((message, index) => (
+            <div key={message.messageId || index} className="message">
+              <div className="message-header">
+                <span className="sender-name">
+                  {message.user?.displayName || 'Unknown User'}
+                </span>
+                <span className="message-time">
+                  {new Date(message.createdAt).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className="message-content">
+                {message.data?.text || 'Message content unavailable'}
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <div className="message-input">
+        <input
+          type="text"
+          value={messageText}
+          onChange={(e) => setMessageText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Type a message..."
+          className="text-input"
+        />
+        <button
+          onClick={sendMessage}
+          disabled={!messageText.trim()}
+          className="send-button"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default SimpleChat;
+```
+</Tab>
+</Tabs>
+
+## Next Steps
+
+Congratulations! You've built your first Social Plus SDK integration. Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Authentication Deep Dive" icon="key" href="/social-plus-sdk/getting-started/authentication">
+    Learn advanced authentication patterns and security best practices
+  </Card>
+  
+  <Card title="Core Concepts" icon="book" href="/social-plus-sdk/core-concepts">
+    Master fundamental concepts like session management and error handling
+  </Card>
+  
+  <Card title="Advanced Chat Features" icon="comments" href="/social-plus-sdk/chat">
+    Add message reactions, file uploads, and advanced chat functionality
+  </Card>
+  
+  <Card title="Social Features" icon="users" href="/social-plus-sdk/social">
+    Build communities, posts, reactions, and social interactions
+  </Card>
+</CardGroup>
+
+## Best Practices for Production
+
+Before deploying to production, consider these important practices:
+
+### Security
+- **API Key Management**: Use environment variables, never hardcode API keys
+- **Authentication**: Implement proper auth token management and refresh logic
+- **Input Validation**: Sanitize all user inputs before sending to the SDK
+- **Permission Checks**: Verify user permissions for actions
+
+### Performance
+- **Connection Management**: Handle network changes and reconnection scenarios
+- **Memory Management**: Properly dispose of SDK resources and subscriptions
+- **Caching**: Implement appropriate caching strategies for better performance
+- **Error Handling**: Comprehensive error handling and user feedback
+
+### User Experience
+- **Loading States**: Show appropriate loading indicators during operations
+- **Offline Support**: Handle offline scenarios gracefully
+- **Error Messages**: Provide clear, actionable error messages to users
+- **Accessibility**: Ensure your chat interface is accessible to all users
+
+## Resources
+
+- **[API Reference](/api-reference)**: Detailed API documentation
+- **[Community Forum](https://community.social.plus)**: Get help from other developers
+- **[Example Projects](https://github.com/AmityCo/Social-Plus-SDK-Examples)**: Complete example applications
+- **[Migration Guides](/social-plus-sdk/migration)**: Upgrade from older SDK versions
+
+Happy building! 🚀

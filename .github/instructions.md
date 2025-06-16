@@ -426,4 +426,88 @@ The core-concepts module has been completely restructured into four workflow-bas
 - **Purpose**: Complete user lifecycle and safety management
 - **Contents**:
   - `overview.mdx` - User management overview
-  - `user-lifecycle`
+  - `user-lifecycle.mdx` - User lifecycle stages and transitions
+  - `user-creation.mdx` - Creating and registering users
+  - `user-authentication.mdx` - Authenticating users and managing sessions
+  - `user-roles-permissions.mdx` - Role-based access control and permissions
+  - `user-data-management.mdx` - Managing user data and privacy
+  - `user-notifications.mdx` - User notifications and messaging
+
+#### 3. Content Management (`/social-plus-sdk/core-concepts/content-management/`)
+- **Purpose**: Managing and moderating user-generated content
+- **Contents**:
+  - `overview.mdx` - Content management overview
+  - `content-creation.mdx` - Creating and publishing content
+  - `content-moderation.mdx` - Moderating and managing content
+  - `content-analytics.mdx` - Analyzing content performance and engagement
+
+#### 4. Social Graph (`/social-plus-sdk/core-concepts/social-graph/`)
+- **Purpose**: Understanding and utilizing the social graph
+- **Contents**:
+  - `overview.mdx` - Social graph overview
+  - `graph-structure.mdx` - Structure and components of the social graph
+  - `graph-queries.mdx` - Querying the social graph
+  - `graph-algorithms.mdx` - Algorithms for social graph analysis
+  - `graph-security.mdx` - Securing the social graph and user data
+
+### Key Improvements
+- **Workflow-Based Organization**: Restructured around key workflows: Foundation, User Management, Content Management, and Social Graph
+- **Comprehensive Coverage**: Complete coverage of all core concepts with detailed explanations and examples
+- **Improved Navigation**: Logical progression through core concepts with clear dependencies and relationships
+- **Enhanced Discoverability**: Better discoverability of related concepts and features
+
+### Navigation Updates
+- Updated `docs.json` with the new hierarchical structure
+- Improved grouping and ordering of core concepts
+- Added proper cross-references and links between related concepts
+
+## Recent Changes - Getting Started Module ✅ COMPLETED
+
+### Enhanced Getting Started Structure
+The getting-started module has been enhanced with better organization and workflow-based navigation:
+
+#### New Structure
+```
+/social-plus-sdk/getting-started/
+├── overview.mdx (modernized quick start guide)
+├── authentication.mdx (detailed auth concepts)
+├── platform-setup/ (organized by development approach)
+│   ├── overview.mdx (platform comparison and selection guide)
+│   ├── mobile/ (native mobile development)
+│   │   ├── overview.mdx (mobile-specific features and best practices)
+│   │   ├── install-ios.mdx (iOS installation guide)
+│   │   └── install-android.mdx (Android installation guide)
+│   ├── web/ (web application development)
+│   │   ├── overview.mdx (web development features and frameworks)
+│   │   └── install-web.mdx (TypeScript/JavaScript installation)
+│   └── cross-platform/ (shared codebase development)
+│       ├── overview.mdx (cross-platform comparison and best practices)
+│       ├── install-react-native.mdx (React Native installation)
+│       └── install-flutter.mdx (Flutter installation)
+└── verification/ (post-installation validation)
+    ├── overview.mdx (comprehensive verification guide with examples)
+    └── first-integration.mdx (step-by-step first feature implementation)
+```
+
+#### Key Improvements
+1. **Platform-Based Organization**: Installation guides grouped by development approach (Mobile, Web, Cross-platform)
+2. **Comprehensive Overviews**: Detailed overview pages for each platform category with:
+   - Feature comparisons and capabilities
+   - Development requirements and best practices
+   - Architecture explanations and considerations
+   - Performance and deployment guidance
+3. **Verification & Testing**: New section to help developers confirm their installation works
+4. **First Integration Guide**: Step-by-step examples for building first features
+5. **Enhanced Navigation**: Logical progression from overview → platform selection → installation → verification → first implementation
+
+#### Features Added
+- **Platform Comparison Tables**: Help developers choose the right platform
+- **Complete Code Examples**: Full working examples for user profiles and simple chat
+- **Troubleshooting Guides**: Common issues and solutions for each platform
+- **Best Practices**: Production-ready development practices and security considerations
+- **Verification Scripts**: Platform-specific verification code to test SDK installation
+
+### Navigation Updates
+- Updated `docs.json` with the new hierarchical structure
+- Maintained backward compatibility while improving logical flow
+- Added proper groupings for better discoverability
