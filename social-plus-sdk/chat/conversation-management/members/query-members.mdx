@@ -1,101 +1,447 @@
 # Query Members
 
-## Query Channel Members
+Search and retrieve channel members based on membership status, roles, and other criteria to build comprehensive member management features.
 
-The ability to search for and query members within a chat channel is an essential feature for creating a seamless and engaging user experience. With Social Plus Chat SDK, developers can use the query member feature to allow users to search for and retrieve member information within a channel. We will discuss how to use the query member feature of Social Plus Chat SDK to enable users to search and retrieve member information within a chat channel.
+<CardGroup cols={3}>
+  <Card title="Filter by Status" icon="filter">
+    Find members by membership status
+  </Card>
+  <Card title="Role-Based Search" icon="user-tag">
+    Query members by their roles
+  </Card>
+  <Card title="Sort & Paginate" icon="arrow-up-down">
+    Control result ordering and pagination
+  </Card>
+</CardGroup>
 
-Here's an explanation of the function parameter:
+## Overview
 
-`filter`: A parameter accepting a filter enum, enabling filtering members with matching membership status.
+The query members feature enables powerful member search and filtering capabilities within channels. This is essential for member management, moderation, and creating engaging user experiences.
 
-* `ALL` -> Members with any membership status
-* `MEMBER` -> Only active members
-* `MUTED` -> Only muted members
-* `BANNED` -> Only banned members
+## Parameters
 
-`roles`: A parameter accepting an array of roles, enabling filtering members with matching roles
+<ParamField path="channelId" type="string" required>
+  The unique identifier of the channel to query members from
+</ParamField>
 
-`includeDeleted`: A parameter accepting a boolean value.
+<ParamField path="filter" type="string">
+  Filter members by membership status:
+  - `ALL`: Members with any membership status (default)
+  - `MEMBER`: Only active members
+  - `MUTED`: Only muted members  
+  - `BANNED`: Only banned members
+</ParamField>
 
-* `true` -> include a member whose user has been deleted
-* `false` -> exclude member whose user has been deleted
+<ParamField path="roles" type="string[]">
+  Array of roles to filter by. Returns members with any of the specified roles
+</ParamField>
+
+<ParamField path="includeDeleted" type="boolean">
+  Whether to include members whose user accounts have been deleted
+  - `true`: Include deleted user members
+  - `false`: Exclude deleted user members (default)
+</ParamField>
+
+<ParamField path="sortBy" type="string">
+  Sorting option for results:
+  - `FIRST_CREATED`: Sort by membership creation date (ascending)
+  - `LAST_CREATED`: Sort by membership creation date (descending)
+</ParamField>
+
+<ParamField path="search" type="string">
+  Search query to match against member names or usernames
+</ParamField>
 
 <Info>
-Channel member count value is based on all members in the channel including the members whose user has been deleted.
+**Member Count**: Channel member count includes all members, including those whose user accounts have been deleted.
 </Info>
 
-`sortBy`: A parameter accepting a sorting option enum
-
-* `FIRST_CREATED` -> Sort by membership creation date ascending
-* `LAST_CREATED` -> Sort by membership creation date ascending
-
-Note: The membership creation date is the time the user joins the channel.
+## Implementation
 
 <Tabs>
-  <Tab title="iOS">
-    All participation-related methods in a channel fall under a separate `ChannelParticipation` class.
+<Tab title="iOS">
+All participation-related methods in a channel use the `ChannelParticipation` class:
 
-    <Frame>
-      <img src="https://gist.github.com/amythee/9aff3540638a09382bddfea69cff07f7#file-channel_participation_init-swift" />
-    </Frame>
+```swift
+// Initialize channel participation
+let channelParticipation = AmityChannelParticipation(client: client, channelId: "channel-123")
 
-    <Frame>
-      <img src="https://gist.github.com/amythee/82a1cbe1e8d4bb5d19fe944b42d6c5c1#file-query_member-swift" />
-    </Frame>
-  </Tab>
+// Query all active members
+let membersCollection = channelParticipation.getMembers()
+    .filter(.member)
+    .sortBy(.lastCreated)
+    .includeDeleted(false)
 
-  <Tab title="Android">
-    All participation related methods in a channel fall under a separate `ChannelParticipation` class.
+membersCollection.observe { [weak self] (collection, error) in
+    if let error = error {
+        print("Failed to query members: \(error)")
+        return
+    }
+    
+    let members = collection.object
+    print("Found \(members.count) members")
+    
+    for member in members {
+        print("Member: \(member.displayName) - Role: \(member.roles.joined(separator: ", "))")
+    }
+    
+    // Update UI
+    DispatchQueue.main.async {
+        self?.updateMembersList(members)
+    }
+}
 
-    <Frame>
-      <img src="https://gist.github.com/amythee/7fc18ad4ee355b166d791e3be949342d" />
-    </Frame>
-  </Tab>
+// Query members with specific roles
+let adminMembers = channelParticipation.getMembers()
+    .roles(["admin", "moderator"])
+    .filter(.member)
 
-  <Tab title="JavaScript">
-    You can get a list of all members, or add `memberships`, `roles`, `search` parameters to get certain members of the channel.
+// Query banned members
+let bannedMembers = channelParticipation.getMembers()
+    .filter(.banned)
+    .sortBy(.firstCreated)
 
-    ```javascript
-    import { ChannelRepository, MemberFilter } from '@amityco/js-sdk';
+// Pagination
+if membersCollection.hasMore {
+    membersCollection.loadMore()
+}
+```
+</Tab>
 
-    let members;
+<Tab title="Android">
+All participation-related methods use the `ChannelParticipation` class:
 
-    const liveCollection = ChannelRepository.queryMembers({ 
-      channelId: 'channel1',
-      memberships: [MemberFilter.Member],
-      roles: ['role1'],
-      search: 'asd',
+```kotlin
+// Initialize channel participation
+val channelParticipation = AmityChannelParticipation(client, "channel-123")
+
+// Query members with comprehensive filters
+val membersLiveCollection = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.MEMBER)
+    .roles(listOf("admin", "moderator"))
+    .includeDeleted(false)
+    .sortBy(AmityChannelMemberSortOption.LAST_CREATED)
+    .build()
+
+membersLiveCollection
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe({ liveCollection ->
+        liveCollection.observe { members ->
+            Log.d("Members", "Found ${members.size} members")
+            
+            members.forEach { member ->
+                Log.d("Member", "${member.displayName} - Roles: ${member.roles}")
+            }
+            
+            // Update RecyclerView
+            memberAdapter.submitList(members)
+            
+            // Handle loading state
+            binding.progressBar.visibility = 
+                if (liveCollection.isLoading) View.VISIBLE else View.GONE
+        }
+        
+        // Pagination
+        if (liveCollection.hasMore()) {
+            liveCollection.loadMore()
+        }
+    }, { error ->
+        Log.e("Members", "Query failed: ${error.message}")
+    })
+
+// Query specific member types
+val mutedMembers = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.MUTED)
+    .build()
+
+val bannedMembers = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.BANNED)
+    .sortBy(AmityChannelMemberSortOption.FIRST_CREATED)
+    .build()
+```
+</Tab>
+
+<Tab title="JavaScript">
+```javascript
+import { ChannelRepository, MemberFilter, MemberSortOption } from '@amityco/js-sdk';
+
+// Basic member query
+const liveCollection = ChannelRepository.queryMembers({ 
+    channelId: 'channel-123',
+    memberships: [MemberFilter.Member],
+    roles: ['admin', 'moderator'],
+    search: 'john',
+    includeDeleted: false,
+    sortBy: MemberSortOption.LastCreated
+});
+
+// Listen for updates
+liveCollection.on('dataUpdated', (members) => {
+    console.log(`Found ${members.length} members`);
+    
+    members.forEach(member => {
+        console.log(`Member: ${member.displayName} - Roles: ${member.roles.join(', ')}`);
     });
+    
+    // Update UI
+    updateMembersList(members);
+});
 
-    liveCollection.on('dataUpdated', newModels => {
-      members = newModels;
+liveCollection.on('dataError', (error) => {
+    console.error('Query failed:', error);
+});
+
+// Access current data
+const members = liveCollection.models;
+
+// Query different member types
+const activeMembersQuery = ChannelRepository.queryMembers({
+    channelId: 'channel-123',
+    memberships: [MemberFilter.Member]
+});
+
+const mutedMembersQuery = ChannelRepository.queryMembers({
+    channelId: 'channel-123',
+    memberships: [MemberFilter.Muted]
+});
+
+const bannedMembersQuery = ChannelRepository.queryMembers({
+    channelId: 'channel-123',
+    memberships: [MemberFilter.Banned]
+});
+
+// Pagination
+if (liveCollection.hasMore) {
+    await liveCollection.loadMore();
+}
+```
+</Tab>
+
+<Tab title="TypeScript">
+**Version 6**
+
+```typescript
+import { 
+    ChannelRepository, 
+    MemberFilter, 
+    MemberSortOption,
+    AmityChannelMember 
+} from '@amityco/ts-sdk';
+
+const channelRepository = new ChannelRepository();
+
+// Comprehensive member query
+const liveCollection = channelRepository.queryMembers({
+    channelId: 'channel-123',
+    memberships: [MemberFilter.Member],
+    roles: ['admin', 'moderator'],
+    search: 'john',
+    includeDeleted: false,
+    sortBy: MemberSortOption.LastCreated,
+    limit: 20
+});
+
+// Type-safe event handling
+liveCollection.on('dataUpdated', (members: AmityChannelMember[]) => {
+    console.log(`Found ${members.length} members`);
+    
+    members.forEach(member => {
+        console.log(`${member.displayName} (${member.userId})`);
+        console.log(`Roles: ${member.roles?.join(', ') || 'None'}`);
+        console.log(`Joined: ${member.createdAt}`);
     });
+});
 
-    liveCollection.on('dataError', error => {
-      console.error(error);
+// Query specific member categories
+const adminQuery = channelRepository.queryMembers({
+    channelId: 'channel-123',
+    roles: ['admin'],
+    memberships: [MemberFilter.Member]
+});
+
+const recentMembersQuery = channelRepository.queryMembers({
+    channelId: 'channel-123',
+    sortBy: MemberSortOption.LastCreated,
+    limit: 10
+});
+
+// Pagination with error handling
+try {
+    if (liveCollection.hasMore) {
+        await liveCollection.loadMore();
+    }
+} catch (error) {
+    console.error('Failed to load more members:', error);
+}
+```
+
+**Beta (v0.0.1)**
+
+```typescript
+const channelRepository = new ChannelRepository();
+
+try {
+    const members = await channelRepository.queryMembers({
+        channelId: 'channel-123',
+        filter: 'member',
+        roles: ['admin', 'moderator'],
+        includeDeleted: false
     });
+    
+    console.log('Query results:', members);
+} catch (error) {
+    console.error('Query failed:', error);
+}
+```
+</Tab>
 
-    members= liveCollection.models;
-    ```
-  </Tab>
+<Tab title="Flutter">
+```dart
+// Initialize channel participation
+final channelParticipation = AmityChannelParticipation(
+    client: client, 
+    channelId: 'channel-123'
+);
 
-  <Tab title="TypeScript">
-    Version 6
+// Comprehensive member query
+final membersLiveCollection = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.member)
+    .roles(['admin', 'moderator'])
+    .includeDeleted(false)
+    .sortBy(AmityChannelMemberSortOption.lastCreated);
 
-    <Frame>
-      <img src="https://gist.github.com/amythee/b8bb3bd99bb896c2afc2c91ca64378c3#file-querychannelmembers-ts" />
-    </Frame>
+// Listen to member updates
+membersLiveCollection.listen((members) {
+    print('Found ${members.length} members');
+    
+    for (final member in members) {
+        print('Member: ${member.displayName}');
+        print('Roles: ${member.roles?.join(', ') ?? 'None'}');
+        print('Joined: ${member.createdAt}');
+    }
+    
+    // Update UI
+    setState(() {
+        _members = members;
+        _isLoading = membersLiveCollection.isLoading;
+    });
+});
 
-    Beta (v0.0.1)
+// Handle errors
+membersLiveCollection.error.listen((error) {
+    print('Member query error: $error');
+    // Show error to user
+});
 
-    <Frame>
-      <img src="https://gist.github.com/amythee/608812eeae0cec85b92770cf9db7764f#file-livechannelmembers-ts" />
-    </Frame>
-  </Tab>
+// Query specific member types
+final adminMembers = channelParticipation.getMembers()
+    .roles(['admin'])
+    .filter(AmityChannelMemberFilter.member);
 
-  <Tab title="Flutter">
-    <Frame>
-      <img src="https://gist.github.com/amythee/c1476d8cc7e4a698c49460440b483151#file-amitychannelmembersearch-dart" />
-    </Frame>
-  </Tab>
+final mutedMembers = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.muted);
+
+final bannedMembers = channelParticipation.getMembers()
+    .filter(AmityChannelMemberFilter.banned)
+    .sortBy(AmityChannelMemberSortOption.firstCreated);
+
+// Pagination
+if (membersLiveCollection.hasMore) {
+    try {
+        await membersLiveCollection.loadMore();
+    } catch (error) {
+        print('Failed to load more members: $error');
+    }
+}
+```
+</Tab>
 </Tabs>
+
+## Best Practices
+
+<AccordionGroup>
+<Accordion title="Query Optimization">
+- Use specific filters to reduce result sets and improve performance
+- Implement pagination for channels with large member counts
+- Cache frequently accessed member lists locally
+- Use appropriate sorting options based on use case
+</Accordion>
+
+<Accordion title="User Experience">
+- Provide real-time search with debounced input
+- Show member counts and loading states
+- Implement member avatars and status indicators
+- Allow filtering by multiple criteria simultaneously
+</Accordion>
+
+<Accordion title="Role Management">
+- Query members by roles for administrative functions
+- Display role hierarchies clearly in the UI
+- Implement role-based permissions for query operations
+- Update member lists when roles change
+</Accordion>
+
+<Accordion title="Performance Considerations">
+- Use live collections for automatic updates
+- Implement efficient list rendering for large member sets
+- Consider virtual scrolling for very large channels
+- Monitor query frequency to avoid rate limits
+</Accordion>
+</AccordionGroup>
+
+## Query Examples
+
+<CardGroup cols={2}>
+  <Card title="Active Members Only" icon="user-check">
+    ```javascript
+    queryMembers({
+      channelId: 'channel-123',
+      memberships: [MemberFilter.Member],
+      includeDeleted: false
+    })
+    ```
+  </Card>
+  <Card title="Moderators & Admins" icon="shield">
+    ```javascript
+    queryMembers({
+      channelId: 'channel-123',
+      roles: ['admin', 'moderator'],
+      sortBy: MemberSortOption.FirstCreated
+    })
+    ```
+  </Card>
+  <Card title="Search by Name" icon="search">
+    ```javascript
+    queryMembers({
+      channelId: 'channel-123',
+      search: 'john',
+      memberships: [MemberFilter.Member]
+    })
+    ```
+  </Card>
+  <Card title="Moderation View" icon="gavel">
+    ```javascript
+    queryMembers({
+      channelId: 'channel-123',
+      memberships: [MemberFilter.Muted, MemberFilter.Banned]
+    })
+    ```
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Member Directory" icon="address-book">
+    Display a searchable directory of all channel members with roles and status
+  </Card>
+  <Card title="Moderation Dashboard" icon="shield-check">
+    View and manage muted, banned, or problematic members
+  </Card>
+  <Card title="Role Management" icon="user-tag">
+    Assign and manage member roles and permissions
+  </Card>
+  <Card title="Analytics & Insights" icon="chart-line">
+    Analyze member activity and engagement patterns
+  </Card>
+</CardGroup>
