@@ -1,46 +1,765 @@
 # Get Notification Tray Seen
 
+<CardGroup cols={2}>
+  <Card title="Unseen Status Detection" icon="bell-exclamation">
+    Determine whether there are unseen notifications in the tray
+  </Card>
+  <Card title="Cross-device Sync" icon="arrows-rotate">
+    Manage seen status across multiple client devices
+  </Card>
+</CardGroup>
+
+## Overview
+
 The `getNotificationTraySeen()` method allows your app to determine whether there are unseen notifications by retrieving the current `isSeen` status of the notification tray.
 
 This is particularly useful for reflecting read/unread indicators in the UI—such as toggling a bell icon badge—based on whether new notifications have arrived since the tray was last viewed.
 
+<Note>
 The seen status is managed on the server and may be affected by actions from other devices. However, the state is **not updated via real-time events**, and thus requires manual refresh to stay current.
+</Note>
 
-**🔁 Refresh Strategy**
+## Refresh Strategies
 
-To keep the seen status accurate across clients:
+<AccordionGroup>
+  <Accordion title="🔁 On-demand Refresh (Recommended)">
+    The preferred approach for maintaining accurate seen status across clients:
+    
+    <CardGroup cols={2}>
+      <Card title="UI-Triggered Updates" icon="mouse-pointer">
+        Invoke `getNotificationTraySeen()` whenever the Notification Tray UI is refreshed
+      </Card>
+      <Card title="Pull-to-Refresh" icon="arrow-rotate-left">
+        Implement pull-to-refresh gestures or dedicated refresh buttons for user-initiated updates
+      </Card>
+    </CardGroup>
+    
+    ### Implementation Pattern
+    
+    <Tabs>
+      <Tab title="iOS">
+        <CodeGroup>
+          ```swift Basic Implementation
+          class NotificationTrayViewController: UIViewController {
+              private let repository = AmityNotificationTrayRepository()
+              
+              override func viewWillAppear(_ animated: Bool) {
+                  super.viewWillAppear(animated)
+                  refreshTraySeenStatus()
+              }
+              
+              private func refreshTraySeenStatus() {
+                  repository.getNotificationTraySeen { [weak self] result in
+                      DispatchQueue.main.async {
+                          switch result {
+                          case .success(let trayData):
+                              self?.updateBadgeIndicator(hasUnseen: !trayData.isSeen)
+                          case .failure(let error):
+                              self?.handleError(error)
+                          }
+                      }
+                  }
+              }
+          }
+          ```
+          
+          ```swift Advanced with Pull-to-Refresh
+          class NotificationTrayViewController: UIViewController {
+              @IBOutlet weak var tableView: UITableView!
+              private let repository = AmityNotificationTrayRepository()
+              private var refreshControl: UIRefreshControl!
+              
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  setupPullToRefresh()
+              }
+              
+              private func setupPullToRefresh() {
+                  refreshControl = UIRefreshControl()
+                  refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+                  tableView.refreshControl = refreshControl
+              }
+              
+              @objc private func handleRefresh() {
+                  repository.getNotificationTraySeen { [weak self] result in
+                      DispatchQueue.main.async {
+                          self?.refreshControl.endRefreshing()
+                          
+                          switch result {
+                          case .success(let trayData):
+                              self?.updateTrayUI(trayData)
+                          case .failure(let error):
+                              self?.showError(error)
+                          }
+                      }
+                  }
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Android">
+        <CodeGroup>
+          ```kotlin Basic Implementation
+          class NotificationTrayActivity : AppCompatActivity() {
+              private lateinit var repository: AmityNotificationTrayRepository
+              
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  repository = AmityCoreClient.newNotificationRepository()
+              }
+              
+              override fun onResume() {
+                  super.onResume()
+                  refreshTraySeenStatus()
+              }
+              
+              private fun refreshTraySeenStatus() {
+                  repository.getNotificationTraySeen()
+                      .observeOn(AndroidSchedulers.mainThread())
+                      .subscribe({ trayData ->
+                          updateBadgeIndicator(!trayData.isSeen)
+                      }, { error ->
+                          handleError(error)
+                      })
+              }
+          }
+          ```
+          
+          ```kotlin Advanced with SwipeRefreshLayout
+          class NotificationTrayFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
+              private lateinit var repository: AmityNotificationTrayRepository
+              private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+              
+              override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+                  val view = inflater.inflate(R.layout.fragment_notification_tray, container, false)
+                  swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
+                  swipeRefreshLayout.setOnRefreshListener(this)
+                  repository = AmityCoreClient.newNotificationRepository()
+                  return view
+              }
+              
+              override fun onRefresh() {
+                  repository.getNotificationTraySeen()
+                      .observeOn(AndroidSchedulers.mainThread())
+                      .subscribe({ trayData ->
+                          swipeRefreshLayout.isRefreshing = false
+                          updateTrayUI(trayData)
+                      }, { error ->
+                          swipeRefreshLayout.isRefreshing = false
+                          showError(error)
+                      })
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Web">
+        <CodeGroup>
+          ```typescript Basic Implementation
+          class NotificationTrayManager {
+              private repository: AmityNotificationTrayRepository;
+              
+              constructor() {
+                  this.repository = new AmityNotificationTrayRepository();
+              }
+              
+              async refreshTraySeenStatus(): Promise<void> {
+                  try {
+                      const trayData = await this.repository.getNotificationTraySeen();
+                      this.updateBadgeIndicator(!trayData.isSeen);
+                  } catch (error) {
+                      this.handleError(error);
+                  }
+              }
+              
+              // Call this when tray component mounts or becomes visible
+              async onTrayVisible(): Promise<void> {
+                  await this.refreshTraySeenStatus();
+              }
+          }
+          ```
+          
+          ```typescript React Component with Refresh
+          import React, { useState, useEffect, useCallback } from 'react';
+          import { AmityNotificationTrayRepository } from '@amityco/ts-sdk';
+          
+          const NotificationTray: React.FC = () => {
+              const [hasUnseen, setHasUnseen] = useState(false);
+              const [isRefreshing, setIsRefreshing] = useState(false);
+              const repository = new AmityNotificationTrayRepository();
+              
+              const refreshTrayStatus = useCallback(async () => {
+                  setIsRefreshing(true);
+                  try {
+                      const trayData = await repository.getNotificationTraySeen();
+                      setHasUnseen(!trayData.isSeen);
+                  } catch (error) {
+                      console.error('Error refreshing tray status:', error);
+                  } finally {
+                      setIsRefreshing(false);
+                  }
+              }, [repository]);
+              
+              useEffect(() => {
+                  refreshTrayStatus();
+              }, [refreshTrayStatus]);
+              
+              return (
+                  <div className="notification-tray">
+                      <button onClick={refreshTrayStatus} disabled={isRefreshing}>
+                          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                      {hasUnseen && <span className="badge">New</span>}
+                  </div>
+              );
+          };
+          ```
+        </CodeGroup>
+      </Tab>
+    </Tabs>
+  </Accordion>
 
-**1. On-demand refresh (recommended)**
+  <Accordion title="⏱️ Polling Strategy (Use Sparingly)">
+    <Warning>
+    Polling should be avoided unless absolutely necessary due to server rate limiting risks and battery drain concerns.
+    </Warning>
+    
+    If polling is required:
+    - **Minimum interval**: 120 seconds or more
+    - **Use case**: Critical real-time applications only
+    - **Implementation**: Include proper error handling and exponential backoff
+    
+    <Tabs>
+      <Tab title="iOS">
+        <CodeGroup>
+          ```swift Controlled Polling
+          class NotificationPollingManager {
+              private let repository = AmityNotificationTrayRepository()
+              private var timer: Timer?
+              private let pollingInterval: TimeInterval = 120.0 // 2 minutes minimum
+              
+              func startPolling() {
+                  stopPolling() // Ensure no duplicate timers
+                  
+                  timer = Timer.scheduledTimer(withTimeInterval: pollingInterval, repeats: true) { [weak self] _ in
+                      self?.pollTrayStatus()
+                  }
+              }
+              
+              func stopPolling() {
+                  timer?.invalidate()
+                  timer = nil
+              }
+              
+              private func pollTrayStatus() {
+                  repository.getNotificationTraySeen { [weak self] result in
+                      switch result {
+                      case .success(let trayData):
+                          DispatchQueue.main.async {
+                              self?.updateBadgeIndicator(!trayData.isSeen)
+                          }
+                      case .failure(let error):
+                          // Consider exponential backoff on errors
+                          print("Polling error: \(error)")
+                      }
+                  }
+              }
+              
+              deinit {
+                  stopPolling()
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Android">
+        <CodeGroup>
+          ```kotlin Controlled Polling
+          class NotificationPollingManager {
+              private val repository = AmityCoreClient.newNotificationRepository()
+              private val handler = Handler(Looper.getMainLooper())
+              private val pollingInterval = 120_000L // 2 minutes minimum
+              private var pollingRunnable: Runnable? = null
+              
+              fun startPolling() {
+                  stopPolling()
+                  
+                  pollingRunnable = object : Runnable {
+                      override fun run() {
+                          pollTrayStatus()
+                          handler.postDelayed(this, pollingInterval)
+                      }
+                  }
+                  handler.post(pollingRunnable!!)
+              }
+              
+              fun stopPolling() {
+                  pollingRunnable?.let { handler.removeCallbacks(it) }
+                  pollingRunnable = null
+              }
+              
+              private fun pollTrayStatus() {
+                  repository.getNotificationTraySeen()
+                      .observeOn(AndroidSchedulers.mainThread())
+                      .subscribe({ trayData ->
+                          updateBadgeIndicator(!trayData.isSeen)
+                      }, { error ->
+                          // Consider exponential backoff on errors
+                          Log.e("NotificationPolling", "Polling error", error)
+                      })
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Web">
+        <CodeGroup>
+          ```typescript Controlled Polling
+          class NotificationPollingManager {
+              private repository: AmityNotificationTrayRepository;
+              private pollingInterval: number = 120000; // 2 minutes minimum
+              private intervalId: NodeJS.Timeout | null = null;
+              
+              constructor() {
+                  this.repository = new AmityNotificationTrayRepository();
+              }
+              
+              startPolling(): void {
+                  this.stopPolling();
+                  
+                  this.intervalId = setInterval(async () => {
+                      await this.pollTrayStatus();
+                  }, this.pollingInterval);
+              }
+              
+              stopPolling(): void {
+                  if (this.intervalId) {
+                      clearInterval(this.intervalId);
+                      this.intervalId = null;
+                  }
+              }
+              
+              private async pollTrayStatus(): Promise<void> {
+                  try {
+                      const trayData = await this.repository.getNotificationTraySeen();
+                      this.updateBadgeIndicator(!trayData.isSeen);
+                  } catch (error) {
+                      // Consider exponential backoff on errors
+                      console.error('Polling error:', error);
+                  }
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+    </Tabs>
+  </Accordion>
+</AccordionGroup>
 
-* Invoke `getNotificationTraySeen()` whenever the Notification Tray UI is refreshed.
-* Implement a pull-to-refresh gesture or a dedicated refresh button for user-initiated updates.
+## Cross-device Update Behavior
 
-**2. Polling (not recommended)**
+<AccordionGroup>
+  <Accordion title="🔄 Local vs Cross-device Updates">
+    Understanding how seen status synchronizes across different scenarios:
+    
+    <CardGroup cols={2}>
+      <Card title="Same Client Updates" icon="check-circle">
+        When `markNotificationTraySeen()` is called **on the same client**, the `isSeen` value updates immediately if LiveObject is being observed
+      </Card>
+      <Card title="Cross-device Updates" icon="devices">
+        **No real-time sync** between devices. Manual `getNotificationTraySeen()` call required to retrieve updated state
+      </Card>
+    </CardGroup>
+  </Accordion>
 
-* If polling is used, set the interval to **120 seconds or more** to reduce the risk of server rate limiting.
-* Continuous polling should be avoided unless absolutely necessary.
+  <Accordion title="🔗 Synchronization Patterns">
+    ### Scenario 1: Same Device Update
+    ```mermaid
+    sequenceDiagram
+        participant App
+        participant SDK
+        participant LiveObject
+        
+        App->>SDK: markNotificationTraySeen()
+        SDK->>LiveObject: Update local state
+        LiveObject-->>App: Immediate state change
+        Note over App: isSeen updates instantly
+    ```
+    
+    ### Scenario 2: Cross-device Update
+    ```mermaid
+    sequenceDiagram
+        participant Device1
+        participant Server
+        participant Device2
+        
+        Device1->>Server: markNotificationTraySeen()
+        Server->>Server: Update seen timestamp
+        Note over Device2: No automatic notification
+        Device2->>Server: getNotificationTraySeen()
+        Server-->>Device2: Return updated state
+    ```
+  </Accordion>
 
-**🔄 Update Behavior**
+  <Accordion title="📱 Multi-device Implementation">
+    <Tabs>
+      <Tab title="iOS">
+        <CodeGroup>
+          ```swift Cross-device Sync Handler
+          class CrossDeviceSyncManager {
+              private let repository = AmityNotificationTrayRepository()
+              
+              // Call this when app becomes active
+              func handleAppDidBecomeActive() {
+                  refreshFromServer()
+              }
+              
+              // Call this when returning from background
+              func handleAppWillEnterForeground() {
+                  refreshFromServer()
+              }
+              
+              private func refreshFromServer() {
+                  repository.getNotificationTraySeen { [weak self] result in
+                      DispatchQueue.main.async {
+                          switch result {
+                          case .success(let trayData):
+                              self?.syncLocalState(with: trayData)
+                          case .failure(let error):
+                              self?.handleSyncError(error)
+                          }
+                      }
+                  }
+              }
+              
+              private func syncLocalState(with trayData: AmityNotificationTraySeen) {
+                  // Update UI badges, counters, etc.
+                  NotificationCenter.default.post(
+                      name: .notificationTrayStateChanged,
+                      object: nil,
+                      userInfo: ["hasUnseen": !trayData.isSeen]
+                  )
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Android">
+        <CodeGroup>
+          ```kotlin Cross-device Sync Handler
+          class CrossDeviceSyncManager(private val context: Context) {
+              private val repository = AmityCoreClient.newNotificationRepository()
+              
+              // Call this in onResume() of main activities
+              fun handleAppResume() {
+                  refreshFromServer()
+              }
+              
+              // Call this when app returns from background
+              fun handleAppForeground() {
+                  refreshFromServer()
+              }
+              
+              private fun refreshFromServer() {
+                  repository.getNotificationTraySeen()
+                      .observeOn(AndroidSchedulers.mainThread())
+                      .subscribe({ trayData ->
+                          syncLocalState(trayData)
+                      }, { error ->
+                          handleSyncError(error)
+                      })
+              }
+              
+              private fun syncLocalState(trayData: AmityNotificationTraySeen) {
+                  // Update UI badges, counters, etc.
+                  val intent = Intent(ACTION_NOTIFICATION_TRAY_CHANGED)
+                  intent.putExtra("hasUnseen", !trayData.isSeen)
+                  LocalBroadcastManager.getInstance(context).sendBroadcast(intent)
+              }
+              
+              companion object {
+                  const val ACTION_NOTIFICATION_TRAY_CHANGED = "com.app.notification_tray_changed"
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Web">
+        <CodeGroup>
+          ```typescript Cross-device Sync Handler
+          class CrossDeviceSyncManager {
+              private repository: AmityNotificationTrayRepository;
+              private eventEmitter: EventTarget;
+              
+              constructor() {
+                  this.repository = new AmityNotificationTrayRepository();
+                  this.eventEmitter = new EventTarget();
+                  this.setupVisibilityHandlers();
+              }
+              
+              private setupVisibilityHandlers(): void {
+                  // Refresh when tab becomes visible
+                  document.addEventListener('visibilitychange', () => {
+                      if (!document.hidden) {
+                          this.refreshFromServer();
+                      }
+                  });
+                  
+                  // Refresh when window gains focus
+                  window.addEventListener('focus', () => {
+                      this.refreshFromServer();
+                  });
+              }
+              
+              private async refreshFromServer(): Promise<void> {
+                  try {
+                      const trayData = await this.repository.getNotificationTraySeen();
+                      this.syncLocalState(trayData);
+                  } catch (error) {
+                      this.handleSyncError(error);
+                  }
+              }
+              
+              private syncLocalState(trayData: AmityNotificationTraySeen): void {
+                  // Emit custom event for components to listen
+                  const event = new CustomEvent('notificationTrayChanged', {
+                      detail: { hasUnseen: !trayData.isSeen }
+                  });
+                  this.eventEmitter.dispatchEvent(event);
+              }
+              
+              // Allow components to subscribe to state changes
+              onStateChange(callback: (hasUnseen: boolean) => void): void {
+                  this.eventEmitter.addEventListener('notificationTrayChanged', (event: any) => {
+                      callback(event.detail.hasUnseen);
+                  });
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+    </Tabs>
+  </Accordion>
+</AccordionGroup>
 
-* When `markNotificationTraySeen()` is invoked **on the same client**, the `isSeen` value returned by `getNotificationTraySeen()` will update immediately if the LiveObject is being observed.
-* However, there is **no cross-device real-time sync**. If `markNotificationTraySeen()` is invoked from another device—or if the server adds a new notification—the local client must call `getNotificationTraySeen()` again to retrieve the updated state.
+## Error Handling
 
-<img src="../../../.gitbook/assets/Explore.jpg" alt="" />
+<AccordionGroup>
+  <Accordion title="Common Error Scenarios">
+    <CardGroup cols={2}>
+      <Card title="Network Connectivity" icon="wifi-slash">
+        Handle offline scenarios gracefully with cached states
+      </Card>
+      <Card title="Rate Limiting" icon="clock">
+        Implement exponential backoff for frequent API calls
+      </Card>
+      <Card title="Authentication" icon="lock">
+        Handle token expiration and re-authentication flows
+      </Card>
+      <Card title="Server Errors" icon="server">
+        Provide fallback UI states for server-side issues
+      </Card>
+    </CardGroup>
+  </Accordion>
 
-<Tabs>
-  <Tab title="iOS">
-    <Frame>
-      <iframe src="https://gist.github.com/amythee/d6487d6b50c2ab3160ed61fe7f331052"></iframe>
-    </Frame>
-  </Tab>
-  <Tab title="Android">
-    <Frame>
-      <iframe src="https://gist.github.com/67453175d068353e284ce720c64a77a0"></iframe>
-    </Frame>
-  </Tab>
-  <Tab title="Web">
-    <Frame>
-      <iframe src="https://gist.github.com/amythee/20b26424bf19a43eca2b348b08b6a0d2"></iframe>
-    </Frame>
-  </Tab>
-</Tabs>
+  <Accordion title="Error Handling Implementation">
+    <Tabs>
+      <Tab title="iOS">
+        <CodeGroup>
+          ```swift Comprehensive Error Handling
+          class NotificationTrayErrorHandler {
+              private let repository = AmityNotificationTrayRepository()
+              private var retryCount = 0
+              private let maxRetries = 3
+              
+              func getNotificationTraySeenWithRetry(completion: @escaping (Result<AmityNotificationTraySeen, Error>) -> Void) {
+                  repository.getNotificationTraySeen { [weak self] result in
+                      switch result {
+                      case .success(let trayData):
+                          self?.retryCount = 0
+                          completion(.success(trayData))
+                          
+                      case .failure(let error):
+                          self?.handleError(error, completion: completion)
+                      }
+                  }
+              }
+              
+              private func handleError(_ error: Error, completion: @escaping (Result<AmityNotificationTraySeen, Error>) -> Void) {
+                  guard retryCount < maxRetries else {
+                      completion(.failure(error))
+                      return
+                  }
+                  
+                  let delay = pow(2.0, Double(retryCount)) // Exponential backoff
+                  retryCount += 1
+                  
+                  DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                      self?.getNotificationTraySeenWithRetry(completion: completion)
+                  }
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Android">
+        <CodeGroup>
+          ```kotlin Comprehensive Error Handling
+          class NotificationTrayErrorHandler {
+              private val repository = AmityCoreClient.newNotificationRepository()
+              private var retryCount = 0
+              private val maxRetries = 3
+              
+              fun getNotificationTraySeenWithRetry(): Single<AmityNotificationTraySeen> {
+                  return repository.getNotificationTraySeen()
+                      .retryWhen { errors ->
+                          errors.zipWith(Observable.range(1, maxRetries)) { error, attempt ->
+                              val delay = (2.0.pow(attempt.toDouble())).toLong()
+                              Observable.timer(delay, TimeUnit.SECONDS)
+                          }.flatMap { it }
+                      }
+                      .doOnError { error ->
+                          handleError(error)
+                      }
+              }
+              
+              private fun handleError(error: Throwable) {
+                  when {
+                      error is NetworkException -> {
+                          // Handle network connectivity issues
+                          showOfflineMessage()
+                      }
+                      error.message?.contains("rate limit") == true -> {
+                          // Handle rate limiting
+                          showRateLimitMessage()
+                      }
+                      else -> {
+                          // Handle generic errors
+                          showGenericErrorMessage()
+                      }
+                  }
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+      
+      <Tab title="Web">
+        <CodeGroup>
+          ```typescript Comprehensive Error Handling
+          class NotificationTrayErrorHandler {
+              private repository: AmityNotificationTrayRepository;
+              private retryCount: number = 0;
+              private maxRetries: number = 3;
+              
+              constructor() {
+                  this.repository = new AmityNotificationTrayRepository();
+              }
+              
+              async getNotificationTraySeenWithRetry(): Promise<AmityNotificationTraySeen> {
+                  try {
+                      const result = await this.repository.getNotificationTraySeen();
+                      this.retryCount = 0; // Reset on success
+                      return result;
+                  } catch (error) {
+                      return await this.handleError(error);
+                  }
+              }
+              
+              private async handleError(error: any): Promise<AmityNotificationTraySeen> {
+                  if (this.retryCount >= this.maxRetries) {
+                      throw error;
+                  }
+                  
+                  // Exponential backoff
+                  const delay = Math.pow(2, this.retryCount) * 1000;
+                  this.retryCount++;
+                  
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                  return await this.getNotificationTraySeenWithRetry();
+              }
+              
+              private handleSpecificErrors(error: any): void {
+                  if (error.code === 'NETWORK_ERROR') {
+                      this.showOfflineMessage();
+                  } else if (error.code === 'RATE_LIMIT_EXCEEDED') {
+                      this.showRateLimitMessage();
+                  } else if (error.code === 'UNAUTHORIZED') {
+                      this.handleAuthenticationError();
+                  } else {
+                      this.showGenericErrorMessage();
+                  }
+              }
+          }
+          ```
+        </CodeGroup>
+      </Tab>
+    </Tabs>
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="🎯 Implementation Guidelines">
+    <CardGroup cols={2}>
+      <Card title="Timing" icon="clock">
+        **When to Call**
+        - App launch or resume
+        - Tray UI becomes visible
+        - User pull-to-refresh action
+        - After significant user inactivity
+      </Card>
+      <Card title="Frequency" icon="repeat">
+        **Call Frequency**
+        - On-demand only (recommended)
+        - Minimum 120s intervals if polling
+        - Avoid excessive API calls
+        - Implement rate limiting client-side
+      </Card>
+    </CardGroup>
+  </Accordion>
+
+  <Accordion title="🔧 Performance Optimization">
+    - **Cache Results**: Store last known state locally for immediate UI updates
+    - **Batch Operations**: Combine with other notification-related API calls when possible
+    - **Background Processing**: Perform network calls off the main thread
+    - **Memory Management**: Properly dispose of observers and callbacks
+  </Accordion>
+
+  <Accordion title="🎨 UI/UX Considerations">
+    - **Visual Indicators**: Use clear badges, dots, or colors for unseen states
+    - **Loading States**: Show appropriate loading indicators during refresh
+    - **Error States**: Provide meaningful error messages and retry options
+    - **Accessibility**: Ensure notification states are accessible to screen readers
+  </Accordion>
+
+  <Accordion title="🔒 Security & Privacy">
+    - **Authentication**: Verify user authentication before making calls
+    - **Permissions**: Request appropriate notification permissions
+    - **Data Privacy**: Handle notification data according to privacy policies
+    - **Logging**: Avoid logging sensitive notification content
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Mark Tray as Seen" href="./mark-notification-tray-seen" icon="check">
+    Update the global tray seen timestamp
+  </Card>
+  <Card title="Mark Individual Items" href="./mark-notification-tray-item-seen" icon="list-check">
+    Track seen status for specific notification items
+  </Card>
+  <Card title="Query Tray Items" href="./query-notification-tray-item" icon="magnifying-glass">
+    Retrieve and filter notification tray items
+  </Card>
+</CardGroup>
