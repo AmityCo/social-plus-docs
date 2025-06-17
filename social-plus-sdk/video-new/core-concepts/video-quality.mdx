@@ -1,0 +1,758 @@
+---
+title: "Video Quality & Performance"
+description: "Understanding video quality settings, resolution options, bitrate management, and performance optimization for Social+ Video SDK"
+---
+
+# Video Quality & Performance
+
+Delivering high-quality video experiences while maintaining optimal performance is crucial for user engagement. This guide covers video quality settings, performance optimization, and best practices for Social+ Video SDK.
+
+## Video Quality Overview
+
+### Supported Quality Levels
+
+Social+ Video SDK supports three standard quality levels optimized for mobile streaming:
+
+<Tabs>
+<Tab title="Quality Specifications">
+| Quality Level | Resolution | Aspect Ratio | Bitrate | Frame Rate | Use Case |
+|---------------|------------|--------------|---------|------------|----------|
+| **SD (Standard)** | 480 × 854 | 9:16 | 1,216 kbps | 24-30 fps | Mobile data, low bandwidth |
+| **HD (High Definition)** | 720 × 1280 | 9:16 | 2,496 kbps | 30 fps | Balanced quality/bandwidth |
+| **FHD (Full HD)** | 1080 × 1920 | 9:16 | 4,992 kbps | 30 fps | Premium quality, WiFi |
+
+```typescript
+// Quality configuration examples
+const qualityProfiles = {
+    SD: {
+        resolution: { width: 480, height: 854 },
+        bitrate: 1216000, // 1.216 Mbps
+        frameRate: 24
+    },
+    HD: {
+        resolution: { width: 720, height: 1280 },
+        bitrate: 2496000, // 2.496 Mbps
+        frameRate: 30
+    },
+    FHD: {
+        resolution: { width: 1080, height: 1920 },
+        bitrate: 4992000, // 4.992 Mbps
+        frameRate: 30
+    }
+};
+```
+</Tab>
+<Tab title="Quality Selection">
+### Automatic Quality Selection
+
+The SDK can automatically select the optimal quality based on:
+
+```typescript
+interface QualitySelectionCriteria {
+    networkSpeed: number;        // Mbps
+    deviceCapabilities: DeviceInfo;
+    batteryLevel: number;        // percentage
+    userPreference: QualityLevel;
+    connectionType: 'wifi' | 'cellular' | 'unknown';
+}
+
+class QualityManager {
+    selectOptimalQuality(criteria: QualitySelectionCriteria): QualityLevel {
+        // Network-based selection
+        if (criteria.networkSpeed < 2) return 'SD';
+        if (criteria.networkSpeed < 4) return 'HD';
+        
+        // Device capability check
+        if (!criteria.deviceCapabilities.supportsHardwareEncoding) {
+            return 'HD'; // Fallback for software encoding
+        }
+        
+        // Battery consideration
+        if (criteria.batteryLevel < 20) {
+            return 'SD'; // Preserve battery
+        }
+        
+        // Connection type consideration
+        if (criteria.connectionType === 'cellular') {
+            return criteria.networkSpeed > 5 ? 'HD' : 'SD';
+        }
+        
+        return 'FHD'; // Default for WiFi with good conditions
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Resolution and Bitrate Management
+
+### Custom Resolution Settings
+
+<Tabs>
+<Tab title="Platform-Specific Settings">
+```typescript
+// iOS/Android native configuration
+const iosConfig = {
+    resolution: { width: 1080, height: 1920 },
+    bitrate: 4000000,
+    frameRate: 30,
+    keyFrameInterval: 2, // seconds
+    profile: 'high', // H.264 profile
+    level: '4.1'
+};
+
+// Web configuration
+const webConfig = {
+    video: {
+        width: { ideal: 1920, max: 1920 },
+        height: { ideal: 1080, max: 1080 },
+        frameRate: { ideal: 30, max: 30 }
+    },
+    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    }
+};
+
+// React Native configuration
+const reactNativeConfig = {
+    resolution: {
+        width: 1280,
+        height: 720
+    },
+    bitrate: 2500000,
+    frameRate: 30,
+    enableHardwareAcceleration: true
+};
+```
+</Tab>
+<Tab title="Adaptive Bitrate">
+### Adaptive Bitrate Streaming (ABR)
+
+Automatically adjust quality based on network conditions:
+
+```typescript
+class AdaptiveBitrateManager {
+    private qualityLevels = [
+        { name: 'SD', bitrate: 1216000, resolution: { width: 480, height: 854 } },
+        { name: 'HD', bitrate: 2496000, resolution: { width: 720, height: 1280 } },
+        { name: 'FHD', bitrate: 4992000, resolution: { width: 1080, height: 1920 } }
+    ];
+    
+    private currentQuality = 1; // Start with HD
+    private networkMonitor: NetworkMonitor;
+    
+    enableAdaptiveBitrate() {
+        this.networkMonitor.onBandwidthChange((bandwidth) => {
+            const optimalQuality = this.selectQualityForBandwidth(bandwidth);
+            if (optimalQuality !== this.currentQuality) {
+                this.switchQuality(optimalQuality);
+            }
+        });
+    }
+    
+    private selectQualityForBandwidth(bandwidth: number): number {
+        // Select quality with 1.5x bandwidth buffer
+        const requiredBandwidth = bandwidth * 0.67; // Use 67% of available bandwidth
+        
+        for (let i = this.qualityLevels.length - 1; i >= 0; i--) {
+            if (this.qualityLevels[i].bitrate <= requiredBandwidth * 1000) {
+                return i;
+            }
+        }
+        return 0; // Fallback to lowest quality
+    }
+    
+    private switchQuality(newQualityIndex: number) {
+        const quality = this.qualityLevels[newQualityIndex];
+        console.log(`Switching to ${quality.name} quality`);
+        
+        // Apply new settings
+        this.updateEncoderSettings({
+            bitrate: quality.bitrate,
+            resolution: quality.resolution
+        });
+        
+        this.currentQuality = newQualityIndex;
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Performance Optimization
+
+### Device-Based Optimization
+
+<Tabs>
+<Tab title="Hardware Detection">
+```typescript
+interface DeviceCapabilities {
+    processingPower: 'low' | 'medium' | 'high';
+    memoryAvailable: number; // MB
+    supportsHardwareEncoding: boolean;
+    maxSupportedResolution: { width: number; height: number };
+    batteryOptimized: boolean;
+}
+
+class DeviceOptimizer {
+    async detectCapabilities(): Promise<DeviceCapabilities> {
+        const capabilities = {
+            processingPower: await this.assessProcessingPower(),
+            memoryAvailable: await this.getAvailableMemory(),
+            supportsHardwareEncoding: await this.checkHardwareEncoding(),
+            maxSupportedResolution: await this.getMaxResolution(),
+            batteryOptimized: this.isBatteryOptimizationEnabled()
+        };
+        
+        return capabilities;
+    }
+    
+    optimizeForDevice(capabilities: DeviceCapabilities) {
+        const config = {
+            resolution: this.selectResolution(capabilities),
+            bitrate: this.calculateBitrate(capabilities),
+            frameRate: this.determineFrameRate(capabilities),
+            useHardwareEncoding: capabilities.supportsHardwareEncoding,
+            enableLowPowerMode: capabilities.batteryOptimized
+        };
+        
+        return config;
+    }
+    
+    private selectResolution(capabilities: DeviceCapabilities) {
+        switch (capabilities.processingPower) {
+            case 'low':
+                return { width: 480, height: 854 };
+            case 'medium':
+                return { width: 720, height: 1280 };
+            case 'high':
+                return capabilities.maxSupportedResolution;
+            default:
+                return { width: 720, height: 1280 };
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Memory Management">
+```typescript
+class VideoMemoryManager {
+    private readonly MAX_MEMORY_USAGE = 150; // MB
+    private currentUsage = 0;
+    
+    optimizeMemoryUsage() {
+        // Monitor memory usage
+        this.monitorMemory();
+        
+        // Implement memory cleanup strategies
+        this.setupMemoryCleanup();
+    }
+    
+    private monitorMemory() {
+        setInterval(() => {
+            this.currentUsage = this.getCurrentMemoryUsage();
+            
+            if (this.currentUsage > this.MAX_MEMORY_USAGE * 0.8) {
+                console.warn('High memory usage detected');
+                this.triggerMemoryCleanup();
+            }
+        }, 5000);
+    }
+    
+    private triggerMemoryCleanup() {
+        // Reduce video buffer size
+        this.reduceBufferSize();
+        
+        // Lower video quality temporarily
+        this.temporarilyReduceQuality();
+        
+        // Clear unnecessary resources
+        this.clearUnusedResources();
+    }
+    
+    private reduceBufferSize() {
+        // Reduce video buffer to minimum
+        const minBufferConfig = {
+            videoBufferSize: 1000, // 1 second
+            audioBufferSize: 500   // 0.5 seconds
+        };
+        
+        this.applyBufferConfig(minBufferConfig);
+    }
+}
+```
+</Tab>
+</Tabs>
+
+### Network Optimization
+
+<Tabs>
+<Tab title="Bandwidth Monitoring">
+```typescript
+class NetworkOptimizer {
+    private bandwidthHistory: number[] = [];
+    private readonly HISTORY_SIZE = 10;
+    
+    startBandwidthMonitoring() {
+        setInterval(() => {
+            this.measureBandwidth().then(bandwidth => {
+                this.updateBandwidthHistory(bandwidth);
+                this.optimizeForBandwidth(bandwidth);
+            });
+        }, 10000); // Check every 10 seconds
+    }
+    
+    private async measureBandwidth(): Promise<number> {
+        const startTime = Date.now();
+        const testData = new ArrayBuffer(1024 * 100); // 100KB test
+        
+        try {
+            // Simulate network test (implement actual bandwidth measurement)
+            await this.sendTestData(testData);
+            const duration = Date.now() - startTime;
+            
+            // Calculate bandwidth in Mbps
+            const bandwidth = (testData.byteLength * 8) / (duration / 1000) / 1000000;
+            return bandwidth;
+        } catch (error) {
+            console.error('Bandwidth measurement failed:', error);
+            return 1; // Fallback to 1 Mbps
+        }
+    }
+    
+    private optimizeForBandwidth(bandwidth: number) {
+        const avgBandwidth = this.getAverageBandwidth();
+        
+        if (avgBandwidth < 1.5) {
+            this.enableLowBandwidthMode();
+        } else if (avgBandwidth > 5) {
+            this.enableHighQualityMode();
+        } else {
+            this.enableBalancedMode();
+        }
+    }
+    
+    private enableLowBandwidthMode() {
+        const config = {
+            bitrate: 800000,        // 800 kbps
+            resolution: { width: 480, height: 854 },
+            frameRate: 20,
+            enableAdaptiveBitrate: true,
+            bufferSize: 'small'
+        };
+        
+        this.applyConfiguration(config);
+    }
+}
+```
+</Tab>
+<Tab title="Connection Recovery">
+```typescript
+class ConnectionRecoveryManager {
+    private reconnectAttempts = 0;
+    private readonly MAX_RECONNECT_ATTEMPTS = 5;
+    private isRecovering = false;
+    
+    handleConnectionLoss() {
+        if (this.isRecovering) return;
+        
+        this.isRecovering = true;
+        this.attemptReconnection();
+    }
+    
+    private async attemptReconnection() {
+        const delays = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
+        
+        for (let i = 0; i < this.MAX_RECONNECT_ATTEMPTS; i++) {
+            try {
+                await this.wait(delays[i] || 16000);
+                await this.testConnection();
+                
+                // Connection successful
+                console.log('Connection recovered');
+                this.onConnectionRecovered();
+                this.isRecovering = false;
+                return;
+                
+            } catch (error) {
+                console.log(`Reconnection attempt ${i + 1} failed`);
+                this.reconnectAttempts++;
+            }
+        }
+        
+        // All attempts failed
+        this.onConnectionFailed();
+        this.isRecovering = false;
+    }
+    
+    private onConnectionRecovered() {
+        // Resume streaming with potentially lower quality
+        const recoveryConfig = {
+            bitrate: Math.max(1000000, this.previousBitrate * 0.7), // 70% of previous
+            enableQuickReconnect: true
+        };
+        
+        this.resumeStreaming(recoveryConfig);
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Quality Metrics and Monitoring
+
+### Real-time Quality Metrics
+
+<Tabs>
+<Tab title="Performance Metrics">
+```typescript
+interface QualityMetrics {
+    // Video metrics
+    currentResolution: { width: number; height: number };
+    actualBitrate: number;
+    frameRate: number;
+    droppedFrames: number;
+    keyFrameInterval: number;
+    
+    // Network metrics
+    bandwidth: number;
+    latency: number;
+    packetLoss: number;
+    jitter: number;
+    
+    // System metrics
+    cpuUsage: number;
+    memoryUsage: number;
+    batteryLevel: number;
+    temperature: number;
+}
+
+class QualityMonitor {
+    private metrics: QualityMetrics = this.initializeMetrics();
+    private listeners: Array<(metrics: QualityMetrics) => void> = [];
+    
+    startMonitoring() {
+        setInterval(() => {
+            this.updateMetrics();
+            this.analyzeQuality();
+            this.notifyListeners();
+        }, 1000); // Update every second
+    }
+    
+    private updateMetrics() {
+        this.metrics = {
+            ...this.metrics,
+            actualBitrate: this.measureCurrentBitrate(),
+            frameRate: this.measureFrameRate(),
+            droppedFrames: this.countDroppedFrames(),
+            bandwidth: this.measureBandwidth(),
+            latency: this.measureLatency(),
+            cpuUsage: this.getCpuUsage(),
+            memoryUsage: this.getMemoryUsage()
+        };
+    }
+    
+    private analyzeQuality() {
+        const issues = [];
+        
+        // Check for quality issues
+        if (this.metrics.frameRate < 15) {
+            issues.push({
+                type: 'low_framerate',
+                severity: 'high',
+                suggestion: 'Reduce resolution or bitrate'
+            });
+        }
+        
+        if (this.metrics.droppedFrames > 10) {
+            issues.push({
+                type: 'dropped_frames',
+                severity: 'medium',
+                suggestion: 'Check network stability'
+            });
+        }
+        
+        if (this.metrics.cpuUsage > 80) {
+            issues.push({
+                type: 'high_cpu',
+                severity: 'high',
+                suggestion: 'Enable hardware encoding or reduce quality'
+            });
+        }
+        
+        if (issues.length > 0) {
+            this.handleQualityIssues(issues);
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Quality Analytics">
+```typescript
+class QualityAnalytics {
+    private sessionData: QualitySession[] = [];
+    
+    recordSession(streamId: string, duration: number, metrics: QualityMetrics[]) {
+        const session: QualitySession = {
+            streamId,
+            duration,
+            startTime: Date.now(),
+            averageMetrics: this.calculateAverages(metrics),
+            qualityScore: this.calculateQualityScore(metrics),
+            issuesDetected: this.identifyIssues(metrics)
+        };
+        
+        this.sessionData.push(session);
+        this.sendAnalytics(session);
+    }
+    
+    private calculateQualityScore(metrics: QualityMetrics[]): number {
+        let score = 100;
+        
+        metrics.forEach(metric => {
+            // Penalize dropped frames
+            if (metric.droppedFrames > 0) {
+                score -= metric.droppedFrames * 0.5;
+            }
+            
+            // Penalize low frame rate
+            if (metric.frameRate < 24) {
+                score -= (24 - metric.frameRate) * 2;
+            }
+            
+            // Penalize high latency
+            if (metric.latency > 5000) {
+                score -= (metric.latency - 5000) / 100;
+            }
+        });
+        
+        return Math.max(0, Math.min(100, score));
+    }
+    
+    generateQualityReport(): QualityReport {
+        return {
+            totalSessions: this.sessionData.length,
+            averageQualityScore: this.getAverageQualityScore(),
+            commonIssues: this.getCommonIssues(),
+            recommendations: this.generateRecommendations()
+        };
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Best Practices
+
+### Quality Configuration Best Practices
+
+<Tabs>
+<Tab title="Mobile Optimization">
+```typescript
+class MobileQualityOptimizer {
+    optimizeForMobile() {
+        return {
+            // Start with balanced quality
+            initialQuality: 'HD',
+            
+            // Enable adaptive streaming
+            enableABR: true,
+            
+            // Optimize for mobile networks
+            cellularOptimizations: {
+                maxBitrate: 2500000, // 2.5 Mbps
+                bufferSize: 3000,    // 3 seconds
+                enableDataSaver: true
+            },
+            
+            // Battery optimizations
+            batteryOptimizations: {
+                reduceFpsOnLowBattery: true,
+                enableLowPowerMode: true,
+                suspendOnBackground: true
+            },
+            
+            // Performance optimizations
+            performanceOptimizations: {
+                enableHardwareAcceleration: true,
+                useEfficientCodec: true,
+                optimizeForLatency: false // Prioritize quality over latency
+            }
+        };
+    }
+}
+```
+</Tab>
+<Tab title="Network-Aware Settings">
+```typescript
+class NetworkAwareQualityManager {
+    configureForConnection(connectionType: string, speed: number) {
+        const configs = {
+            'wifi': {
+                maxBitrate: 5000000,
+                targetResolution: { width: 1080, height: 1920 },
+                bufferSize: 5000,
+                enableHighQuality: true
+            },
+            
+            '4g': {
+                maxBitrate: 3000000,
+                targetResolution: { width: 720, height: 1280 },
+                bufferSize: 3000,
+                enableAdaptive: true
+            },
+            
+            '3g': {
+                maxBitrate: 1500000,
+                targetResolution: { width: 480, height: 854 },
+                bufferSize: 2000,
+                enableDataSaver: true
+            },
+            
+            'slow': {
+                maxBitrate: 800000,
+                targetResolution: { width: 480, height: 854 },
+                bufferSize: 1000,
+                enableUltraDataSaver: true
+            }
+        };
+        
+        return configs[connectionType] || configs['3g'];
+    }
+}
+```
+</Tab>
+</Tabs>
+
+### Performance Monitoring
+
+```typescript
+class PerformanceOptimizer {
+    private readonly thresholds = {
+        frameRate: { min: 15, target: 30 },
+        latency: { max: 8000, target: 3000 },
+        cpuUsage: { max: 70, warning: 50 },
+        memoryUsage: { max: 200, warning: 150 }, // MB
+        droppedFrames: { max: 5, warning: 2 }
+    };
+    
+    optimizePerformance(metrics: QualityMetrics) {
+        const optimizations = [];
+        
+        // CPU optimization
+        if (metrics.cpuUsage > this.thresholds.cpuUsage.warning) {
+            optimizations.push(this.reduceCpuLoad());
+        }
+        
+        // Memory optimization
+        if (metrics.memoryUsage > this.thresholds.memoryUsage.warning) {
+            optimizations.push(this.optimizeMemory());
+        }
+        
+        // Network optimization
+        if (metrics.latency > this.thresholds.latency.target) {
+            optimizations.push(this.optimizeNetwork());
+        }
+        
+        return optimizations;
+    }
+    
+    private reduceCpuLoad() {
+        return {
+            action: 'reduce_cpu_load',
+            changes: [
+                'Lower frame rate to 24fps',
+                'Reduce resolution by one step',
+                'Enable hardware encoding if available'
+            ]
+        };
+    }
+}
+```
+
+## Troubleshooting Quality Issues
+
+### Common Quality Problems
+
+<Tabs>
+<Tab title="Low Frame Rate">
+**Symptoms:** Choppy video, low FPS
+
+**Causes & Solutions:**
+```typescript
+class FrameRateOptimizer {
+    diagnoseLowFrameRate(metrics: QualityMetrics) {
+        const issues = [];
+        
+        if (metrics.cpuUsage > 80) {
+            issues.push({
+                cause: 'High CPU usage',
+                solutions: [
+                    'Reduce video resolution',
+                    'Lower frame rate target',
+                    'Enable hardware encoding',
+                    'Close background apps'
+                ]
+            });
+        }
+        
+        if (metrics.memoryUsage > 150) {
+            issues.push({
+                cause: 'Memory pressure',
+                solutions: [
+                    'Reduce buffer size',
+                    'Lower video quality',
+                    'Clear app cache'
+                ]
+            });
+        }
+        
+        return issues;
+    }
+}
+```
+</Tab>
+<Tab title="Poor Video Quality">
+**Symptoms:** Blurry, pixelated video
+
+**Solutions:**
+```typescript
+class QualityTroubleshooter {
+    improvePoorQuality(networkSpeed: number, deviceCapabilities: DeviceCapabilities) {
+        const recommendations = [];
+        
+        // Network-based improvements
+        if (networkSpeed < 2) {
+            recommendations.push({
+                type: 'network',
+                action: 'Improve network connection',
+                details: 'Switch to WiFi or better cellular coverage'
+            });
+        }
+        
+        // Device-based improvements
+        if (!deviceCapabilities.supportsHardwareEncoding) {
+            recommendations.push({
+                type: 'device',
+                action: 'Enable software optimizations',
+                details: 'Use lower resolution with higher bitrate'
+            });
+        }
+        
+        return recommendations;
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Next Steps
+
+- **[Permissions](./permissions)** - Learn about camera and microphone permissions
+- **[Lifecycle Management](./lifecycle-management)** - Master stream lifecycle management
+- **[Broadcasting Setup](../broadcasting/setup)** - Configure broadcasting features
+- **[Platform-Specific Optimization](../platform-specific/platform-comparison)** - Platform-specific performance tips
+
+For detailed troubleshooting, visit our [Troubleshooting Guide](../troubleshooting/overview).

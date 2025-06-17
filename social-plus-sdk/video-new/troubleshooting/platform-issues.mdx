@@ -1,0 +1,646 @@
+---
+title: "Platform-Specific Troubleshooting"
+description: "Troubleshooting guide for platform-specific issues with Social+ Video SDK"
+---
+
+# Platform-Specific Troubleshooting
+
+This guide addresses common issues specific to different platforms when using the Social+ Video SDK. Each platform has unique characteristics and potential problems that require targeted solutions.
+
+## iOS Troubleshooting
+
+### Camera and Microphone Issues
+
+#### Issue: Camera Permission Denied
+```
+AVCaptureDevice authorization denied
+```
+
+**Solution:**
+```swift
+import AVFoundation
+
+// Check and request camera permission
+func requestCameraPermission() {
+    let status = AVCaptureDevice.authorizationStatus(for: .video)
+    
+    switch status {
+    case .notDetermined:
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            if granted {
+                // Initialize camera
+            } else {
+                // Show permission explanation
+            }
+        }
+    case .denied, .restricted:
+        // Direct user to settings
+        showSettingsAlert()
+    case .authorized:
+        // Camera access granted
+        break
+    }
+}
+```
+
+#### Issue: Audio Session Conflicts
+```
+Error: Audio session already in use by another app
+```
+
+**Solution:**
+```swift
+import AVFoundation
+
+// Configure audio session properly
+func configureAudioSession() {
+    let audioSession = AVAudioSession.sharedInstance()
+    
+    do {
+        try audioSession.setCategory(.playAndRecord, 
+                                   mode: .videoChat,
+                                   options: [.defaultToSpeaker, .allowBluetooth])
+        try audioSession.setActive(true)
+    } catch {
+        print("Audio session configuration failed: \(error)")
+    }
+}
+```
+
+### Background Streaming Issues
+
+#### Issue: Stream Stops in Background
+```
+App suspended, streaming interrupted
+```
+
+**Solution:**
+1. Enable Background App Refresh in iOS Settings
+2. Configure background modes in Info.plist:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>background-processing</string>
+    <string>background-audio</string>
+    <string>voip</string>
+</array>
+```
+
+3. Implement background task handling:
+```swift
+var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+
+func startBackgroundTask() {
+    backgroundTask = UIApplication.shared.beginBackgroundTask {
+        self.endBackgroundTask()
+    }
+}
+
+func endBackgroundTask() {
+    if backgroundTask != .invalid {
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+}
+```
+
+### Memory Management Issues
+
+#### Issue: Memory Warnings and Crashes
+```
+Memory pressure, app terminated
+```
+
+**Solution:**
+```swift
+// Optimize memory usage
+func optimizeMemoryUsage() {
+    // Reduce video resolution in low memory situations
+    NotificationCenter.default.addObserver(
+        forName: UIApplication.didReceiveMemoryWarningNotification,
+        object: nil,
+        queue: .main
+    ) { _ in
+        self.reduceBroadcastQuality()
+    }
+}
+
+func reduceBroadcastQuality() {
+    // Lower resolution and bitrate
+    socialPlusSDK.configureStream(
+        resolution: "480p",
+        bitrate: 1500
+    )
+}
+```
+
+## Android Troubleshooting
+
+### Permission Management
+
+#### Issue: Runtime Permissions Not Granted
+```
+SecurityException: Permission denial
+```
+
+**Solution:**
+```kotlin
+import android.Manifest
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
+class StreamActivity : AppCompatActivity() {
+    private val PERMISSIONS_REQUEST_CODE = 100
+    
+    private fun checkPermissions(): Boolean {
+        val permissions = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+        
+        return permissions.all { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == 
+                PackageManager.PERMISSION_GRANTED
+        }
+    }
+    
+    private fun requestPermissions() {
+        val permissions = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+        
+        ActivityCompat.requestPermissions(
+            this, 
+            permissions, 
+            PERMISSIONS_REQUEST_CODE
+        )
+    }
+}
+```
+
+### Camera2 API Issues
+
+#### Issue: Camera Initialization Fails
+```
+CameraAccessException: Camera service unavailable
+```
+
+**Solution:**
+```kotlin
+import android.hardware.camera2.*
+
+class CameraManager {
+    private fun initializeCamera() {
+        val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        
+        try {
+            val cameraId = cameraManager.cameraIdList[0]
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            
+            // Check camera capabilities
+            val capabilities = characteristics.get(
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+            )
+            
+            if (capabilities?.contains(
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE
+            ) == true) {
+                // Camera supports required features
+                openCamera(cameraId)
+            } else {
+                // Fallback to Camera API
+                useLegacyCameraAPI()
+            }
+        } catch (e: CameraAccessException) {
+            handleCameraError(e)
+        }
+    }
+}
+```
+
+### Network Configuration Issues
+
+#### Issue: Network Security Policy Blocks Connections
+```
+java.security.cert.CertPathValidatorException: Trust anchor for certification path not found
+```
+
+**Solution:**
+1. Configure network security in `res/xml/network_security_config.xml`:
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">your-streaming-domain.com</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+```
+
+2. Reference in AndroidManifest.xml:
+```xml
+<application
+    android:networkSecurityConfig="@xml/network_security_config">
+</application>
+```
+
+### Background Service Issues
+
+#### Issue: Service Killed by System
+```
+Service destroyed due to memory pressure
+```
+
+**Solution:**
+```kotlin
+class StreamingService : Service() {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, createNotification())
+        
+        // Return sticky to restart service if killed
+        return START_STICKY
+    }
+    
+    private fun createNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Live Streaming")
+            .setContentText("Stream is active")
+            .setSmallIcon(R.drawable.ic_stream)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+    }
+}
+```
+
+## Web Browser Troubleshooting
+
+### WebRTC Issues
+
+#### Issue: WebRTC Not Supported
+```
+Navigator.mediaDevices is undefined
+```
+
+**Solution:**
+```javascript
+// Check WebRTC support and provide fallbacks
+function checkWebRTCSupport() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('WebRTC not supported');
+        
+        // Fallback to older API
+        navigator.getUserMedia = navigator.getUserMedia ||
+                               navigator.webkitGetUserMedia ||
+                               navigator.mozGetUserMedia;
+        
+        if (!navigator.getUserMedia) {
+            // Use HLS fallback
+            return useHLSFallback();
+        }
+    }
+    
+    return true;
+}
+
+function useHLSFallback() {
+    // Configure HLS player
+    const player = new SocialPlusVideo({
+        apiKey: 'your-api-key',
+        playbackProtocol: 'hls',
+        fallbackEnabled: true
+    });
+    
+    return player;
+}
+```
+
+### HTTPS Requirements
+
+#### Issue: getUserMedia Requires HTTPS
+```
+getUserMedia() no longer works on insecure origins
+```
+
+**Solution:**
+1. Use HTTPS in production
+2. For development, use localhost or configure browser flags
+3. Alternative for testing:
+
+```javascript
+// Development workaround
+if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    console.warn('HTTPS required for camera access');
+    
+    // Redirect to HTTPS or show warning
+    if (confirm('Camera access requires HTTPS. Redirect?')) {
+        location.href = 'https://' + location.host + location.pathname;
+    }
+}
+```
+
+### Cross-Origin Issues
+
+#### Issue: CORS Blocking Requests
+```
+Access to fetch blocked by CORS policy
+```
+
+**Solution:**
+```javascript
+// Configure CORS headers on your server
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://yourdomain.com');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+});
+
+// Or use proxy in development
+const sdk = new SocialPlusVideo({
+    apiKey: 'your-api-key',
+    proxyUrl: '/api/proxy', // Your proxy endpoint
+    useCORS: true
+});
+```
+
+### Browser-Specific Issues
+
+#### Safari Issues
+```javascript
+// Safari-specific fixes
+if (navigator.userAgent.indexOf('Safari') > -1 && 
+    navigator.userAgent.indexOf('Chrome') === -1) {
+    
+    // Safari requires user interaction for autoplay
+    sdk.configurePlayback({
+        autoplay: false,
+        muted: true, // Muted autoplay is allowed
+        playsInline: true // Prevent fullscreen on iOS
+    });
+}
+```
+
+#### Firefox Issues
+```javascript
+// Firefox WebRTC compatibility
+if (navigator.userAgent.indexOf('Firefox') > -1) {
+    sdk.configureWebRTC({
+        iceServers: [
+            { urls: 'stun:stun.mozilla.org' }
+        ],
+        sdpSemantics: 'plan-b' // Firefox uses plan-b
+    });
+}
+```
+
+## React Native Troubleshooting
+
+### Metro Bundler Issues
+
+#### Issue: Module Resolution Fails
+```
+Unable to resolve module @social-plus/video-sdk
+```
+
+**Solution:**
+1. Clear Metro cache:
+```bash
+npx react-native start --reset-cache
+```
+
+2. Configure Metro bundler in `metro.config.js`:
+```javascript
+module.exports = {
+    resolver: {
+        alias: {
+            '@social-plus/video-sdk': require.resolve('@social-plus/video-sdk')
+        }
+    }
+};
+```
+
+### Native Module Linking Issues
+
+#### Issue: Native Modules Not Found
+```
+NativeModules.SocialPlusVideo is undefined
+```
+
+**Solution:**
+1. For React Native >= 0.60 (auto-linking):
+```bash
+cd ios && pod install
+```
+
+2. For older versions:
+```bash
+react-native link @social-plus/video-sdk
+```
+
+3. Manual linking if needed:
+```javascript
+// android/settings.gradle
+include ':social-plus-video-sdk'
+project(':social-plus-video-sdk').projectDir = 
+    new File(rootProject.projectDir, '../node_modules/@social-plus/video-sdk/android')
+
+// android/app/build.gradle
+dependencies {
+    implementation project(':social-plus-video-sdk')
+}
+```
+
+### Platform-Specific Code Issues
+
+#### Issue: Platform-Specific Code Not Working
+```javascript
+// Use Platform module properly
+import { Platform } from 'react-native';
+
+const StreamComponent = () => {
+    const configureSDK = () => {
+        const config = {
+            apiKey: 'your-api-key',
+            ...Platform.select({
+                ios: {
+                    audioSession: 'videoChat',
+                    backgroundModes: ['audio']
+                },
+                android: {
+                    foregroundService: true,
+                    notificationConfig: {
+                        channelId: 'streaming',
+                        title: 'Live Stream'
+                    }
+                }
+            })
+        };
+        
+        return new SocialPlusVideo(config);
+    };
+};
+```
+
+## Flutter Troubleshooting
+
+### Plugin Registration Issues
+
+#### Issue: Plugin Not Registered
+```
+MissingPluginException: No implementation found for method
+```
+
+**Solution:**
+1. Run `flutter clean` and `flutter pub get`
+2. For iOS, run `cd ios && pod install`
+3. Ensure plugin is properly registered:
+
+```dart
+// In your main.dart
+import 'package:social_plus_video/social_plus_video.dart';
+
+void main() {
+    // Ensure plugin is initialized
+    WidgetsFlutterBinding.ensureInitialized();
+    runApp(MyApp());
+}
+```
+
+### Platform Channel Issues
+
+#### Issue: Platform Channel Communication Fails
+```dart
+// Implement proper error handling
+try {
+    final result = await SocialPlusVideo.initialize(apiKey: 'your-key');
+} on PlatformException catch (e) {
+    print('Platform error: ${e.code} - ${e.message}');
+    
+    // Handle specific error codes
+    switch (e.code) {
+        case 'PERMISSION_DENIED':
+            requestPermissions();
+            break;
+        case 'NETWORK_ERROR':
+            checkNetworkConnection();
+            break;
+        default:
+            showGenericError();
+    }
+}
+```
+
+### Widget State Management
+
+#### Issue: Widget Disposed During Async Operation
+```dart
+class StreamWidget extends StatefulWidget {
+    @override
+    _StreamWidgetState createState() => _StreamWidgetState();
+}
+
+class _StreamWidgetState extends State<StreamWidget> {
+    late SocialPlusVideoController _controller;
+    
+    @override
+    void initState() {
+        super.initState();
+        _initializeController();
+    }
+    
+    Future<void> _initializeController() async {
+        try {
+            _controller = await SocialPlusVideo.createController();
+            
+            // Check if widget is still mounted
+            if (mounted) {
+                setState(() {
+                    // Update UI
+                });
+            }
+        } catch (e) {
+            if (mounted) {
+                // Handle error
+            }
+        }
+    }
+    
+    @override
+    void dispose() {
+        _controller.dispose();
+        super.dispose();
+    }
+}
+```
+
+## Universal Troubleshooting Tips
+
+### Debug Mode Setup
+
+```javascript
+// Enable comprehensive debugging across all platforms
+const sdk = new SocialPlusVideo({
+    apiKey: 'your-api-key',
+    debug: {
+        enabled: true,
+        level: 'verbose',
+        logToConsole: true,
+        logToFile: true,
+        remoteLogging: true
+    }
+});
+
+// Platform-specific debug info
+const debugInfo = await sdk.getPlatformDebugInfo();
+console.log('Platform debug info:', debugInfo);
+```
+
+### Performance Monitoring
+
+```javascript
+// Monitor performance across platforms
+sdk.on('performanceUpdate', (metrics) => {
+    console.log('Performance metrics:', {
+        platform: metrics.platform,
+        fps: metrics.fps,
+        bitrate: metrics.bitrate,
+        latency: metrics.latency,
+        memoryUsage: metrics.memoryUsage,
+        cpuUsage: metrics.cpuUsage
+    });
+    
+    // Alert on performance issues
+    if (metrics.fps < 15 || metrics.latency > 500) {
+        console.warn('Performance degradation detected');
+        optimizeSettings();
+    }
+});
+```
+
+## Next Steps
+
+- [Troubleshooting Overview](./overview) - General troubleshooting guide
+- [Notifications Troubleshooting](./notifications) - Push notification issues
+- [Events Troubleshooting](./events) - Real-time event problems
+- [Platform-Specific Guides](../platform-specific) - Detailed implementation guides
+
+## Getting Platform-Specific Help
+
+For platform-specific issues:
+
+1. **iOS**: Check Xcode console for detailed error messages
+2. **Android**: Use Android Studio's Logcat for debugging
+3. **Web**: Use browser developer tools and console
+4. **React Native**: Use React Native debugger and platform logs
+5. **Flutter**: Use Flutter inspector and platform channels debugging
+
+Include platform-specific debug information when reporting issues to get faster resolution.

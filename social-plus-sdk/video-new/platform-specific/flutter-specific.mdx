@@ -1,0 +1,2046 @@
+---
+title: "Flutter Implementation Guide"
+description: "Complete guide for implementing Social+ Video SDK in Flutter applications with streaming, playback, and real-time features"
+---
+
+# Flutter Implementation Guide
+
+This comprehensive guide covers everything you need to integrate Social+ Video SDK into your Flutter application, including live streaming, video playback, and real-time notifications.
+
+## Prerequisites
+
+- Flutter 3.0 or higher
+- Dart 2.17 or higher
+- iOS 12+ (for iOS apps)
+- Android API level 21+ (for Android apps)
+- Valid Social+ API credentials
+
+## Installation & Setup
+
+### Package Installation
+
+Add the required dependencies to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Social+ Video SDK dependencies
+  amity_sdk: ^6.0.0
+  amity_video_player: ^0.0.1
+  
+  # Additional dependencies for enhanced functionality
+  permission_handler: ^10.4.3
+  video_player: ^2.7.0
+  camera: ^0.10.5
+  path_provider: ^2.1.0
+  http: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+```
+
+Then run:
+
+```bash
+flutter pub get
+```
+
+### Platform Configuration
+
+<Tabs>
+<Tab title="Android">
+#### 1. Configure Build Settings
+
+Update `android/app/build.gradle`:
+
+```gradle
+android {
+    compileSdkVersion 34
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+}
+```
+
+#### 2. Configure Permissions
+
+Add permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Camera and Audio Permissions -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    
+    <!-- Network Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    
+    <!-- Storage Permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    
+    <!-- Hardware Features -->
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="true" />
+
+    <application
+        android:label="Your App Name"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        
+        <!-- Add network security config for HTTP traffic (if needed) -->
+        <meta-data
+            android:name="android.content.NETWORK_SECURITY_CONFIG"
+            android:resource="@xml/network_security_config" />
+            
+        <!-- Your activities -->
+    </application>
+</manifest>
+```
+
+#### 3. Network Security Configuration
+
+Create `android/app/src/main/res/xml/network_security_config.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">your-streaming-domain.com</domain>
+    </domain-config>
+</network-security-config>
+```
+</Tab>
+<Tab title="iOS">
+#### 1. Configure iOS Deployment Target
+
+Update `ios/Podfile`:
+
+```ruby
+platform :ios, '12.0'
+
+# Add this if not present
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+    end
+  end
+end
+```
+
+#### 2. Configure Permissions
+
+Add permissions to `ios/Runner/Info.plist`:
+
+```xml
+<dict>
+    <!-- Existing keys... -->
+    
+    <!-- Camera Permission -->
+    <key>NSCameraUsageDescription</key>
+    <string>This app needs camera access to broadcast live streams and record videos</string>
+    
+    <!-- Microphone Permission -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs microphone access for live streaming audio and video recording</string>
+    
+    <!-- Photo Library Permission -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>This app needs photo library access to save and share videos</string>
+    
+    <!-- Photo Library Add Permission -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>This app needs permission to save videos to your photo library</string>
+    
+    <!-- Background Modes (for streaming) -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>background-audio</string>
+        <string>background-processing</string>
+    </array>
+</dict>
+```
+
+#### 3. Install iOS Dependencies
+
+```bash
+cd ios && pod install
+```
+</Tab>
+</Tabs>
+
+## SDK Initialization
+
+### Basic Setup
+
+```dart
+// lib/services/social_plus_service.dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+class SocialPlusService {
+  static final SocialPlusService _instance = SocialPlusService._internal();
+  factory SocialPlusService() => _instance;
+  SocialPlusService._internal();
+
+  AmitySDK? _sdk;
+  bool _isInitialized = false;
+
+  Future<void> initialize({
+    required String apiKey,
+    required String httpUrl,
+    required String socketUrl,
+  }) async {
+    try {
+      _sdk = AmitySDK();
+      
+      await _sdk!.setup(
+        option: AmitySDKSetupOption(
+          apiKey: apiKey,
+          httpEndpoint: httpUrl,
+          socketEndpoint: socketUrl,
+        ),
+      );
+      
+      _isInitialized = true;
+      print('Social+ SDK initialized successfully');
+    } catch (error) {
+      print('Failed to initialize Social+ SDK: $error');
+      rethrow;
+    }
+  }
+
+  Future<AmityUser> login({
+    required String userId,
+    String? displayName,
+    String? authToken,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SDK not initialized. Call initialize() first.');
+    }
+
+    try {
+      final user = await _sdk!.login(userId)
+          .displayName(displayName ?? '')
+          .authToken(authToken)
+          .submit();
+      
+      print('User logged in successfully: ${user.userId}');
+      return user;
+    } catch (error) {
+      print('Login failed: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> logout() async {
+    if (_sdk != null) {
+      await _sdk!.logout();
+    }
+  }
+
+  AmitySDK? get sdk => _sdk;
+  bool get isInitialized => _isInitialized;
+}
+```
+
+### App Initialization
+
+```dart
+// lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:amity_video_player/amity_video_player.dart';
+import 'services/social_plus_service.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Social+ Video App',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: SplashScreen(),
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  final SocialPlusService _socialPlusService = SocialPlusService();
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      // Initialize Social+ SDK
+      await _socialPlusService.initialize(
+        apiKey: 'your-api-key',
+        httpUrl: 'https://api.amity.co',
+        socketUrl: 'wss://api.amity.co',
+      );
+
+      // Login user
+      await _socialPlusService.login(
+        userId: 'user-123',
+        displayName: 'John Doe',
+      );
+
+      // Setup video player
+      await AmityVideoPlayerClient.setup();
+
+      // Navigate to main screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => HomeScreen()),
+      );
+    } catch (error) {
+      // Handle initialization error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to initialize app: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Initializing Social+ Video SDK...'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+## Live Streaming Implementation
+
+### Stream Management Service
+
+```dart
+// lib/services/stream_service.dart
+import 'package:amity_sdk/amity_sdk.dart';
+
+class StreamService {
+  final AmityStreamRepository _streamRepository;
+
+  StreamService() : _streamRepository = AmitySDK.newStreamRepository();
+
+  Future<AmityStream> createStream({
+    required String title,
+    String? description,
+    String? thumbnailFileId,
+    bool isSecure = false,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      final stream = await _streamRepository
+          .createStream()
+          .title(title)
+          .description(description ?? '')
+          .thumbnailFileId(thumbnailFileId)
+          .isSecure(isSecure)
+          .metadata(metadata ?? {})
+          .create();
+
+      print('Stream created successfully: ${stream.streamId}');
+      return stream;
+    } catch (error) {
+      print('Failed to create stream: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> updateStream({
+    required String streamId,
+    String? title,
+    String? description,
+    String? thumbnailFileId,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      await _streamRepository
+          .updateStream(streamId)
+          .title(title)
+          .description(description)
+          .thumbnailFileId(thumbnailFileId)
+          .metadata(metadata ?? {})
+          .update();
+
+      print('Stream updated successfully: $streamId');
+    } catch (error) {
+      print('Failed to update stream: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteStream(String streamId) async {
+    try {
+      await _streamRepository.deleteStream(streamId);
+      print('Stream deleted successfully: $streamId');
+    } catch (error) {
+      print('Failed to delete stream: $error');
+      rethrow;
+    }
+  }
+
+  AmityStreamLiveCollection getStreams({
+    List<AmityStreamStatus>? statuses,
+    AmityStreamSortOption sortOption = AmityStreamSortOption.CREATED_AT,
+  }) {
+    return _streamRepository
+        .getStreams()
+        .setStatus(statuses ?? [])
+        .sortBy(sortOption)
+        .build();
+  }
+
+  AmityStreamLiveObject getStreamById(String streamId) {
+    return _streamRepository.getStreamById(streamId);
+  }
+}
+```
+
+### Broadcasting Screen
+
+<Tabs>
+<Tab title="Basic Broadcasting">
+```dart
+// lib/screens/broadcast_screen.dart
+import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../services/stream_service.dart';
+
+class BroadcastScreen extends StatefulWidget {
+  @override
+  _BroadcastScreenState createState() => _BroadcastScreenState();
+}
+
+class _BroadcastScreenState extends State<BroadcastScreen> {
+  final StreamService _streamService = StreamService();
+  
+  CameraController? _cameraController;
+  List<CameraDescription> _cameras = [];
+  bool _isRecording = false;
+  bool _isCameraInitialized = false;
+  AmityStream? _currentStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    // Request permissions
+    final cameraPermission = await Permission.camera.request();
+    final microphonePermission = await Permission.microphone.request();
+
+    if (cameraPermission.isGranted && microphonePermission.isGranted) {
+      _cameras = await availableCameras();
+      
+      if (_cameras.isNotEmpty) {
+        _cameraController = CameraController(
+          _cameras[0],
+          ResolutionPreset.high,
+          enableAudio: true,
+        );
+
+        await _cameraController!.initialize();
+        
+        if (mounted) {
+          setState(() {
+            _isCameraInitialized = true;
+          });
+        }
+      }
+    } else {
+      _showPermissionDialog();
+    }
+  }
+
+  Future<void> _startBroadcast() async {
+    if (_cameraController == null) return;
+
+    try {
+      // Create stream
+      _currentStream = await _streamService.createStream(
+        title: 'Live Broadcast from Flutter',
+        description: 'Broadcasting live using Social+ Flutter SDK',
+        isSecure: false,
+      );
+
+      // Start recording
+      await _cameraController!.startVideoRecording();
+      
+      setState(() {
+        _isRecording = true;
+      });
+
+      _showSnackBar('Broadcast started successfully!');
+    } catch (error) {
+      _showSnackBar('Failed to start broadcast: $error');
+    }
+  }
+
+  Future<void> _stopBroadcast() async {
+    if (_cameraController == null || !_isRecording) return;
+
+    try {
+      // Stop recording
+      final videoFile = await _cameraController!.stopVideoRecording();
+      
+      setState(() {
+        _isRecording = false;
+      });
+
+      _showSnackBar('Broadcast stopped. Video saved: ${videoFile.path}');
+    } catch (error) {
+      _showSnackBar('Failed to stop broadcast: $error');
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_cameras.length < 2) return;
+
+    final currentCameraIndex = _cameras.indexWhere(
+      (camera) => camera.lensDirection == _cameraController!.description.lensDirection,
+    );
+    
+    final newCameraIndex = (currentCameraIndex + 1) % _cameras.length;
+    
+    await _cameraController!.dispose();
+    
+    _cameraController = CameraController(
+      _cameras[newCameraIndex],
+      ResolutionPreset.high,
+      enableAudio: true,
+    );
+
+    await _cameraController!.initialize();
+    setState(() {});
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permissions Required'),
+        content: Text('Camera and microphone permissions are required for broadcasting.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+            child: Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Live Broadcast'),
+        backgroundColor: Colors.red,
+      ),
+      body: Column(
+        children: [
+          // Camera Preview
+          Expanded(
+            child: _isCameraInitialized
+                ? CameraPreview(_cameraController!)
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Initializing camera...'),
+                      ],
+                    ),
+                  ),
+          ),
+          
+          // Controls
+          Container(
+            padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            color: Colors.black87,
+            child: Column(
+              children: [
+                if (_currentStream != null)
+                  Text(
+                    'Stream: ${_currentStream!.title}',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                
+                SizedBox(height: 16),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Start/Stop Broadcast Button
+                    ElevatedButton(
+                      onPressed: _isCameraInitialized
+                          ? (_isRecording ? _stopBroadcast : _startBroadcast)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isRecording ? Colors.red : Colors.green,
+                        shape: CircleBorder(),
+                        padding: EdgeInsets.all(20),
+                      ),
+                      child: Icon(
+                        _isRecording ? Icons.stop : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                    
+                    // Switch Camera Button
+                    ElevatedButton(
+                      onPressed: _isCameraInitialized && _cameras.length > 1
+                          ? _switchCamera
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: CircleBorder(),
+                        padding: EdgeInsets.all(16),
+                      ),
+                      child: Icon(
+                        Icons.switch_camera,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                SizedBox(height: 8),
+                
+                Text(
+                  _isRecording ? 'LIVE' : 'Ready to broadcast',
+                  style: TextStyle(
+                    color: _isRecording ? Colors.red : Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+</Tab>
+<Tab title="Advanced Broadcasting">
+```dart
+// lib/screens/advanced_broadcast_screen.dart
+import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../services/stream_service.dart';
+
+class AdvancedBroadcastScreen extends StatefulWidget {
+  @override
+  _AdvancedBroadcastScreenState createState() => _AdvancedBroadcastScreenState();
+}
+
+class _AdvancedBroadcastScreenState extends State<AdvancedBroadcastScreen>
+    with TickerProviderStateMixin {
+  final StreamService _streamService = StreamService();
+  
+  CameraController? _cameraController;
+  List<CameraDescription> _cameras = [];
+  bool _isRecording = false;
+  bool _isCameraInitialized = false;
+  AmityStream? _currentStream;
+  
+  // Advanced features
+  AnimationController? _recordingAnimationController;
+  Timer? _broadcastTimer;
+  Duration _broadcastDuration = Duration.zero;
+  int _viewerCount = 0;
+  bool _isFlashOn = false;
+  ResolutionPreset _currentResolution = ResolutionPreset.high;
+
+  @override
+  void initState() {
+    super.initState();
+    _recordingAnimationController = AnimationController(
+      duration: Duration(seconds: 1),
+      vsync: this,
+    );
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    final permissions = await [
+      Permission.camera,
+      Permission.microphone,
+      Permission.storage,
+    ].request();
+
+    if (permissions.values.every((status) => status.isGranted)) {
+      _cameras = await availableCameras();
+      
+      if (_cameras.isNotEmpty) {
+        await _setupCamera(_cameras[0]);
+      }
+    } else {
+      _showPermissionDialog();
+    }
+  }
+
+  Future<void> _setupCamera(CameraDescription camera) async {
+    _cameraController = CameraController(
+      camera,
+      _currentResolution,
+      enableAudio: true,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
+
+    try {
+      await _cameraController!.initialize();
+      
+      if (mounted) {
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      }
+    } catch (error) {
+      print('Error initializing camera: $error');
+    }
+  }
+
+  Future<void> _startAdvancedBroadcast() async {
+    if (_cameraController == null) return;
+
+    try {
+      // Create stream with metadata
+      _currentStream = await _streamService.createStream(
+        title: 'Advanced Live Broadcast',
+        description: 'High-quality broadcast with advanced features',
+        isSecure: false,
+        metadata: {
+          'resolution': _currentResolution.toString(),
+          'platform': 'flutter',
+          'features': ['hd_quality', 'flash_support', 'camera_switch']
+        },
+      );
+
+      // Start recording with advanced settings
+      await _cameraController!.startVideoRecording();
+      
+      // Start animation and timer
+      _recordingAnimationController!.repeat();
+      _startBroadcastTimer();
+      
+      setState(() {
+        _isRecording = true;
+      });
+
+      _showSnackBar('Advanced broadcast started!');
+    } catch (error) {
+      _showSnackBar('Failed to start broadcast: $error');
+    }
+  }
+
+  void _startBroadcastTimer() {
+    _broadcastTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        _broadcastDuration = Duration(seconds: timer.tick);
+        // Simulate viewer count changes
+        _viewerCount = 10 + (timer.tick % 50);
+      });
+    });
+  }
+
+  Future<void> _stopAdvancedBroadcast() async {
+    if (_cameraController == null || !_isRecording) return;
+
+    try {
+      final videoFile = await _cameraController!.stopVideoRecording();
+      
+      _recordingAnimationController!.stop();
+      _broadcastTimer?.cancel();
+      
+      setState(() {
+        _isRecording = false;
+        _broadcastDuration = Duration.zero;
+        _viewerCount = 0;
+      });
+
+      _showSnackBar('Broadcast ended. Duration: ${_formatDuration(_broadcastDuration)}');
+    } catch (error) {
+      _showSnackBar('Failed to stop broadcast: $error');
+    }
+  }
+
+  Future<void> _toggleFlash() async {
+    if (_cameraController == null) return;
+
+    try {
+      if (_isFlashOn) {
+        await _cameraController!.setFlashMode(FlashMode.off);
+      } else {
+        await _cameraController!.setFlashMode(FlashMode.torch);
+      }
+      
+      setState(() {
+        _isFlashOn = !_isFlashOn;
+      });
+    } catch (error) {
+      print('Error toggling flash: $error');
+    }
+  }
+
+  Future<void> _changeResolution(ResolutionPreset newResolution) async {
+    if (_cameraController == null || _isRecording) return;
+
+    final currentCamera = _cameraController!.description;
+    await _cameraController!.dispose();
+    
+    _currentResolution = newResolution;
+    await _setupCamera(currentCamera);
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(duration.inHours);
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$hours:$minutes:$seconds';
+  }
+
+  Widget _buildStatsOverlay() {
+    return Positioned(
+      top: 16,
+      left: 16,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                AnimatedBuilder(
+                  animation: _recordingAnimationController!,
+                  builder: (context, child) {
+                    return Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: _isRecording
+                            ? Colors.red.withOpacity(_recordingAnimationController!.value)
+                            : Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                    );
+                  },
+                ),
+                SizedBox(width: 8),
+                Text(
+                  _isRecording ? 'LIVE' : 'OFFLINE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            
+            if (_isRecording) ...[
+              SizedBox(height: 4),
+              Text(
+                'Duration: ${_formatDuration(_broadcastDuration)}',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              Text(
+                'Viewers: $_viewerCount',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              Text(
+                'Quality: ${_currentResolution.toString().split('.').last}',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Advanced Broadcast'),
+        backgroundColor: Colors.red,
+        actions: [
+          if (_isCameraInitialized && !_isRecording)
+            PopupMenuButton<ResolutionPreset>(
+              onSelected: _changeResolution,
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: ResolutionPreset.low,
+                  child: Text('Low Quality'),
+                ),
+                PopupMenuItem(
+                  value: ResolutionPreset.medium,
+                  child: Text('Medium Quality'),
+                ),
+                PopupMenuItem(
+                  value: ResolutionPreset.high,
+                  child: Text('High Quality'),
+                ),
+                PopupMenuItem(
+                  value: ResolutionPreset.veryHigh,
+                  child: Text('Very High Quality'),
+                ),
+              ],
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // Camera Preview
+          if (_isCameraInitialized)
+            Positioned.fill(
+              child: CameraPreview(_cameraController!),
+            )
+          else
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Initializing advanced camera...'),
+                ],
+              ),
+            ),
+
+          // Stats Overlay
+          _buildStatsOverlay(),
+
+          // Controls Overlay
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black87,
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Flash Toggle
+                      IconButton(
+                        onPressed: _isCameraInitialized ? _toggleFlash : null,
+                        icon: Icon(
+                          _isFlashOn ? Icons.flash_on : Icons.flash_off,
+                          color: _isFlashOn ? Colors.yellow : Colors.white,
+                          size: 30,
+                        ),
+                      ),
+
+                      // Main Broadcast Button
+                      GestureDetector(
+                        onTap: _isCameraInitialized
+                            ? (_isRecording ? _stopAdvancedBroadcast : _startAdvancedBroadcast)
+                            : null,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: _isRecording ? Colors.red : Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 4),
+                          ),
+                          child: Icon(
+                            _isRecording ? Icons.stop : Icons.videocam,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+
+                      // Switch Camera
+                      IconButton(
+                        onPressed: _isCameraInitialized && _cameras.length > 1
+                            ? _switchCamera
+                            : null,
+                        icon: Icon(
+                          Icons.switch_camera,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _recordingAnimationController?.dispose();
+    _broadcastTimer?.cancel();
+    _cameraController?.dispose();
+    super.dispose();
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Video Playback Implementation
+
+### Video Player Screen
+
+<Tabs>
+<Tab title="Basic Player">
+```dart
+// lib/screens/video_player_screen.dart
+import 'package:flutter/material.dart';
+import 'package:amity_video_player/amity_video_player.dart';
+import '../services/stream_service.dart';
+
+class VideoPlayerScreen extends StatefulWidget {
+  final String streamId;
+
+  const VideoPlayerScreen({Key? key, required this.streamId}) : super(key: key);
+
+  @override
+  _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  final StreamService _streamService = StreamService();
+  
+  AmityVideoController? _videoController;
+  AmityStream? _stream;
+  bool _isLoading = true;
+  bool _hasError = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStream();
+  }
+
+  Future<void> _loadStream() async {
+    try {
+      final streamLiveObject = _streamService.getStreamById(widget.streamId);
+      
+      streamLiveObject.listen().listen((amityStream) {
+        if (mounted) {
+          setState(() {
+            _stream = amityStream;
+            _isLoading = false;
+          });
+          
+          if (amityStream != null) {
+            _initializeVideoPlayer(amityStream);
+          }
+        }
+      });
+      
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  void _initializeVideoPlayer(AmityStream stream) {
+    _videoController = AmityVideoController(
+      streamId: stream.streamId!,
+      onPlayerStateChanged: (state) {
+        print('Player state changed: $state');
+      },
+      onError: (error) {
+        print('Video player error: $error');
+        setState(() {
+          _hasError = true;
+          _errorMessage = error;
+        });
+      },
+    );
+  }
+
+  Future<void> _playVideo() async {
+    if (_videoController != null) {
+      await _videoController!.play();
+    }
+  }
+
+  Future<void> _pauseVideo() async {
+    if (_videoController != null) {
+      await _videoController!.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_stream?.title ?? 'Video Player'),
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading stream...'),
+          ],
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.red,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Error loading stream',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Unknown error occurred',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _hasError = false;
+                  _errorMessage = null;
+                });
+                _loadStream();
+              },
+              child: Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_stream == null) {
+      return Center(
+        child: Text('Stream not found'),
+      );
+    }
+
+    return Column(
+      children: [
+        // Video Player
+        Expanded(
+          child: Container(
+            color: Colors.black,
+            child: _videoController != null
+                ? AmityVideoPlayer(controller: _videoController!)
+                : Center(
+                    child: Text(
+                      'Initializing player...',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+          ),
+        ),
+        
+        // Stream Info and Controls
+        Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _stream!.title ?? 'Untitled Stream',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              
+              if (_stream!.description != null && _stream!.description!.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    _stream!.description!,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              
+              SizedBox(height: 16),
+              
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(_stream!.status),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _stream!.status.toString().split('.').last.toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  
+                  Spacer(),
+                  
+                  // Play/Pause Button
+                  ElevatedButton.icon(
+                    onPressed: _playVideo,
+                    icon: Icon(Icons.play_arrow),
+                    label: Text('Play'),
+                  ),
+                  
+                  SizedBox(width: 8),
+                  
+                  ElevatedButton.icon(
+                    onPressed: _pauseVideo,
+                    icon: Icon(Icons.pause),
+                    label: Text('Pause'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getStatusColor(AmityStreamStatus status) {
+    switch (status) {
+      case AmityStreamStatus.LIVE:
+        return Colors.red;
+      case AmityStreamStatus.RECORDED:
+        return Colors.green;
+      case AmityStreamStatus.ENDED:
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+}
+```
+</Tab>
+<Tab title="Advanced Player">
+```dart
+// lib/screens/advanced_video_player_screen.dart
+import 'package:flutter/material.dart';
+import 'package:amity_video_player/amity_video_player.dart';
+import '../services/stream_service.dart';
+
+class AdvancedVideoPlayerScreen extends StatefulWidget {
+  final String streamId;
+
+  const AdvancedVideoPlayerScreen({Key? key, required this.streamId}) : super(key: key);
+
+  @override
+  _AdvancedVideoPlayerScreenState createState() => _AdvancedVideoPlayerScreenState();
+}
+
+class _AdvancedVideoPlayerScreenState extends State<AdvancedVideoPlayerScreen>
+    with TickerProviderStateMixin {
+  final StreamService _streamService = StreamService();
+  
+  AmityVideoController? _videoController;
+  AmityStream? _stream;
+  bool _isLoading = true;
+  bool _hasError = false;
+  bool _isPlaying = false;
+  bool _showControls = true;
+  
+  // Advanced controls
+  double _volume = 1.0;
+  double _playbackSpeed = 1.0;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  
+  AnimationController? _controlsAnimationController;
+  Timer? _hideControlsTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controlsAnimationController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _controlsAnimationController!.forward();
+    _loadStream();
+    _startHideControlsTimer();
+  }
+
+  void _startHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(Duration(seconds: 3), () {
+      if (_isPlaying && _showControls) {
+        setState(() {
+          _showControls = false;
+        });
+        _controlsAnimationController!.reverse();
+      }
+    });
+  }
+
+  void _showControlsTemporarily() {
+    if (!_showControls) {
+      setState(() {
+        _showControls = true;
+      });
+      _controlsAnimationController!.forward();
+    }
+    _startHideControlsTimer();
+  }
+
+  Future<void> _loadStream() async {
+    try {
+      final streamLiveObject = _streamService.getStreamById(widget.streamId);
+      
+      streamLiveObject.listen().listen((amityStream) {
+        if (mounted) {
+          setState(() {
+            _stream = amityStream;
+            _isLoading = false;
+          });
+          
+          if (amityStream != null) {
+            _initializeAdvancedVideoPlayer(amityStream);
+          }
+        }
+      });
+      
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+    }
+  }
+
+  void _initializeAdvancedVideoPlayer(AmityStream stream) {
+    _videoController = AmityVideoController(
+      streamId: stream.streamId!,
+      autoPlay: false,
+      showControls: false, // We'll use custom controls
+      onPlayerStateChanged: (state) {
+        setState(() {
+          _isPlaying = state == AmityVideoPlayerState.playing;
+        });
+      },
+      onPositionChanged: (position) {
+        setState(() {
+          _currentPosition = position;
+        });
+      },
+      onDurationChanged: (duration) {
+        setState(() {
+          _totalDuration = duration;
+        });
+      },
+      onVolumeChanged: (volume) {
+        setState(() {
+          _volume = volume;
+        });
+      },
+      onError: (error) {
+        setState(() {
+          _hasError = true;
+        });
+      },
+    );
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (_videoController == null) return;
+
+    if (_isPlaying) {
+      await _videoController!.pause();
+    } else {
+      await _videoController!.play();
+    }
+  }
+
+  Future<void> _seekTo(Duration position) async {
+    if (_videoController != null) {
+      await _videoController!.seekTo(position);
+    }
+  }
+
+  Future<void> _setVolume(double volume) async {
+    if (_videoController != null) {
+      await _videoController!.setVolume(volume);
+    }
+  }
+
+  Future<void> _setPlaybackSpeed(double speed) async {
+    if (_videoController != null) {
+      await _videoController!.setPlaybackSpeed(speed);
+      setState(() {
+        _playbackSpeed = speed;
+      });
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
+  Widget _buildAdvancedControls() {
+    return AnimatedBuilder(
+      animation: _controlsAnimationController!,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _controlsAnimationController!.value,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black54,
+                  Colors.transparent,
+                  Colors.transparent,
+                  Colors.black87,
+                ],
+              ),
+            ),
+            child: Column(
+              children: [
+                // Top controls
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.arrow_back, color: Colors.white),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _stream?.title ?? 'Video Player',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton<double>(
+                        icon: Icon(Icons.speed, color: Colors.white),
+                        onSelected: _setPlaybackSpeed,
+                        itemBuilder: (context) => [
+                          PopupMenuItem(value: 0.5, child: Text('0.5x')),
+                          PopupMenuItem(value: 0.75, child: Text('0.75x')),
+                          PopupMenuItem(value: 1.0, child: Text('1x')),
+                          PopupMenuItem(value: 1.25, child: Text('1.25x')),
+                          PopupMenuItem(value: 1.5, child: Text('1.5x')),
+                          PopupMenuItem(value: 2.0, child: Text('2x')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                Spacer(),
+
+                // Bottom controls
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Progress bar
+                      Row(
+                        children: [
+                          Text(
+                            _formatDuration(_currentPosition),
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _totalDuration.inMilliseconds > 0
+                                  ? _currentPosition.inMilliseconds / _totalDuration.inMilliseconds
+                                  : 0.0,
+                              onChanged: (value) {
+                                final position = Duration(
+                                  milliseconds: (_totalDuration.inMilliseconds * value).round(),
+                                );
+                                _seekTo(position);
+                              },
+                              activeColor: Colors.red,
+                              inactiveColor: Colors.white24,
+                            ),
+                          ),
+                          Text(
+                            _formatDuration(_totalDuration),
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: 8),
+
+                      // Playback controls
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          // Volume control
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.volume_up, color: Colors.white, size: 20),
+                              SizedBox(
+                                width: 100,
+                                child: Slider(
+                                  value: _volume,
+                                  onChanged: _setVolume,
+                                  activeColor: Colors.white,
+                                  inactiveColor: Colors.white24,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Play/Pause button
+                          GestureDetector(
+                            onTap: _togglePlayPause,
+                            child: Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isPlaying ? Icons.pause : Icons.play_arrow,
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                            ),
+                          ),
+
+                          // Speed indicator
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${_playbackSpeed}x',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: _buildBody(),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 16),
+            Text(
+              'Loading stream...',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text(
+              'Error loading stream',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _hasError = false;
+                });
+                _loadStream();
+              },
+              child: Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: _showControlsTemporarily,
+      child: Stack(
+        children: [
+          // Video Player
+          if (_videoController != null)
+            Positioned.fill(
+              child: AmityVideoPlayer(controller: _videoController!),
+            ),
+
+          // Advanced Controls Overlay
+          if (_showControls)
+            Positioned.fill(
+              child: _buildAdvancedControls(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controlsAnimationController?.dispose();
+    _hideControlsTimer?.cancel();
+    _videoController?.dispose();
+    super.dispose();
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Push Notifications
+
+For comprehensive push notification setup, refer to our [Push Notifications Guide](/social-plus-sdk/video-new/notifications/push-notifications).
+
+### Basic Notification Setup
+
+```dart
+// lib/services/notification_service.dart
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin _localNotifications = 
+      FlutterLocalNotificationsPlugin();
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+
+  Future<void> initialize() async {
+    // Initialize local notifications
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
+
+    // Initialize Firebase Messaging
+    await _setupFirebaseMessaging();
+  }
+
+  Future<void> _setupFirebaseMessaging() async {
+    // Request permissions
+    NotificationSettings settings = await _firebaseMessaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted permission');
+      
+      // Get FCM token
+      String? token = await _firebaseMessaging.getToken();
+      print('FCM Token: $token');
+      
+      // Listen to messages
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    }
+  }
+
+  void _handleForegroundMessage(RemoteMessage message) {
+    print('Received message: ${message.notification?.title}');
+    
+    if (message.data['type'] == 'stream_notification') {
+      _showStreamNotification(message);
+    }
+  }
+
+  void _handleNotificationTap(RemoteMessage message) {
+    print('Notification tapped: ${message.data}');
+    // Handle navigation based on notification data
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    print('Local notification tapped: ${response.payload}');
+  }
+
+  Future<void> _showStreamNotification(RemoteMessage message) async {
+    const androidDetails = AndroidNotificationDetails(
+      'stream_channel',
+      'Stream Notifications',
+      channelDescription: 'Notifications for live streams',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const iosDetails = DarwinNotificationDetails();
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      message.notification?.title ?? 'Stream Update',
+      message.notification?.body ?? 'Check out this stream!',
+      notificationDetails,
+      payload: message.data['streamId'],
+    );
+  }
+}
+```
+
+## Error Handling & Troubleshooting
+
+### Error Handler Utility
+
+```dart
+// lib/utils/error_handler.dart
+class VideoSDKErrorHandler {
+  static String getErrorMessage(dynamic error) {
+    if (error is AmityException) {
+      switch (error.code) {
+        case AmityErrorCode.NETWORK_ERROR:
+          return 'Network connection issue. Please check your internet.';
+        case AmityErrorCode.PERMISSION_DENIED:
+          return 'Camera and microphone permissions are required.';
+        case AmityErrorCode.STREAM_NOT_FOUND:
+          return 'The requested stream is not available.';
+        case AmityErrorCode.INVALID_PARAMETER:
+          return 'Invalid stream parameters provided.';
+        default:
+          return 'An unexpected error occurred: ${error.message}';
+      }
+    }
+    
+    return 'Unknown error: $error';
+  }
+
+  static Future<T?> executeWithRetry<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration delay = const Duration(seconds: 1),
+  }) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (i == maxRetries - 1) {
+          print('Operation failed after $maxRetries attempts: $error');
+          rethrow;
+        }
+        
+        print('Attempt ${i + 1} failed, retrying in ${delay.inSeconds}s...');
+        await Future.delayed(delay);
+        delay *= 2; // Exponential backoff
+      }
+    }
+    return null;
+  }
+}
+```
+
+## Testing
+
+### Widget Testing Example
+
+```dart
+// test/widget_test.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:your_app/screens/video_player_screen.dart';
+import 'package:your_app/services/stream_service.dart';
+
+class MockStreamService extends Mock implements StreamService {}
+
+void main() {
+  group('Video Player Screen Tests', () {
+    late MockStreamService mockStreamService;
+
+    setUp(() {
+      mockStreamService = MockStreamService();
+    });
+
+    testWidgets('should display loading state initially', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VideoPlayerScreen(streamId: 'test-stream-id'),
+        ),
+      );
+
+      expect(find.text('Loading stream...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('should display stream title when loaded', (WidgetTester tester) async {
+      // Mock stream data
+      final mockStream = AmityStream()
+        ..streamId = 'test-stream-id'
+        ..title = 'Test Stream Title';
+
+      when(mockStreamService.getStreamById('test-stream-id'))
+          .thenAnswer((_) => Stream.value(mockStream));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VideoPlayerScreen(streamId: 'test-stream-id'),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(find.text('Test Stream Title'), findsOneWidget);
+    });
+  });
+}
+```
+
+## Performance Optimization
+
+### Best Practices
+
+```dart
+// lib/utils/performance_utils.dart
+class PerformanceUtils {
+  static Map<String, dynamic> getOptimalVideoSettings() {
+    // Get device capabilities
+    final screenSize = WidgetsBinding.instance.platformDispatcher.views.first.physicalSize;
+    final pixelRatio = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    
+    final screenWidth = screenSize.width / pixelRatio;
+    final screenHeight = screenSize.height / pixelRatio;
+
+    // Determine optimal settings based on screen size
+    if (screenWidth >= 1920) {
+      return {
+        'resolution': ResolutionPreset.veryHigh,
+        'bitrate': 4000000,
+        'frameRate': 30,
+      };
+    } else if (screenWidth >= 1280) {
+      return {
+        'resolution': ResolutionPreset.high,
+        'bitrate': 2000000,
+        'frameRate': 30,
+      };
+    } else {
+      return {
+        'resolution': ResolutionPreset.medium,
+        'bitrate': 1000000,
+        'frameRate': 24,
+      };
+    }
+  }
+
+  static void optimizeMemoryUsage() {
+    // Force garbage collection
+    // Note: This should be used sparingly in production
+    // GCUtils.forceGC(); // Platform-specific implementation needed
+  }
+}
+```
+
+## Troubleshooting
+
+For detailed troubleshooting guides, see:
+- [Notification Troubleshooting](/social-plus-sdk/video-new/troubleshooting/notifications)
+- [Event Troubleshooting](/social-plus-sdk/video-new/troubleshooting/events)
+
+### Common Flutter Issues
+
+1. **Camera initialization fails**: Check permissions in AndroidManifest.xml and Info.plist
+2. **Video playback issues**: Ensure proper network configuration and stream availability
+3. **Build failures**: Verify Flutter and Dart versions, run `flutter clean` and `flutter pub get`
+4. **iOS deployment issues**: Update Podfile and run `pod install`
+
+## Next Steps
+
+- Explore [Core Concepts](/social-plus-sdk/video-new/core-concepts/overview) for advanced SDK usage
+- Learn about [Broadcasting Features](/social-plus-sdk/video-new/broadcasting/overview)
+- Implement [Real-time Notifications](/social-plus-sdk/video-new/notifications/push-notifications)
+- Review [API Reference](/api-reference/introduction) for complete SDK documentation
+
+## Support
+
+Need help? Contact our support team or visit our community forum for assistance with Flutter implementation.

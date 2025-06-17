@@ -1,0 +1,905 @@
+---
+title: Your First Live Stream
+description: Build a simple live streaming feature step by step
+---
+
+# Your First Live Stream
+
+This tutorial will guide you through creating a basic live streaming feature. You'll learn how to set up broadcasting, handle stream states, and implement basic playback functionality.
+
+## What You'll Build
+
+By the end of this tutorial, you'll have:
+- ✅ A camera preview for broadcasting
+- ✅ Stream creation and management
+- ✅ Basic broadcast controls (start/stop)
+- ✅ Stream state monitoring
+- ✅ Simple stream viewing capability
+
+## Prerequisites
+
+- SDK installed and configured
+- User authentication working
+- Required permissions granted (camera, microphone)
+
+---
+
+## Step 1: Create the Stream
+
+First, create a stream object that represents your live broadcast:
+
+<Tabs>
+<TabItem value="android" label="Android">
+
+```kotlin
+import com.amity.socialcloud.sdk.video.stream.AmityStreamRepository
+import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.schedulers.Schedulers
+
+class StreamManager {
+    
+    fun createStream(
+        title: String,
+        description: String,
+        onSuccess: (String) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val streamData = AmityStream.Builder()
+            .title(title)
+            .description(description)
+            .build()
+            
+        AmityStreamRepository.createStream(streamData)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ stream ->
+                // Stream created successfully
+                onSuccess(stream.streamId)
+            }, { error ->
+                // Handle error
+                onError(error)
+            })
+    }
+}
+```
+
+</TabItem>
+<TabItem value="ios" label="iOS">
+
+```swift
+import AmitySDK
+
+class StreamManager {
+    
+    func createStream(
+        title: String,
+        description: String,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let streamBuilder = AmityStreamBuilder()
+        streamBuilder.setTitle(title)
+        streamBuilder.setDescription(description)
+        
+        AmityStreamRepository.shared.createStream(streamBuilder) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let stream):
+                    completion(.success(stream.streamId))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+}
+```
+
+</TabItem>
+<TabItem value="web" label="Web">
+
+```javascript
+import { StreamRepository } from '@amityco/video-sdk';
+
+class StreamManager {
+    
+    async createStream(title, description) {
+        try {
+            const newStream = {
+                title: title,
+                description: description,
+                isSecure: false
+            };
+            
+            const { data: stream } = await StreamRepository.createStream(newStream);
+            return { success: true, streamId: stream.streamId };
+        } catch (error) {
+            console.error('Failed to create stream:', error);
+            return { success: false, error };
+        }
+    }
+}
+```
+
+</TabItem>
+<TabItem value="react-native" label="React Native">
+
+```javascript
+import { StreamRepository } from '@amityco/react-native-video-sdk';
+
+class StreamManager {
+    
+    static async createStream(title, description) {
+        try {
+            const streamData = {
+                title,
+                description,
+                isSecure: false
+            };
+            
+            const stream = await StreamRepository.createStream(streamData);
+            return { success: true, streamId: stream.streamId };
+        } catch (error) {
+            console.error('Failed to create stream:', error);
+            return { success: false, error };
+        }
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Step 2: Set Up Camera Preview
+
+Create a camera preview that users will see before going live:
+
+<Tabs>
+<TabItem value="android" label="Android">
+
+**Layout (XML):**
+```xml
+<androidx.constraintlayout.widget.ConstraintLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    
+    <com.amity.socialcloud.sdk.video.AmityCameraView
+        android:id="@+id/camera_view"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="9:16"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+        
+    <Button
+        android:id="@+id/btn_go_live"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Go Live"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginBottom="32dp" />
+        
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+**Activity/Fragment:**
+```kotlin
+import com.amity.socialcloud.sdk.video.AmityStreamBroadcaster
+import com.amity.socialcloud.sdk.video.AmityStreamBroadcasterConfig
+
+class LiveStreamActivity : AppCompatActivity() {
+    
+    private lateinit var cameraView: AmityCameraView
+    private lateinit var broadcaster: AmityStreamBroadcaster
+    private lateinit var goLiveButton: Button
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_live_stream)
+        
+        setupViews()
+        setupBroadcaster()
+    }
+    
+    private fun setupViews() {
+        cameraView = findViewById(R.id.camera_view)
+        goLiveButton = findViewById(R.id.btn_go_live)
+        
+        goLiveButton.setOnClickListener {
+            toggleLiveStream()
+        }
+    }
+    
+    private fun setupBroadcaster() {
+        val config = AmityStreamBroadcasterConfig.Builder()
+            .resolution(AmityStreamBroadcastResolution.HD_720P)
+            .build()
+            
+        broadcaster = AmityStreamBroadcaster.Builder(cameraView)
+            .setConfiguration(config)
+            .build()
+            
+        // Start camera preview
+        broadcaster.startPreview()
+        
+        // Observe broadcast state
+        observeBroadcastState()
+    }
+}
+```
+
+</TabItem>
+<TabItem value="ios" label="iOS">
+
+```swift
+import UIKit
+import AmityVideoSDK
+
+class LiveStreamViewController: UIViewController {
+    
+    @IBOutlet weak var cameraView: AmityCameraView!
+    @IBOutlet weak var goLiveButton: UIButton!
+    
+    private var broadcaster: AmityStreamBroadcaster?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupBroadcaster()
+    }
+    
+    private func setupBroadcaster() {
+        let config = AmityStreamBroadcasterConfig.Builder()
+            .resolution(.HD_720P)
+            .build()
+            
+        broadcaster = AmityStreamBroadcaster.Builder(cameraView: cameraView)
+            .configuration(config)
+            .build()
+            
+        // Start camera preview
+        broadcaster?.startPreview()
+        
+        // Observe broadcast state
+        observeBroadcastState()
+    }
+    
+    @IBAction func goLiveButtonTapped(_ sender: UIButton) {
+        toggleLiveStream()
+    }
+}
+```
+
+</TabItem>
+<TabItem value="web" label="Web">
+
+**HTML:**
+```html
+<div class="live-stream-container">
+    <video id="cameraPreview" autoplay muted></video>
+    <button id="goLiveBtn">Go Live</button>
+    <div id="streamStatus">Ready to stream</div>
+</div>
+```
+
+**JavaScript:**
+```javascript
+class LiveStreamComponent {
+    constructor() {
+        this.cameraPreview = document.getElementById('cameraPreview');
+        this.goLiveBtn = document.getElementById('goLiveBtn');
+        this.streamStatus = document.getElementById('streamStatus');
+        
+        this.broadcaster = null;
+        this.isLive = false;
+        
+        this.init();
+    }
+    
+    async init() {
+        // Set up event listeners
+        this.goLiveBtn.addEventListener('click', () => this.toggleLiveStream());
+        
+        // Initialize camera preview
+        await this.setupCameraPreview();
+    }
+    
+    async setupCameraPreview() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 720, height: 1280 },
+                audio: true
+            });
+            
+            this.cameraPreview.srcObject = stream;
+            this.updateStatus('Camera ready');
+        } catch (error) {
+            console.error('Failed to access camera:', error);
+            this.updateStatus('Camera access denied');
+        }
+    }
+    
+    updateStatus(message) {
+        this.streamStatus.textContent = message;
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Step 3: Implement Stream Controls
+
+Add functionality to start and stop broadcasting:
+
+<Tabs>
+<TabItem value="android" label="Android">
+
+```kotlin
+class LiveStreamActivity : AppCompatActivity() {
+    
+    private var isLive = false
+    private var currentStreamId: String? = null
+    
+    private fun toggleLiveStream() {
+        if (isLive) {
+            stopLiveStream()
+        } else {
+            startLiveStream()
+        }
+    }
+    
+    private fun startLiveStream() {
+        // First create a stream
+        StreamManager().createStream(
+            title = "My Live Stream",
+            description = "Live from my app!",
+            onSuccess = { streamId ->
+                currentStreamId = streamId
+                startBroadcasting(streamId)
+            },
+            onError = { error ->
+                showError("Failed to create stream: ${error.message}")
+            }
+        )
+    }
+    
+    private fun startBroadcasting(streamId: String) {
+        broadcaster.startBroadcast(streamId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                // Broadcasting started
+                isLive = true
+                updateUI()
+            }, { error ->
+                showError("Failed to start broadcast: ${error.message}")
+            })
+    }
+    
+    private fun stopLiveStream() {
+        broadcaster.stopBroadcast()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                // Broadcasting stopped
+                isLive = false
+                updateUI()
+                
+                // Dispose the stream
+                currentStreamId?.let { disposeStream(it) }
+            }, { error ->
+                showError("Failed to stop broadcast: ${error.message}")
+            })
+    }
+    
+    private fun updateUI() {
+        goLiveButton.text = if (isLive) "Stop Stream" else "Go Live"
+        goLiveButton.setBackgroundColor(
+            if (isLive) Color.RED else Color.GREEN
+        )
+    }
+}
+```
+
+</TabItem>
+<TabItem value="ios" label="iOS">
+
+```swift
+class LiveStreamViewController: UIViewController {
+    
+    private var isLive = false
+    private var currentStreamId: String?
+    
+    private func toggleLiveStream() {
+        if isLive {
+            stopLiveStream()
+        } else {
+            startLiveStream()
+        }
+    }
+    
+    private func startLiveStream() {
+        StreamManager().createStream(
+            title: "My Live Stream",
+            description: "Live from my app!"
+        ) { [weak self] result in
+            switch result {
+            case .success(let streamId):
+                self?.currentStreamId = streamId
+                self?.startBroadcasting(streamId: streamId)
+            case .failure(let error):
+                self?.showError("Failed to create stream: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func startBroadcasting(streamId: String) {
+        broadcaster?.startBroadcast(streamId: streamId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.isLive = true
+                    self?.updateUI()
+                case .failure(let error):
+                    self?.showError("Failed to start broadcast: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func stopLiveStream() {
+        broadcaster?.stopBroadcast { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.isLive = false
+                    self?.updateUI()
+                    
+                    // Dispose the stream
+                    if let streamId = self?.currentStreamId {
+                        self?.disposeStream(streamId: streamId)
+                    }
+                case .failure(let error):
+                    self?.showError("Failed to stop broadcast: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func updateUI() {
+        goLiveButton.setTitle(isLive ? "Stop Stream" : "Go Live", for: .normal)
+        goLiveButton.backgroundColor = isLive ? .red : .green
+    }
+}
+```
+
+</TabItem>
+<TabItem value="web" label="Web">
+
+```javascript
+class LiveStreamComponent {
+    
+    async toggleLiveStream() {
+        if (this.isLive) {
+            await this.stopLiveStream();
+        } else {
+            await this.startLiveStream();
+        }
+    }
+    
+    async startLiveStream() {
+        try {
+            // Create stream
+            const streamResult = await new StreamManager().createStream(
+                'My Live Stream',
+                'Live from my app!'
+            );
+            
+            if (!streamResult.success) {
+                throw new Error(streamResult.error);
+            }
+            
+            this.currentStreamId = streamResult.streamId;
+            
+            // Start broadcasting
+            await this.startBroadcasting(streamResult.streamId);
+            
+        } catch (error) {
+            console.error('Failed to start live stream:', error);
+            this.updateStatus('Failed to start stream');
+        }
+    }
+    
+    async startBroadcasting(streamId) {
+        try {
+            // Initialize broadcaster with stream
+            this.broadcaster = new VideoBroadcaster({
+                streamId: streamId,
+                videoElement: this.cameraPreview
+            });
+            
+            await this.broadcaster.start();
+            
+            this.isLive = true;
+            this.updateUI();
+            this.updateStatus('Live!');
+            
+        } catch (error) {
+            throw new Error(`Broadcasting failed: ${error.message}`);
+        }
+    }
+    
+    async stopLiveStream() {
+        try {
+            if (this.broadcaster) {
+                await this.broadcaster.stop();
+                this.broadcaster = null;
+            }
+            
+            // Dispose stream
+            if (this.currentStreamId) {
+                await StreamRepository.disposeStream(this.currentStreamId);
+            }
+            
+            this.isLive = false;
+            this.updateUI();
+            this.updateStatus('Stream ended');
+            
+        } catch (error) {
+            console.error('Failed to stop stream:', error);
+            this.updateStatus('Error stopping stream');
+        }
+    }
+    
+    updateUI() {
+        this.goLiveBtn.textContent = this.isLive ? 'Stop Stream' : 'Go Live';
+        this.goLiveBtn.className = this.isLive ? 'btn-stop' : 'btn-start';
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Step 4: Handle Stream States
+
+Monitor and respond to different streaming states:
+
+<Tabs>
+<TabItem value="android" label="Android">
+
+```kotlin
+private fun observeBroadcastState() {
+    broadcaster.stateFlowable
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe { state ->
+            when (state) {
+                is AmityStreamBroadcasterState.IDLE -> {
+                    updateStatus("Ready to stream")
+                }
+                is AmityStreamBroadcasterState.CONNECTING -> {
+                    updateStatus("Connecting...")
+                    showLoadingIndicator(true)
+                }
+                is AmityStreamBroadcasterState.CONNECTED -> {
+                    updateStatus("Live!")
+                    showLoadingIndicator(false)
+                    isLive = true
+                    updateUI()
+                }
+                is AmityStreamBroadcasterState.DISCONNECTED -> {
+                    updateStatus("Disconnected")
+                    showLoadingIndicator(false)
+                    isLive = false
+                    updateUI()
+                    
+                    // Handle disconnection error if any
+                    state.error?.let { error ->
+                        showError("Stream disconnected: ${error.message}")
+                    }
+                }
+            }
+        }
+}
+
+private fun updateStatus(message: String) {
+    // Update status text view
+    findViewById<TextView>(R.id.status_text).text = message
+}
+
+private fun showLoadingIndicator(show: Boolean) {
+    findViewById<ProgressBar>(R.id.loading_indicator).visibility = 
+        if (show) View.VISIBLE else View.GONE
+}
+```
+
+</TabItem>
+<TabItem value="ios" label="iOS">
+
+```swift
+private func observeBroadcastState() {
+    broadcaster?.stateObserver = { [weak self] state in
+        DispatchQueue.main.async {
+            switch state {
+            case .idle:
+                self?.updateStatus("Ready to stream")
+            case .connecting:
+                self?.updateStatus("Connecting...")
+                self?.showLoadingIndicator(true)
+            case .connected:
+                self?.updateStatus("Live!")
+                self?.showLoadingIndicator(false)
+                self?.isLive = true
+                self?.updateUI()
+            case .disconnected(let error):
+                self?.updateStatus("Disconnected")
+                self?.showLoadingIndicator(false)
+                self?.isLive = false
+                self?.updateUI()
+                
+                if let error = error {
+                    self?.showError("Stream disconnected: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+}
+
+private func updateStatus(_ message: String) {
+    statusLabel.text = message
+}
+
+private func showLoadingIndicator(_ show: Bool) {
+    loadingIndicator.isHidden = !show
+}
+```
+
+</TabItem>
+<TabItem value="web" label="Web">
+
+```javascript
+class LiveStreamComponent {
+    
+    setupBroadcastStateHandling() {
+        if (this.broadcaster) {
+            this.broadcaster.on('state-changed', (state) => {
+                this.handleBroadcastState(state);
+            });
+        }
+    }
+    
+    handleBroadcastState(state) {
+        switch (state.status) {
+            case 'idle':
+                this.updateStatus('Ready to stream');
+                break;
+            case 'connecting':
+                this.updateStatus('Connecting...');
+                this.showLoadingIndicator(true);
+                break;
+            case 'connected':
+                this.updateStatus('Live!');
+                this.showLoadingIndicator(false);
+                this.isLive = true;
+                this.updateUI();
+                break;
+            case 'disconnected':
+                this.updateStatus('Disconnected');
+                this.showLoadingIndicator(false);
+                this.isLive = false;
+                this.updateUI();
+                
+                if (state.error) {
+                    console.error('Stream disconnected:', state.error);
+                    this.showError(`Stream disconnected: ${state.error.message}`);
+                }
+                break;
+        }
+    }
+    
+    showLoadingIndicator(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        indicator.style.display = show ? 'block' : 'none';
+    }
+    
+    showError(message) {
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        // Hide error after 5 seconds
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Step 5: Basic Stream Viewing
+
+Create a simple viewer component to watch live streams:
+
+<Tabs>
+<TabItem value="android" label="Android">
+
+```kotlin
+class StreamViewerActivity : AppCompatActivity() {
+    
+    private lateinit var videoView: VideoView
+    private var streamId: String? = null
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_stream_viewer)
+        
+        streamId = intent.getStringExtra("STREAM_ID")
+        setupViewer()
+    }
+    
+    private fun setupViewer() {
+        videoView = findViewById(R.id.video_view)
+        
+        streamId?.let { id ->
+            loadAndPlayStream(id)
+        }
+    }
+    
+    private fun loadAndPlayStream(streamId: String) {
+        AmityStreamRepository.getStream(streamId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ stream ->
+                if (stream.status == AmityStreamStatus.LIVE) {
+                    // Stream is live, play the stream
+                    playStream(stream.streamUrl)
+                } else {
+                    showMessage("Stream is not live")
+                }
+            }, { error ->
+                showError("Failed to load stream: ${error.message}")
+            })
+    }
+    
+    private fun playStream(streamUrl: String) {
+        val uri = Uri.parse(streamUrl)
+        videoView.setVideoURI(uri)
+        videoView.setOnPreparedListener { mediaPlayer ->
+            videoView.start()
+        }
+        videoView.setOnErrorListener { _, what, extra ->
+            showError("Playback error: $what, $extra")
+            true
+        }
+    }
+}
+```
+
+</TabItem>
+<TabItem value="web" label="Web">
+
+```javascript
+class StreamViewer {
+    constructor(streamId) {
+        this.streamId = streamId;
+        this.videoElement = document.getElementById('streamVideo');
+        this.init();
+    }
+    
+    async init() {
+        try {
+            await this.loadStream();
+        } catch (error) {
+            console.error('Failed to initialize stream viewer:', error);
+            this.showError('Failed to load stream');
+        }
+    }
+    
+    async loadStream() {
+        try {
+            const stream = await StreamRepository.getStream(this.streamId);
+            
+            if (stream.status === 'live') {
+                await this.playStream(stream.streamUrl);
+                this.showStatus('Watching live stream');
+            } else {
+                this.showStatus('Stream is not live');
+            }
+            
+        } catch (error) {
+            throw new Error(`Failed to load stream: ${error.message}`);
+        }
+    }
+    
+    async playStream(streamUrl) {
+        this.videoElement.src = streamUrl;
+        this.videoElement.play();
+        
+        this.videoElement.addEventListener('loadstart', () => {
+            this.showStatus('Loading stream...');
+        });
+        
+        this.videoElement.addEventListener('canplay', () => {
+            this.showStatus('Stream ready');
+        });
+        
+        this.videoElement.addEventListener('error', (e) => {
+            this.showError('Playback error occurred');
+        });
+    }
+    
+    showStatus(message) {
+        document.getElementById('viewerStatus').textContent = message;
+    }
+    
+    showError(message) {
+        document.getElementById('viewerError').textContent = message;
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Testing Your Implementation
+
+### 1. Test Camera Preview
+- Verify camera preview appears correctly
+- Test camera switching (front/back)
+- Check aspect ratio (should be 16:9)
+
+### 2. Test Stream Creation
+- Verify streams are created successfully
+- Check stream metadata (title, description)
+- Test error handling for failed creation
+
+### 3. Test Broadcasting
+- Start broadcast and verify connection
+- Monitor state changes
+- Test broadcast stop functionality
+
+### 4. Test Viewing
+- Load and play live streams
+- Test viewer error handling
+- Verify playback quality
+
+## Next Steps
+
+Congratulations! You've built your first live streaming feature. Here's what to explore next:
+
+1. **[Core Concepts](../core-concepts/overview.mdx)** - Understand streaming fundamentals
+2. **[Broadcasting Features](../broadcasting/setup.mdx)** - Add advanced broadcasting capabilities
+3. **[Playback Controls](../playback/live-viewing.mdx)** - Enhance the viewing experience
+4. **[Push Notifications](../notifications/push-notifications.mdx)** - Notify users about stream events
+
+## Troubleshooting
+
+### Common Issues
+
+**Camera Not Working**
+- Check camera permissions
+- Verify device camera availability
+- Test on different devices
+
+**Stream Won't Start**
+- Verify authentication is working
+- Check network connectivity
+- Monitor console/logs for errors
+
+**Poor Video Quality**
+- Check network bandwidth
+- Adjust video resolution settings
+- Test on different network conditions
+
+**Playback Issues**
+- Verify stream URL is accessible
+- Check supported video formats
+- Test with different players
+
+For more help, see our **[Troubleshooting Guide](../troubleshooting/overview.mdx)**.

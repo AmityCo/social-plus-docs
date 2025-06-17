@@ -1,0 +1,1657 @@
+---
+title: "Web Implementation Guide"
+description: "Comprehensive web-specific implementation details for Social+ Video SDK integration in browser environments"
+---
+
+# Web Implementation Guide
+
+Complete guide for implementing Social+ Video SDK in web applications using modern JavaScript/TypeScript and web standards.
+
+## Overview
+
+This guide covers web-specific implementation details, browser compatibility, and platform-specific considerations for video streaming in web applications.
+
+### Browser Support
+
+- **Chrome 80+** (recommended)
+- **Firefox 75+** 
+- **Safari 13+**
+- **Edge 80+**
+- **Opera 70+**
+
+### Core Web Technologies
+
+- **WebRTC** - Real-time communication
+- **Media Stream API** - Camera and microphone access
+- **Web Workers** - Background processing
+- **Service Workers** - Push notifications and offline capability
+- **IndexedDB** - Local data storage
+- **WebAssembly** - High-performance video processing
+
+## Installation & Setup
+
+### NPM Installation
+
+```bash
+# Install Social+ Video SDK for web
+npm install @social-plus/video-web
+
+# Install additional dependencies
+npm install @social-plus/core-web
+npm install ws  # WebSocket support
+npm install hls.js  # HLS streaming support
+```
+
+### CDN Installation
+
+```html
+<!-- Include Social+ Video SDK -->
+<script src="https://cdn.social.plus/video-web/1.0.0/social-video.min.js"></script>
+
+<!-- Optional: HLS.js for better streaming support -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+```
+
+### Module Import
+
+```typescript
+// ES6 Modules
+import { VideoStreamManager, VideoPlayer, VideoBroadcaster } from '@social-plus/video-web';
+
+// CommonJS
+const { VideoStreamManager, VideoPlayer, VideoBroadcaster } = require('@social-plus/video-web');
+
+// TypeScript types
+import type { 
+  StreamConfig, 
+  PlayerOptions, 
+  BroadcastSettings,
+  StreamEvent 
+} from '@social-plus/video-web';
+```
+
+### SDK Initialization
+
+```typescript
+import { SocialVideo } from '@social-plus/video-web';
+
+// Initialize the SDK
+const videoSDK = new SocialVideo({
+  apiKey: 'your-api-key',
+  region: 'global', // or 'us', 'eu', 'asia'
+  environment: 'production', // or 'development'
+  enableLogging: process.env.NODE_ENV === 'development'
+});
+
+// Wait for initialization
+await videoSDK.initialize();
+
+console.log('Social+ Video SDK initialized for web');
+```
+
+## Browser Permissions & Media Access
+
+### Camera and Microphone Access
+
+```typescript
+class MediaPermissionManager {
+  
+  static async requestCameraPermission(): Promise<boolean> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      
+      // Stop the stream immediately after permission check
+      stream.getTracks().forEach(track => track.stop());
+      
+      return true;
+    } catch (error) {
+      console.error('Camera permission denied:', error);
+      return false;
+    }
+  }
+  
+  static async requestMicrophonePermission(): Promise<boolean> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Stop the stream immediately after permission check
+      stream.getTracks().forEach(track => track.stop());
+      
+      return true;
+    } catch (error) {
+      console.error('Microphone permission denied:', error);
+      return false;
+    }
+  }
+  
+  static async requestBothPermissions(): Promise<{ camera: boolean; microphone: boolean }> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
+      // Stop the stream immediately after permission check
+      stream.getTracks().forEach(track => track.stop());
+      
+      return { camera: true, microphone: true };
+    } catch (error) {
+      console.error('Media permissions denied:', error);
+      
+      // Try individually to see which failed
+      const camera = await this.requestCameraPermission();
+      const microphone = await this.requestMicrophonePermission();
+      
+      return { camera, microphone };
+    }
+  }
+  
+  static async checkPermissionStatus(): Promise<{
+    camera: PermissionState;
+    microphone: PermissionState;
+  }> {
+    if (!navigator.permissions) {
+      throw new Error('Permissions API not supported');
+    }
+    
+    const [cameraPermission, microphonePermission] = await Promise.all([
+      navigator.permissions.query({ name: 'camera' as PermissionName }),
+      navigator.permissions.query({ name: 'microphone' as PermissionName })
+    ]);
+    
+    return {
+      camera: cameraPermission.state,
+      microphone: microphonePermission.state
+    };
+  }
+  
+  static showPermissionGuide(): void {
+    const guide = document.createElement('div');
+    guide.className = 'permission-guide';
+    guide.innerHTML = `
+      <div class="permission-guide-content">
+        <h3>Enable Camera and Microphone</h3>
+        <p>To broadcast live video, please allow access to your camera and microphone.</p>
+        <div class="browser-instructions">
+          <h4>How to enable permissions:</h4>
+          <ul>
+            <li><strong>Chrome/Edge:</strong> Click the camera icon in the address bar</li>
+            <li><strong>Firefox:</strong> Click the shield icon and select "Permissions"</li>
+            <li><strong>Safari:</strong> Go to Safari → Settings → Websites → Camera/Microphone</li>
+          </ul>
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()">Got it</button>
+      </div>
+    `;
+    
+    document.body.appendChild(guide);
+  }
+}
+```
+
+### Device Enumeration
+
+```typescript
+class DeviceManager {
+  
+  static async getAvailableDevices(): Promise<{
+    cameras: MediaDeviceInfo[];
+    microphones: MediaDeviceInfo[];
+    speakers: MediaDeviceInfo[];
+  }> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      
+      return {
+        cameras: devices.filter(device => device.kind === 'videoinput'),
+        microphones: devices.filter(device => device.kind === 'audioinput'),
+        speakers: devices.filter(device => device.kind === 'audiooutput')
+      };
+    } catch (error) {
+      console.error('Failed to enumerate devices:', error);
+      return { cameras: [], microphones: [], speakers: [] };
+    }
+  }
+  
+  static async selectBestCamera(): Promise<string | null> {
+    const { cameras } = await this.getAvailableDevices();
+    
+    if (cameras.length === 0) return null;
+    
+    // Prefer back camera if available (mobile)
+    const backCamera = cameras.find(camera => 
+      camera.label.toLowerCase().includes('back') ||
+      camera.label.toLowerCase().includes('environment')
+    );
+    
+    if (backCamera) return backCamera.deviceId;
+    
+    // Otherwise, use the first available camera
+    return cameras[0].deviceId;
+  }
+  
+  static async createMediaStream(constraints: MediaStreamConstraints): Promise<MediaStream> {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (error) {
+      console.error('Failed to create media stream:', error);
+      throw new Error(`Media access failed: ${error.message}`);
+    }
+  }
+}
+```
+
+## Broadcasting Implementation
+
+### Web Broadcaster
+
+```typescript
+import { VideoBroadcaster } from '@social-plus/video-web';
+
+class WebBroadcaster {
+  private broadcaster: VideoBroadcaster;
+  private localStream: MediaStream | null = null;
+  private isLive = false;
+  
+  constructor(private videoElement: HTMLVideoElement) {
+    this.broadcaster = new VideoBroadcaster({
+      videoElement: this.videoElement,
+      enableAudio: true,
+      enableVideo: true,
+      quality: 'hd' // 'sd', 'hd', 'fhd'
+    });
+    
+    this.setupEventListeners();
+  }
+  
+  private setupEventListeners(): void {
+    this.broadcaster.on('stateChanged', (state) => {
+      this.handleStateChange(state);
+    });
+    
+    this.broadcaster.on('error', (error) => {
+      this.handleError(error);
+    });
+    
+    this.broadcaster.on('qualityChanged', (quality) => {
+      console.log('Broadcast quality changed:', quality);
+    });
+    
+    this.broadcaster.on('viewerJoined', (viewer) => {
+      this.handleViewerJoined(viewer);
+    });
+    
+    this.broadcaster.on('viewerLeft', (viewer) => {
+      this.handleViewerLeft(viewer);
+    });
+  }
+  
+  async initialize(): Promise<void> {
+    try {
+      // Request permissions
+      const permissions = await MediaPermissionManager.requestBothPermissions();
+      
+      if (!permissions.camera || !permissions.microphone) {
+        throw new Error('Camera and microphone permissions are required');
+      }
+      
+      // Get user media
+      const constraints: MediaStreamConstraints = {
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+      
+      this.localStream = await DeviceManager.createMediaStream(constraints);
+      
+      // Set up preview
+      this.videoElement.srcObject = this.localStream;
+      this.videoElement.muted = true; // Prevent feedback
+      await this.videoElement.play();
+      
+      console.log('Broadcaster initialized successfully');
+      
+    } catch (error) {
+      console.error('Failed to initialize broadcaster:', error);
+      throw error;
+    }
+  }
+  
+  async startBroadcast(title: string, description?: string): Promise<string> {
+    if (this.isLive) {
+      throw new Error('Already broadcasting');
+    }
+    
+    if (!this.localStream) {
+      throw new Error('Broadcaster not initialized');
+    }
+    
+    try {
+      const streamConfig = {
+        title,
+        description: description || '',
+        stream: this.localStream,
+        quality: 'hd',
+        enableRecording: true
+      };
+      
+      const streamId = await this.broadcaster.startBroadcast(streamConfig);
+      this.isLive = true;
+      
+      // Track analytics
+      this.trackBroadcastStarted(streamId);
+      
+      return streamId;
+      
+    } catch (error) {
+      console.error('Failed to start broadcast:', error);
+      throw error;
+    }
+  }
+  
+  async stopBroadcast(): Promise<void> {
+    if (!this.isLive) {
+      throw new Error('Not currently broadcasting');
+    }
+    
+    try {
+      await this.broadcaster.stopBroadcast();
+      this.isLive = false;
+      
+      // Track analytics
+      this.trackBroadcastStopped();
+      
+    } catch (error) {
+      console.error('Failed to stop broadcast:', error);
+      throw error;
+    }
+  }
+  
+  async switchCamera(): Promise<void> {
+    if (!this.localStream) return;
+    
+    try {
+      const { cameras } = await DeviceManager.getAvailableDevices();
+      
+      if (cameras.length < 2) {
+        throw new Error('No alternative camera available');
+      }
+      
+      // Get current camera
+      const videoTrack = this.localStream.getVideoTracks()[0];
+      const currentDeviceId = videoTrack.getSettings().deviceId;
+      
+      // Find different camera
+      const nextCamera = cameras.find(camera => 
+        camera.deviceId !== currentDeviceId
+      );
+      
+      if (!nextCamera) {
+        throw new Error('No alternative camera found');
+      }
+      
+      // Create new stream with different camera
+      const newConstraints: MediaStreamConstraints = {
+        video: { deviceId: nextCamera.deviceId },
+        audio: true
+      };
+      
+      const newStream = await DeviceManager.createMediaStream(newConstraints);
+      
+      // Replace tracks
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      await this.broadcaster.replaceVideoTrack(newVideoTrack);
+      
+      // Update local preview
+      this.videoElement.srcObject = newStream;
+      
+      // Clean up old stream
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = newStream;
+      
+    } catch (error) {
+      console.error('Failed to switch camera:', error);
+      throw error;
+    }
+  }
+  
+  toggleMute(): void {
+    if (!this.localStream) return;
+    
+    const audioTrack = this.localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+    }
+  }
+  
+  isMuted(): boolean {
+    if (!this.localStream) return true;
+    
+    const audioTrack = this.localStream.getAudioTracks()[0];
+    return audioTrack ? !audioTrack.enabled : true;
+  }
+  
+  async changeQuality(quality: 'sd' | 'hd' | 'fhd'): Promise<void> {
+    if (this.isLive) {
+      // Quality change during live stream
+      await this.broadcaster.updateQuality(quality);
+    } else {
+      // Update for next broadcast
+      this.broadcaster.setQuality(quality);
+    }
+  }
+  
+  private handleStateChange(state: string): void {
+    console.log('Broadcast state changed:', state);
+    
+    // Emit custom events for UI updates
+    const event = new CustomEvent('broadcastStateChanged', { 
+      detail: { state, isLive: this.isLive } 
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private handleError(error: any): void {
+    console.error('Broadcast error:', error);
+    
+    // Emit error event for UI handling
+    const event = new CustomEvent('broadcastError', { 
+      detail: { error } 
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private handleViewerJoined(viewer: any): void {
+    console.log('Viewer joined:', viewer);
+    
+    const event = new CustomEvent('viewerJoined', { 
+      detail: { viewer } 
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private handleViewerLeft(viewer: any): void {
+    console.log('Viewer left:', viewer);
+    
+    const event = new CustomEvent('viewerLeft', { 
+      detail: { viewer } 
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private trackBroadcastStarted(streamId: string): void {
+    // Analytics tracking
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'broadcast_started', {
+        stream_id: streamId,
+        platform: 'web'
+      });
+    }
+  }
+  
+  private trackBroadcastStopped(): void {
+    // Analytics tracking
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'broadcast_stopped', {
+        platform: 'web'
+      });
+    }
+  }
+  
+  destroy(): void {
+    if (this.isLive) {
+      this.stopBroadcast();
+    }
+    
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+    
+    this.broadcaster.destroy();
+  }
+}
+```
+
+### HTML Broadcasting Interface
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Broadcast - Social+ Video</title>
+    <style>
+        .broadcast-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .video-preview {
+            width: 100%;
+            max-width: 640px;
+            height: 360px;
+            background: #000;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .broadcast-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary { background: #007bff; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        
+        .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .status-indicator {
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-live { background: #dc3545; color: white; }
+        .status-ready { background: #28a745; color: white; }
+        .status-connecting { background: #ffc107; color: black; }
+        
+        .viewer-count {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .permission-guide {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .permission-guide-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        .browser-instructions {
+            text-align: left;
+            margin: 20px 0;
+        }
+        
+        .browser-instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="broadcast-container">
+        <h1>Live Broadcast</h1>
+        
+        <!-- Video Preview -->
+        <video id="videoPreview" class="video-preview" autoplay muted playsinline></video>
+        
+        <!-- Status Indicator -->
+        <div id="statusIndicator" class="status-indicator status-ready">
+            Ready to broadcast
+        </div>
+        
+        <!-- Viewer Count (hidden initially) -->
+        <div id="viewerCount" class="viewer-count" style="display: none;">
+            0 viewers
+        </div>
+        
+        <!-- Broadcast Controls -->
+        <div class="broadcast-controls">
+            <div class="input-group">
+                <label for="streamTitle">Stream Title</label>
+                <input type="text" id="streamTitle" placeholder="Enter stream title" />
+            </div>
+            
+            <div class="input-group">
+                <label for="streamDescription">Description (optional)</label>
+                <textarea id="streamDescription" placeholder="Enter stream description" rows="3"></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button id="switchCameraBtn" class="btn btn-secondary">Switch Camera</button>
+                <button id="toggleMuteBtn" class="btn btn-secondary">Mute</button>
+                <button id="qualityBtn" class="btn btn-secondary">Quality: HD</button>
+            </div>
+            
+            <div class="button-group">
+                <button id="startBtn" class="btn btn-primary">Start Broadcast</button>
+                <button id="stopBtn" class="btn btn-danger" disabled>Stop Broadcast</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { WebBroadcaster } from './web-broadcaster.js';
+        
+        let broadcaster = null;
+        let viewerCount = 0;
+        
+        // DOM elements
+        const videoPreview = document.getElementById('videoPreview');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const viewerCountEl = document.getElementById('viewerCount');
+        const streamTitle = document.getElementById('streamTitle');
+        const streamDescription = document.getElementById('streamDescription');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const switchCameraBtn = document.getElementById('switchCameraBtn');
+        const toggleMuteBtn = document.getElementById('toggleMuteBtn');
+        const qualityBtn = document.getElementById('qualityBtn');
+        
+        // Initialize broadcaster
+        async function initializeBroadcaster() {
+            try {
+                broadcaster = new WebBroadcaster(videoPreview);
+                await broadcaster.initialize();
+                
+                updateStatus('Ready to broadcast', 'status-ready');
+                startBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Failed to initialize broadcaster:', error);
+                updateStatus('Failed to initialize camera', 'status-error');
+                
+                if (error.message.includes('permission')) {
+                    MediaPermissionManager.showPermissionGuide();
+                }
+            }
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', async () => {
+            const title = streamTitle.value.trim() || 'Live Stream';
+            const description = streamDescription.value.trim();
+            
+            try {
+                updateStatus('Starting broadcast...', 'status-connecting');
+                startBtn.disabled = true;
+                
+                const streamId = await broadcaster.startBroadcast(title, description);
+                
+                updateStatus('LIVE', 'status-live');
+                stopBtn.disabled = false;
+                viewerCountEl.style.display = 'block';
+                
+                console.log('Broadcast started with ID:', streamId);
+                
+            } catch (error) {
+                console.error('Failed to start broadcast:', error);
+                updateStatus('Failed to start broadcast', 'status-error');
+                startBtn.disabled = false;
+            }
+        });
+        
+        stopBtn.addEventListener('click', async () => {
+            try {
+                await broadcaster.stopBroadcast();
+                
+                updateStatus('Ready to broadcast', 'status-ready');
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                viewerCountEl.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Failed to stop broadcast:', error);
+            }
+        });
+        
+        switchCameraBtn.addEventListener('click', async () => {
+            try {
+                await broadcaster.switchCamera();
+            } catch (error) {
+                console.error('Failed to switch camera:', error);
+                alert('Failed to switch camera: ' + error.message);
+            }
+        });
+        
+        toggleMuteBtn.addEventListener('click', () => {
+            broadcaster.toggleMute();
+            toggleMuteBtn.textContent = broadcaster.isMuted() ? 'Unmute' : 'Mute';
+        });
+        
+        let currentQuality = 'hd';
+        const qualities = ['sd', 'hd', 'fhd'];
+        qualityBtn.addEventListener('click', async () => {
+            const currentIndex = qualities.indexOf(currentQuality);
+            const nextIndex = (currentIndex + 1) % qualities.length;
+            currentQuality = qualities[nextIndex];
+            
+            try {
+                await broadcaster.changeQuality(currentQuality);
+                qualityBtn.textContent = `Quality: ${currentQuality.toUpperCase()}`;
+            } catch (error) {
+                console.error('Failed to change quality:', error);
+            }
+        });
+        
+        // Custom event listeners
+        document.addEventListener('broadcastStateChanged', (event) => {
+            console.log('Broadcast state:', event.detail);
+        });
+        
+        document.addEventListener('viewerJoined', (event) => {
+            viewerCount++;
+            updateViewerCount();
+        });
+        
+        document.addEventListener('viewerLeft', (event) => {
+            viewerCount = Math.max(0, viewerCount - 1);
+            updateViewerCount();
+        });
+        
+        document.addEventListener('broadcastError', (event) => {
+            console.error('Broadcast error:', event.detail.error);
+            updateStatus('Broadcast error occurred', 'status-error');
+        });
+        
+        // Helper functions
+        function updateStatus(text, className) {
+            statusIndicator.textContent = text;
+            statusIndicator.className = `status-indicator ${className}`;
+        }
+        
+        function updateViewerCount() {
+            viewerCountEl.textContent = `${viewerCount} viewer${viewerCount !== 1 ? 's' : ''}`;
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', initializeBroadcaster);
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (broadcaster) {
+                broadcaster.destroy();
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+## Video Playback Implementation
+
+### Web Player
+
+```typescript
+import { VideoPlayer } from '@social-plus/video-web';
+import Hls from 'hls.js';
+
+class WebVideoPlayer {
+  private player: VideoPlayer;
+  private hls: Hls | null = null;
+  private isLiveStream: boolean;
+  
+  constructor(
+    private videoElement: HTMLVideoElement,
+    private streamId: string,
+    isLive = false
+  ) {
+    this.isLiveStream = isLive;
+    
+    this.player = new VideoPlayer({
+      videoElement: this.videoElement,
+      enableControls: !isLive, // Hide controls for live streams
+      autoplay: isLive, // Auto-play live streams
+      muted: false
+    });
+    
+    this.setupEventListeners();
+  }
+  
+  private setupEventListeners(): void {
+    this.player.on('stateChanged', (state) => {
+      this.handleStateChange(state);
+    });
+    
+    this.player.on('error', (error) => {
+      this.handleError(error);
+    });
+    
+    this.player.on('progress', (progress) => {
+      this.handleProgress(progress);
+    });
+    
+    this.player.on('qualityChanged', (quality) => {
+      console.log('Playback quality changed:', quality);
+    });
+    
+    // Video element events
+    this.videoElement.addEventListener('loadstart', () => {
+      console.log('Video load started');
+    });
+    
+    this.videoElement.addEventListener('canplay', () => {
+      console.log('Video can start playing');
+    });
+    
+    this.videoElement.addEventListener('error', (e) => {
+      console.error('Video element error:', e);
+    });
+  }
+  
+  async initialize(): Promise<void> {
+    try {
+      // Load stream information
+      const streamInfo = await this.player.loadStream(this.streamId);
+      
+      if (streamInfo.isHLS && Hls.isSupported()) {
+        // Use HLS.js for better streaming support
+        await this.setupHLS(streamInfo.url);
+      } else if (this.videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        this.videoElement.src = streamInfo.url;
+      } else {
+        // Fallback to regular video
+        this.videoElement.src = streamInfo.url;
+      }
+      
+      // Auto-play for live streams
+      if (this.isLiveStream) {
+        await this.play();
+      }
+      
+    } catch (error) {
+      console.error('Failed to initialize player:', error);
+      throw error;
+    }
+  }
+  
+  private async setupHLS(url: string): Promise<void> {
+    if (!Hls.isSupported()) {
+      throw new Error('HLS not supported');
+    }
+    
+    this.hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: this.isLiveStream,
+      backBufferLength: this.isLiveStream ? 30 : 60
+    });
+    
+    this.hls.loadSource(url);
+    this.hls.attachMedia(this.videoElement);
+    
+    this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      console.log('HLS manifest parsed');
+    });
+    
+    this.hls.on(Hls.Events.ERROR, (event, data) => {
+      console.error('HLS error:', data);
+      
+      if (data.fatal) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.log('Network error, trying to recover...');
+            this.hls?.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.log('Media error, trying to recover...');
+            this.hls?.recoverMediaError();
+            break;
+          default:
+            console.log('Fatal error, cannot recover');
+            this.handleError(new Error(`HLS fatal error: ${data.type}`));
+            break;
+        }
+      }
+    });
+    
+    return new Promise((resolve) => {
+      this.hls!.on(Hls.Events.MANIFEST_PARSED, () => resolve());
+    });
+  }
+  
+  async play(): Promise<void> {
+    try {
+      await this.videoElement.play();
+    } catch (error) {
+      console.error('Failed to play video:', error);
+      
+      // Handle autoplay restrictions
+      if (error.name === 'NotAllowedError') {
+        this.showPlayButton();
+      }
+      
+      throw error;
+    }
+  }
+  
+  pause(): void {
+    this.videoElement.pause();
+  }
+  
+  stop(): void {
+    this.pause();
+    this.videoElement.currentTime = 0;
+  }
+  
+  seek(time: number): void {
+    if (!this.isLiveStream) {
+      this.videoElement.currentTime = time;
+    }
+  }
+  
+  setVolume(volume: number): void {
+    this.videoElement.volume = Math.max(0, Math.min(1, volume));
+  }
+  
+  mute(): void {
+    this.videoElement.muted = true;
+  }
+  
+  unmute(): void {
+    this.videoElement.muted = false;
+  }
+  
+  toggleMute(): void {
+    this.videoElement.muted = !this.videoElement.muted;
+  }
+  
+  toggleFullscreen(): void {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      this.videoElement.requestFullscreen();
+    }
+  }
+  
+  getCurrentTime(): number {
+    return this.videoElement.currentTime;
+  }
+  
+  getDuration(): number {
+    return this.videoElement.duration || 0;
+  }
+  
+  isPlaying(): boolean {
+    return !this.videoElement.paused && !this.videoElement.ended && this.videoElement.readyState > 2;
+  }
+  
+  private handleStateChange(state: string): void {
+    console.log('Player state changed:', state);
+    
+    const event = new CustomEvent('playerStateChanged', {
+      detail: { state, isLive: this.isLiveStream }
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private handleError(error: any): void {
+    console.error('Player error:', error);
+    
+    const event = new CustomEvent('playerError', {
+      detail: { error }
+    });
+    document.dispatchEvent(event);
+  }
+  
+  private handleProgress(progress: any): void {
+    if (!this.isLiveStream) {
+      const event = new CustomEvent('playerProgress', {
+        detail: { 
+          currentTime: progress.currentTime,
+          duration: progress.duration,
+          buffered: progress.buffered
+        }
+      });
+      document.dispatchEvent(event);
+    }
+  }
+  
+  private showPlayButton(): void {
+    const playButton = document.createElement('button');
+    playButton.textContent = '▶ Play';
+    playButton.className = 'video-play-button';
+    playButton.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 5px;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 1000;
+    `;
+    
+    playButton.addEventListener('click', async () => {
+      try {
+        await this.play();
+        playButton.remove();
+      } catch (error) {
+        console.error('Manual play failed:', error);
+      }
+    });
+    
+    // Position relative to video element
+    const container = this.videoElement.parentElement;
+    if (container) {
+      container.style.position = 'relative';
+      container.appendChild(playButton);
+    }
+  }
+  
+  destroy(): void {
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+    
+    this.player.destroy();
+  }
+}
+```
+
+## Push Notifications (Service Workers)
+
+### Service Worker Setup
+
+```typescript
+// sw.js - Service Worker
+declare const self: ServiceWorkerGlobalScope;
+
+import { VideoNotificationHandler } from './video-notification-handler.js';
+
+const CACHE_NAME = 'social-video-v1';
+const urlsToCache = [
+  '/',
+  '/static/js/bundle.js',
+  '/static/css/main.css',
+  '/manifest.json'
+];
+
+// Install event
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+// Fetch event
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request);
+      }
+    )
+  );
+});
+
+// Push event
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  
+  const data = event.data.json();
+  const options = VideoNotificationHandler.createNotificationOptions(data);
+  
+  event.waitUntil(
+    self.registration.showNotification(options.title, options)
+  );
+});
+
+// Notification click event
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  const data = event.notification.data;
+  const action = event.action;
+  
+  event.waitUntil(
+    VideoNotificationHandler.handleNotificationClick(action, data)
+  );
+});
+```
+
+### Notification Handler
+
+```typescript
+// video-notification-handler.ts
+export class VideoNotificationHandler {
+  
+  static createNotificationOptions(data: any): NotificationOptions {
+    switch (data.type) {
+      case 'stream.started':
+        return {
+          title: `🔴 ${data.broadcaster_name} is LIVE`,
+          body: data.stream_title || 'Live stream started',
+          icon: '/icons/live-stream-icon.png',
+          badge: '/icons/badge-icon.png',
+          tag: `stream-${data.stream_id}`,
+          data: { streamId: data.stream_id, type: 'stream.started' },
+          actions: [
+            {
+              action: 'watch',
+              title: 'Watch Stream',
+              icon: '/icons/play-icon.png'
+            },
+            {
+              action: 'share',
+              title: 'Share',
+              icon: '/icons/share-icon.png'
+            }
+          ],
+          requireInteraction: true
+        };
+        
+      case 'viewer.milestone':
+        return {
+          title: '🎉 Milestone Reached!',
+          body: `${data.viewer_count} people are watching your stream`,
+          icon: '/icons/celebration-icon.png',
+          tag: `milestone-${data.stream_id}`,
+          data: { streamId: data.stream_id, type: 'viewer.milestone' },
+          actions: [
+            {
+              action: 'view',
+              title: 'View Stream',
+              icon: '/icons/view-icon.png'
+            }
+          ]
+        };
+        
+      case 'recording.ready':
+        return {
+          title: 'Recording Ready',
+          body: 'Your stream recording is now available',
+          icon: '/icons/recording-icon.png',
+          tag: `recording-${data.stream_id}`,
+          data: { 
+            streamId: data.stream_id, 
+            recordingUrl: data.recording_url,
+            type: 'recording.ready' 
+          },
+          actions: [
+            {
+              action: 'watch',
+              title: 'Watch Recording',
+              icon: '/icons/play-icon.png'
+            }
+          ]
+        };
+        
+      default:
+        return {
+          title: data.title || 'Video Notification',
+          body: data.body || 'You have a new video notification',
+          icon: '/icons/default-icon.png'
+        };
+    }
+  }
+  
+  static async handleNotificationClick(action: string, data: any): Promise<void> {
+    const clients = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    });
+    
+    let client = clients.find(c => c.url.includes('your-app.com'));
+    
+    switch (action) {
+      case 'watch':
+        const watchUrl = data.recordingUrl || `/stream/${data.streamId}`;
+        
+        if (client) {
+          client.postMessage({
+            type: 'NAVIGATE_TO_STREAM',
+            streamId: data.streamId,
+            url: watchUrl
+          });
+          client.focus();
+        } else {
+          await self.clients.openWindow(watchUrl);
+        }
+        break;
+        
+      case 'share':
+        const shareUrl = `/stream/${data.streamId}`;
+        
+        if (client) {
+          client.postMessage({
+            type: 'SHARE_STREAM',
+            streamId: data.streamId,
+            url: shareUrl
+          });
+          client.focus();
+        } else {
+          await self.clients.openWindow(shareUrl);
+        }
+        break;
+        
+      case 'view':
+        const viewUrl = `/stream/${data.streamId}`;
+        
+        if (client) {
+          client.postMessage({
+            type: 'VIEW_STREAM',
+            streamId: data.streamId
+          });
+          client.focus();
+        } else {
+          await self.clients.openWindow(viewUrl);
+        }
+        break;
+        
+      default:
+        // Default action - open app
+        if (client) {
+          client.focus();
+        } else {
+          await self.clients.openWindow('/');
+        }
+        break;
+    }
+  }
+}
+```
+
+### Push Subscription Management
+
+```typescript
+// push-manager.ts
+export class PushManager {
+  
+  static async initializePushNotifications(): Promise<void> {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      throw new Error('Push notifications not supported');
+    }
+    
+    // Register service worker
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    console.log('Service Worker registered:', registration);
+    
+    // Wait for service worker to be ready
+    await navigator.serviceWorker.ready;
+    
+    // Request notification permission
+    const permission = await Notification.requestPermission();
+    
+    if (permission !== 'granted') {
+      throw new Error('Notification permission denied');
+    }
+    
+    // Subscribe to push notifications
+    await this.subscribeUser(registration);
+  }
+  
+  static async subscribeUser(registration: ServiceWorkerRegistration): Promise<void> {
+    const applicationServerKey = this.urlBase64ToUint8Array(
+      process.env.REACT_APP_VAPID_PUBLIC_KEY || ''
+    );
+    
+    try {
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+      
+      console.log('Push subscription:', subscription);
+      
+      // Send subscription to server
+      await this.sendSubscriptionToServer(subscription);
+      
+    } catch (error) {
+      console.error('Failed to subscribe user:', error);
+      throw error;
+    }
+  }
+  
+  static async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
+    const response = await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscription: subscription,
+        userAgent: navigator.userAgent
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to send subscription to server');
+    }
+  }
+  
+  static async unsubscribeUser(): Promise<void> {
+    const registration = await navigator.serviceWorker.getRegistration();
+    
+    if (registration) {
+      const subscription = await registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        await subscription.unsubscribe();
+        
+        // Notify server
+        await fetch('/api/push-unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            endpoint: subscription.endpoint
+          })
+        });
+      }
+    }
+  }
+  
+  private static urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    
+    return outputArray;
+  }
+  
+  static async checkSubscriptionStatus(): Promise<boolean> {
+    const registration = await navigator.serviceWorker.getRegistration();
+    
+    if (!registration) return false;
+    
+    const subscription = await registration.pushManager.getSubscription();
+    return !!subscription;
+  }
+}
+```
+
+## Performance Optimization
+
+### Lazy Loading & Code Splitting
+
+```typescript
+// video-loader.ts
+export class VideoLoader {
+  
+  static async loadBroadcaster(): Promise<typeof WebBroadcaster> {
+    const { WebBroadcaster } = await import('./web-broadcaster.js');
+    return WebBroadcaster;
+  }
+  
+  static async loadPlayer(): Promise<typeof WebVideoPlayer> {
+    const { WebVideoPlayer } = await import('./web-video-player.js');
+    return WebVideoPlayer;
+  }
+  
+  static async loadHLS(): Promise<typeof Hls> {
+    if (Hls.isSupported()) {
+      return (await import('hls.js')).default;
+    }
+    throw new Error('HLS not supported');
+  }
+  
+  static preloadComponents(): void {
+    // Preload critical video components
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'script';
+    link.href = '/static/js/video-components.js';
+    document.head.appendChild(link);
+  }
+}
+```
+
+### Memory Management
+
+```typescript
+// memory-manager.ts
+export class MemoryManager {
+  
+  private static readonly MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB
+  private static cachedStreams = new Map<string, any>();
+  
+  static cacheStream(streamId: string, data: any): void {
+    if (this.getCurrentCacheSize() > this.MAX_CACHE_SIZE) {
+      this.clearOldestCache();
+    }
+    
+    this.cachedStreams.set(streamId, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+  
+  static getCachedStream(streamId: string): any | null {
+    const cached = this.cachedStreams.get(streamId);
+    
+    if (cached && Date.now() - cached.timestamp < 30 * 60 * 1000) { // 30 minutes
+      return cached.data;
+    }
+    
+    this.cachedStreams.delete(streamId);
+    return null;
+  }
+  
+  private static getCurrentCacheSize(): number {
+    return Array.from(this.cachedStreams.values())
+      .reduce((size, cached) => size + JSON.stringify(cached.data).length, 0);
+  }
+  
+  private static clearOldestCache(): void {
+    const entries = Array.from(this.cachedStreams.entries())
+      .sort(([,a], [,b]) => a.timestamp - b.timestamp);
+    
+    // Remove oldest 25% of cache
+    const toRemove = Math.ceil(entries.length * 0.25);
+    
+    for (let i = 0; i < toRemove; i++) {
+      this.cachedStreams.delete(entries[i][0]);
+    }
+  }
+  
+  static monitorMemoryUsage(): void {
+    if ('memory' in performance) {
+      const memory = (performance as any).memory;
+      
+      console.log('Memory usage:', {
+        used: Math.round(memory.usedJSHeapSize / 1024 / 1024) + ' MB',
+        total: Math.round(memory.totalJSHeapSize / 1024 / 1024) + ' MB',
+        limit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024) + ' MB'
+      });
+      
+      // Warn if memory usage is high
+      if (memory.usedJSHeapSize / memory.jsHeapSizeLimit > 0.8) {
+        console.warn('High memory usage detected, consider optimizing');
+      }
+    }
+  }
+}
+```
+
+## Browser Compatibility
+
+### Feature Detection
+
+```typescript
+// feature-detection.ts
+export class FeatureDetection {
+  
+  static checkVideoSupport(): {
+    basicVideo: boolean;
+    webRTC: boolean;
+    mediaStream: boolean;
+    recording: boolean;
+    fullscreen: boolean;
+  } {
+    return {
+      basicVideo: !!document.createElement('video').canPlayType,
+      webRTC: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+      mediaStream: !!(window.MediaStream),
+      recording: !!(window.MediaRecorder),
+      fullscreen: !!(document.documentElement.requestFullscreen)
+    };
+  }
+  
+  static checkBrowserCapabilities(): {
+    browser: string;
+    version: string;
+    supported: boolean;
+    features: string[];
+    limitations: string[];
+  } {
+    const userAgent = navigator.userAgent;
+    let browser = 'Unknown';
+    let version = '';
+    let supported = false;
+    const features: string[] = [];
+    const limitations: string[] = [];
+    
+    // Detect browser
+    if (userAgent.includes('Chrome')) {
+      browser = 'Chrome';
+      version = userAgent.match(/Chrome\/(\d+)/)?.[1] || '';
+      supported = parseInt(version) >= 80;
+    } else if (userAgent.includes('Firefox')) {
+      browser = 'Firefox';
+      version = userAgent.match(/Firefox\/(\d+)/)?.[1] || '';
+      supported = parseInt(version) >= 75;
+    } else if (userAgent.includes('Safari')) {
+      browser = 'Safari';
+      version = userAgent.match(/Version\/(\d+)/)?.[1] || '';
+      supported = parseInt(version) >= 13;
+      limitations.push('Limited WebRTC support');
+    } else if (userAgent.includes('Edge')) {
+      browser = 'Edge';
+      version = userAgent.match(/Edg\/(\d+)/)?.[1] || '';
+      supported = parseInt(version) >= 80;
+    }
+    
+    // Check features
+    if (supported) {
+      features.push('Basic video playback');
+      
+      if (this.checkVideoSupport().webRTC) {
+        features.push('WebRTC broadcasting');
+      }
+      
+      if (this.checkVideoSupport().recording) {
+        features.push('Local recording');
+      }
+      
+      if (Hls.isSupported()) {
+        features.push('HLS streaming');
+      }
+    }
+    
+    return { browser, version, supported, features, limitations };
+  }
+  
+  static showUnsupportedBrowserMessage(): void {
+    const message = document.createElement('div');
+    message.className = 'unsupported-browser';
+    message.innerHTML = `
+      <div class="unsupported-browser-content">
+        <h3>Browser Not Supported</h3>
+        <p>Your browser doesn't support all features required for video streaming.</p>
+        <p>Please upgrade to:</p>
+        <ul>
+          <li>Chrome 80+</li>
+          <li>Firefox 75+</li>
+          <li>Safari 13+</li>
+          <li>Edge 80+</li>
+        </ul>
+        <button onclick="this.parentElement.parentElement.remove()">Dismiss</button>
+      </div>
+    `;
+    
+    message.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    
+    document.body.appendChild(message);
+  }
+}
+```
+
+## Best Practices
+
+1. **Permission Handling** - Request permissions at appropriate times with clear explanations
+2. **Responsive Design** - Ensure video interfaces work on all screen sizes
+3. **Performance** - Use lazy loading and code splitting for video components
+4. **Accessibility** - Provide keyboard controls and screen reader support
+5. **Progressive Enhancement** - Gracefully degrade features for older browsers
+6. **Security** - Always use HTTPS for WebRTC and media access
+
+## Next Steps
+
+1. **[React Native Implementation](./react-native-specific.mdx)** - React Native-specific details
+2. **[Flutter Implementation](./flutter-specific.mdx)** - Flutter-specific details
+3. **[Platform Comparison](./platform-comparison.mdx)** - Compare all platform implementations
+
+<Warning>
+**Browser Security**: Modern browsers require HTTPS for camera and microphone access. Ensure your application is served over HTTPS in production environments.
+</Warning>

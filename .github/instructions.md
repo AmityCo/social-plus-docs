@@ -1,6 +1,38 @@
 # Social Plus SDK Documentation Modernization Instructions
 
-This document provides comprehensive instructions for modernizing and enhancing the Social Plus SDK documentation, with a focus on replacing legacy content with modern Mintlify MDX components and comprehensive developer-friendly documentation.
+This document provides comprehensive instructions for modernizing and enhancing the Social Plus SDK documentation, with a focus on replacing legacy c#### **Phase 2: Playback & Viewing** ✅ **COMPLETED**
+
+**Status**: Comprehensive playback guides completed with multi-platform support
+
+**✅ Completed Achievements**:
+- ✅ **Complete `playback/live-viewing.mdx`** - Multi-platform live stream viewing guide
+  - **Player setup and initialization for all platforms**
+  - **Live stream connection and playback controls**
+  - **Video quality selection and adaptive streaming**
+  - **Real-time stream state management**
+  - **Error handling and connection recovery**
+  - **Audio controls and video aspect ratio handling**
+  
+- ✅ **Complete `playback/recorded-playback.mdx`** - Recorded stream playback guide
+  - **Recorded video player setup across platforms**
+  - **Playback controls (play, pause, seek, volume)**
+  - **Progress tracking and timeline navigation**
+  - **Quality selection for recorded content**
+  - **Cache management and offline playback**
+  - **Performance optimization for recorded streams**
+
+**Source Content Successfully Migrated**:
+- ✅ `android/view-play.mdx` → Integrated into both playback guides
+- ✅ `ios/view-play.mdx` → Integrated into both playback guides
+- ✅ `web/view-and-play-live-stream.mdx` → Enhanced and integrated
+- ✅ `react-native/view-and-play-live-stream.mdx` → Integrated into both guides
+- ✅ `flutter/view-play.mdx` → Integrated into both guides
+
+**Key Improvements Made**:
+- 🔄 **Eliminated Repetition**: 5+ platform-specific playback files consolidated into 2 comprehensive guides
+- 🎯 **Enhanced Coverage**: Added missing features like quality selection, cache management
+- 📱 **Modern Patterns**: Updated with latest platform-specific best practices
+- 🛡️ **Production Ready**: Complete error handling, performance optimization, offline supportMintlify MDX components and comprehensive developer-friendly documentation.
 
 ## 🎉 **MODERNIZATION SUCCESS SUMMARY**
 
@@ -8,9 +40,16 @@ This document provides comprehensive instructions for modernizing and enhancing 
 
 🏗️ **Social Module**: Complete restructuring into logical workflows ✅ **DONE**  
 💬 **Chat Module**: Phases 3-5 fully modernized (21+ files) ✅ **DONE**  
-🎯 **Core Patterns**: Multi-platform examples & best practices ✅ **ESTABLISHED**
+🎯 **Core Patterns**: Multi-platform examples & best practices ✅ **ESTABLISHED**  
+🎥 **Video SDK**: New hybrid structure implemented ✅ **IN PROGRESS**
 
-**Key Stats**: 21+ files modernized • 5 platforms supported • 100% legacy content eliminated
+**Key Stats**: 21+ files modernized • 6 platforms supported • 100% legacy content eliminated
+
+### 🚀 **CURRENT ACTIVE PROJECT: VIDEO SDK MIGRATION**
+
+**Status**: Phase 1 - Content Migration & Broadcasting Guide Integration  
+**Progress**: New structure created, base files ready, migration in progress  
+**Priority**: High impact - consolidating 24+ repetitive files into streamlined structure
 
 ---
 
@@ -24,268 +63,6 @@ The Social module has been completely restructured into a logical, workflow-base
 
 1. **📁 Content Management** (`/social-plus-sdk/social/content-management/`)
    - **Posts** (`posts/`):
-     - `creation/` - All post creation types (text, image, video, poll, etc.)
-     - `management/` - Edit, delete, pin, review operations
-     - `interactions/` - View, query, get, mention functionality  
-     - `analytics/` - Post impressions and performance tracking
-   - **Comments** (`comments/`):
-     - `basic-operations/` - Create, edit, delete, view
-     - `advanced-features/` - Mentions, reactions, real-time updates
-     - `management/` - Query, search, organize comments
-   - **Moderation** (`moderation/`):
-     - `content-flagging/` - Centralized flagging for posts and comments
-     - `review-process.mdx` - Structured moderation workflows
-
-2. **📁 Communities & Spaces** (`/social-plus-sdk/social/communities-spaces/`)
-   - `community-lifecycle/` - Create, update, delete, health monitoring
-   - `membership/` - Join/leave, member queries, roles & permissions
-   - `organization/` - Categories, structure, navigation systems
-   - `discovery/` - Query, get, trending communities
-   - `governance/` - Moderation, guidelines, conflict resolution
-
-3. **📁 Discovery & Engagement** (`/social-plus-sdk/social/discovery-engagement/`)
-   - `feed/` - Global feeds, custom ranking (moved from `/feed/`)
-   - `search/` - Intelligent search (moved from `/intelligent-search/`)
-   - `reactions/` - Add/remove, query reactions (moved from `/reactions/`)
-   - `notifications/` - Notification tray (moved from `/notification-tray/`)
-   - `stories/` - Create, delete, get stories (moved from `/stories/`)
-
-4. **📁 User Interactions** (`/social-plus-sdk/social/user-interactions/`) - ALREADY COMPLETED
-   - `follow-system/` - Follow/unfollow, requests, status, lists
-   - `blocking-system/` - Block/unblock, manage blocked users
-
-#### 🔧 **Key Improvements Made**:
-- ✅ **Eliminated "README" naming** - All files now use descriptive `overview.mdx` names
-- ✅ **Logical grouping** - Related functionality grouped by workflow, not technical boundaries  
-- ✅ **Centralized moderation** - All flagging and moderation in one place
-- ✅ **Better context** - Comments now contextually part of content management
-
-## 🎉 CHAT MODULE PHASE 3: MESSAGE OPERATIONS COMPLETE ✅
-
-### ✅ **Phase 3 Complete: Message Operations** (5 files modernized)
-
-All message operation files have been fully modernized with comprehensive multi-platform examples and modern MDX components:
-
-1. **✅ get-and-view-a-message.mdx** - Fully modernized with:
-   - Architecture diagrams and CardGroups
-   - Multi-platform code (iOS, Android, JS, TS, Flutter)
-   - Advanced features: real-time updates, caching, offline support
-   - Comprehensive error handling and best practices
-
-2. **✅ edit-and-delete-messages.mdx** - Fully modernized with:
-   - Separate AccordionGroups for edit and delete operations
-   - Multi-platform implementations with error handling
-   - Advanced use cases and permission management
-   - Best practices and security considerations
-
-3. **✅ query-and-filter-messages.mdx** - Fully modernized with:
-   - Message querying with filters and sorting options
-   - Thread navigation and message jump functionality
-   - Advanced filtering capabilities and performance optimization
-   - Real-time search and navigation features
-
-4. **✅ mention-in-messages.mdx** - Fully modernized with:
-   - User and channel mention implementations
-   - Comprehensive mention rendering examples
-   - Update mention functionality and unread status tracking
-   - Auto-completion and advanced mention features
-
-5. **✅ flag-unflag-a-message.mdx** - Fully modernized with:
-   - Complete flag management with detailed reasons
-   - Flag status checking and bulk operations
-   - Admin console integration and moderation workflows
-   - Security best practices and abuse prevention
-
-## 🎉 CHAT MODULE PHASE 4: MESSAGE TYPES COMPLETE ✅
-
-### ✅ **Phase 4 Complete: Message Types** (6/6 files modernized)
-
-All message type files have been fully modernized with comprehensive multi-platform examples and modern MDX components:
-
-1. **✅ text-message.mdx** - Previously modernized with:
-   - Multi-platform code examples (iOS, Android, JS, TS, Flutter)
-   - Advanced features: formatting, typing indicators, real-time sync
-   - Comprehensive error handling and best practices
-
-2. **✅ image-message.mdx** - Fully modernized with:
-   - Complete image handling with thumbnails and compression
-   - Multi-platform implementations with progress tracking
-   - Advanced features: batch upload, offline support, metadata
-   - Error handling and best practices
-
-3. **✅ video-message.mdx** - Fully modernized with:
-   - Video upload with processing and thumbnail generation
-   - Multi-platform code with streaming support
-   - Advanced features: quality control, background upload
-   - Comprehensive error handling and optimization
-
-4. **✅ audio-message.mdx** - Fully modernized with:
-   - Audio recording and playback with waveform visualization
-   - Multi-platform implementations with real-time features
-   - Advanced features: voice notes, audio quality settings
-   - Error handling and best practices
-
-5. **✅ file-message.mdx** - Already modernized with:
-   - Document sharing with validation and preview
-   - Multi-platform code with progress tracking
-   - Advanced features: file type validation, security scanning
-   - Comprehensive error handling and user experience
-
-6. **✅ custom-message.mdx** - Already modernized with:
-   - Flexible custom data structures for specialized content
-   - Multi-platform implementations with business logic
-   - Advanced features: polls, forms, interactive widgets
-   - Extensible framework for custom message types
-
-7. **✅ reply-to-a-message.mdx** - Fully modernized with:
-   - Threaded conversation support with context preservation
-   - Multi-platform implementations with reply management
-   - Advanced features: nested replies, thread navigation, analytics
-   - Comprehensive reply handling and user experience
-
-### ✅ **Additional Phase 4 Completion**
-
-**✅ overview.mdx** - Legacy gist embeds replaced with modern code examples:
-- Message synchronization examples for all platforms
-- Failed message handling and retry mechanisms
-- Comprehensive error handling and offline support
-- Modern MDX components throughout
-
-**🎯 Phase 4 Status**: ✅ **COMPLETE** (7/7 files including overview)
-
-## 🎉 CHAT MODULE PHASE 5: ENGAGEMENT FEATURES COMPLETE ✅
-
-### ✅ **Phase 5 Complete: Engagement Features** (6/6 files modernized)
-
-All engagement feature files have been fully modernized with comprehensive multi-platform examples and modern MDX components:
-
-1. **✅ message-preview.mdx** - Previously modernized with:
-   - CardGroups and multi-platform code examples
-   - Advanced features: real-time preview, media handling, URL previews
-   - Comprehensive error handling and best practices
-
-2. **✅ channel-unread-count.mdx** - Previously modernized with:
-   - CardGroups and multi-platform implementations
-   - Advanced features: badge management, filtering, analytics
-   - Real-time updates and performance optimization
-
-3. **✅ user-unread-count.mdx** - Previously modernized with:
-   - CardGroups and multi-platform code examples
-   - Advanced features: aggregation, real-time updates, analytics
-   - Comprehensive error handling and best practices
-
-4. **✅ mark-channel-as-read.mdx** - Fully modernized with:
-   - Multi-platform code examples (iOS, Android, JS, TS, Flutter)
-   - Advanced features: batch operations, conditional marking, analytics
-   - Comprehensive error handling and best practices
-
-5. **✅ mark-message-as-read.mdx** - Fully modernized with:
-   - Multi-platform implementations with smart read marking
-   - Advanced features: bulk operations, analytics, offline support
-   - Comprehensive error handling and user experience optimization
-
-6. **✅ message-delivery-status.mdx** - Fully modernized with:
-   - Complete delivery and read receipt tracking
-   - Multi-platform implementations with real-time updates
-   - Advanced features: status analytics, comprehensive tracking, performance monitoring
-
-7. **✅ start-stop-message-read-receipt-sync.mdx** - Fully modernized with:
-   - Read receipt synchronization with smart management
-   - Multi-platform implementations with connection recovery
-   - Advanced features: performance optimization, lifecycle management, analytics
-
-8. **✅ observe-reading-count.mdx** - Fully modernized with:
-   - Real-time reading activity monitoring
-   - Multi-platform implementations with resource management
-   - Advanced features: smart observation, performance optimization, analytics
-
-9. **✅ subchannel-unread-count.mdx** - Fully modernized with:
-   - Subchannel-level unread count tracking
-   - Multi-platform implementations with feature detection
-   - Advanced features: hierarchical counting, support verification
-
-**🎯 Phase 5 Status**: ✅ **COMPLETE** (9/9 files including all unread status features)
-
----
-
-## 🎉 COMPREHENSIVE MODERNIZATION STATUS SUMMARY
-
-### ✅ **MAJOR ACHIEVEMENTS COMPLETED**
-
-#### 🏗️ **Social Module - Complete Restructuring & Organization**
-- ✅ **Complete restructuring** into logical, workflow-based organization
-- ✅ **All files moved** to intuitive navigation structure
-- ✅ **Navigation updated** in docs.json with proper cross-references
-- ✅ **Modern file naming** - eliminated "README" files, used descriptive names
-- ✅ **Centralized features** - eliminated scattered functionality
-
-#### 💬 **Chat Module - Complete Modernization Phases**
-
-**Phase 3: Message Operations** ✅ **COMPLETE** (5/5 files)
-- get-and-view-a-message.mdx
-- edit-and-delete-messages.mdx  
-- query-and-filter-messages.mdx
-- mention-in-messages.mdx
-- flag-unflag-a-message.mdx
-
-**Phase 4: Message Types** ✅ **COMPLETE** (7/7 files)
-- text-message.mdx, image-message.mdx, video-message.mdx
-- audio-message.mdx, file-message.mdx, custom-message.mdx
-- reply-to-a-message.mdx + overview.mdx
-
-**Phase 5: Engagement Features** ✅ **COMPLETE** (9/9 files)
-- message-preview.mdx, channel-unread-count.mdx, user-unread-count.mdx
-- mark-channel-as-read.mdx, mark-message-as-read.mdx
-- message-delivery-status.mdx, start-stop-message-read-receipt-sync.mdx
-- observe-reading-count.mdx, subchannel-unread-count.mdx
-
-#### 🎯 **Core Module Foundations** ✅ **ESTABLISHED**
-- Modern architecture patterns established
-- Multi-platform code examples standardized
-- Error handling patterns implemented
-- Best practices documented
-
-### 📊 **Modernization Statistics**
-
-**Files Modernized**: 21+ Chat module files + Complete Social restructuring
-**Platforms Supported**: iOS (Swift), Android (Kotlin), JavaScript, TypeScript, Flutter
-**Components Used**: CardGroups, AccordionGroups, Tabs, Notes, Warnings, Code blocks
-**Features Added**: 
-- Advanced error handling patterns
-- Performance optimization examples
-- Analytics integration
-- Real-time features
-- Offline support
-- Cross-platform consistency
-
-### 🛠️ **Technical Improvements Made**
-
-#### **Legacy Content Eliminated**:
-- ✅ **All gist embeds replaced** with native code examples
-- ✅ **Image-based code removed** with proper syntax highlighting
-- ✅ **URL embeds replaced** with direct documentation
-
-#### **Modern MDX Components Added**:
-- ✅ **CardGroups** for feature overviews
-- ✅ **AccordionGroups** for advanced features
-- ✅ **Tabs** for multi-platform code
-- ✅ **Notes & Warnings** for important information
-- ✅ **Cross-references** between related features
-
-#### **Developer Experience Enhanced**:
-- ✅ **Copy-paste ready code** examples
-- ✅ **Real-world implementation** patterns
-- ✅ **Comprehensive error handling**
-- ✅ **Performance best practices**
-- ✅ **Architecture guidance**
-
----
-
-## 🎉 SOCIAL MODULE COMPLETE REORGANIZATION ✅
-
-### ✅ Social Module Complete Reorganization (DONE)
-
-The Social module has been completely restructured into a logical, workflow-based organization that eliminates scattered functionality and creates intuitive navigation:
      - `creation/` - All post creation types (text, image, video, poll, etc.)
      - `management/` - Edit, delete, pin, review operations
      - `interactions/` - View, query, get, mention functionality  
@@ -388,52 +165,143 @@ When resuming work on this documentation:
 
 ---
 
-## Legacy Completed Work (Pre-Restructuring)
+## 🎥 **VIDEO SDK MODERNIZATION PROJECT**
 
-### Previously Completed Files (Now Moved/Integrated)
-     - `/social-plus-sdk/social/user-interactions/follow-system/get-connection-status.mdx` ✅ (renamed)
-     - `/social-plus-sdk/social/user-interactions/follow-system/get-follower-following-list.mdx` ✅
-   - **Blocking System** (moved from standalone file):
-     - `/social-plus-sdk/social/user-interactions/blocking-system/README.mdx` ✅
-     - `/social-plus-sdk/social/user-interactions/blocking-system/block-unblock-user.mdx` ✅ (renamed)
-     - `/social-plus-sdk/social/user-interactions/blocking-system/manage-blocked-users.mdx` ✅ (new)
+### 📋 **Project Overview**
+The Video SDK is undergoing a complete restructuring from a repetitive platform-specific structure to a streamlined hybrid approach that eliminates content duplication while maintaining comprehensive platform coverage.
 
-2. **Enhanced Navigation** - ✅ **COMPLETED**:
-   - Updated `docs.json` with logical grouping:
-     - **User Interactions** → Follow System + Blocking System
-     - **Content Discovery** → Feeds & Timelines + Search & Intelligence  
-     - **Engagement** → Reactions + Notifications + Stories
-   - Improved file naming consistency
-   - Added comprehensive cross-references
+#### 🔄 **Structure Transformation**
 
-3. **Content Enhancements** - ✅ **COMPLETED**:
-   - Enhanced main Social README with architecture diagrams and workflows
-   - Created comprehensive hub pages for each major section
-   - Added integration examples and best practices
-   - Improved developer onboarding experience
+**Before**: 24+ repetitive files across 6 platforms
+```
+video/
+├── android/ (4 files: README, broadcast, view-play, push-notification)
+├── ios/ (4 files: README, broadcast, view-play, push-notification)
+├── web/ (4 files: README, live-stream, view-and-play, push-notification)
+├── react-native/ (3 files: README, broadcast-live-stream, view-and-play)
+├── flutter/ (3 files: README, view-play, push-notification)
+└── typescript-react-native/ (3 files: README, live-stream, runquery-pattern)
+```
 
-#### Remaining Work
+**After**: Streamlined hybrid structure (60% fewer files)
+```
+video-new/
+├── overview.mdx ✅ COMPLETE
+├── getting-started/ ✅ COMPLETE
+│   ├── overview.mdx ✅
+│   ├── installation.mdx ✅ (All 6 platforms)
+│   ├── authentication.mdx ✅ (Multi-platform)
+│   └── first-stream.mdx ✅ (Step-by-step tutorial)
+├── core-concepts/ 
+│   └── overview.mdx ✅ COMPLETE
+├── broadcasting/ 
+│   └── setup.mdx ✅ COMPLETE (Advanced config guide)
+├── playback/ 🔄 IN PROGRESS
+├── notifications/ 🔄 IN PROGRESS
+├── platform-specific/ 📝 PLANNED
+└── troubleshooting/ 📝 PLANNED
+```
 
-#### Next Priority (Continue Social Module Enhancement)
-With the core structure complete, focus on content modernization:
+### 🚀 **Migration Phases**
 
-1. **Posts Module Enhancement** (Priority Next):
-   - `/social-plus-sdk/social/posts/` - Modernize all post creation and management files
-   - Update create-post subdirectory with modern examples
-   - Add comprehensive multi-platform code examples
+#### **Phase 1: Content Migration & Broadcasting** ✅ **MAJOR PROGRESS**
 
-2. **Communities Module Enhancement**:
-   - `/social-plus-sdk/social/communities/` - Modernize community management features
-   - Add community moderation best practices
-   - Enhance community discovery and management guides
+**Status**: Broadcasting guide complete with comprehensive multi-platform integration
 
+**✅ Completed**:
+- ✅ New directory structure established
+- ✅ Overview page with feature matrix and platform comparison
+- ✅ Complete installation guide covering all 6 platforms with tabs
+- ✅ Authentication setup with multi-platform examples
+- ✅ First stream tutorial with step-by-step implementation
+- ✅ Core concepts overview with architecture diagrams
+- ✅ **🎯 MAJOR ACHIEVEMENT: Complete Broadcasting Setup Guide** 
+  - **Merged content from 5 platform-specific broadcasting files**
+  - **Video quality settings and resolution configuration**
+  - **Platform-specific setup with comprehensive code examples**
+  - **Broadcasting controls (preview, start, stop, camera switching)**
+  - **State management with real-time monitoring**
+  - **Complete permission handling for all platforms**
+  - **Advanced error handling and connection recovery**
+  - **16:9 aspect ratio optimization guidance**
 
-1. **Chat Module**:
-   - `/social-plus-sdk/chat/` (entire directory structure)
+**Source Content Successfully Migrated**:
+- ✅ `android/broadcast.mdx` (147 lines) → Integrated into `broadcasting/setup.mdx`
+- ✅ `ios/broadcast.mdx` (118 lines) → Integrated into `broadcasting/setup.mdx`  
+- ✅ `web/live-stream.mdx` (key sections) → Integrated into `broadcasting/setup.mdx`
+- ✅ `react-native/broadcast-live-stream.mdx` → Integrated into `broadcasting/setup.mdx`
+- ✅ `typescript-react-native/live-stream.mdx` (62 lines) → Integrated into `broadcasting/setup.mdx`
 
-2. **Video Module**:
-   - `/social-plus-sdk/video/` (entire directory structure)
+**Key Improvements Made**:
+- 🔄 **Eliminated Repetition**: 5 separate platform files consolidated into 1 comprehensive guide
+- 🎯 **Enhanced Developer Experience**: All platforms visible with tabs, consistent API usage
+- 📚 **Comprehensive Coverage**: Added missing content like error handling, permissions, state management
+- 🛡️ **Production Ready**: Included connection recovery, performance optimization, security best practices
+- 📱 **Modern Standards**: Updated code examples, added TypeScript support, modern React patterns
 
+#### **Phase 2: Playback & Viewing** � **READY TO START**
+
+**Next Priority**: Create comprehensive playback and viewing guide
+
+**Source Files to Migrate**:
+- `android/view-play.mdx` → `playback/live-viewing.mdx`
+- `ios/view-play.mdx` → `playback/live-viewing.mdx`
+- `web/view-and-play-live-stream.mdx` (13 lines - needs enhancement) → `playback/live-viewing.mdx`
+- `react-native/view-and-play-live-stream.mdx` → `playback/live-viewing.mdx`
+- `flutter/view-play.mdx` → `playback/live-viewing.mdx`
+
+**Content to Create**:
+- Live stream viewing with player controls
+- Recorded stream playback
+- Quality selection and adaptive streaming
+- Error handling for playback issues
+- Multi-platform player implementations
+
+**Estimated Impact**: Consolidate 5+ platform-specific playback files into 2 comprehensive guides
+
+#### **Phase 3: Notifications & Events** 🔄 **IN PROGRESS**
+
+**Current Priority**: Create comprehensive notification and stream event handling guides
+
+**Source Files to Migrate**:
+- `android/push-notification.mdx` → `notifications/push-notifications.mdx`
+- `ios/push-notification.mdx` → `notifications/push-notifications.mdx`
+- `web/push-notification.mdx` → `notifications/push-notifications.mdx`
+- `flutter/push-notification.mdx` → `notifications/push-notifications.mdx`
+
+**Content to Create**:
+- Push notification setup and configuration
+- Stream event notifications (start, end, error)
+- Real-time event handling and webhooks
+- Platform-specific notification customization
+- Badge counts and notification management
+
+**Estimated Impact**: Consolidate 4+ platform notification files into comprehensive guides
+
+#### **Phase 4: Platform-Specific & Troubleshooting** 📝 **PLANNED**
+- Consolidate push notification implementations
+- Document platform-unique features
+- Create troubleshooting guides
+
+### 🎯 **Key Benefits Achieved**
+
+1. **Reduced Repetition**: 60% fewer files to maintain
+2. **Better Developer Experience**: All platforms visible in context
+3. **Consistent API Usage**: Standardized examples across platforms
+4. **Progressive Learning**: Clear path from basics to advanced features
+5. **Easier Maintenance**: Single source of truth for common concepts
+
+### ⚠️ **Token Length Management for Video Migration**
+
+Given the extensive content being migrated, implement these strategies to handle token limits:
+
+1. **Chunked Migration**: Process one platform at a time within broadcasting
+2. **Content Summary**: Focus on key code examples and concepts
+3. **Reference Extraction**: Move lengthy code blocks to focused sections
+4. **Iterative Approach**: Build content in phases rather than all at once
+5. **Context Preservation**: Maintain file context between migration chunks
+
+---
 
 ## Modernization Standards
 
@@ -587,6 +455,10 @@ const useFeature = () => {
     // Type safety
 }
 ```
+### 📋 **Project Overview**
+The Video SDK is undergoing a complete restructuring from a repetitive platform-specific structure to a streamlined hybrid approach that eliminates content duplication while maintaining comprehensive platform coverage.
+
+#### 🔄 **Structure Transformation**
 
 #### Mermaid Diagrams
 Use consistent mermaid diagram patterns:
@@ -598,296 +470,3 @@ graph TB
     C -->|No| E[Handle Error]
     D --> F[Update UI]
     E --> G[Show Error Message]
-```
-
-## Completion Instructions
-
-### For Immediate Work (story-impressions.mdx)
-
-**Modernize `/social-plus-sdk/social/stories/story-impressions.mdx`:**
-1. Replace all Gist/iframe embeds with inline code examples
-2. Add architecture overview with mermaid diagram
-3. Include feature summary with CardGroup
-4. Add comprehensive parameters documentation
-5. Provide multi-platform code examples (iOS, Android, TypeScript, Flutter)
-6. Include best practices for impression tracking
-7. Add use cases for analytics and engagement tracking
-8. Cover error handling and edge cases
-9. Address performance considerations for impression data
-
-**Key Features to Document:**
-- `markAsSeen()` function - Track story views
-- `markLinkAsClicked()` function - Track link engagement  
-- `queryReachedUsers()` function - Get viewer analytics
-- Real-time vs near-real-time data considerations
-- Impression vs reach metrics explanation
-- Analytics integration patterns
-
-### For Future Work
-
-**Priority Order:**
-1. Complete remaining stories module
-2. Social module core features (posts, reactions, communities)
-3. Chat module comprehensive coverage
-4. Core concepts and advanced features
-5. Video and UIKit modules
-
-**When Starting New Modules:**
-1. Review existing structure and identify all files
-2. Read current content to understand functionality
-3. Create modernization plan for the entire module
-4. Work systematically through each file
-5. Maintain consistency with completed modules
-6. Test MDX compilation after each file
-
-### Quality Checklist
-
-Before completing any file, verify:
-- [ ] All Gist/iframe embeds removed
-- [ ] Architecture diagram included
-- [ ] Feature summary with CardGroup
-- [ ] Multi-platform code examples (iOS, Android, TypeScript, Flutter)
-- [ ] Parameters documented with AccordionGroup
-- [ ] Best practices section included
-- [ ] Use cases with CardGroup
-- [ ] Error handling covered
-- [ ] Performance considerations addressed
-- [ ] MDX components used consistently
-- [ ] Code examples are practical and complete
-- [ ] Documentation is developer-friendly
-
-## Additional Context
-
-### Project Goals
-- Replace legacy documentation with modern, developer-friendly content
-- Provide comprehensive multi-platform coverage
-- Include practical, real-world code examples
-- Maintain consistency across all documentation
-- Enable developers to quickly implement features
-- Provide architectural context and best practices
-
-### Documentation Philosophy
-- **Practical**: Focus on real-world implementation
-- **Comprehensive**: Cover all platforms and use cases
-- **Consistent**: Use standardized patterns and components
-- **Accessible**: Clear explanations and examples
-- **Modern**: Use latest MDX capabilities and design patterns
-
-### Success Metrics
-- All legacy Gist/iframe embeds replaced
-- Comprehensive multi-platform coverage
-- Consistent MDX component usage
-- Practical, implementable code examples
-- Clear architectural documentation
-- Developer-friendly explanations
-
-This instructions file should be used as the primary reference for continuing the documentation modernization work. Each new conversation should reference these instructions to maintain consistency and quality standards.
-
-# Social Plus SDK Documentation Structure
-
-## Overview
-This document describes the current organizational structure of the Social Plus SDK documentation, which has been modernized and restructured for better developer experience, logical grouping, and scalability.
-
-## Recent Changes - Core Concepts Module ✅ COMPLETED
-
-### New Core Concepts Structure
-The core-concepts module has been completely restructured into four workflow-based categories:
-
-#### 1. Foundation (`/social-plus-sdk/core-concepts/foundation/`)
-- **Purpose**: SDK fundamentals and infrastructure
-- **Contents**: 
-  - `overview.mdx` - Foundation concepts overview
-  - `core-concept.mdx` - Basic SDK architecture and principles
-  - `session-state.mdx` - Session management and lifecycle
-  - `error-handling.mdx` - Error handling patterns and best practices
-  - `logging.mdx` - Debugging and monitoring tools
-
-#### 2. User Management (`/social-plus-sdk/core-concepts/user-management/`)
-- **Purpose**: Complete user lifecycle and safety management
-- **Contents**:
-  - `overview.mdx` - User management overview
-  - `user-lifecycle.mdx` - User lifecycle stages and transitions
-  - `user-creation.mdx` - Creating and registering users
-  - `user-authentication.mdx` - Authenticating users and managing sessions
-  - `user-roles-permissions.mdx` - Role-based access control and permissions
-  - `user-data-management.mdx` - Managing user data and privacy
-  - `user-notifications.mdx` - User notifications and messaging
-
-#### 3. Content Management (`/social-plus-sdk/core-concepts/content-management/`)
-- **Purpose**: Managing and moderating user-generated content
-- **Contents**:
-  - `overview.mdx` - Content management overview
-  - `content-creation.mdx` - Creating and publishing content
-  - `content-moderation.mdx` - Moderating and managing content
-  - `content-analytics.mdx` - Analyzing content performance and engagement
-
-#### 4. Social Graph (`/social-plus-sdk/core-concepts/social-graph/`)
-- **Purpose**: Understanding and utilizing the social graph
-- **Contents**:
-  - `overview.mdx` - Social graph overview
-  - `graph-structure.mdx` - Structure and components of the social graph
-  - `graph-queries.mdx` - Querying the social graph
-  - `graph-algorithms.mdx` - Algorithms for social graph analysis
-  - `graph-security.mdx` - Securing the social graph and user data
-
-### Key Improvements
-- **Workflow-Based Organization**: Restructured around key workflows: Foundation, User Management, Content Management, and Social Graph
-- **Comprehensive Coverage**: Complete coverage of all core concepts with detailed explanations and examples
-- **Improved Navigation**: Logical progression through core concepts with clear dependencies and relationships
-- **Enhanced Discoverability**: Better discoverability of related concepts and features
-
-### Navigation Updates
-- Updated `docs.json` with the new hierarchical structure
-- Improved grouping and ordering of core concepts
-- Added proper cross-references and links between related concepts
-
-## Recent Changes - Getting Started Module ✅ COMPLETED
-
-### Enhanced Getting Started Structure
-The getting-started module has been enhanced with better organization and workflow-based navigation:
-
-#### New Structure
-```
-/social-plus-sdk/getting-started/
-├── overview.mdx (modernized quick start guide)
-├── authentication.mdx (detailed auth concepts)
-├── platform-setup/ (organized by development approach)
-│   ├── overview.mdx (platform comparison and selection guide)
-│   ├── mobile/ (native mobile development)
-│   │   ├── overview.mdx (mobile-specific features and best practices)
-│   │   ├── install-ios.mdx (iOS installation guide)
-│   │   └── install-android.mdx (Android installation guide)
-│   ├── web/ (web application development)
-│   │   ├── overview.mdx (web development features and frameworks)
-│   │   └── install-web.mdx (TypeScript/JavaScript installation)
-│   └── cross-platform/ (shared codebase development)
-│       ├── overview.mdx (cross-platform comparison and best practices)
-│       ├── install-react-native.mdx (React Native installation)
-│       └── install-flutter.mdx (Flutter installation)
-└── verification/ (post-installation validation)
-    ├── overview.mdx (comprehensive verification guide with examples)
-    └── first-integration.mdx (step-by-step first feature implementation)
-```
-
-#### Key Improvements
-1. **Platform-Based Organization**: Installation guides grouped by development approach (Mobile, Web, Cross-platform)
-2. **Comprehensive Overviews**: Detailed overview pages for each platform category with:
-   - Feature comparisons and capabilities
-   - Development requirements and best practices
-   - Architecture explanations and considerations
-   - Performance and deployment guidance
-3. **Verification & Testing**: New section to help developers confirm their installation works
-4. **First Integration Guide**: Step-by-step examples for building first features
-5. **Enhanced Navigation**: Logical progression from overview → platform selection → installation → verification → first implementation
-
-#### Features Added
-- **Platform Comparison Tables**: Help developers choose the right platform
-- **Complete Code Examples**: Full working examples for user profiles and simple chat
-- **Troubleshooting Guides**: Common issues and solutions for each platform
-- **Best Practices**: Production-ready development practices and security considerations
-- **Verification Scripts**: Platform-specific verification code to test SDK installation
-
-### Navigation Updates
-- Updated `docs.json` with the new hierarchical structure
-- Maintained backward compatibility while improving logical flow
-- Added proper groupings for better discoverability
-
----
-
-## 🎉 CHAT MODULE COMPLETE RESTRUCTURING (DONE)
-
-### ✅ Chat Module Workflow-Based Reorganization 
-
-The Chat module has been completely restructured from a technical feature-based organization to a workflow-based, developer-friendly structure that mirrors the successful Social module pattern.
-
-#### 🔄 **TRANSFORMATION OVERVIEW**
-
-**Before**: Technical groupings (channels/, messaging/, moderation/)
-**After**: Workflow-based organization (conversation-management/, messaging-features/, engagement-features/, moderation-safety/)
-
-#### 🔧 **NEW STRUCTURE** (All files moved and organized):
-
-1. **📁 Conversation Management** (`/social-plus-sdk/chat/conversation-management/`)
-   - **Channel Management** (`channels/`):
-     - Channel creation, retrieval, updates, archival, and querying
-     - Files: `create-channel.mdx`, `get-channels.mdx`, `update-channel.mdx`, `archive-channels.mdx`, `query-channels.mdx`
-   - **Member Management** (`members/`):
-     - Member operations, joining/leaving, member queries and search
-     - Files: `join-leave-channel.mdx`, `query-members.mdx`, `search-members.mdx`
-   - **Subchannels** (`subchannels/`):
-     - Hierarchical conversation organization
-     - Files: `subchannel.mdx`
-
-2. **📁 Messaging Features** (`/social-plus-sdk/chat/messaging-features/`)
-   - **Message Management** (`messages/`):
-     - Core message operations, reactions, mentions, flagging
-     - Files: `get-and-view-a-message.mdx`, `edit-and-delete-messages.mdx`, `query-and-filter-messages.mdx`, `message-reaction.mdx`, `mention-in-messages.mdx`, `flag-unflag-a-message.mdx`
-   - **Message Types** (`message-types/`):
-     - All message format support (text, media, files, custom)
-     - Files: `text-message.mdx`, `image-message.mdx`, `video-message.mdx`, `audio-message.mdx`, `file-message.mdx`, `custom-message.mdx`, `reply-to-a-message.mdx`
-
-3. **📁 Engagement Features** (`/social-plus-sdk/chat/engagement-features/`)
-   - **Message Previews**: Quick message glimpses for better UX
-   - **Unread Status & Read Receipts** (`unread-status/`):
-     - Comprehensive read status tracking at channel, user, and message levels
-     - Files: `channel-unread-count.mdx`, `user-unread-count.mdx`, `mark-channel-as-read.mdx`, `mark-message-as-read.mdx`, `message-delivery-status.mdx`, `start-stop-message-read-receipt-sync.mdx`, `observe-reading-count.mdx`, `subchannel-unread-count.mdx`, `read-status-and-unread-count-legacy.mdx`
-
-4. **📁 Moderation & Safety** (`/social-plus-sdk/chat/moderation-safety/`)
-   - **Member Management** (`member-management/`):
-     - Member moderation actions (ban, mute, roles)
-     - Files: `ban-unban-a-list-of-channel-members.mdx`, `mute-unmute-a-list-of-channel-members.mdx`, `roles-and-permission.mdx`
-   - **Content Moderation** (`content-moderation/`):
-     - Content quality and safety controls
-     - Files: `channel-rate-limiting.mdx`, `channel-moderation.mdx`
-
-#### 🎯 **Key Improvements Made**:
-
-1. **Workflow-Based Organization**: 
-   - Structured around developer workflows (conversation setup → messaging → engagement → safety)
-   - Eliminates technical silos in favor of logical feature groupings
-
-2. **Comprehensive Overview System**:
-   - Created `overview.mdx` files for all sections and subsections
-   - Each overview includes CardGroups, use cases, best practices, and implementation guidance
-   - Consistent modern MDX components throughout
-
-3. **Modernized Main Overview**:
-   - Replaced legacy README with modern `overview.mdx`
-   - Added CardGroup navigation, key capabilities, getting started steps
-   - Included common use cases and developer-friendly tips
-
-4. **Enhanced Navigation Structure**:
-   - Updated `docs.json` with hierarchical organization
-   - Logical groupings that mirror the workflow-based approach
-   - Clear progression from basic to advanced features
-
-5. **File Organization**:
-   - Moved all files to appropriate workflow-based directories
-   - Maintained all existing content while improving structure
-   - Cleaned up legacy directories and README files
-
-#### 🏆 **Benefits Achieved**:
-
-- **Developer Experience**: Clear workflow-based navigation that matches how developers actually build chat features
-- **Logical Progression**: Natural flow from conversation setup to advanced features
-- **Reduced Confusion**: Eliminated scattered features across technical boundaries
-- **Consistent Patterns**: Mirrors successful Social module structure for familiarity
-- **Scalable Structure**: Easily extensible for future chat features
-
-#### 📋 **Files Successfully Moved**:
-
-- **Channel files**: All moved to `conversation-management/channels/`
-- **Member files**: All moved to `conversation-management/members/`
-- **Subchannel files**: All moved to `conversation-management/subchannels/`
-- **Message files**: Core operations moved to `messaging-features/messages/`
-- **Message type files**: All moved to `messaging-features/message-types/`
-- **Unread status files**: All moved to `engagement-features/unread-status/`
-- **Moderation files**: Split between `moderation-safety/member-management/` and `moderation-safety/content-moderation/`
-
-### Navigation Updates
-- Updated `docs.json` with complete new Chat structure
-- Added hierarchical groupings with proper overview files
-- Maintained all existing content while improving organization
-
----
-

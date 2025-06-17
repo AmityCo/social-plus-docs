@@ -1,0 +1,709 @@
+---
+title: "Stream Events Troubleshooting"
+description: "Debug and resolve common stream event handling issues in your video streaming application"
+---
+
+# Stream Events Troubleshooting
+
+Common issues and solutions when working with real-time stream events, viewer interactions, and broadcast state management.
+
+## Common Issues
+
+### Events Not Firing
+
+**Symptoms:**
+- Stream lifecycle events not triggered
+- Viewer activity events missing
+- Broadcast status changes not detected
+
+**Troubleshooting Steps:**
+
+1. **Verify Event Registration**
+   ```typescript
+   // Check if event listeners are properly registered
+   const registeredEvents = VideoStreamManager.getRegisteredEvents();
+   console.log('Registered events:', registeredEvents);
+   
+   // Re-register if needed
+   VideoStreamManager.on('stream.started', handleStreamStarted);
+   VideoStreamManager.on('viewer.joined', handleViewerJoined);
+   ```
+
+2. **Check Connection Status**
+   ```typescript
+   // Verify connection to event stream
+   const status = await VideoStreamManager.getConnectionStatus();
+   
+   if (status !== 'connected') {
+     console.log('Event stream not connected, attempting reconnection...');
+     await VideoStreamManager.reconnectEventStream();
+   }
+   ```
+
+3. **Test Event Flow**
+   ```typescript
+   // Enable event debugging
+   VideoStreamManager.enableEventDebugging();
+   
+   // Test with mock events
+   VideoStreamManager.simulateEvent('stream.started', {
+     streamId: 'test-stream',
+     timestamp: Date.now()
+   });
+   ```
+
+### Event Delays
+
+**Symptoms:**
+- Events received with significant delay
+- Viewer count updates lagging
+- Chat messages arriving late
+
+**Causes & Solutions:**
+
+1. **Network Connectivity Issues**
+   ```typescript
+   // Monitor connection quality
+   VideoStreamManager.on('connection.quality', (quality) => {
+     console.log('Connection quality:', quality);
+     
+     if (quality === 'poor') {
+       // Switch to polling mode for critical events
+       VideoStreamManager.enableEventPolling(['stream.ended', 'broadcast.error']);
+     }
+   });
+   ```
+
+2. **Event Queue Backlog**
+   ```typescript
+   // Check event queue status
+   const queueStatus = VideoStreamManager.getEventQueueStatus();
+   
+   if (queueStatus.backlog > 100) {
+     console.warn('Event queue backlog detected:', queueStatus);
+     
+     // Clear non-critical events
+     VideoStreamManager.clearEventQueue(['viewer.joined', 'viewer.left']);
+   }
+   ```
+
+3. **Processing Bottlenecks**
+   ```typescript
+   // Optimize event processing
+   VideoStreamManager.configure({
+     eventProcessing: {
+       batchSize: 10,
+       batchInterval: 1000,
+       priorityEvents: ['stream.ended', 'broadcast.error'],
+       throttledEvents: {
+         'viewer.joined': 2000, // Process every 2 seconds
+         'viewer.left': 2000
+       }
+     }
+   });
+   ```
+
+### Memory Leaks
+
+**Symptoms:**
+- Increasing memory usage over time
+- App performance degradation
+- Event handlers accumulating
+
+**Solutions:**
+
+1. **Proper Event Cleanup**
+   ```typescript
+   class StreamComponent {
+     private eventCleanup: (() => void)[] = [];
+     
+     componentDidMount() {
+       // Store cleanup functions
+       this.eventCleanup.push(
+         VideoStreamManager.on('stream.started', this.handleStreamStarted)
+       );
+       
+       this.eventCleanup.push(
+         VideoStreamManager.on('viewer.joined', this.handleViewerJoined)
+       );
+     }
+     
+     componentWillUnmount() {
+       // Clean up all event listeners
+       this.eventCleanup.forEach(cleanup => cleanup());
+       this.eventCleanup = [];
+     }
+   }
+   ```
+
+2. **Event Handler Optimization**
+   ```typescript
+   // Use weak references for event handlers
+   class EventHandlerManager {
+     private handlers = new WeakMap();
+     
+     addHandler(component: any, event: string, handler: Function) {
+       if (!this.handlers.has(component)) {
+         this.handlers.set(component, new Map());
+       }
+       
+       const componentHandlers = this.handlers.get(component);
+       componentHandlers.set(event, handler);
+       
+       return VideoStreamManager.on(event, handler);
+     }
+     
+     removeHandlers(component: any) {
+       const componentHandlers = this.handlers.get(component);
+       if (componentHandlers) {
+         componentHandlers.forEach((handler, event) => {
+           VideoStreamManager.off(event, handler);
+         });
+         this.handlers.delete(component);
+       }
+     }
+   }
+   ```
+
+### Event Ordering Issues
+
+**Symptoms:**
+- Events received out of order
+- State inconsistencies
+- Race conditions in UI updates
+
+**Solutions:**
+
+1. **Event Sequencing**
+   ```typescript
+   class EventSequencer {
+     private sequenceNumber = 0;
+     private pendingEvents = new Map<number, StreamEvent>();
+     private expectedSequence = 1;
+     
+     processEvent(event: StreamEvent) {
+       if (event.sequence === this.expectedSequence) {
+         // Process immediately
+         this.handleEvent(event);
+         this.expectedSequence++;
+         
+         // Check for pending events
+         this.processPendingEvents();
+       } else {
+         // Store for later processing
+         this.pendingEvents.set(event.sequence, event);
+       }
+     }
+     
+     private processPendingEvents() {
+       while (this.pendingEvents.has(this.expectedSequence)) {
+         const event = this.pendingEvents.get(this.expectedSequence)!;
+         this.handleEvent(event);
+         this.pendingEvents.delete(this.expectedSequence);
+         this.expectedSequence++;
+       }
+     }
+   }
+   ```
+
+2. **State Synchronization**
+   ```typescript
+   // Use state snapshots for consistency
+   class StreamStateManager {
+     private stateHistory: StreamState[] = [];
+     private maxHistorySize = 100;
+     
+     updateState(event: StreamEvent) {
+       const currentState = this.getCurrentState();
+       const newState = this.applyEvent(currentState, event);
+       
+       // Validate state transition
+       if (this.isValidTransition(currentState, newState)) {
+         this.stateHistory.push(newState);
+         
+         // Limit history size
+         if (this.stateHistory.length > this.maxHistorySize) {
+           this.stateHistory.shift();
+         }
+         
+         // Notify listeners
+         this.notifyStateChange(newState);
+       } else {
+         console.warn('Invalid state transition:', { currentState, event, newState });
+         // Request state synchronization
+         this.requestStateSync();
+       }
+     }
+   }
+   ```
+
+## Platform-Specific Issues
+
+### iOS Event Handling
+
+**Background Event Processing:**
+```swift
+// Handle events when app is backgrounded
+class VideoEventHandler: NSObject {
+    
+    override init() {
+        super.init()
+        setupBackgroundEventHandling()
+    }
+    
+    private func setupBackgroundEventHandling() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func appDidEnterBackground() {
+        // Switch to essential events only
+        VideoStreamManager.shared.configureForBackground()
+    }
+    
+    @objc private func appWillEnterForeground() {
+        // Restore full event handling
+        VideoStreamManager.shared.configureForForeground()
+        
+        // Sync missed events
+        VideoStreamManager.shared.syncMissedEvents()
+    }
+}
+```
+
+**Memory Management:**
+```swift
+// Prevent retain cycles in event handlers
+class StreamViewController: UIViewController {
+    private var eventTokens: [EventToken] = []
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Use weak self to prevent retain cycles
+        let token1 = VideoStreamManager.shared.onStreamStarted { [weak self] streamData in
+            self?.handleStreamStarted(streamData)
+        }
+        
+        let token2 = VideoStreamManager.shared.onViewerJoined { [weak self] viewerData in
+            self?.handleViewerJoined(viewerData)
+        }
+        
+        eventTokens = [token1, token2]
+    }
+    
+    deinit {
+        // Clean up event handlers
+        eventTokens.forEach { $0.cancel() }
+    }
+}
+```
+
+### Android Event Handling
+
+**Lifecycle-Aware Event Handling:**
+```kotlin
+class StreamFragment : Fragment(), LifecycleEventObserver {
+    
+    private val eventHandlers = mutableListOf<EventHandler>()
+    
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        
+        // Register as lifecycle observer
+        lifecycle.addObserver(this)
+        
+        setupEventHandlers()
+    }
+    
+    private fun setupEventHandlers() {
+        val streamStartedHandler = VideoStreamManager.getInstance()
+            .onStreamStarted { streamData ->
+                if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    handleStreamStarted(streamData)
+                }
+            }
+        
+        eventHandlers.add(streamStartedHandler)
+    }
+    
+    override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+        when (event) {
+            Lifecycle.Event.ON_PAUSE -> pauseEventHandling()
+            Lifecycle.Event.ON_RESUME -> resumeEventHandling()
+            Lifecycle.Event.ON_DESTROY -> cleanupEventHandlers()
+            else -> {}
+        }
+    }
+    
+    private fun cleanupEventHandlers() {
+        eventHandlers.forEach { it.cancel() }
+        eventHandlers.clear()
+    }
+}
+```
+
+**Background Processing Limits:**
+```kotlin
+// Handle Android background processing limits
+class VideoEventService : JobIntentService() {
+    
+    companion object {
+        private const val JOB_ID = 1000
+        
+        fun enqueueWork(context: Context, intent: Intent) {
+            enqueueWork(context, VideoEventService::class.java, JOB_ID, intent)
+        }
+    }
+    
+    override fun onHandleWork(intent: Intent) {
+        val eventType = intent.getStringExtra("event_type") ?: return
+        val eventData = intent.getStringExtra("event_data") ?: return
+        
+        // Process critical events even in background
+        when (eventType) {
+            "stream.ended" -> handleStreamEnded(eventData)
+            "broadcast.error" -> handleBroadcastError(eventData)
+            "recording.completed" -> handleRecordingCompleted(eventData)
+        }
+    }
+}
+```
+
+### Web Event Handling
+
+**Service Worker Event Processing:**
+```javascript
+// sw.js - Service Worker for background event handling
+self.addEventListener('message', event => {
+  if (event.data.type === 'STREAM_EVENT') {
+    handleStreamEvent(event.data.event);
+  }
+});
+
+function handleStreamEvent(streamEvent) {
+  switch (streamEvent.type) {
+    case 'stream.ended':
+      // Update cached stream status
+      updateStreamCache(streamEvent.streamId, { status: 'ended' });
+      break;
+      
+    case 'recording.ready':
+      // Show notification
+      self.registration.showNotification('Recording Ready', {
+        body: 'Your stream recording is now available',
+        data: { recordingUrl: streamEvent.recordingUrl }
+      });
+      break;
+  }
+}
+```
+
+**Browser Tab Visibility:**
+```javascript
+// Handle visibility changes
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Reduce event processing when tab is hidden
+    VideoStreamManager.setEventProcessingMode('background');
+  } else {
+    // Resume full event processing
+    VideoStreamManager.setEventProcessingMode('foreground');
+    
+    // Sync missed events
+    VideoStreamManager.syncMissedEvents();
+  }
+});
+```
+
+## Performance Optimization
+
+### Event Batching
+
+```typescript
+class EventBatcher {
+  private batches = new Map<string, StreamEvent[]>();
+  private timers = new Map<string, NodeJS.Timeout>();
+  private batchSize = 10;
+  private batchTimeout = 5000;
+  
+  addEvent(event: StreamEvent) {
+    const batchKey = this.getBatchKey(event);
+    
+    if (!this.batches.has(batchKey)) {
+      this.batches.set(batchKey, []);
+    }
+    
+    const batch = this.batches.get(batchKey)!;
+    batch.push(event);
+    
+    // Process batch if size limit reached
+    if (batch.length >= this.batchSize) {
+      this.processBatch(batchKey);
+    } else {
+      // Set timeout for batch processing
+      this.setBatchTimeout(batchKey);
+    }
+  }
+  
+  private setBatchTimeout(batchKey: string) {
+    if (this.timers.has(batchKey)) {
+      clearTimeout(this.timers.get(batchKey));
+    }
+    
+    const timer = setTimeout(() => {
+      this.processBatch(batchKey);
+    }, this.batchTimeout);
+    
+    this.timers.set(batchKey, timer);
+  }
+  
+  private processBatch(batchKey: string) {
+    const batch = this.batches.get(batchKey);
+    if (!batch || batch.length === 0) return;
+    
+    // Process batched events
+    this.processBatchedEvents(batchKey, batch);
+    
+    // Clean up
+    this.batches.delete(batchKey);
+    if (this.timers.has(batchKey)) {
+      clearTimeout(this.timers.get(batchKey));
+      this.timers.delete(batchKey);
+    }
+  }
+}
+```
+
+### Event Filtering
+
+```typescript
+class EventFilter {
+  private filters = new Map<string, (event: StreamEvent) => boolean>();
+  
+  addFilter(name: string, filter: (event: StreamEvent) => boolean) {
+    this.filters.set(name, filter);
+  }
+  
+  shouldProcessEvent(event: StreamEvent): boolean {
+    // Apply all filters
+    for (const [name, filter] of this.filters) {
+      if (!filter(event)) {
+        console.debug(`Event filtered by ${name}:`, event);
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+// Usage
+const eventFilter = new EventFilter();
+
+// Filter by stream relevance
+eventFilter.addFilter('active_streams', (event) => {
+  return activeStreamIds.includes(event.streamId);
+});
+
+// Filter by event importance
+eventFilter.addFilter('importance', (event) => {
+  const criticalEvents = ['stream.ended', 'broadcast.error'];
+  const userRole = getCurrentUserRole();
+  
+  if (userRole === 'viewer' && !criticalEvents.includes(event.type)) {
+    return false; // Viewers don't need all events
+  }
+  return true;
+});
+```
+
+## Testing & Debugging
+
+### Event Flow Testing
+
+```typescript
+// Test event flow with mock events
+class EventFlowTester {
+  private receivedEvents: StreamEvent[] = [];
+  private expectedEvents: StreamEvent[] = [];
+  
+  async testEventFlow(scenario: string): Promise<boolean> {
+    this.receivedEvents = [];
+    
+    // Set up event capture
+    VideoStreamManager.on('*', (event) => {
+      this.receivedEvents.push(event);
+    });
+    
+    // Run test scenario
+    await this.runScenario(scenario);
+    
+    // Verify events
+    return this.verifyEventSequence();
+  }
+  
+  private async runScenario(scenario: string): Promise<void> {
+    switch (scenario) {
+      case 'stream_lifecycle':
+        this.expectedEvents = [
+          { type: 'stream.created', streamId: 'test-123' },
+          { type: 'stream.started', streamId: 'test-123' },
+          { type: 'viewer.joined', streamId: 'test-123' },
+          { type: 'stream.ended', streamId: 'test-123' }
+        ];
+        
+        // Simulate events
+        await this.simulateStreamLifecycle();
+        break;
+    }
+  }
+  
+  private verifyEventSequence(): boolean {
+    if (this.receivedEvents.length !== this.expectedEvents.length) {
+      console.error('Event count mismatch');
+      return false;
+    }
+    
+    for (let i = 0; i < this.expectedEvents.length; i++) {
+      const expected = this.expectedEvents[i];
+      const received = this.receivedEvents[i];
+      
+      if (expected.type !== received.type || expected.streamId !== received.streamId) {
+        console.error('Event sequence mismatch at index', i);
+        return false;
+      }
+    }
+    
+    return true;
+  }
+}
+```
+
+### Debug Utilities
+
+```typescript
+// Comprehensive event debugging
+class EventDebugger {
+  private eventLog: Array<{
+    timestamp: number;
+    event: StreamEvent;
+    processed: boolean;
+    processingTime?: number;
+  }> = [];
+  
+  enable() {
+    VideoStreamManager.on('*', (event) => {
+      this.logEvent(event);
+    });
+  }
+  
+  private logEvent(event: StreamEvent) {
+    const logEntry = {
+      timestamp: Date.now(),
+      event,
+      processed: false
+    };
+    
+    this.eventLog.push(logEntry);
+    
+    // Monitor processing
+    const startTime = performance.now();
+    
+    setTimeout(() => {
+      const endTime = performance.now();
+      logEntry.processed = true;
+      logEntry.processingTime = endTime - startTime;
+    }, 0);
+  }
+  
+  getEventStats() {
+    const totalEvents = this.eventLog.length;
+    const processedEvents = this.eventLog.filter(e => e.processed).length;
+    const avgProcessingTime = this.eventLog
+      .filter(e => e.processingTime)
+      .reduce((sum, e) => sum + e.processingTime!, 0) / processedEvents;
+    
+    return {
+      totalEvents,
+      processedEvents,
+      avgProcessingTime,
+      unprocessedEvents: totalEvents - processedEvents
+    };
+  }
+  
+  exportLogs() {
+    return JSON.stringify(this.eventLog, null, 2);
+  }
+}
+```
+
+## Best Practices
+
+### Event Handler Design
+
+1. **Keep Handlers Lightweight**
+   ```typescript
+   // Good: Lightweight handler
+   VideoStreamManager.on('viewer.joined', (data) => {
+     setViewerCount(data.viewerCount);
+   });
+   
+   // Avoid: Heavy processing in handlers
+   VideoStreamManager.on('viewer.joined', async (data) => {
+     // Don't do this - offload to background
+     await updateUserDatabase(data);
+     await sendAnalytics(data);
+     await updateUI(data);
+   });
+   ```
+
+2. **Use Error Boundaries**
+   ```typescript
+   VideoStreamManager.on('stream.started', (data) => {
+     try {
+       handleStreamStarted(data);
+     } catch (error) {
+       console.error('Stream start handler failed:', error);
+       // Don't let one handler break others
+     }
+   });
+   ```
+
+3. **Implement Proper Cleanup**
+   ```typescript
+   class StreamEventManager {
+     private cleanup: (() => void)[] = [];
+     
+     initialize() {
+       this.cleanup.push(
+         VideoStreamManager.on('stream.started', this.handleStreamStarted.bind(this))
+       );
+     }
+     
+     destroy() {
+       this.cleanup.forEach(fn => fn());
+       this.cleanup = [];
+     }
+   }
+   ```
+
+## Next Steps
+
+1. **[Push Notifications Troubleshooting](./notifications.mdx)** - Notification-specific issues
+2. **[Performance Guide](../core-concepts/performance.mdx)** - Optimization techniques
+3. **[API Reference](../../api-reference/stream-events.mdx)** - Complete event API documentation
+
+<Warning>
+**Production Debugging**: Enable detailed event logging only in development or when specifically troubleshooting production issues, as it can impact performance.
+</Warning>

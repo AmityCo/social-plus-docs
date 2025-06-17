@@ -1,0 +1,1646 @@
+---
+title: "Android Implementation Guide"
+description: "Comprehensive Android-specific implementation details for Social+ Video SDK integration"
+---
+
+# Android Implementation Guide
+
+Complete guide for implementing Social+ Video SDK in Android applications using Kotlin and modern Android development practices.
+
+## Overview
+
+This guide covers Android-specific implementation details, native components integration, and platform-specific considerations for video streaming applications.
+
+### Prerequisites
+
+- **Android 5.0 (API 21)+** minimum SDK version
+- **Android Studio 4.2+** for development
+- **Kotlin 1.5+** support
+- **Gradle 7.0+** build system
+
+### Core Dependencies
+
+```kotlin
+// App-level build.gradle
+dependencies {
+    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-video-publisher:1.0.0'
+    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-video-player:1.0.0'
+    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-video-core:1.0.0'
+    
+    // Required Android dependencies
+    implementation 'androidx.camera:camera-core:1.3.1'
+    implementation 'androidx.camera:camera-camera2:1.3.1'
+    implementation 'androidx.camera:camera-lifecycle:1.3.1'
+    implementation 'androidx.camera:camera-view:1.3.1'
+    implementation 'androidx.media3:media3-exoplayer:1.2.0'
+    implementation 'androidx.media3:media3-ui:1.2.0'
+    
+    // Coroutines for async operations
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    
+    // Lifecycle components
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+}
+```
+
+## Installation & Setup
+
+### Gradle Configuration
+
+```kotlin
+// Project-level build.gradle
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+        maven { url 'https://releases.social.plus/android' }
+    }
+}
+
+// App-level build.gradle
+android {
+    compileSdk 34
+    
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+        
+        // Required for video features
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    
+    buildFeatures {
+        viewBinding true
+        dataBinding true
+    }
+}
+```
+
+### Application Setup
+
+```kotlin
+// Application class
+class VideoApplication : Application() {
+    
+    override fun onCreate() {
+        super.onCreate()
+        
+        // Initialize Social+ Video SDK
+        setupVideoSDK()
+    }
+    
+    private fun setupVideoSDK() {
+        val config = AmityCoreClient.Configuration(
+            apiKey = "your-api-key",
+            region = AmityRegion.GLOBAL
+        )
+        
+        AmityCoreClient.setup(this, config)
+        
+        // Register video publisher
+        AmityStreamBroadcasterClient.setup(AmityCoreClient.getConfiguration())
+    }
+}
+```
+
+### Manifest Configuration
+
+```xml
+<!-- AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Required permissions -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- Camera hardware features -->
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="true" />
+    
+    <application
+        android:name=".VideoApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme">
+        
+        <!-- Your activities -->
+        
+    </application>
+</manifest>
+```
+
+## Permissions & Runtime Handling
+
+### Permission Manager
+
+```kotlin
+class PermissionManager(private val activity: Activity) {
+    
+    companion object {
+        private const val PERMISSION_REQUEST_CODE = 1001
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+    }
+    
+    fun requestPermissions(callback: (Boolean) -> Unit) {
+        if (hasAllPermissions()) {
+            callback(true)
+            return
+        }
+        
+        this.permissionCallback = callback
+        
+        ActivityCompat.requestPermissions(
+            activity,
+            REQUIRED_PERMISSIONS,
+            PERMISSION_REQUEST_CODE
+        )
+    }
+    
+    private fun hasAllPermissions(): Boolean {
+        return REQUIRED_PERMISSIONS.all { permission ->
+            ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+    
+    private var permissionCallback: ((Boolean) -> Unit)? = null
+    
+    fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            permissionCallback?.invoke(allGranted)
+            permissionCallback = null
+        }
+    }
+    
+    fun showPermissionRationale(callback: () -> Unit) {
+        AlertDialog.Builder(activity)
+            .setTitle("Permissions Required")
+            .setMessage("This app needs camera and microphone access to broadcast video")
+            .setPositiveButton("Grant") { _, _ -> callback() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+}
+```
+
+## Broadcasting Implementation
+
+### Broadcast Activity
+
+```kotlin
+class LiveBroadcastActivity : AppCompatActivity() {
+    
+    private lateinit var binding: ActivityLiveBroadcastBinding
+    private lateinit var broadcaster: AmityStreamBroadcaster
+    private lateinit var permissionManager: PermissionManager
+    
+    private var streamId: String? = null
+    private var isLive = false
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityLiveBroadcastBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        permissionManager = PermissionManager(this)
+        
+        setupUI()
+        requestPermissions()
+    }
+    
+    private fun setupUI() {
+        binding.apply {
+            startButton.setOnClickListener { startBroadcast() }
+            stopButton.setOnClickListener { stopBroadcast() }
+            switchCameraButton.setOnClickListener { switchCamera() }
+            toggleMuteButton.setOnClickListener { toggleMute() }
+            qualityButton.setOnClickListener { showQualitySelector() }
+        }
+    }
+    
+    private fun requestPermissions() {
+        permissionManager.requestPermissions { granted ->
+            if (granted) {
+                setupBroadcaster()
+            } else {
+                showPermissionDeniedDialog()
+            }
+        }
+    }
+    
+    private fun setupBroadcaster() {
+        try {
+            // Create broadcaster configuration
+            val config = AmityStreamBroadcasterConfiguration.Builder()
+                .setOrientation(Configuration.ORIENTATION_PORTRAIT)
+                .setResolution(AmityBroadcastResolution.HD_720P)
+                .build()
+            
+            // Create broadcaster
+            broadcaster = AmityStreamBroadcaster.Builder(binding.cameraView)
+                .setConfiguration(config)
+                .build()
+            
+            // Set up event listeners
+            broadcaster.setOnStateChangedListener { state ->
+                runOnUiThread { updateUI(state) }
+            }
+            
+            broadcaster.setOnErrorListener { error ->
+                runOnUiThread { handleBroadcastError(error) }
+            }
+            
+            updateUI(AmityStreamBroadcasterState.IDLE)
+            
+        } catch (e: Exception) {
+            Log.e("Broadcast", "Failed to setup broadcaster", e)
+            showError("Failed to initialize broadcaster: ${e.message}")
+        }
+    }
+    
+    private fun startBroadcast() {
+        if (!::broadcaster.isInitialized) {
+            showError("Broadcaster not initialized")
+            return
+        }
+        
+        val title = binding.titleEditText.text.toString().ifEmpty { "Live Stream" }
+        val description = binding.descriptionEditText.text.toString().ifEmpty { "Broadcasting live from Android" }
+        
+        broadcaster.startPublish(title, description)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ stream ->
+                streamId = stream.streamId
+                isLive = true
+                updateUI(AmityStreamBroadcasterState.CONNECTED)
+                
+                // Track analytics
+                trackBroadcastStarted(stream.streamId)
+                
+            }, { error ->
+                Log.e("Broadcast", "Failed to start broadcast", error)
+                handleBroadcastError(error)
+            })
+    }
+    
+    private fun stopBroadcast() {
+        if (!::broadcaster.isInitialized || !isLive) return
+        
+        broadcaster.stopPublish()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                isLive = false
+                streamId = null
+                updateUI(AmityStreamBroadcasterState.IDLE)
+                
+                // Track analytics
+                trackBroadcastStopped()
+                
+            }, { error ->
+                Log.e("Broadcast", "Failed to stop broadcast", error)
+                handleBroadcastError(error)
+            })
+    }
+    
+    private fun switchCamera() {
+        if (!::broadcaster.isInitialized) return
+        
+        broadcaster.switchCamera()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                // Camera switched successfully
+            }, { error ->
+                Log.e("Broadcast", "Failed to switch camera", error)
+                showError("Failed to switch camera")
+            })
+    }
+    
+    private fun toggleMute() {
+        if (!::broadcaster.isInitialized) return
+        
+        val isMuted = broadcaster.isMuted()
+        broadcaster.setMuted(!isMuted)
+        
+        binding.toggleMuteButton.apply {
+            text = if (!isMuted) "Unmute" else "Mute"
+            setCompoundDrawablesWithIntrinsicBounds(
+                if (!isMuted) R.drawable.ic_mic_off else R.drawable.ic_mic_on,
+                0, 0, 0
+            )
+        }
+    }
+    
+    private fun showQualitySelector() {
+        val qualities = arrayOf("480p", "720p", "1080p")
+        val resolutions = arrayOf(
+            AmityBroadcastResolution.SD_480P,
+            AmityBroadcastResolution.HD_720P,
+            AmityBroadcastResolution.FHD_1080P
+        )
+        
+        AlertDialog.Builder(this)
+            .setTitle("Select Quality")
+            .setItems(qualities) { _, which ->
+                updateBroadcastQuality(resolutions[which])
+            }
+            .show()
+    }
+    
+    private fun updateBroadcastQuality(resolution: AmityBroadcastResolution) {
+        if (isLive) {
+            showError("Cannot change quality while broadcasting")
+            return
+        }
+        
+        // Update configuration
+        val config = AmityStreamBroadcasterConfiguration.Builder()
+            .setOrientation(Configuration.ORIENTATION_PORTRAIT)
+            .setResolution(resolution)
+            .build()
+        
+        broadcaster.updateConfiguration(config)
+    }
+    
+    private fun updateUI(state: AmityStreamBroadcasterState) {
+        binding.apply {
+            when (state) {
+                AmityStreamBroadcasterState.IDLE -> {
+                    statusText.text = "Ready to broadcast"
+                    startButton.isEnabled = true
+                    stopButton.isEnabled = false
+                    liveIndicator.visibility = View.GONE
+                }
+                
+                AmityStreamBroadcasterState.CONNECTING -> {
+                    statusText.text = "Connecting..."
+                    startButton.isEnabled = false
+                    stopButton.isEnabled = false
+                    liveIndicator.visibility = View.VISIBLE
+                }
+                
+                AmityStreamBroadcasterState.CONNECTED -> {
+                    statusText.text = "LIVE"
+                    startButton.isEnabled = false
+                    stopButton.isEnabled = true
+                    liveIndicator.visibility = View.VISIBLE
+                }
+                
+                AmityStreamBroadcasterState.DISCONNECTED -> {
+                    statusText.text = "Disconnected"
+                    startButton.isEnabled = true
+                    stopButton.isEnabled = false
+                    liveIndicator.visibility = View.GONE
+                }
+            }
+        }
+    }
+    
+    private fun handleBroadcastError(error: Throwable) {
+        val message = when (error) {
+            is AmityNetworkException -> "Network error. Please check your connection."
+            is AmityPermissionException -> "Permission denied. Please grant required permissions."
+            is AmityStreamException -> "Stream error: ${error.message}"
+            else -> "Broadcast error: ${error.message}"
+        }
+        
+        showError(message)
+        
+        // Reset UI state
+        isLive = false
+        updateUI(AmityStreamBroadcasterState.IDLE)
+    }
+    
+    private fun showError(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+    
+    private fun showPermissionDeniedDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Permissions Required")
+            .setMessage("Camera and microphone permissions are required for broadcasting")
+            .setPositiveButton("Grant") { _, _ ->
+                permissionManager.requestPermissions { granted ->
+                    if (granted) setupBroadcaster()
+                    else finish()
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
+    
+    private fun trackBroadcastStarted(streamId: String) {
+        // Analytics tracking
+        val properties = mapOf(
+            "stream_id" to streamId,
+            "platform" to "android",
+            "quality" to broadcaster.configuration.resolution.name
+        )
+        
+        // Send to your analytics service
+        // Analytics.track("broadcast_started", properties)
+    }
+    
+    private fun trackBroadcastStopped() {
+        // Analytics tracking
+        // Analytics.track("broadcast_stopped")
+    }
+    
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionManager.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        
+        // Clean up broadcaster
+        if (::broadcaster.isInitialized) {
+            if (isLive) {
+                broadcaster.stopPublish().subscribe()
+            }
+            broadcaster.release()
+        }
+    }
+}
+```
+
+### Broadcast Layout
+
+```xml
+<!-- activity_live_broadcast.xml -->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res/constraints"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+    
+    <!-- Camera preview -->
+    <com.amity.socialcloud.sdk.video.AmityCameraView
+        android:id="@+id/cameraView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/controlsContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintDimensionRatio="H,9:16" />
+    
+    <!-- Live indicator -->
+    <TextView
+        android:id="@+id/liveIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LIVE"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:background="@drawable/live_indicator_bg"
+        android:padding="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@+id/cameraView"
+        app:layout_constraintStart_toStartOf="@+id/cameraView"
+        android:layout_margin="16dp" />
+    
+    <!-- Top controls -->
+    <LinearLayout
+        android:id="@+id/topControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        app:layout_constraintTop_toTopOf="@+id/cameraView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <Button
+            android:id="@+id/switchCameraButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/circle_button_bg"
+            android:drawableTop="@drawable/ic_switch_camera"
+            android:layout_marginEnd="16dp" />
+        
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+        
+        <Button
+            android:id="@+id/qualityButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="720p"
+            android:textColor="@color/white"
+            android:background="@drawable/rounded_button_bg"
+            android:padding="12dp" />
+    </LinearLayout>
+    
+    <!-- Controls container -->
+    <LinearLayout
+        android:id="@+id/controlsContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="@drawable/controls_bg"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <!-- Stream info inputs -->
+        <EditText
+            android:id="@+id/titleEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Stream title"
+            android:textColor="@color/white"
+            android:textColorHint="@color/white_70"
+            android:background="@drawable/edit_text_bg"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp" />
+        
+        <EditText
+            android:id="@+id/descriptionEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Description (optional)"
+            android:textColor="@color/white"
+            android:textColorHint="@color/white_70"
+            android:background="@drawable/edit_text_bg"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp" />
+        
+        <!-- Status text -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ready to broadcast"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp" />
+        
+        <!-- Control buttons -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal">
+            
+            <Button
+                android:id="@+id/toggleMuteButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/circle_button_bg"
+                android:drawableTop="@drawable/ic_mic_on"
+                android:layout_marginEnd="24dp" />
+            
+            <Button
+                android:id="@+id/startButton"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:background="@drawable/broadcast_button_bg"
+                android:text="GO\nLIVE"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="24dp" />
+            
+            <Button
+                android:id="@+id/stopButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/stop_button_bg"
+                android:enabled="false" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+## Video Playback Implementation
+
+### Player Activity
+
+```kotlin
+class VideoPlayerActivity : AppCompatActivity() {
+    
+    private lateinit var binding: ActivityVideoPlayerBinding
+    private lateinit var player: AmityVideoPlayer
+    
+    private var streamId: String? = null
+    private var isLiveStream = false
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityVideoPlayerBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        // Get stream info from intent
+        streamId = intent.getStringExtra("stream_id")
+        isLiveStream = intent.getBooleanExtra("is_live", false)
+        
+        setupPlayer()
+        setupUI()
+        loadStream()
+    }
+    
+    private fun setupPlayer() {
+        player = AmityVideoPlayer.Builder(this)
+            .setPlayerView(binding.playerView)
+            .build()
+        
+        // Set up event listeners
+        player.setOnStateChangedListener { state ->
+            runOnUiThread { updateUI(state) }
+        }
+        
+        player.setOnErrorListener { error ->
+            runOnUiThread { handlePlayerError(error) }
+        }
+        
+        player.setOnProgressListener { position, duration ->
+            runOnUiThread { updateProgress(position, duration) }
+        }
+    }
+    
+    private fun setupUI() {
+        binding.apply {
+            playButton.setOnClickListener { player.play() }
+            pauseButton.setOnClickListener { player.pause() }
+            fullscreenButton.setOnClickListener { toggleFullscreen() }
+            
+            // Seek bar for VOD content
+            if (!isLiveStream) {
+                seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            player.seekTo(progress.toLong())
+                        }
+                    }
+                    
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                })
+            } else {
+                seekBar.visibility = View.GONE
+                liveIndicator.visibility = View.VISIBLE
+            }
+        }
+    }
+    
+    private fun loadStream() {
+        streamId?.let { id ->
+            player.loadStream(id)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({ stream ->
+                    updateStreamInfo(stream)
+                    
+                }, { error ->
+                    Log.e("Player", "Failed to load stream", error)
+                    handlePlayerError(error)
+                })
+        }
+    }
+    
+    private fun updateStreamInfo(stream: AmityStream) {
+        binding.apply {
+            titleText.text = stream.title
+            descriptionText.text = stream.description
+            
+            if (isLiveStream) {
+                viewerCountText.text = "${stream.viewerCount} viewers"
+                viewerCountText.visibility = View.VISIBLE
+            }
+        }
+    }
+    
+    private fun updateUI(state: AmityVideoPlayerState) {
+        binding.apply {
+            when (state) {
+                AmityVideoPlayerState.IDLE -> {
+                    playButton.visibility = View.VISIBLE
+                    pauseButton.visibility = View.GONE
+                    loadingIndicator.visibility = View.GONE
+                }
+                
+                AmityVideoPlayerState.LOADING -> {
+                    playButton.visibility = View.GONE
+                    pauseButton.visibility = View.GONE
+                    loadingIndicator.visibility = View.VISIBLE
+                }
+                
+                AmityVideoPlayerState.PLAYING -> {
+                    playButton.visibility = View.GONE
+                    pauseButton.visibility = View.VISIBLE
+                    loadingIndicator.visibility = View.GONE
+                }
+                
+                AmityVideoPlayerState.PAUSED -> {
+                    playButton.visibility = View.VISIBLE
+                    pauseButton.visibility = View.GONE
+                    loadingIndicator.visibility = View.GONE
+                }
+                
+                AmityVideoPlayerState.ENDED -> {
+                    playButton.visibility = View.VISIBLE
+                    pauseButton.visibility = View.GONE
+                    loadingIndicator.visibility = View.GONE
+                    
+                    if (!isLiveStream) {
+                        binding.seekBar.progress = 0
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun updateProgress(position: Long, duration: Long) {
+        if (!isLiveStream && duration > 0) {
+            binding.apply {
+                seekBar.max = duration.toInt()
+                seekBar.progress = position.toInt()
+                
+                currentTimeText.text = formatTime(position)
+                totalTimeText.text = formatTime(duration)
+            }
+        }
+    }
+    
+    private fun formatTime(timeMs: Long): String {
+        val seconds = (timeMs / 1000) % 60
+        val minutes = (timeMs / (1000 * 60)) % 60
+        val hours = (timeMs / (1000 * 60 * 60))
+        
+        return if (hours > 0) {
+            String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+    
+    private fun toggleFullscreen() {
+        if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+    
+    private fun handlePlayerError(error: Throwable) {
+        val message = when (error) {
+            is AmityNetworkException -> "Network error. Please check your connection."
+            is AmityStreamNotFoundException -> "Stream not found."
+            is AmityStreamUnavailableException -> "Stream is not available."
+            else -> "Playback error: ${error.message}"
+        }
+        
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        player.release()
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        player.pause()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Auto-resume for live streams
+        if (isLiveStream) {
+            player.play()
+        }
+    }
+}
+```
+
+## Push Notifications Integration
+
+### Firebase Messaging Service
+
+```kotlin
+class VideoFirebaseMessagingService : FirebaseMessagingService() {
+    
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        Log.d("FCM", "New token: $token")
+        
+        // Register with Social+ Video SDK
+        VideoNotificationManager.getInstance().registerDevice(token) { result ->
+            when (result) {
+                is AmityResult.Success -> {
+                    Log.d("FCM", "Device registered successfully")
+                }
+                is AmityResult.Error -> {
+                    Log.e("FCM", "Failed to register device", result.exception)
+                }
+            }
+        }
+    }
+    
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        super.onMessageReceived(remoteMessage)
+        
+        Log.d("FCM", "Message received from: ${remoteMessage.from}")
+        
+        val data = remoteMessage.data
+        val eventType = data["event_type"]
+        val streamId = data["stream_id"]
+        
+        when (eventType) {
+            "stream.started" -> handleStreamStarted(data)
+            "viewer.milestone" -> handleViewerMilestone(data)
+            "recording.ready" -> handleRecordingReady(data)
+            else -> handleGenericNotification(remoteMessage)
+        }
+    }
+    
+    private fun handleStreamStarted(data: Map<String, String>) {
+        val streamId = data["stream_id"] ?: return
+        val broadcasterName = data["broadcaster_name"] ?: "Someone"
+        val streamTitle = data["stream_title"] ?: "Untitled Stream"
+        
+        val notification = NotificationCompat.Builder(this, STREAM_CHANNEL_ID)
+            .setContentTitle("🔴 $broadcasterName is LIVE")
+            .setContentText(streamTitle)
+            .setSmallIcon(R.drawable.ic_live_stream)
+            .setAutoCancel(true)
+            .setContentIntent(createStreamPendingIntent(streamId, isLive = true))
+            .addAction(
+                R.drawable.ic_play,
+                "Watch",
+                createStreamPendingIntent(streamId, isLive = true)
+            )
+            .addAction(
+                R.drawable.ic_share,
+                "Share",
+                createSharePendingIntent(streamId)
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        
+        NotificationManagerCompat.from(this).notify(streamId.hashCode(), notification)
+    }
+    
+    private fun handleViewerMilestone(data: Map<String, String>) {
+        val streamId = data["stream_id"] ?: return
+        val viewerCount = data["viewer_count"] ?: return
+        val broadcasterName = data["broadcaster_name"] ?: "Your stream"
+        
+        val notification = NotificationCompat.Builder(this, MILESTONE_CHANNEL_ID)
+            .setContentTitle("🎉 Milestone Reached!")
+            .setContentText("$viewerCount people are watching $broadcasterName")
+            .setSmallIcon(R.drawable.ic_celebration)
+            .setAutoCancel(true)
+            .setContentIntent(createStreamPendingIntent(streamId, isLive = true))
+            .build()
+        
+        NotificationManagerCompat.from(this).notify(
+            "milestone_$streamId".hashCode(),
+            notification
+        )
+    }
+    
+    private fun handleRecordingReady(data: Map<String, String>) {
+        val streamId = data["stream_id"] ?: return
+        val recordingUrl = data["recording_url"] ?: return
+        
+        val notification = NotificationCompat.Builder(this, RECORDING_CHANNEL_ID)
+            .setContentTitle("Recording Ready")
+            .setContentText("Your stream recording is now available")
+            .setSmallIcon(R.drawable.ic_recording)
+            .setAutoCancel(true)
+            .setContentIntent(createRecordingPendingIntent(recordingUrl))
+            .addAction(
+                R.drawable.ic_play,
+                "Watch",
+                createRecordingPendingIntent(recordingUrl)
+            )
+            .build()
+        
+        NotificationManagerCompat.from(this).notify(
+            "recording_$streamId".hashCode(),
+            notification
+        )
+    }
+    
+    private fun createStreamPendingIntent(streamId: String, isLive: Boolean): PendingIntent {
+        val intent = Intent(this, VideoPlayerActivity::class.java).apply {
+            putExtra("stream_id", streamId)
+            putExtra("is_live", isLive)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        
+        return PendingIntent.getActivity(
+            this,
+            streamId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    private fun createSharePendingIntent(streamId: String): PendingIntent {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Watch this live stream: https://your-app.com/stream/$streamId")
+        }
+        
+        val intent = Intent.createChooser(shareIntent, "Share Stream")
+        
+        return PendingIntent.getActivity(
+            this,
+            "share_$streamId".hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    private fun createRecordingPendingIntent(recordingUrl: String): PendingIntent {
+        val intent = Intent(this, VideoPlayerActivity::class.java).apply {
+            putExtra("recording_url", recordingUrl)
+            putExtra("is_live", false)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        
+        return PendingIntent.getActivity(
+            this,
+            recordingUrl.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    companion object {
+        private const val STREAM_CHANNEL_ID = "stream_notifications"
+        private const val MILESTONE_CHANNEL_ID = "milestone_notifications"
+        private const val RECORDING_CHANNEL_ID = "recording_notifications"
+    }
+}
+```
+
+### Notification Channels Setup
+
+```kotlin
+class NotificationChannelManager(private val context: Context) {
+    
+    fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            // Stream notifications channel
+            val streamChannel = NotificationChannel(
+                STREAM_CHANNEL_ID,
+                "Stream Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for live stream events"
+                enableLights(true)
+                lightColor = Color.RED
+                enableVibration(true)
+                setSound(
+                    Uri.parse("android.resource://${context.packageName}/raw/stream_notification"),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+            }
+            
+            // Milestone notifications channel
+            val milestoneChannel = NotificationChannel(
+                MILESTONE_CHANNEL_ID,
+                "Milestone Notifications",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for viewer milestones"
+                enableLights(true)
+                lightColor = Color.BLUE
+            }
+            
+            // Recording notifications channel
+            val recordingChannel = NotificationChannel(
+                RECORDING_CHANNEL_ID,
+                "Recording Notifications",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for recording events"
+            }
+            
+            notificationManager.createNotificationChannels(
+                listOf(streamChannel, milestoneChannel, recordingChannel)
+            )
+        }
+    }
+    
+    companion object {
+        private const val STREAM_CHANNEL_ID = "stream_notifications"
+        private const val MILESTONE_CHANNEL_ID = "milestone_notifications"
+        private const val RECORDING_CHANNEL_ID = "recording_notifications"
+    }
+}
+```
+
+## Jetpack Compose Integration
+
+### Compose Broadcasting Screen
+
+```kotlin
+@Composable
+fun LiveBroadcastScreen(
+    viewModel: BroadcastViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    
+    LaunchedEffect(Unit) {
+        viewModel.requestPermissions(context as Activity)
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Camera preview
+        AndroidView(
+            factory = { context ->
+                AmityCameraView(context).apply {
+                    viewModel.setupBroadcaster(this)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+        
+        // Overlay UI
+        LiveBroadcastOverlay(
+            state = state,
+            onStartBroadcast = viewModel::startBroadcast,
+            onStopBroadcast = viewModel::stopBroadcast,
+            onSwitchCamera = viewModel::switchCamera,
+            onToggleMute = viewModel::toggleMute,
+            onQualityChange = viewModel::changeQuality
+        )
+    }
+}
+
+@Composable
+fun LiveBroadcastOverlay(
+    state: BroadcastState,
+    onStartBroadcast: (String, String) -> Unit,
+    onStopBroadcast: () -> Unit,
+    onSwitchCamera: () -> Unit,
+    onToggleMute: () -> Unit,
+    onQualityChange: (AmityBroadcastResolution) -> Unit
+) {
+    var showControls by remember { mutableStateOf(true) }
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Top controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onSwitchCamera) {
+                Icon(
+                    imageVector = Icons.Default.Cameraswitch,
+                    contentDescription = "Switch Camera",
+                    tint = Color.White
+                )
+            }
+            
+            if (state.isLive) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Red),
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    Text(
+                        text = "LIVE",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            
+            QualitySelector(
+                currentQuality = state.quality,
+                onQualityChange = onQualityChange
+            )
+        }
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        // Bottom controls
+        if (showControls) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.Black.copy(alpha = 0.7f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    if (!state.isLive) {
+                        OutlinedTextField(
+                            value = title,
+                            onValueChange = { title = it },
+                            label = { Text("Stream Title") },
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                textColor = Color.White,
+                                focusedLabelColor = Color.White,
+                                unfocusedLabelColor = Color.Gray
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("Description (optional)") },
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                textColor = Color.White,
+                                focusedLabelColor = Color.White,
+                                unfocusedLabelColor = Color.Gray
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    
+                    Text(
+                        text = state.statusText,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        IconButton(onClick = onToggleMute) {
+                            Icon(
+                                imageVector = if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = if (state.isMuted) "Unmute" else "Mute",
+                                tint = Color.White
+                            )
+                        }
+                        
+                        FloatingActionButton(
+                            onClick = {
+                                if (state.isLive) {
+                                    onStopBroadcast()
+                                } else {
+                                    onStartBroadcast(
+                                        title.ifEmpty { "Live Stream" },
+                                        description
+                                    )
+                                }
+                            },
+                            containerColor = if (state.isLive) Color.Red else Color.Green,
+                            modifier = Modifier.size(80.dp)
+                        ) {
+                            if (state.isConnecting) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (state.isLive) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = if (state.isLive) "Stop" else "Start",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        
+                        IconButton(onClick = { /* Settings */ }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QualitySelector(
+    currentQuality: AmityBroadcastResolution,
+    onQualityChange: (AmityBroadcastResolution) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+            colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+        ) {
+            Text(
+                text = when (currentQuality) {
+                    AmityBroadcastResolution.SD_480P -> "480p"
+                    AmityBroadcastResolution.HD_720P -> "720p"
+                    AmityBroadcastResolution.FHD_1080P -> "1080p"
+                }
+            )
+        }
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("480p") },
+                onClick = {
+                    onQualityChange(AmityBroadcastResolution.SD_480P)
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("720p") },
+                onClick = {
+                    onQualityChange(AmityBroadcastResolution.HD_720P)
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("1080p") },
+                onClick = {
+                    onQualityChange(AmityBroadcastResolution.FHD_1080P)
+                    expanded = false
+                }
+            )
+        }
+    }
+}
+```
+
+### Broadcast ViewModel
+
+```kotlin
+@HiltViewModel
+class BroadcastViewModel @Inject constructor(
+    private val permissionManager: PermissionManager,
+    private val analyticsService: AnalyticsService
+) : ViewModel() {
+    
+    private val _state = MutableStateFlow(BroadcastState())
+    val state: StateFlow<BroadcastState> = _state.asStateFlow()
+    
+    private var broadcaster: AmityStreamBroadcaster? = null
+    private var streamId: String? = null
+    
+    fun requestPermissions(activity: Activity) {
+        permissionManager.requestPermissions(activity) { granted ->
+            if (granted) {
+                _state.value = _state.value.copy(permissionsGranted = true)
+            } else {
+                _state.value = _state.value.copy(error = "Permissions required for broadcasting")
+            }
+        }
+    }
+    
+    fun setupBroadcaster(cameraView: AmityCameraView) {
+        try {
+            val config = AmityStreamBroadcasterConfiguration.Builder()
+                .setOrientation(Configuration.ORIENTATION_PORTRAIT)
+                .setResolution(AmityBroadcastResolution.HD_720P)
+                .build()
+            
+            broadcaster = AmityStreamBroadcaster.Builder(cameraView)
+                .setConfiguration(config)
+                .build()
+            
+            broadcaster?.setOnStateChangedListener { state ->
+                updateBroadcastState(state)
+            }
+            
+            broadcaster?.setOnErrorListener { error ->
+                handleError(error)
+            }
+            
+            _state.value = _state.value.copy(
+                isInitialized = true,
+                quality = AmityBroadcastResolution.HD_720P
+            )
+            
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(error = "Failed to initialize broadcaster: ${e.message}")
+        }
+    }
+    
+    fun startBroadcast(title: String, description: String) {
+        broadcaster?.startPublish(title, description)
+            ?.subscribeOn(Schedulers.io())
+            ?.observeOn(AndroidSchedulers.mainThread())
+            ?.subscribe({ stream ->
+                streamId = stream.streamId
+                analyticsService.trackBroadcastStarted(stream.streamId)
+                
+            }, { error ->
+                handleError(error)
+            })
+    }
+    
+    fun stopBroadcast() {
+        broadcaster?.stopPublish()
+            ?.subscribeOn(Schedulers.io())
+            ?.observeOn(AndroidSchedulers.mainThread())
+            ?.subscribe({
+                streamId?.let { id ->
+                    analyticsService.trackBroadcastStopped(id)
+                }
+                streamId = null
+                
+            }, { error ->
+                handleError(error)
+            })
+    }
+    
+    fun switchCamera() {
+        broadcaster?.switchCamera()
+            ?.subscribeOn(Schedulers.io())
+            ?.observeOn(AndroidSchedulers.mainThread())
+            ?.subscribe({
+                // Camera switched successfully
+            }, { error ->
+                handleError(error)
+            })
+    }
+    
+    fun toggleMute() {
+        broadcaster?.let { broadcaster ->
+            val isMuted = broadcaster.isMuted()
+            broadcaster.setMuted(!isMuted)
+            _state.value = _state.value.copy(isMuted = !isMuted)
+        }
+    }
+    
+    fun changeQuality(quality: AmityBroadcastResolution) {
+        if (_state.value.isLive) {
+            _state.value = _state.value.copy(error = "Cannot change quality while broadcasting")
+            return
+        }
+        
+        val config = AmityStreamBroadcasterConfiguration.Builder()
+            .setOrientation(Configuration.ORIENTATION_PORTRAIT)
+            .setResolution(quality)
+            .build()
+        
+        broadcaster?.updateConfiguration(config)
+        _state.value = _state.value.copy(quality = quality)
+    }
+    
+    private fun updateBroadcastState(broadcasterState: AmityStreamBroadcasterState) {
+        val newState = when (broadcasterState) {
+            AmityStreamBroadcasterState.IDLE -> _state.value.copy(
+                isLive = false,
+                isConnecting = false,
+                statusText = "Ready to broadcast"
+            )
+            AmityStreamBroadcasterState.CONNECTING -> _state.value.copy(
+                isConnecting = true,
+                statusText = "Connecting..."
+            )
+            AmityStreamBroadcasterState.CONNECTED -> _state.value.copy(
+                isLive = true,
+                isConnecting = false,
+                statusText = "LIVE"
+            )
+            AmityStreamBroadcasterState.DISCONNECTED -> _state.value.copy(
+                isLive = false,
+                isConnecting = false,
+                statusText = "Disconnected"
+            )
+        }
+        _state.value = newState
+    }
+    
+    private fun handleError(error: Throwable) {
+        val message = when (error) {
+            is AmityNetworkException -> "Network error. Please check your connection."
+            is AmityPermissionException -> "Permission denied. Please grant required permissions."
+            else -> "Error: ${error.message}"
+        }
+        
+        _state.value = _state.value.copy(
+            error = message,
+            isLive = false,
+            isConnecting = false
+        )
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        broadcaster?.release()
+    }
+}
+
+data class BroadcastState(
+    val isInitialized: Boolean = false,
+    val permissionsGranted: Boolean = false,
+    val isLive: Boolean = false,
+    val isConnecting: Boolean = false,
+    val isMuted: Boolean = false,
+    val quality: AmityBroadcastResolution = AmityBroadcastResolution.HD_720P,
+    val statusText: String = "Initializing...",
+    val error: String? = null
+)
+```
+
+## Performance Optimization
+
+### Memory Management
+
+```kotlin
+class VideoMemoryManager {
+    
+    companion object {
+        fun optimizeForBroadcasting(context: Context) {
+            // Reduce memory usage for other components
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memoryInfo = ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memoryInfo)
+            
+            if (memoryInfo.lowMemory) {
+                // Implement memory optimization strategies
+                System.gc()
+                
+                // Reduce video quality if needed
+                // broadcastManager.reduceQuality()
+            }
+        }
+        
+        fun cleanupVideoResources(broadcaster: AmityStreamBroadcaster?) {
+            broadcaster?.release()
+        }
+        
+        fun cleanupPlayerResources(player: AmityVideoPlayer?) {
+            player?.release()
+        }
+    }
+}
+```
+
+### Background Handling
+
+```kotlin
+class VideoLifecycleObserver : LifecycleObserver {
+    
+    private var broadcaster: AmityStreamBroadcaster? = null
+    private var player: AmityVideoPlayer? = null
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    fun onPause() {
+        // Pause video playback
+        player?.pause()
+        
+        // Optionally pause broadcasting (based on requirements)
+        // broadcaster?.pause()
+    }
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    fun onResume() {
+        // Resume video playback for live streams
+        player?.play()
+        
+        // Resume broadcasting if it was paused
+        // broadcaster?.resume()
+    }
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    fun onDestroy() {
+        // Clean up resources
+        broadcaster?.release()
+        player?.release()
+    }
+    
+    fun setBroadcaster(broadcaster: AmityStreamBroadcaster) {
+        this.broadcaster = broadcaster
+    }
+    
+    fun setPlayer(player: AmityVideoPlayer) {
+        this.player = player
+    }
+}
+```
+
+## Troubleshooting
+
+### Common Android Issues
+
+1. **Camera Access Denied**
+   ```kotlin
+   private fun handleCameraPermissionDenied() {
+       if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+           // Show rationale and request again
+           showPermissionRationale()
+       } else {
+           // User denied with "Don't ask again" - guide to settings
+           showGoToSettingsDialog()
+       }
+   }
+   ```
+
+2. **Background Limitations**
+   ```kotlin
+   private fun handleBackgroundRestrictions() {
+       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+           val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+           if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+               // Request to ignore battery optimizations for streaming
+               requestIgnoreBatteryOptimizations()
+           }
+       }
+   }
+   ```
+
+3. **Memory Issues**
+   ```kotlin
+   override fun onTrimMemory(level: Int) {
+       super.onTrimMemory(level)
+       
+       when (level) {
+           ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
+               // Reduce video quality or stop non-essential streams
+               VideoMemoryManager.optimizeForBroadcasting(this)
+           }
+           ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+               // App is in background, pause non-essential video operations
+               pauseNonEssentialVideoOperations()
+           }
+       }
+   }
+   ```
+
+## Best Practices
+
+1. **Permission Handling** - Always check and request permissions appropriately
+2. **Lifecycle Management** - Properly handle Android lifecycle events
+3. **Memory Management** - Release video resources when not needed
+4. **Background Limitations** - Handle Android's background processing limits
+5. **Network Optimization** - Implement adaptive streaming for varying network conditions
+
+## Next Steps
+
+1. **[iOS Implementation](./ios-specific.mdx)** - iOS-specific implementation details
+2. **[Web Implementation](./web-specific.mdx)** - Web-specific implementation details
+3. **[Cross-Platform Comparison](./platform-comparison.mdx)** - Compare platform differences
+
+<Warning>
+**Android Permissions**: Ensure your app handles runtime permissions correctly and provides clear explanations for why permissions are needed. Target SDK 31+ requires careful handling of camera and microphone permissions.
+</Warning>

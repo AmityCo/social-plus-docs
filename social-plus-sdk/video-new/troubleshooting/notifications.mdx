@@ -1,0 +1,467 @@
+---
+title: "Notification Troubleshooting"
+description: "Common issues and solutions for video stream notifications and events"
+---
+
+# Notification Troubleshooting
+
+Common issues and solutions when implementing push notifications and stream event handling in your video streaming application.
+
+## Common Issues
+
+### Push Notifications Not Received
+
+**Symptoms:**
+- Users not receiving stream start notifications
+- Missing viewer activity alerts
+- Recording completion notifications not delivered
+
+**Possible Causes & Solutions:**
+
+1. **Platform Configuration Issues**
+   ```typescript
+   // Verify platform setup
+   // iOS: Check APNs certificate configuration
+   // Android: Verify FCM configuration
+   // Web: Ensure service worker is registered
+   
+   // Test notification delivery
+   await VideoNotifications.test({
+     event: 'stream.started',
+     targetPlatform: 'ios', // or 'android', 'web'
+     deviceToken: 'user-device-token'
+   });
+   ```
+
+2. **Permission Issues**
+   ```typescript
+   // Check notification permissions
+   const permission = await VideoNotifications.checkPermission();
+   
+   if (permission !== 'granted') {
+     // Request permission at appropriate time
+     const result = await VideoNotifications.requestPermission();
+     console.log('Permission result:', result);
+   }
+   ```
+
+3. **Device Token Registration**
+   ```typescript
+   // Ensure device token is properly registered
+   const deviceToken = await VideoNotifications.getDeviceToken();
+   
+   if (!deviceToken) {
+     console.error('Device token not available');
+     // Re-register for notifications
+     await VideoNotifications.register();
+   }
+   ```
+
+### Stream Events Not Firing
+
+**Symptoms:**
+- Stream start/end events not triggered
+- Viewer count updates missing
+- Chat messages not received
+
+**Troubleshooting Steps:**
+
+1. **Check Event Listener Registration**
+   ```typescript
+   // Verify event listeners are properly set up
+   VideoStreamManager.getInstance().listEventListeners();
+   
+   // Re-register listeners if needed
+   videoStreamManager.on('stream.started', handleStreamStarted);
+   videoStreamManager.on('viewer.joined', handleViewerJoined);
+   ```
+
+2. **Verify Connection Status**
+   ```typescript
+   // Check connection to stream events
+   const connectionStatus = await VideoStreamManager.getConnectionStatus();
+   
+   if (connectionStatus !== 'connected') {
+     // Reconnect to event stream
+     await VideoStreamManager.reconnect();
+   }
+   ```
+
+3. **Debug Event Flow**
+   ```typescript
+   // Enable debug mode
+   VideoStreamManager.setDebugMode(true);
+   
+   // Monitor all events
+   VideoStreamManager.on('*', (eventType, data) => {
+     console.log('Event received:', eventType, data);
+   });
+   ```
+
+### High Event Volume Issues
+
+**Symptoms:**
+- UI freezing during high viewer activity
+- Memory usage increasing over time
+- Delayed event processing
+
+**Solutions:**
+
+1. **Implement Event Throttling**
+   ```typescript
+   // Throttle high-frequency events
+   const throttledHandler = throttle(handleViewerActivity, 1000);
+   videoStreamManager.on('viewer.joined', throttledHandler);
+   ```
+
+2. **Use Event Batching**
+   ```typescript
+   // Batch similar events
+   const eventBatcher = new EventBatcher(5000); // 5 second batch window
+   
+   eventBatcher.addEvent('viewer.joined', viewerData);
+   eventBatcher.addEvent('viewer.left', viewerData);
+   
+   eventBatcher.onBatch((events) => {
+     // Process batched events
+     processBatchedViewerEvents(events);
+   });
+   ```
+
+3. **Selective Event Subscription**
+   ```typescript
+   // Only subscribe to necessary events
+   videoStreamManager.configure({
+     events: {
+       'stream.started': true,
+       'stream.ended': true,
+       'viewer.joined': false, // Disable if not needed
+       'viewer.milestone': true,
+       'chat.message': true
+     }
+   });
+   ```
+
+### Webhook Delivery Failures
+
+**Symptoms:**
+- Webhook endpoints not receiving events
+- Delayed webhook delivery
+- Missing webhook payloads
+
+**Debugging Steps:**
+
+1. **Verify Webhook Configuration**
+   ```typescript
+   // Check webhook endpoint configuration
+   const webhookConfig = await VideoNotifications.getWebhookConfig();
+   console.log('Webhook config:', webhookConfig);
+   
+   // Test webhook endpoint
+   await VideoNotifications.testWebhook({
+     url: 'https://your-server.com/webhooks',
+     event: 'stream.started',
+     testData: { streamId: 'test-123' }
+   });
+   ```
+
+2. **Check Endpoint Accessibility**
+   ```bash
+   # Test webhook endpoint accessibility
+   curl -X POST https://your-server.com/webhooks \
+     -H "Content-Type: application/json" \
+     -d '{"test": true}'
+   ```
+
+3. **Implement Webhook Retry Logic**
+   ```typescript
+   // Server-side webhook handler with retry
+   app.post('/webhooks', async (req, res) => {
+     try {
+       await processWebhookEvent(req.body);
+       res.status(200).send('OK');
+     } catch (error) {
+       console.error('Webhook processing failed:', error);
+       // Return 500 to trigger retry
+       res.status(500).send('Processing failed');
+     }
+   });
+   ```
+
+## Platform-Specific Issues
+
+### iOS Issues
+
+**APNs Certificate Problems:**
+```swift
+// Check APNs configuration
+#if DEBUG
+let apnsEnvironment = "development"
+#else  
+let apnsEnvironment = "production"
+#endif
+
+print("APNs Environment: \(apnsEnvironment)")
+
+// Verify device token format
+func application(_ application: UIApplication, 
+                 didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    print("Device Token: \(tokenString)")
+    
+    // Register with Social+ Video SDK
+    VideoNotificationManager.shared.registerDevice(token: tokenString)
+}
+```
+
+**Silent Notification Issues:**
+```swift
+// Handle silent notifications for stream events
+func application(_ application: UIApplication, 
+                 didReceiveRemoteNotification userInfo: [AnyHashable: Any], 
+                 fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    
+    if let streamEvent = userInfo["stream_event"] as? String {
+        // Process stream event silently
+        VideoStreamManager.shared.processBackgroundEvent(userInfo)
+        completionHandler(.newData)
+    } else {
+        completionHandler(.noData)
+    }
+}
+```
+
+### Android Issues
+
+**FCM Configuration:**
+```kotlin
+// Check FCM configuration
+class VideoFirebaseMessagingService : FirebaseMessagingService() {
+    
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        Log.d("FCM", "New token: $token")
+        
+        // Register with Social+ Video SDK
+        VideoNotificationManager.getInstance().registerDevice(token)
+    }
+    
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        super.onMessageReceived(remoteMessage)
+        
+        Log.d("FCM", "Message received from: ${remoteMessage.from}")
+        Log.d("FCM", "Message data: ${remoteMessage.data}")
+        
+        // Process video notification
+        VideoNotificationHandler.processMessage(remoteMessage)
+    }
+}
+```
+
+**Background Processing:**
+```kotlin
+// Handle background video events
+class VideoBackgroundProcessor : JobIntentService() {
+    
+    override fun onHandleWork(intent: Intent) {
+        val eventType = intent.getStringExtra("event_type")
+        val streamId = intent.getStringExtra("stream_id")
+        
+        when (eventType) {
+            "stream.started" -> handleStreamStarted(streamId)
+            "recording.ready" -> handleRecordingReady(intent.extras)
+        }
+    }
+}
+```
+
+### Web Issues
+
+**Service Worker Registration:**
+```javascript
+// Check service worker registration
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(registration => {
+      console.log('Service Worker registered:', registration);
+      
+      // Check if already subscribed
+      return registration.pushManager.getSubscription();
+    })
+    .then(subscription => {
+      if (!subscription) {
+        // Subscribe to push notifications
+        return subscribeUserToPush();
+      }
+      console.log('Already subscribed:', subscription);
+    })
+    .catch(error => {
+      console.error('Service Worker registration failed:', error);
+    });
+}
+```
+
+**VAPID Key Issues:**
+```javascript
+// Verify VAPID key configuration
+function subscribeUserToPush() {
+  const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  
+  return navigator.serviceWorker.ready
+    .then(registration => {
+      return registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+    })
+    .then(subscription => {
+      console.log('Push subscription:', subscription);
+      
+      // Send subscription to server
+      return sendSubscriptionToServer(subscription);
+    })
+    .catch(error => {
+      console.error('Failed to subscribe user:', error);
+    });
+}
+```
+
+## Performance Optimization
+
+### Memory Management
+
+```typescript
+// Prevent memory leaks from event listeners
+class EventListenerManager {
+  private listeners: Map<string, Function[]> = new Map();
+  
+  addListener(event: string, callback: Function): () => void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    
+    this.listeners.get(event)!.push(callback);
+    
+    // Return cleanup function
+    return () => {
+      const callbacks = this.listeners.get(event);
+      if (callbacks) {
+        const index = callbacks.indexOf(callback);
+        if (index > -1) {
+          callbacks.splice(index, 1);
+        }
+      }
+    };
+  }
+  
+  cleanup(): void {
+    this.listeners.clear();
+  }
+}
+```
+
+### Event Queue Management
+
+```typescript
+// Manage event queue to prevent overflow
+class EventQueue {
+  private queue: StreamEvent[] = [];
+  private processing = false;
+  private maxQueueSize = 1000;
+  
+  addEvent(event: StreamEvent): void {
+    if (this.queue.length >= this.maxQueueSize) {
+      // Remove oldest events
+      this.queue.splice(0, this.queue.length - this.maxQueueSize + 1);
+    }
+    
+    this.queue.push(event);
+    this.processQueue();
+  }
+  
+  private async processQueue(): Promise<void> {
+    if (this.processing || this.queue.length === 0) return;
+    
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const event = this.queue.shift()!;
+      try {
+        await this.processEvent(event);
+      } catch (error) {
+        console.error('Event processing failed:', error);
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+```
+
+## Testing & Debugging
+
+### Debug Mode
+
+```typescript
+// Enable comprehensive debugging
+VideoStreamManager.configure({
+  debug: {
+    enabled: true,
+    logLevel: 'verbose',
+    logEvents: true,
+    logNotifications: true,
+    logWebhooks: true
+  }
+});
+
+// Custom debug logger
+VideoStreamManager.setDebugLogger((level, message, data) => {
+  console.log(`[VIDEO-${level.toUpperCase()}]`, message, data);
+  
+  // Send to analytics if needed
+  if (level === 'error') {
+    Analytics.track('video_debug_error', { message, data });
+  }
+});
+```
+
+### Test Utilities
+
+```typescript
+// Test notification delivery
+async function testNotificationFlow() {
+  const testCases = [
+    { event: 'stream.started', platform: 'ios' },
+    { event: 'viewer.milestone', platform: 'android' },
+    { event: 'recording.ready', platform: 'web' }
+  ];
+  
+  for (const testCase of testCases) {
+    try {
+      const result = await VideoNotifications.test(testCase);
+      console.log(`✅ ${testCase.event} on ${testCase.platform}:`, result);
+    } catch (error) {
+      console.error(`❌ ${testCase.event} on ${testCase.platform}:`, error);
+    }
+  }
+}
+```
+
+## Support & Resources
+
+### Getting Help
+
+1. **Check Debug Logs** - Enable debug mode for detailed logging
+2. **Test Components** - Use built-in test utilities to isolate issues
+3. **Monitor Analytics** - Track notification delivery and event processing rates
+4. **Community Support** - Visit [community.social.plus.co](https://community.social.plus.co/) for help
+
+### Additional Resources
+
+- **[API Reference](../../api-reference/video-notifications.mdx)** - Complete API documentation
+- **[Best Practices](../core-concepts/best-practices.mdx)** - Implementation guidelines
+- **[Performance Guide](../core-concepts/performance.mdx)** - Optimization techniques
+
+<Warning>
+**Production Debugging**: Be careful with debug mode in production as it can impact performance and expose sensitive information in logs.
+</Warning>

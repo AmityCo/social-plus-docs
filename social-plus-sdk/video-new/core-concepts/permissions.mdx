@@ -1,0 +1,923 @@
+---
+title: "Permissions Management"
+description: "Handle camera, microphone, and storage permissions across platforms for Social+ Video SDK implementation"
+---
+
+# Permissions Management
+
+Proper permission handling is essential for video streaming functionality. This guide covers camera, microphone, and storage permissions across all supported platforms, including best practices for user experience and compliance.
+
+## Required Permissions
+
+### Core Permissions
+
+Social+ Video SDK requires the following permissions for full functionality:
+
+| Permission | Purpose | Required For | Platforms |
+|------------|---------|--------------|-----------|
+| **Camera** | Video capture and broadcasting | Broadcasting | All |
+| **Microphone** | Audio capture | Broadcasting | All |
+| **Storage** | Save recordings, cache thumbnails | Recording, Caching | Mobile |
+| **Network** | Stream data transmission | All features | All |
+| **Notifications** | Stream alerts and updates | Push notifications | Mobile, Web |
+
+### Platform-Specific Permissions
+
+<Tabs>
+<Tab title="iOS">
+### iOS Permission Requirements
+
+**Info.plist Configuration:**
+```xml
+<key>NSCameraUsageDescription</key>
+<string>This app needs camera access to broadcast live streams and record videos</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>This app needs microphone access for live streaming audio and video recording</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>This app needs photo library access to save and share videos</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>This app needs permission to save videos to your photo library</string>
+
+<!-- For background streaming -->
+<key>UIBackgroundModes</key>
+<array>
+    <string>background-audio</string>
+    <string>background-processing</string>
+</array>
+```
+
+**Swift Permission Handling:**
+```swift
+import AVFoundation
+import Photos
+
+class PermissionManager {
+    
+    func requestCameraPermission(completion: @escaping (Bool) -> Void) {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            completion(true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    completion(granted)
+                }
+            }
+        case .denied, .restricted:
+            completion(false)
+        @unknown default:
+            completion(false)
+        }
+    }
+    
+    func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            completion(true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async {
+                    completion(granted)
+                }
+            }
+        case .denied, .restricted:
+            completion(false)
+        @unknown default:
+            completion(false)
+        }
+    }
+    
+    func requestAllPermissions(completion: @escaping (Bool, Bool) -> Void) {
+        requestCameraPermission { cameraGranted in
+            self.requestMicrophonePermission { microphoneGranted in
+                completion(cameraGranted, microphoneGranted)
+            }
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Android">
+### Android Permission Requirements
+
+**AndroidManifest.xml Configuration:**
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Camera and Audio Permissions -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    
+    <!-- Network Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    
+    <!-- Storage Permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                     android:maxSdkVersion="28" />
+    
+    <!-- Notification Permissions (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Hardware Features -->
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="true" />
+</manifest>
+```
+
+**Kotlin Permission Handling:**
+```kotlin
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
+class PermissionManager(private val activity: Activity) {
+    
+    companion object {
+        private const val PERMISSION_REQUEST_CODE = 1001
+        
+        val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS
+        )
+        
+        val STORAGE_PERMISSIONS = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+    }
+    
+    fun checkAndRequestPermissions(): Boolean {
+        val missingPermissions = REQUIRED_PERMISSIONS.filter {
+            ContextCompat.checkSelfPermission(activity, it) != PackageManager.PERMISSION_GRANTED
+        }
+        
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                activity,
+                missingPermissions.toTypedArray(),
+                PERMISSION_REQUEST_CODE
+            )
+            return false
+        }
+        
+        return true
+    }
+    
+    fun hasAllRequiredPermissions(): Boolean {
+        return REQUIRED_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(activity, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+    
+    fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+        callback: (Boolean) -> Unit
+    ) {
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            callback(allGranted)
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Web">
+### Web Permission Requirements
+
+**MediaDevices API:**
+```typescript
+class WebPermissionManager {
+    async requestCameraAndMicrophone(): Promise<MediaStream | null> {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1920, max: 1920 },
+                    height: { ideal: 1080, max: 1080 },
+                    frameRate: { ideal: 30, max: 30 }
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            
+            console.log('Camera and microphone access granted');
+            return stream;
+        } catch (error) {
+            console.error('Permission denied or error:', error);
+            this.handlePermissionError(error);
+            return null;
+        }
+    }
+    
+    async checkPermissions(): Promise<{ camera: boolean; microphone: boolean }> {
+        try {
+            const permissions = await Promise.all([
+                navigator.permissions.query({ name: 'camera' as PermissionName }),
+                navigator.permissions.query({ name: 'microphone' as PermissionName })
+            ]);
+            
+            return {
+                camera: permissions[0].state === 'granted',
+                microphone: permissions[1].state === 'granted'
+            };
+        } catch (error) {
+            console.warn('Permission API not supported');
+            return { camera: false, microphone: false };
+        }
+    }
+    
+    private handlePermissionError(error: any) {
+        switch (error.name) {
+            case 'NotAllowedError':
+                throw new Error('Camera/microphone access denied by user');
+            case 'NotFoundError':
+                throw new Error('Camera or microphone not found');
+            case 'NotReadableError':
+                throw new Error('Camera or microphone is being used by another application');
+            case 'OverconstrainedError':
+                throw new Error('Camera constraints cannot be satisfied');
+            default:
+                throw new Error(`Permission error: ${error.message}`);
+        }
+    }
+}
+```
+
+**Notification Permissions:**
+```typescript
+class NotificationPermissionManager {
+    async requestNotificationPermission(): Promise<boolean> {
+        if ('Notification' in window) {
+            const permission = await Notification.requestPermission();
+            return permission === 'granted';
+        }
+        return false;
+    }
+    
+    checkNotificationPermission(): 'granted' | 'denied' | 'default' {
+        if ('Notification' in window) {
+            return Notification.permission;
+        }
+        return 'denied';
+    }
+}
+```
+</Tab>
+<Tab title="React Native">
+### React Native Permission Requirements
+
+**Installation:**
+```bash
+npm install react-native-permissions
+# iOS
+cd ios && pod install
+```
+
+**Permission Handling:**
+```typescript
+import { check, request, PERMISSIONS, RESULTS, Permission } from 'react-native-permissions';
+import { Platform } from 'react-native';
+
+class ReactNativePermissionManager {
+    private getPermissions(): Permission[] {
+        return Platform.select({
+            ios: [
+                PERMISSIONS.IOS.CAMERA,
+                PERMISSIONS.IOS.MICROPHONE
+            ],
+            android: [
+                PERMISSIONS.ANDROID.CAMERA,
+                PERMISSIONS.ANDROID.RECORD_AUDIO
+            ]
+        }) || [];
+    }
+    
+    async checkAllPermissions(): Promise<{ camera: boolean; microphone: boolean }> {
+        const permissions = this.getPermissions();
+        const results = await Promise.all(
+            permissions.map(permission => check(permission))
+        );
+        
+        return {
+            camera: results[0] === RESULTS.GRANTED,
+            microphone: results[1] === RESULTS.GRANTED
+        };
+    }
+    
+    async requestAllPermissions(): Promise<{ camera: boolean; microphone: boolean }> {
+        const permissions = this.getPermissions();
+        const results = await Promise.all(
+            permissions.map(permission => request(permission))
+        );
+        
+        return {
+            camera: results[0] === RESULTS.GRANTED,
+            microphone: results[1] === RESULTS.GRANTED
+        };
+    }
+    
+    async ensurePermissions(): Promise<boolean> {
+        const currentStatus = await this.checkAllPermissions();
+        
+        if (currentStatus.camera && currentStatus.microphone) {
+            return true;
+        }
+        
+        const requestedStatus = await this.requestAllPermissions();
+        return requestedStatus.camera && requestedStatus.microphone;
+    }
+}
+```
+</Tab>
+<Tab title="Flutter">
+### Flutter Permission Requirements
+
+**pubspec.yaml:**
+```yaml
+dependencies:
+  permission_handler: ^10.4.3
+```
+
+**Permission Handling:**
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+class FlutterPermissionManager {
+  static const List<Permission> requiredPermissions = [
+    Permission.camera,
+    Permission.microphone,
+    Permission.storage,
+  ];
+  
+  Future<bool> checkAllPermissions() async {
+    Map<Permission, PermissionStatus> statuses = 
+        await requiredPermissions.asMap().map((key, permission) => 
+            MapEntry(permission, permission as PermissionStatus)).cast();
+    
+    return statuses.values.every((status) => status.isGranted);
+  }
+  
+  Future<bool> requestAllPermissions() async {
+    Map<Permission, PermissionStatus> statuses = 
+        await requiredPermissions.request();
+    
+    return statuses.values.every((status) => status.isGranted);
+  }
+  
+  Future<bool> ensurePermissions() async {
+    bool hasPermissions = await checkAllPermissions();
+    
+    if (!hasPermissions) {
+      hasPermissions = await requestAllPermissions();
+    }
+    
+    if (!hasPermissions) {
+      await _showPermissionDialog();
+    }
+    
+    return hasPermissions;
+  }
+  
+  Future<void> _showPermissionDialog() async {
+    // Show dialog to guide user to settings
+    await openAppSettings();
+  }
+  
+  Future<PermissionStatus> checkCameraPermission() async {
+    return await Permission.camera.status;
+  }
+  
+  Future<PermissionStatus> checkMicrophonePermission() async {
+    return await Permission.microphone.status;
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Permission Flow Best Practices
+
+### 1. Progressive Permission Requests
+
+<Tabs>
+<Tab title="User-Friendly Approach">
+```typescript
+class PermissionFlowManager {
+    async initiatePermissionFlow(): Promise<boolean> {
+        // Step 1: Explain why permissions are needed
+        const userConsent = await this.showPermissionExplanation();
+        if (!userConsent) return false;
+        
+        // Step 2: Request permissions one by one
+        const cameraGranted = await this.requestCameraWithContext();
+        if (!cameraGranted) return false;
+        
+        const micPermanted = await this.requestMicrophoneWithContext();
+        if (!micPermanted) return false;
+        
+        // Step 3: Confirm success and guide next steps
+        await this.showPermissionSuccess();
+        return true;
+    }
+    
+    private async showPermissionExplanation(): Promise<boolean> {
+        return new Promise((resolve) => {
+            const modal = this.createModal({
+                title: 'Camera & Microphone Access',
+                message: 'To broadcast live streams, we need access to your camera and microphone. Your privacy is important - we only use these during active streaming.',
+                buttons: [
+                    { text: 'Not Now', action: () => resolve(false) },
+                    { text: 'Continue', action: () => resolve(true), primary: true }
+                ]
+            });
+            modal.show();
+        });
+    }
+    
+    private async requestCameraWithContext(): Promise<boolean> {
+        try {
+            const granted = await this.requestCameraPermission();
+            if (!granted) {
+                await this.showCameraPermissionHelp();
+            }
+            return granted;
+        } catch (error) {
+            console.error('Camera permission error:', error);
+            return false;
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Fallback Strategies">
+```typescript
+class PermissionFallbackManager {
+    async handlePermissionDenied(permissionType: 'camera' | 'microphone') {
+        switch (permissionType) {
+            case 'camera':
+                return this.handleCameraDenied();
+            case 'microphone':
+                return this.handleMicrophoneDenied();
+        }
+    }
+    
+    private async handleCameraDenied() {
+        // Offer alternatives
+        const options = [
+            'Use audio-only streaming',
+            'View live streams without broadcasting',
+            'Go to settings to enable camera access'
+        ];
+        
+        const choice = await this.showOptions('Camera Access Needed', options);
+        
+        switch (choice) {
+            case 0:
+                return this.enableAudioOnlyMode();
+            case 1:
+                return this.enableViewerOnlyMode();
+            case 2:
+                return this.openAppSettings();
+        }
+    }
+    
+    private async enableAudioOnlyMode() {
+        // Configure SDK for audio-only streaming
+        const config = {
+            video: false,
+            audio: true,
+            showAudioOnlyUI: true
+        };
+        
+        return this.initializeWithConfig(config);
+    }
+    
+    private async enableViewerOnlyMode() {
+        // Hide broadcasting features, show viewer features only
+        const config = {
+            features: {
+                broadcasting: false,
+                viewing: true,
+                chat: true
+            }
+        };
+        
+        return this.initializeWithConfig(config);
+    }
+}
+```
+</Tab>
+</Tabs>
+
+### 2. Permission State Management
+
+<Tabs>
+<Tab title="State Tracking">
+```typescript
+interface PermissionState {
+    camera: 'granted' | 'denied' | 'unknown' | 'blocked';
+    microphone: 'granted' | 'denied' | 'unknown' | 'blocked';
+    notifications: 'granted' | 'denied' | 'unknown';
+    lastChecked: Date;
+    userExplained: boolean;
+}
+
+class PermissionStateManager {
+    private state: PermissionState = {
+        camera: 'unknown',
+        microphone: 'unknown',
+        notifications: 'unknown',
+        lastChecked: new Date(0),
+        userExplained: false
+    };
+    
+    async updatePermissionState(): Promise<PermissionState> {
+        const [camera, microphone, notifications] = await Promise.all([
+            this.checkCameraPermission(),
+            this.checkMicrophonePermission(),
+            this.checkNotificationPermission()
+        ]);
+        
+        this.state = {
+            camera: this.mapPermissionStatus(camera),
+            microphone: this.mapPermissionStatus(microphone),
+            notifications: this.mapPermissionStatus(notifications),
+            lastChecked: new Date(),
+            userExplained: this.state.userExplained
+        };
+        
+        this.saveStateToStorage();
+        return this.state;
+    }
+    
+    canBroadcast(): boolean {
+        return this.state.camera === 'granted' && this.state.microphone === 'granted';
+    }
+    
+    canReceiveNotifications(): boolean {
+        return this.state.notifications === 'granted';
+    }
+    
+    needsPermissionRequest(): boolean {
+        const hasUnknown = Object.values(this.state).includes('unknown');
+        const isStale = Date.now() - this.state.lastChecked.getTime() > 24 * 60 * 60 * 1000; // 24 hours
+        
+        return hasUnknown || isStale;
+    }
+}
+```
+</Tab>
+<Tab title="Reactive Permission Updates">
+```typescript
+class ReactivePermissionManager {
+    private permissionSubject = new BehaviorSubject<PermissionState>(this.initialState);
+    
+    get permissionState$() {
+        return this.permissionSubject.asObservable();
+    }
+    
+    async startPermissionMonitoring() {
+        // Monitor permission changes
+        if ('permissions' in navigator) {
+            const permissions = ['camera', 'microphone'];
+            
+            permissions.forEach(async (name) => {
+                try {
+                    const permission = await navigator.permissions.query({ name: name as PermissionName });
+                    permission.addEventListener('change', () => {
+                        this.updatePermissionState();
+                    });
+                } catch (error) {
+                    console.warn(`Cannot monitor ${name} permission:`, error);
+                }
+            });
+        }
+        
+        // Periodic permission check
+        setInterval(() => {
+            this.updatePermissionState();
+        }, 60000); // Check every minute
+    }
+    
+    private async updatePermissionState() {
+        const newState = await this.getCurrentPermissionState();
+        
+        if (JSON.stringify(newState) !== JSON.stringify(this.permissionSubject.value)) {
+            this.permissionSubject.next(newState);
+            this.onPermissionStateChanged(newState);
+        }
+    }
+    
+    private onPermissionStateChanged(newState: PermissionState) {
+        // React to permission changes
+        if (!this.canBroadcast(newState) && this.isBroadcasting()) {
+            this.stopBroadcastDueToPermissions();
+        }
+        
+        if (this.canBroadcast(newState) && this.wasWaitingForPermissions()) {
+            this.enableBroadcastingFeatures();
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## Error Handling and Recovery
+
+### Permission Error Types
+
+<Tabs>
+<Tab title="Error Classification">
+```typescript
+enum PermissionErrorType {
+    USER_DENIED = 'user_denied',
+    SYSTEM_BLOCKED = 'system_blocked',
+    HARDWARE_UNAVAILABLE = 'hardware_unavailable',
+    ALREADY_IN_USE = 'already_in_use',
+    UNKNOWN_ERROR = 'unknown_error'
+}
+
+class PermissionErrorHandler {
+    handlePermissionError(error: any, permissionType: string): PermissionErrorType {
+        // Web API errors
+        if (error instanceof DOMException) {
+            switch (error.name) {
+                case 'NotAllowedError':
+                    return PermissionErrorType.USER_DENIED;
+                case 'NotFoundError':
+                    return PermissionErrorType.HARDWARE_UNAVAILABLE;
+                case 'NotReadableError':
+                    return PermissionErrorType.ALREADY_IN_USE;
+                case 'OverconstrainedError':
+                    return PermissionErrorType.SYSTEM_BLOCKED;
+                default:
+                    return PermissionErrorType.UNKNOWN_ERROR;
+            }
+        }
+        
+        // Mobile platform errors
+        if (typeof error === 'string') {
+            if (error.includes('denied')) return PermissionErrorType.USER_DENIED;
+            if (error.includes('blocked')) return PermissionErrorType.SYSTEM_BLOCKED;
+        }
+        
+        return PermissionErrorType.UNKNOWN_ERROR;
+    }
+    
+    getErrorMessage(errorType: PermissionErrorType, permissionType: string): string {
+        const messages = {
+            [PermissionErrorType.USER_DENIED]: `${permissionType} access was denied. Please allow access in your browser settings.`,
+            [PermissionErrorType.SYSTEM_BLOCKED]: `${permissionType} access is blocked by your system. Please check your privacy settings.`,
+            [PermissionErrorType.HARDWARE_UNAVAILABLE]: `${permissionType} hardware is not available on this device.`,
+            [PermissionErrorType.ALREADY_IN_USE]: `${permissionType} is currently being used by another application.`,
+            [PermissionErrorType.UNKNOWN_ERROR]: `An unknown error occurred while requesting ${permissionType} access.`
+        };
+        
+        return messages[errorType] || messages[PermissionErrorType.UNKNOWN_ERROR];
+    }
+    
+    getRecoveryActions(errorType: PermissionErrorType): string[] {
+        const actions = {
+            [PermissionErrorType.USER_DENIED]: [
+                'Click the camera/microphone icon in your browser\'s address bar',
+                'Select "Allow" for camera and microphone permissions',
+                'Refresh the page and try again'
+            ],
+            [PermissionErrorType.SYSTEM_BLOCKED]: [
+                'Open your system preferences',
+                'Navigate to Privacy & Security settings',
+                'Enable camera and microphone access for your browser'
+            ],
+            [PermissionErrorType.HARDWARE_UNAVAILABLE]: [
+                'Check that your camera and microphone are connected',
+                'Try using a different device',
+                'Contact support if the issue persists'
+            ],
+            [PermissionErrorType.ALREADY_IN_USE]: [
+                'Close other applications using the camera/microphone',
+                'Restart your browser',
+                'Try again'
+            ]
+        };
+        
+        return actions[errorType] || ['Please try again or contact support'];
+    }
+}
+```
+</Tab>
+<Tab title="Recovery Strategies">
+```typescript
+class PermissionRecoveryManager {
+    async attemptRecovery(errorType: PermissionErrorType, permissionType: string): Promise<boolean> {
+        switch (errorType) {
+            case PermissionErrorType.USER_DENIED:
+                return this.recoverFromUserDenial(permissionType);
+            case PermissionErrorType.ALREADY_IN_USE:
+                return this.recoverFromDeviceInUse(permissionType);
+            case PermissionErrorType.HARDWARE_UNAVAILABLE:
+                return this.recoverFromHardwareIssue(permissionType);
+            default:
+                return false;
+        }
+    }
+    
+    private async recoverFromUserDenial(permissionType: string): Promise<boolean> {
+        // Show guidance to user
+        await this.showPermissionGuidance(permissionType);
+        
+        // Wait for user action
+        return new Promise((resolve) => {
+            const checkInterval = setInterval(async () => {
+                const hasPermission = await this.checkPermission(permissionType);
+                if (hasPermission) {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                }
+            }, 2000);
+            
+            // Timeout after 60 seconds
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                resolve(false);
+            }, 60000);
+        });
+    }
+    
+    private async recoverFromDeviceInUse(permissionType: string): Promise<boolean> {
+        // Wait for device to become available
+        const maxAttempts = 5;
+        const delay = 3000; // 3 seconds
+        
+        for (let i = 0; i < maxAttempts; i++) {
+            await this.wait(delay);
+            
+            try {
+                const hasPermission = await this.requestPermission(permissionType);
+                if (hasPermission) return true;
+            } catch (error) {
+                if (i === maxAttempts - 1) return false;
+            }
+        }
+        
+        return false;
+    }
+}
+```
+</Tab>
+</Tabs>
+
+## User Experience Best Practices
+
+### 1. Permission Request Timing
+
+```typescript
+class PermissionUXManager {
+    async requestPermissionsWithOptimalTiming() {
+        // Don't request on app start - wait for user intent
+        await this.waitForUserIntent();
+        
+        // Provide context before requesting
+        await this.showFeatureExplanation();
+        
+        // Request permissions when needed
+        return this.requestPermissions();
+    }
+    
+    private async waitForUserIntent(): Promise<void> {
+        return new Promise((resolve) => {
+            // Wait for user to tap "Start Broadcasting" or similar
+            this.onUserActionToStartBroadcasting(() => resolve());
+        });
+    }
+    
+    private async showFeatureExplanation(): Promise<void> {
+        const modal = {
+            title: '📹 Ready to Go Live?',
+            message: 'To start broadcasting, we\'ll need access to your camera and microphone. This helps you share your content with your audience!',
+            animation: 'camera-preview', // Show animated camera preview
+            primaryButton: 'Allow Access',
+            secondaryButton: 'Maybe Later'
+        };
+        
+        return this.showModal(modal);
+    }
+}
+```
+
+### 2. Graceful Degradation
+
+```typescript
+class GracefulPermissionHandler {
+    async initializeWithAvailablePermissions() {
+        const permissions = await this.checkAllPermissions();
+        
+        const config = {
+            features: {
+                videoBroadcasting: permissions.camera && permissions.microphone,
+                audioBroadcasting: !permissions.camera && permissions.microphone,
+                viewerMode: true, // Always available
+                chat: true,
+                notifications: permissions.notifications
+            },
+            ui: {
+                showBroadcastButton: permissions.camera || permissions.microphone,
+                showPermissionPrompts: !permissions.camera || !permissions.microphone,
+                enablePushNotifications: permissions.notifications
+            }
+        };
+        
+        return this.initializeSDK(config);
+    }
+    
+    createAdaptiveUI(permissions: PermissionState) {
+        const components = [];
+        
+        if (permissions.camera && permissions.microphone) {
+            components.push('FullBroadcastControls');
+        } else if (permissions.microphone) {
+            components.push('AudioOnlyControls');
+        } else {
+            components.push('ViewerOnlyControls');
+        }
+        
+        if (!permissions.camera || !permissions.microphone) {
+            components.push('PermissionBanner');
+        }
+        
+        return components;
+    }
+}
+```
+
+## Compliance and Privacy
+
+### 1. Privacy Compliance
+
+```typescript
+class PrivacyComplianceManager {
+    async ensurePrivacyCompliance() {
+        // GDPR compliance
+        if (this.isEUUser()) {
+            await this.showGDPRConsent();
+        }
+        
+        // CCPA compliance
+        if (this.isCaliforniaUser()) {
+            await this.showCCPANotice();
+        }
+        
+        // Data usage transparency
+        await this.explainDataUsage();
+    }
+    
+    private async explainDataUsage() {
+        const notice = {
+            title: 'Your Privacy Matters',
+            content: [
+                '🔒 Camera and microphone data is only used during active streaming',
+                '🚫 We never record or store your camera/microphone data without permission',
+                '⏱️ Recordings are automatically deleted after 30 days unless you save them',
+                '🛡️ All streaming data is encrypted in transit and at rest'
+            ],
+            actions: [
+                { label: 'View Privacy Policy', action: this.openPrivacyPolicy },
+                { label: 'Continue', action: this.proceedWithPermissions }
+            ]
+        };
+        
+        return this.showPrivacyNotice(notice);
+    }
+    
+    async handleDataDeletion(userId: string) {
+        // Handle user data deletion requests
+        await this.deleteUserStreams(userId);
+        await this.clearUserPreferences(userId);
+        await this.removeUserFromAnalytics(userId);
+    }
+}
+```
+
+## Next Steps
+
+Now that you understand permission management, explore these related topics:
+
+- **[Lifecycle Management](./lifecycle-management)** - Learn about managing stream states and app lifecycle
+- **[Broadcasting Setup](../broadcasting/setup)** - Configure broadcasting with proper permissions
+- **[Platform-Specific Guides](../platform-specific/platform-comparison)** - Platform-specific permission handling
+- **[Troubleshooting](../troubleshooting/overview)** - Solve common permission issues
+
+For permission-related troubleshooting, see our [Platform Issues Guide](../troubleshooting/platform-issues).

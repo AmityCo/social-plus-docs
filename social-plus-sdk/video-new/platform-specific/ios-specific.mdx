@@ -1,0 +1,986 @@
+---
+title: "iOS Implementation Guide"
+description: "Comprehensive iOS-specific implementation details for Social+ Video SDK integration"
+---
+
+# iOS Implementation Guide
+
+Complete guide for implementing Social+ Video SDK in iOS applications using Swift and UIKit/SwiftUI.
+
+## Overview
+
+This guide covers iOS-specific implementation details, native frameworks integration, and platform-specific considerations for video streaming applications.
+
+### Prerequisites
+
+- **iOS 12.0+** minimum deployment target
+- **Xcode 13.0+** for development
+- **Swift 5.5+** support
+- **Valid Apple Developer Account** for device testing and App Store distribution
+
+### Core Frameworks
+
+The iOS Video SDK integrates with several native frameworks:
+
+```swift
+import Social_Video
+import AVFoundation
+import AVkit
+import CallKit
+import PushKit
+import UserNotifications
+import Network
+```
+
+## Installation & Setup
+
+### CocoaPods Installation
+
+```ruby
+# Podfile
+platform :ios, '12.0'
+use_frameworks!
+
+target 'YourApp' do
+  pod 'Social-Video-iOS', '~> 1.0'
+  pod 'Social-Video-Broadcast', '~> 1.0'
+  pod 'Social-Video-Player', '~> 1.0'
+end
+```
+
+### Swift Package Manager
+
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/AmityCo/Social-Video-iOS-SDK", from: "1.0.0")
+]
+```
+
+### Manual Integration
+
+1. **Download iOS SDK Bundle**
+   ```bash
+   curl -O https://releases.social.plus/ios/Social-Video-iOS-1.0.0.zip
+   unzip Social-Video-iOS-1.0.0.zip
+   ```
+
+2. **Add Frameworks to Project**
+   - Drag `Social_Video.framework` to your project
+   - Add to "Embedded Binaries" and "Linked Frameworks"
+   - Set "Embed & Sign" for framework
+
+3. **Configure Build Settings**
+   ```swift
+   // Build Settings
+   ENABLE_BITCODE = NO
+   SWIFT_VERSION = 5.5
+   IPHONEOS_DEPLOYMENT_TARGET = 12.0
+   ```
+
+## Permissions & Privacy
+
+### Required Permissions
+
+Add these to your `Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>This app needs camera access to broadcast live video</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>This app needs microphone access for live audio streaming</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>This app needs photo library access to select video thumbnails</string>
+
+<key>NSUserNotificationsUsageDescription</key>
+<string>This app sends notifications about stream events</string>
+```
+
+### Permission Handling
+
+```swift
+import AVFoundation
+
+class PermissionManager {
+    
+    static func requestCameraPermission(completion: @escaping (Bool) -> Void) {
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
+        }
+    }
+    
+    static func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
+        }
+    }
+    
+    static func requestAllPermissions(completion: @escaping (Bool) -> Void) {
+        requestCameraPermission { cameraGranted in
+            guard cameraGranted else {
+                completion(false)
+                return
+            }
+            
+            requestMicrophonePermission { micGranted in
+                completion(micGranted)
+            }
+        }
+    }
+}
+```
+
+## Broadcasting Implementation
+
+### Basic Broadcaster Setup
+
+```swift
+import Social_Video
+
+class LiveBroadcastViewController: UIViewController {
+    
+    @IBOutlet weak var previewView: UIView!
+    @IBOutlet weak var startButton: UIButton!
+    @IBOutlet weak var stopButton: UIButton!
+    @IBOutlet weak var statusLabel: UILabel!
+    
+    private var broadcaster: AmityStreamBroadcaster!
+    private var streamId: String?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupBroadcaster()
+    }
+    
+    private func setupBroadcaster() {
+        // Initialize broadcaster with client
+        broadcaster = AmityStreamBroadcaster(client: AmityManager.shared.client!)
+        broadcaster.delegate = self
+        
+        // Configure broadcaster settings
+        let config = AmityStreamBroadcasterConfiguration()
+        config.canvasFitting = .fill
+        config.bitrate = 3_000_000 // 3 Mbps
+        config.frameRate = .fps30
+        config.audioConfig = .standard
+        
+        broadcaster.setup(with: config)
+        
+        // Add preview view
+        previewView.addSubview(broadcaster.previewView)
+        broadcaster.previewView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            broadcaster.previewView.topAnchor.constraint(equalTo: previewView.topAnchor),
+            broadcaster.previewView.leadingAnchor.constraint(equalTo: previewView.leadingAnchor),
+            broadcaster.previewView.trailingAnchor.constraint(equalTo: previewView.trailingAnchor),
+            broadcaster.previewView.bottomAnchor.constraint(equalTo: previewView.bottomAnchor)
+        ])
+        
+        // Set video resolution
+        broadcaster.videoResolution = CGSize(width: 1280, height: 720) // 720p
+    }
+    
+    @IBAction func startBroadcast(_ sender: UIButton) {
+        startLiveStream()
+    }
+    
+    @IBAction func stopBroadcast(_ sender: UIButton) {
+        stopLiveStream()
+    }
+    
+    private func startLiveStream() {
+        broadcaster.startPublish(
+            title: "Live from iOS",
+            description: "Broadcasting live video from iOS app"
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let streamId):
+                    self?.streamId = streamId
+                    self?.updateUI(for: .broadcasting)
+                    
+                case .failure(let error):
+                    self?.handleBroadcastError(error)
+                }
+            }
+        }
+    }
+    
+    private func stopLiveStream() {
+        broadcaster.stopPublish { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.updateUI(for: .idle)
+                    
+                case .failure(let error):
+                    self?.handleBroadcastError(error)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - AmityStreamBroadcasterDelegate
+extension LiveBroadcastViewController: AmityStreamBroadcasterDelegate {
+    
+    func amityStreamBroadcasterDidUpdateState(_ broadcaster: AmityStreamBroadcaster) {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateUI(for: broadcaster.state)
+        }
+    }
+    
+    func amityStreamBroadcaster(_ broadcaster: AmityStreamBroadcaster, didFailWithError error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleBroadcastError(error)
+        }
+    }
+    
+    private func updateUI(for state: AmityStreamBroadcasterState) {
+        switch state {
+        case .idle:
+            statusLabel.text = "Ready to broadcast"
+            startButton.isEnabled = true
+            stopButton.isEnabled = false
+            
+        case .connecting:
+            statusLabel.text = "Connecting..."
+            startButton.isEnabled = false
+            stopButton.isEnabled = false
+            
+        case .connected:
+            statusLabel.text = "Live"
+            startButton.isEnabled = false
+            stopButton.isEnabled = true
+            
+        case .disconnected:
+            statusLabel.text = "Disconnected"
+            startButton.isEnabled = true
+            stopButton.isEnabled = false
+            
+        @unknown default:
+            break
+        }
+    }
+    
+    private func handleBroadcastError(_ error: Error) {
+        let alert = UIAlertController(
+            title: "Broadcast Error",
+            message: error.localizedDescription,
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}
+```
+
+### Advanced Broadcasting Features
+
+```swift
+// MARK: - Camera Controls
+extension LiveBroadcastViewController {
+    
+    @IBAction func switchCamera(_ sender: UIButton) {
+        broadcaster.cameraPosition = broadcaster.cameraPosition == .back ? .front : .back
+    }
+    
+    @IBAction func toggleFlash(_ sender: UIButton) {
+        broadcaster.flashMode = broadcaster.flashMode == .on ? .off : .on
+    }
+    
+    @IBAction func adjustZoom(_ sender: UIPinchGestureRecognizer) {
+        let scale = sender.scale
+        broadcaster.zoomFactor = min(max(scale, 1.0), 5.0)
+    }
+}
+
+// MARK: - Audio Controls
+extension LiveBroadcastViewController {
+    
+    @IBAction func toggleMute(_ sender: UIButton) {
+        broadcaster.isMuted = !broadcaster.isMuted
+        sender.isSelected = broadcaster.isMuted
+    }
+    
+    @IBAction func adjustVolume(_ sender: UISlider) {
+        broadcaster.audioGain = sender.value
+    }
+}
+
+// MARK: - Quality Controls
+extension LiveBroadcastViewController {
+    
+    func setupQualitySelector() {
+        let qualityOptions = [
+            (title: "480p", resolution: CGSize(width: 854, height: 480), bitrate: 1_200_000),
+            (title: "720p", resolution: CGSize(width: 1280, height: 720), bitrate: 2_500_000),
+            (title: "1080p", resolution: CGSize(width: 1920, height: 1080), bitrate: 5_000_000)
+        ]
+        
+        let alert = UIAlertController(title: "Select Quality", message: nil, preferredStyle: .actionSheet)
+        
+        for option in qualityOptions {
+            alert.addAction(UIAlertAction(title: option.title, style: .default) { _ in
+                self.broadcaster.videoResolution = option.resolution
+                self.broadcaster.config.bitrate = option.bitrate
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+}
+```
+
+## Video Playback Implementation
+
+### Basic Player Setup
+
+```swift
+import Social_Video
+import AVKit
+
+class VideoPlayerViewController: UIViewController {
+    
+    @IBOutlet weak var playerView: UIView!
+    @IBOutlet weak var playButton: UIButton!
+    @IBOutlet weak var pauseButton: UIButton!
+    @IBOutlet weak var progressSlider: UISlider!
+    @IBOutlet weak var timeLabel: UILabel!
+    
+    private var player: AmityVideoPlayer!
+    private var playerLayer: AVPlayerLayer!
+    private var timeObserver: Any?
+    
+    var streamId: String!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupPlayer()
+    }
+    
+    private func setupPlayer() {
+        // Initialize video player
+        player = AmityVideoPlayer()
+        player.delegate = self
+        
+        // Setup player layer
+        playerLayer = AVPlayerLayer(player: player.avPlayer)
+        playerLayer.frame = playerView.bounds
+        playerLayer.videoGravity = .resizeAspect
+        playerView.layer.addSublayer(playerLayer)
+        
+        // Load stream
+        loadStream()
+        
+        // Setup time observer
+        setupTimeObserver()
+    }
+    
+    private func loadStream() {
+        player.loadStream(streamId: streamId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.updateUI(isLoaded: true)
+                    
+                case .failure(let error):
+                    self?.handlePlayerError(error)
+                }
+            }
+        }
+    }
+    
+    @IBAction func playTapped(_ sender: UIButton) {
+        player.play()
+    }
+    
+    @IBAction func pauseTapped(_ sender: UIButton) {
+        player.pause()
+    }
+    
+    @IBAction func sliderValueChanged(_ sender: UISlider) {
+        let time = CMTime(seconds: Double(sender.value), preferredTimescale: 1000)
+        player.seek(to: time)
+    }
+    
+    private func setupTimeObserver() {
+        timeObserver = player.avPlayer.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 1, preferredTimescale: 1000),
+            queue: .main
+        ) { [weak self] time in
+            self?.updateTimeUI(currentTime: time)
+        }
+    }
+    
+    private func updateTimeUI(currentTime: CMTime) {
+        let seconds = CMTimeGetSeconds(currentTime)
+        let duration = CMTimeGetSeconds(player.avPlayer.currentItem?.duration ?? CMTime.zero)
+        
+        progressSlider.value = Float(seconds)
+        progressSlider.maximumValue = Float(duration)
+        
+        timeLabel.text = "\(formatTime(seconds)) / \(formatTime(duration))"
+    }
+    
+    private func formatTime(_ seconds: Double) -> String {
+        let minutes = Int(seconds) / 60
+        let remainingSeconds = Int(seconds) % 60
+        return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        playerLayer.frame = playerView.bounds
+    }
+    
+    deinit {
+        if let timeObserver = timeObserver {
+            player.avPlayer.removeTimeObserver(timeObserver)
+        }
+    }
+}
+
+// MARK: - AmityVideoPlayerDelegate
+extension VideoPlayerViewController: AmityVideoPlayerDelegate {
+    
+    func amityVideoPlayer(_ player: AmityVideoPlayer, didUpdateState state: AmityVideoPlayerState) {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateUI(for: state)
+        }
+    }
+    
+    func amityVideoPlayer(_ player: AmityVideoPlayer, didFailWithError error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handlePlayerError(error)
+        }
+    }
+    
+    private func updateUI(for state: AmityVideoPlayerState) {
+        switch state {
+        case .idle:
+            playButton.isEnabled = true
+            pauseButton.isEnabled = false
+            
+        case .loading:
+            playButton.isEnabled = false
+            pauseButton.isEnabled = false
+            
+        case .playing:
+            playButton.isEnabled = false
+            pauseButton.isEnabled = true
+            
+        case .paused:
+            playButton.isEnabled = true
+            pauseButton.isEnabled = false
+            
+        case .ended:
+            playButton.isEnabled = true
+            pauseButton.isEnabled = false
+            progressSlider.value = 0
+            
+        @unknown default:
+            break
+        }
+    }
+    
+    private func updateUI(isLoaded: Bool) {
+        playButton.isEnabled = isLoaded
+        progressSlider.isEnabled = isLoaded
+    }
+    
+    private func handlePlayerError(_ error: Error) {
+        let alert = UIAlertController(
+            title: "Playback Error",
+            message: error.localizedDescription,
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}
+```
+
+## Push Notifications Integration
+
+### APNs Configuration
+
+```swift
+import UserNotifications
+import Social_Video
+
+class NotificationManager: NSObject {
+    
+    static let shared = NotificationManager()
+    
+    func setupNotifications() {
+        UNUserNotificationCenter.current().delegate = self
+        
+        // Request permission
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .badge, .sound]
+        ) { granted, error in
+            if granted {
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+        }
+    }
+    
+    func registerDeviceToken(_ deviceToken: Data) {
+        let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        
+        // Register with Social+ Video SDK
+        VideoNotificationManager.shared.registerDevice(token: tokenString) { result in
+            switch result {
+            case .success:
+                print("Device registered for video notifications")
+                
+            case .failure(let error):
+                print("Failed to register device: \(error)")
+            }
+        }
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+extension NotificationManager: UNUserNotificationCenterDelegate {
+    
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Handle foreground notifications
+        completionHandler([.alert, .badge, .sound])
+    }
+    
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        
+        if let streamId = userInfo["stream_id"] as? String {
+            // Navigate to stream
+            handleStreamNotification(streamId: streamId)
+        }
+        
+        completionHandler()
+    }
+    
+    private func handleStreamNotification(streamId: String) {
+        // Navigate to stream view controller
+        if let sceneDelegate = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate,
+           let window = sceneDelegate.window,
+           let rootViewController = window.rootViewController {
+            
+            let storyboard = UIStoryboard(name: "Main", bundle: nil)
+            let playerVC = storyboard.instantiateViewController(withIdentifier: "VideoPlayerViewController") as! VideoPlayerViewController
+            playerVC.streamId = streamId
+            
+            rootViewController.present(playerVC, animated: true)
+        }
+    }
+}
+```
+
+### AppDelegate Integration
+
+```swift
+import UIKit
+import Social_Video
+
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        
+        // Setup Social+ Video SDK
+        setupVideoSDK()
+        
+        // Setup notifications
+        NotificationManager.shared.setupNotifications()
+        
+        return true
+    }
+    
+    private func setupVideoSDK() {
+        // Initialize SDK
+        let config = AmitySDKConfiguration(
+            apiKey: "your-api-key",
+            region: .global
+        )
+        
+        AmitySDK.setup(with: config)
+    }
+    
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        NotificationManager.shared.registerDeviceToken(deviceToken)
+    }
+    
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("Failed to register for remote notifications: \(error)")
+    }
+    
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        // Handle background notifications
+        if let streamEvent = userInfo["stream_event"] as? String {
+            VideoEventManager.shared.processBackgroundEvent(userInfo)
+            completionHandler(.newData)
+        } else {
+            completionHandler(.noData)
+        }
+    }
+}
+```
+
+## SwiftUI Integration
+
+### SwiftUI Broadcasting View
+
+```swift
+import SwiftUI
+import Social_Video
+
+struct LiveBroadcastView: View {
+    @StateObject private var broadcaster = BroadcastViewModel()
+    @State private var isRecording = false
+    @State private var cameraPosition: CameraPosition = .back
+    
+    var body: some View {
+        ZStack {
+            // Camera preview
+            CameraPreviewView(broadcaster: broadcaster.broadcaster)
+                .ignoresSafeArea()
+            
+            VStack {
+                // Top controls
+                HStack {
+                    Button(action: { cameraPosition.toggle() }) {
+                        Image(systemName: "camera.rotate")
+                            .foregroundColor(.white)
+                            .font(.title2)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: { broadcaster.toggleFlash() }) {
+                        Image(systemName: broadcaster.isFlashOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                            .foregroundColor(.white)
+                            .font(.title2)
+                    }
+                }
+                .padding()
+                
+                Spacer()
+                
+                // Bottom controls
+                VStack {
+                    Text(broadcaster.statusText)
+                        .foregroundColor(.white)
+                        .font(.headline)
+                    
+                    HStack(spacing: 30) {
+                        Button(action: { broadcaster.toggleMute() }) {
+                            Image(systemName: broadcaster.isMuted ? "mic.slash.fill" : "mic.fill")
+                                .foregroundColor(.white)
+                                .font(.title2)
+                        }
+                        
+                        Button(action: { broadcaster.toggleBroadcast() }) {
+                            Circle()
+                                .fill(broadcaster.isLive ? Color.red : Color.white)
+                                .frame(width: 80, height: 80)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 4)
+                                )
+                        }
+                        
+                        Button(action: { /* Settings */ }) {
+                            Image(systemName: "gear")
+                                .foregroundColor(.white)
+                                .font(.title2)
+                        }
+                    }
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            broadcaster.setup()
+        }
+        .onChange(of: cameraPosition) { newPosition in
+            broadcaster.switchCamera(to: newPosition)
+        }
+    }
+}
+
+class BroadcastViewModel: ObservableObject {
+    @Published var isLive = false
+    @Published var isMuted = false
+    @Published var isFlashOn = false
+    @Published var statusText = "Ready to broadcast"
+    
+    private(set) var broadcaster: AmityStreamBroadcaster!
+    
+    func setup() {
+        broadcaster = AmityStreamBroadcaster(client: AmityManager.shared.client!)
+        broadcaster.delegate = self
+        
+        let config = AmityStreamBroadcasterConfiguration()
+        config.canvasFitting = .fill
+        config.bitrate = 3_000_000
+        config.frameRate = .fps30
+        
+        broadcaster.setup(with: config)
+    }
+    
+    func toggleBroadcast() {
+        if isLive {
+            stopBroadcast()
+        } else {
+            startBroadcast()
+        }
+    }
+    
+    private func startBroadcast() {
+        broadcaster.startPublish(
+            title: "Live from SwiftUI",
+            description: "Broadcasting with SwiftUI interface"
+        ) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.isLive = true
+                    self.statusText = "Live"
+                    
+                case .failure(let error):
+                    print("Broadcast failed: \(error)")
+                }
+            }
+        }
+    }
+    
+    private func stopBroadcast() {
+        broadcaster.stopPublish { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.isLive = false
+                    self.statusText = "Ready to broadcast"
+                    
+                case .failure(let error):
+                    print("Stop broadcast failed: \(error)")
+                }
+            }
+        }
+    }
+    
+    func switchCamera(to position: CameraPosition) {
+        broadcaster.cameraPosition = position == .back ? .back : .front
+    }
+    
+    func toggleMute() {
+        broadcaster.isMuted = !broadcaster.isMuted
+        isMuted = broadcaster.isMuted
+    }
+    
+    func toggleFlash() {
+        broadcaster.flashMode = broadcaster.flashMode == .on ? .off : .on
+        isFlashOn = broadcaster.flashMode == .on
+    }
+}
+
+extension BroadcastViewModel: AmityStreamBroadcasterDelegate {
+    func amityStreamBroadcasterDidUpdateState(_ broadcaster: AmityStreamBroadcaster) {
+        DispatchQueue.main.async {
+            switch broadcaster.state {
+            case .idle:
+                self.statusText = "Ready to broadcast"
+            case .connecting:
+                self.statusText = "Connecting..."
+            case .connected:
+                self.statusText = "Live"
+            case .disconnected:
+                self.statusText = "Disconnected"
+            @unknown default:
+                break
+            }
+        }
+    }
+}
+
+enum CameraPosition {
+    case front, back
+    
+    mutating func toggle() {
+        self = self == .front ? .back : .front
+    }
+}
+
+struct CameraPreviewView: UIViewRepresentable {
+    let broadcaster: AmityStreamBroadcaster
+    
+    func makeUIView(context: Context) -> UIView {
+        return broadcaster.previewView
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Update if needed
+    }
+}
+```
+
+## Performance Optimization
+
+### Memory Management
+
+```swift
+class VideoViewController: UIViewController {
+    private var player: AmityVideoPlayer?
+    private var broadcaster: AmityStreamBroadcaster?
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // Initialize when view appears
+        setupVideoComponents()
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        
+        // Clean up when view disappears
+        cleanupVideoComponents()
+    }
+    
+    private func cleanupVideoComponents() {
+        player?.pause()
+        player = nil
+        
+        broadcaster?.stopPublish { _ in }
+        broadcaster = nil
+        
+        // Remove observers
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+```
+
+### Background Handling
+
+```swift
+class VideoBackgroundHandler {
+    
+    func setupBackgroundHandling() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func appDidEnterBackground() {
+        // Pause non-essential video operations
+        VideoStreamManager.shared.enterBackgroundMode()
+    }
+    
+    @objc private func appWillEnterForeground() {
+        // Resume video operations
+        VideoStreamManager.shared.enterForegroundMode()
+    }
+}
+```
+
+## Troubleshooting
+
+### Common iOS Issues
+
+1. **Camera Permission Denied**
+   ```swift
+   func handleCameraPermission() {
+       AVCaptureDevice.requestAccess(for: .video) { granted in
+           if !granted {
+               DispatchQueue.main.async {
+                   self.showPermissionAlert()
+               }
+           }
+       }
+   }
+   ```
+
+2. **Audio Session Conflicts**
+   ```swift
+   func configureAudioSession() {
+       do {
+           try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .videoRecording)
+           try AVAudioSession.sharedInstance().setActive(true)
+       } catch {
+           print("Audio session configuration failed: \(error)")
+       }
+   }
+   ```
+
+3. **Memory Warnings**
+   ```swift
+   override func didReceiveMemoryWarning() {
+       super.didReceiveMemoryWarning()
+       
+       // Clean up non-essential video resources
+       if !isViewLoaded || view.window == nil {
+           cleanupVideoComponents()
+       }
+   }
+   ```
+
+## Best Practices
+
+1. **Lifecycle Management** - Always clean up video resources in `viewDidDisappear`
+2. **Permission Handling** - Request permissions at appropriate times
+3. **Background Behavior** - Pause video operations when app goes to background
+4. **Memory Management** - Use weak references for delegates and completion handlers
+5. **Error Handling** - Provide clear error messages and recovery options
+
+## Next Steps
+
+1. **[Android Implementation](./android-specific.mdx)** - Android-specific implementation details
+2. **[Cross-Platform Comparison](./platform-comparison.mdx)** - Compare platform differences
+3. **[Core Concepts](../core-concepts/overview.mdx)** - Understanding video SDK concepts
+
+<Warning>
+**iOS App Store Requirements**: Ensure your app complies with App Store guidelines for video streaming apps, including proper permission usage descriptions and content moderation policies.
+</Warning>
