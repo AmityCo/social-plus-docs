@@ -1,0 +1,346 @@
+---
+title: "Android"
+description: "Get up and running with Social+ Android SDK for Kotlin/Java applications in minutes."
+---
+
+Get your Android app connected to Social+ in just a few steps. This guide covers everything from installation to your first authenticated session.
+
+## Requirements
+
+- Android 5.0 (API 21)+
+- Target SDK 30+
+- Compile SDK 30+
+- JVM target 1.8
+- Kotlin 1.5.10+
+
+## Installation
+
+Add the SDK to your project using your preferred repository:
+
+<Tabs>
+<Tab title="Maven Central">
+
+Add Maven Central to your project-level `build.gradle`:
+
+<CodeGroup>
+```gradle Gradle 6.8+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
+```
+
+```gradle Gradle 6.7 and below
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+```
+</CodeGroup>
+
+Add the dependency to your module-level `build.gradle`:
+
+<CodeGroup>
+
+```kotlin Gradle (Kotlin DSL)
+implementation("co.amity.android:amity-sdk:x.y.z")
+```
+
+```gradle Gradle (Groovy)
+implementation 'co.amity.android:amity-sdk:x.y.z'
+```
+
+</CodeGroup>
+
+<Info>
+Replace `x.y.z` with the [latest version number](https://github.com/AmityCo/Amity-Social-Cloud-Android-SDK/releases).
+</Info>
+
+If your minSDKVersion is below 24, there are additional configurations required. In your project build.gradle:
+```
+buildscript {
+    repositories {
+        google()
+        gradlePluginPortal()
+        ...
+    }
+    dependencies {
+        ...
+        classpath 'gradle.plugin.com.github.sgtsilvio.gradle:android-retrofix:0.4.1'
+    }
+}
+```
+</Tab>
+
+<Tab title="Jitpack (Deprecated)">
+
+Add Jitpack to your project-level `build.gradle`:
+
+```gradle
+allprojects {
+    repositories {
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+
+Add the dependency:
+
+```gradle
+implementation 'com.github.AmityCo:Amity-Social-Cloud-Android-SDK:x.y.z'
+```
+</Tab>
+</Tabs>
+
+## Configuration
+
+### Managing conflicting file generation
+In your app module's build.gradle,  add the following packaging options.
+```gradle
+android {
+    ...
+    packagingOptions {
+        exclude 'META-INF/INDEX.LIST'
+        exclude 'META-INF/io.netty.versions.properties'
+    }
+}
+```
+
+### ProGuard Rules
+
+If using ProGuard, add these rules to your `proguard-rules.pro`:
+
+```pro
+-keep class com.ekoapp.ekosdk.** { *; }
+-keep interface com.ekoapp.ekosdk.** { *; }
+-keep enum com.ekoapp.ekosdk.** { *; }
+-keep class com.amity.socialcloud.** { *; }
+-keep interface com.amity.socialcloud.** { *; }
+-keep enum com.amity.socialcloud.** { *; }
+-keep class co.amity.rxupload.** { *; }
+```
+
+If you are using the SDK version below 6.9.0. If you'd like to pass an Amity Serializable Object such as AmityPost, AmityMessage, etc. You will need to add ProGuard rules below:
+
+```pro
+-keepclassmembers class * implements java.io.Serializable {
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+```
+
+### Log Visibility Configuration
+To control log visibility, add the following to your `build.gradle`:
+
+```gradle
+android {
+    defaultConfig {
+        resValue 'bool', "IS_HIDDEN_AMITY_LOG", "true"
+        …
+    }
+    …
+}
+```
+
+## Database Encryption (Optional)
+
+<Info>
+The SDK does not employ database encryption by default. The database file is solely restricted to the application by the operating system, which is generally sufficient for most use cases.
+</Info>
+
+Database encryption serves as an additional layer of security in the event of compromised root access. **Important**: Enabling database encryption may lead to a performance reduction of up to 15% during database read/write operations.
+
+### Encryption Modes
+
+<CardGroup cols={3}>
+<Card title="NONE" icon="unlock" color="#gray">
+**No Encryption**  
+Default mode with no encryption applied. Best performance.
+</Card>
+
+<Card title="AUTH" icon="shield-check" color="#green">
+**Token Security**  
+Access token storage is encrypted. **Recommended** for balanced security.
+</Card>
+
+<Card title="ALL" icon="shield" color="#blue">
+**Full Encryption**  
+All database files are encrypted. Maximum security.
+</Card>
+</CardGroup>
+
+<Warning>
+**AUTH mode is recommended** to introduce extra security with minimal performance compromise. Choose the encryption mode that aligns with your application's specific requirements.
+</Warning>
+
+### Implementation
+
+<Tabs>
+<Tab title="AUTH Mode (Recommended)">
+```kotlin
+fun setupWithDatabaseEncryption(encryptionKey: String) {
+    AmityCoreClient.setup(
+        apiKey = "your-api-key",
+        dbEncryption = AmityDBEncryption.AUTH(encryptionKey.toByteArray())
+    )
+}
+```
+</Tab>
+
+<Tab title="Full Encryption">
+```kotlin
+fun setupWithFullEncryption(encryptionKey: String) {
+    AmityCoreClient.setup(
+        apiKey = "your-api-key",
+        dbEncryption = AmityDBEncryption.ALL(encryptionKey.toByteArray())
+    )
+}
+```
+</Tab>
+
+<Tab title="No Encryption">
+```kotlin
+fun setupWithoutEncryption() {
+    AmityCoreClient.setup(
+        apiKey = "your-api-key",
+        dbEncryption = AmityDBEncryption.NONE
+    )
+}
+```
+</Tab>
+</Tabs>
+
+### Encryption Key Management
+
+<Accordion title="🔐 Secure Key Generation & Storage" icon="key">
+Enabling database encryption requires an encryption key. **You must consistently pass the same key** to the SDK. If a new key is supplied, the existing database will be erased and regenerated with the new key.
+
+<Warning>
+The level of security depends on your key generation and storage method. Follow industry standards for both key storage and generation.
+</Warning>
+
+**Add the security library dependency:**
+
+```gradle
+implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+```
+
+**Secure key implementation:**
+
+```kotlin
+private fun getEncryptionKey(context: Context): String {
+    // Use androidx.security:security-crypto to store generated key
+    val securedSharedPreferences = EncryptedSharedPreferences.create(
+        "amity_encrypted_shared_prefs",
+        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+        context,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
+    val cachedKey = securedSharedPreferences.getString("amity_key", null)
+    return if (cachedKey != null) {
+        cachedKey
+    } else {
+        // Generate AES 256-bit key
+        val keyGen = KeyGenerator.getInstance("AES")
+        keyGen.init(256)
+        val key = keyGen.generateKey()
+        val encodedKey = key.encoded
+        val generatedKey = String(Base64.encode(encodedKey, Base64.DEFAULT))
+        
+        // Store the key securely
+        securedSharedPreferences.edit()
+            .putString("amity_key", generatedKey)
+            .apply()
+        
+        generatedKey
+    }
+}
+```
+
+**Usage in your Application class:**
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        // Get or generate encryption key
+        val encryptionKey = getEncryptionKey(this)
+        
+        // Setup SDK with encryption
+        AmityCoreClient.setup(
+            context = this,
+            apiKey = "your-api-key",
+            region = AmityRegion.SG,
+            dbEncryption = AmityDBEncryption.AUTH(encryptionKey.toByteArray())
+        )
+    }
+}
+```
+</Accordion>
+
+### Performance Considerations
+
+<Note>
+**Performance Impact**: Database encryption adds computational overhead. Consider these factors:
+
+- **AUTH mode**: ~5-8% performance impact
+- **ALL mode**: ~10-15% performance impact
+- **Battery usage**: Slightly increased due to encryption/decryption operations
+- **Storage**: Minimal impact on storage size
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="Authentication Guide" icon="shield-check" href="/social-plus-sdk/getting-started/authentication">
+Learn about session management and secure authentication flows
+</Card>
+
+<Card title="Chat Features" icon="message" href="/social-plus-sdk/chat/overview">
+Start building chat and messaging features
+</Card>
+
+<Card title="Social Features" icon="users" href="/social-plus-sdk/social/overview">
+Add posts, feeds, and social interactions
+</Card>
+
+<Card title="Video Streaming" icon="video" href="/social-plus-sdk/video/overview">
+Implement live video and streaming features
+</Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+<Accordion title="Build Issues" icon="wrench">
+**Dependency conflicts**: Use the latest versions and ensure all Amity dependencies use the same version
+
+**ProGuard issues**: Make sure you've added the required ProGuard rules
+
+**Minimum SDK version**: Ensure your app's minimum SDK is at least API 21
+</Accordion>
+
+<Accordion title="Runtime Issues" icon="bug">
+**SDK not initialized**: Make sure you call `AmityCoreClient.setup()` in your Application class
+
+**Authentication failures**: Verify your API key and region settings
+
+**Network errors**: Check internet permissions and network connectivity
+</Accordion>
+
+<Accordion title="RxJava Issues" icon="code">
+**Missing RxJava**: The SDK uses RxJava 2&3 - ensure you have the dependency added
+
+**Threading issues**: Use `.subscribeOn(Schedulers.io())` for background operations
+
+**Memory leaks**: Always dispose of your subscriptions in onDestroy()
+</Accordion>
+</AccordionGroup>
