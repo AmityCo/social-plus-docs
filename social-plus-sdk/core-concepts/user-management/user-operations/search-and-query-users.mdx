@@ -14,7 +14,7 @@ Deleted users are automatically excluded from all search and query results to ma
 ## Search vs Query
 
 <CardGroup cols={2}>
-  <Card title="Search Users" icon="search">
+  <Card title="Search Users" icon="user-magnifying-glass">
     Find users by display name with keyword matching
   </Card>
   <Card title="Query Users" icon="list">
@@ -22,333 +22,208 @@ Deleted users are automatically excluded from all search and query results to ma
   </Card>
 </CardGroup>
 
-## User Search
+## Search User
 
-Find users by their display name with flexible matching options.
+Query for users by their display name, receiving a collection of AmityUser matching your search. It requires two parameters: the display name you're searching for, and a 'sort option' from the AmityUserSortOption enum.
 
 ### Search Requirements
 
 <Note>
-- Search keywords must be **at least 3 characters long**
-- Special characters require exact matches (e.g., "Äli" won't match "Ali")
-- Results are ranked by relevance when using keywords
+- **Search keywords must be at least 3 characters long**
+- If no keyword is supplied, the list of users will be organized alphabetically by display name
+- When a keyword is provided, the list will be arranged based on search rank
+- The displayName sorting option will be specified by default if it isn't specified
 </Note>
 
 ### Sorting Options
 
-- **displayName**: Alphabetical sorting using ICU collation (default)
-- **lastCreated**: Most recently created users first
+Users have the option to sort by:
+- **displayName**: Alphabetical sorting using ICU collation for English locale (default)
+- **lastCreated**: Most recently created users first  
 - **firstCreated**: Oldest users first
+
+### Special Character Handling
+
+<Info>
+With the displayName sorting option, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as Ä are treated as variants of A. For example, a sorted list might appear as: **adam, Älex, Alice, Arthur, charlie, Kristen**.
+
+When providing a search keyword, the API performs an **exact-match lookup for special characters**:
+- Searching for "Äli" will only return users whose display name contains "Äli" (e.g., "Älise")
+- Searching for "Alice" will NOT return "Älice"
+</Info>
 
 ### Search Implementation
 
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    // Search users by display name
-    let userRepository = AmityUserRepository(client: client)
-    
-    // Basic search
-    userRepository.searchUser(byDisplayName: "John")
-        .sortBy(.displayName)
-        .query()
-    
-    // Advanced search with custom sorting
-    userRepository.searchUser(byDisplayName: "Jane")
-        .sortBy(.lastCreated)
-        .query()
-    
-    // Handle search results
-    let searchCollection = userRepository.searchUser(byDisplayName: "Mike").query()
-    searchCollection.delegate = self
-    
-    // AmityCollectionDelegate methods
-    func amityCollection(_ collection: AmityCollection<AmityUser>, 
-                        didReceive data: [AmityUser], 
-                        at indexPaths: [IndexPath]) {
-        // Handle new search results
-        for user in data {
-            print("Found user: \(user.displayName ?? user.userId)")
-        }
+<CodeGroup>
+```swift iOS
+var token: AmityNotificationToken?
+
+func searchUserExample() {
+    let liveCollection = userRepository.searchUsers("<display-name>", sortBy: .displayName)
+    token = liveCollection.observe { collection, change, error in
+        // Handle live collection notification here
     }
-    ```
-  </Tab>
-  
-  <Tab title="Android">
-    ```kotlin
-    val userRepository = AmityUserRepository(client)
-    
-    // Basic search
-    val searchResults = userRepository.searchUserByDisplayName("John")
-        .sortBy(AmityUserSortOption.DISPLAY_NAME)
+}
+```
+
+```kotlin Android
+fun searchUsers(userRepository: AmityUserRepository) {
+    userRepository.searchUsers("Brian")
         .build()
         .query()
-    
-    // Handle search results with pagination
-    searchResults.observe(this) { result ->
-        result.onSuccess { userList ->
-            userList.forEach { user ->
-                Log.d("Search", "Found user: ${user.displayName ?: user.userId}")
-            }
-        }.onError { error ->
-            Log.e("Search", "Search failed: ${error.message}")
+        .doOnNext { users: PagingData<AmityUser> ->
+            // PagingData<AmityUser>
         }
-    }
-    
-    // Search with different sorting
-    val recentUsers = userRepository.searchUserByDisplayName("Jane")
-        .sortBy(AmityUserSortOption.LAST_CREATED)
-        .build()
-        .query()
-    ```
-  </Tab>
-  
-  <Tab title="TypeScript">
-    ```typescript
-    // Search users by display name
-    try {
-      const { data: users } = await client.queryUsers({
-        displayName: 'John'
-      });
-      
-      users.forEach(user => {
-        console.log(`Found user: ${user.displayName || user.userId}`);
-      });
-    } catch (error) {
-      console.error('Search failed:', error);
-    }
-    
-    // Live search with real-time updates
-    const subscription = client.liveUsers({
-      displayName: 'Jane',
-      sortBy: 'displayName'
-    }).subscribe({
-      next: (users) => {
-        console.log('Search results updated:', users.length);
+        .doOnError {
+            // Exception
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const unsub = UserRepository.searchUserByDisplayName({ displayName: 'Joe' }, ({ data: users }) =>
+  console.log(users),
+);
+
+unsub();
+```
+
+```dart Flutter
+final _amityUsers = <AmityUser>[];
+late PagingController<AmityUser> _amityUsersController;
+
+void searchUserByDisplayName(String keyword) {
+  _amityUsersController = PagingController(
+    pageFuture: (token) => AmityCoreClient.newUserRepository()
+        .searchUserByDisplayName(keyword)
+        .getPagingData(token: token, limit: 20),
+    pageSize: 20,
+  )..addListener(
+      () {
+        if (_amityUsersController.error == null) {
+          //handle _amityUsersController, we suggest to clear the previous items
+          //and add with the latest _controller.loadedItems
+          _amityUsers.clear();
+          _amityUsers.addAll(_amityUsersController.loadedItems);
+          //update widgets
+        } else {
+          //error on pagination controller
+          //update widgets
+        }
       },
-      error: (error) => {
-        console.error('Search error:', error);
-      }
-    });
-    
-    // Remember to unsubscribe
-    // subscription.unsubscribe();
-    ```
-  </Tab>
-  
-  <Tab title="Flutter">
-    ```dart
-    final userRepository = AmityUserRepository();
-    
-    // Basic search
-    final searchController = userRepository
-        .searchUserByDisplayName("John")
-        .sortBy(AmityUserSortOption.DISPLAY_NAME)
-        .getPagingController();
-    
-    // Listen to search results
-    searchController.addListener(() {
-      final users = searchController.itemList;
-      for (final user in users ?? []) {
-        print('Found user: ${user.displayName ?? user.userId}');
-      }
-    });
-    
-    // Search with different sorting
-    final recentSearchController = userRepository
-        .searchUserByDisplayName("Jane")
-        .sortBy(AmityUserSortOption.LAST_CREATED)
-        .getPagingController();
-    ```
-  </Tab>
-</Tabs>
+    );
+}
+```
+</CodeGroup>
 
-## User Query
+## Query Users
 
-Retrieve collections of users with various sorting and filtering options.
+Query for users to receive a collection of AmityUser based on a single parameter: a 'sort option' from the AmityUserSortOption enum. Sort the list by options such as displayName, firstCreated, or lastCreated. The displayName sort option will be specified by default if it isn't specified.
+
+### Sorting Behavior
+
+<Info>
+With the displayName sorting option, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as Ä are treated as variants of A. For example, a sorted list might appear as: **adam, Älex, Alice, Arthur, charlie, Kristen**.
+
+**Deleted users are excluded from the results**
+</Info>
 
 ### Query Implementation
 
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    let userRepository = AmityUserRepository(client: client)
-    
-    // Query all users (default: sorted by display name)
-    let allUsers = userRepository.getUsers().query()
-    
-    // Query with specific sorting
-    let recentUsers = userRepository.getUsers()
-        .sortBy(.lastCreated)
-        .query()
-    
-    // Handle query results
-    allUsers.delegate = self
-    
-    func amityCollection(_ collection: AmityCollection<AmityUser>, 
-                        didReceive data: [AmityUser], 
-                        at indexPaths: [IndexPath]) {
-        // Process user data
-        for user in data {
-            print("User: \(user.displayName ?? user.userId)")
-            print("Created: \(user.createdAt)")
-        }
+<CodeGroup>
+```swift iOS
+var token: AmityNotificationToken?
+
+func queryUsersExample() {
+    let liveCollection = userRepository.getUsers(.displayName)
+    token = liveCollection.observe { collection, change, error in
+        // Handle live collection notification here
     }
-    ```
-  </Tab>
-  
-  <Tab title="Android">
-    ```kotlin
-    val userRepository = AmityUserRepository(client)
-    
-    // Query all users with default sorting
-    val allUsers = userRepository.getUsers()
-        .sortBy(AmityUserSortOption.DISPLAY_NAME)
+}
+```
+
+```kotlin Android
+fun queryUsers(userRepository: AmityUserRepository) {
+    userRepository.getUsers()
+        .sortBy(sortOption = AmityUserSortOption.DISPLAYNAME) // optional
         .build()
         .query()
-    
-    // Observe query results
-    allUsers.observe(this) { result ->
-        result.onSuccess { userList ->
-            userList.forEach { user ->
-                Log.d("Query", "User: ${user.displayName ?: user.userId}")
-                Log.d("Query", "Created: ${user.createdAt}")
-            }
-        }.onError { error ->
-            Log.e("Query", "Query failed: ${error.message}")
+        .doOnNext { users: PagingData<AmityUser> ->
+            // PagingData<AmityUser>
         }
-    }
-    
-    // Query with different sorting options
-    val oldestUsers = userRepository.getUsers()
-        .sortBy(AmityUserSortOption.FIRST_CREATED)
-        .build()
-        .query()
-    ```
-  </Tab>
-  
-  <Tab title="TypeScript">
-    ```typescript
-    // Query all users
-    try {
-      const { data: users } = await client.queryUsers({
-        sortBy: 'displayName'
-      });
-      
-      users.forEach(user => {
-        console.log(`User: ${user.displayName || user.userId}`);
-        console.log(`Created: ${user.createdAt}`);
-      });
-    } catch (error) {
-      console.error('Query failed:', error);
-    }
-    
-    // Live query with real-time updates
-    const liveCollection = client.liveUsers({
-      sortBy: 'lastCreated'
-    });
-    
-    const subscription = liveCollection.subscribe({
-      next: (users) => {
-        console.log(`Loaded ${users.length} users`);
-        
-        // Handle user updates
-        users.forEach(user => {
-          if (user.isDeleted) return; // Skip deleted users
-          
-          console.log(`- ${user.displayName || user.userId}`);
+        .doOnError {
+            // Exception
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { UserRepository, subscribeTopic, getUserTopic } from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
+
+const disposers: Amity.Unsubscriber[] = [];
+
+const GetUsers: FC = () => {
+  const [data, setUsers] = useState<Amity.LiveCollection<Amity.User>>();
+  const { data: users = [], onNextPage, hasNextPage, loading, error } = data ?? {};
+
+  useEffect(() => {
+    const unsubscribe = UserRepository.getUsers(
+      {},
+      ({ data: users, onNextPage, hasNextPage, loading, error }) => {
+        setUsers({
+          data: users,
+          onNextPage,
+          hasNextPage,
+          loading,
+          error,
         });
       },
-      error: (error) => {
-        console.error('Live query error:', error);
-      }
-    });
-    
-    // Cleanup
-    // subscription.unsubscribe();
-    ```
-  </Tab>
-  
-  <Tab title="Flutter">
-    ```dart
-    final userRepository = AmityUserRepository();
-    
-    // Query all users with default sorting
-    final userController = userRepository
+    );
+
+  });
+
+  return null;
+};
+```
+
+```dart Flutter
+final _amityUsers = <AmityUser>[];
+late PagingController<AmityUser> _amityUsersController;
+
+// Available sort options
+// AmityUserSortOption.DISPLAY;
+// AmityUserSortOption.FIRST_CREATED;
+// AmityUserSortOption.LAST_CREATED;
+
+void getUsers(AmityUserSortOption amityUserSortOption) {
+  _amityUsersController = PagingController(
+    pageFuture: (token) => AmityCoreClient.newUserRepository()
         .getUsers()
-        .sortBy(AmityUserSortOption.DISPLAY_NAME)
-        .getPagingController();
-    
-    // Listen to query results
-    userController.addListener(() {
-      final users = userController.itemList;
-      
-      for (final user in users ?? []) {
-        print('User: ${user.displayName ?? user.userId}');
-        print('Created: ${user.createdAt}');
-      }
-    });
-    
-    // Query with different sorting
-    final recentUserController = userRepository
-        .getUsers()
-        .sortBy(AmityUserSortOption.LAST_CREATED)
-        .getPagingController();
-    ```
-  </Tab>
-</Tabs>
-
-## Advanced Features
-
-### Pagination Handling
-
-<Tabs>
-  <Tab title="TypeScript">
-    ```typescript
-    // Manual pagination
-    let hasMore = true;
-    let page = 0;
-    const limit = 20;
-    
-    while (hasMore) {
-      const { data: users, pagination } = await client.queryUsers({
-        sortBy: 'displayName',
-        limit,
-        offset: page * limit
-      });
-      
-      // Process users
-      users.forEach(user => {
-        console.log(user.displayName);
-      });
-      
-      // Check if more data is available
-      hasMore = pagination.hasMore;
-      page++;
-    }
-    ```
-  </Tab>
-</Tabs>
-
-### Filtering Options
-
-<Tabs>
-  <Tab title="TypeScript">
-    ```typescript
-    // Filter flagged users (admin only)
-    const flaggedUsers = await client.queryUsers({
-      filter: 'flagged',
-      sortBy: 'lastCreated'
-    });
-    
-    // Search with keyword
-    const searchResults = await client.queryUsers({
-      keyword: 'john',
-      sortBy: 'displayName'
-    });
-    ```
-  </Tab>
-</Tabs>
+        .sortBy(amityUserSortOption)
+        .getPagingData(token: token, limit: 20),
+    pageSize: 20,
+  )..addListener(
+      () {
+        if (_amityUsersController.error == null) {
+          //handle _amityUsersController, we suggest to clear the previous items
+          //and add with the latest _controller.loadedItems
+          _amityUsers.clear();
+          _amityUsers.addAll(_amityUsersController.loadedItems);
+          //update widgets
+        } else {
+          //error on pagination controller
+          //update widgets
+        }
+      },
+    );
+}
+```
+</CodeGroup>
 
 ## Best Practices
 
@@ -381,7 +256,7 @@ Retrieve collections of users with various sorting and filtering options.
   <Card title="Get User Information" href="./get-user-information" icon="user">
     Learn how to retrieve detailed user profiles
   </Card>
-  <Card title="Flag/Unflag Users" href="./flag-unflag-user" icon="flag">
-    Understand user moderation features
+  <Card title="Update User Information" href="./update-user-information" icon="pencil">
+    Discover how to modify user profiles
   </Card>
 </CardGroup>

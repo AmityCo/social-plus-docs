@@ -1,36 +1,28 @@
-import { Client } from '@amityco/ts-sdk';
-import React, { FC, useEffect, useState } from 'react';
+import { UserRepository, subscribeTopic, getUserTopic } from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
 
-const SessionState: FC = () => {
-    const [sessionState, setSessionState] = useState('');
-    useEffect(() => {
-        return Client.onSessionStateChange((state: Amity.SessionStates) => {
-            switch (state) {
-                case 'notLoggedIn':
-                    // Show login form
-                    showLoginForm();
-                    break;
-                case 'establishing':
-                    // Show loading spinner
-                    showLoadingSpinner();
-                    break;
-                case 'established':
-                    // Hide spinner, navigate to app
-                    hideLoadingSpinner();
-                    navigateToApp();
-                    break;
-                case 'tokenExpired':
-                    // Try to refresh token
-                    refreshToken();
-                    break;
-                case 'terminated':
-                    // Handle termination
-                    handleSessionTermination();
-                    break;
-            }
-        }
-        );
-    }, []);
+const disposers: Amity.Unsubscriber[] = [];
+
+
+const GetUsers: FC = () => {
+  const [data, setUsers] = useState<Amity.LiveCollection<Amity.User>>();
+  const { data: users = [], onNextPage, hasNextPage, loading, error } = data ?? {};
+
+  useEffect(() => {
+    const unsubscribe = UserRepository.getUsers(
+      {},
+      ({ data: users, onNextPage, hasNextPage, loading, error }) => {
+        setUsers({
+          data: users,
+          onNextPage,
+          hasNextPage,
+          loading,
+          error,
+        });
+      },
+    );
+
+  });
 
   return null;
 };
