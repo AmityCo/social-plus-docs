@@ -6,6 +6,18 @@
 
 This document serves as a comprehensive guide for continuing the modernization of Social Plus SDK documentation. The project focuses on enhancing push notifications and real-time features documentation across all major platforms while maintaining consistency and using modern Mintlify components.
 
+### ✅ Completed Visual Enhancements
+
+The following files have been fully modernized with visual components and improved content structure:
+
+1. **image-handling.mdx** - Enhanced with CardGroups, AccordionGroups, callouts, and icons
+2. **file.mdx** - Applied visual standards with improved feature overview and properties
+3. **video-handling.mdx** - Fixed title typo and added comprehensive visual enhancements
+4. **poll.mdx** - Enhanced with CardGroups, AccordionGroups, and improved best practices
+5. **mentions.mdx** - Complete rewrite with enhanced structure, clear explanations, and actionable examples
+
+These files serve as **templates** for visual enhancement standards. Reference them when modernizing other documentation pages.
+
 ## 🎯 Modernization Standards
 
 ### Component Usage Standards
