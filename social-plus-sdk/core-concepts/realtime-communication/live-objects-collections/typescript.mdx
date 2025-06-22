@@ -1,898 +1,288 @@
 ---
-title: "TypeScript Implementation"
-description: "Real-time reactive data handling with AmityObject and AmityCollection for Web and React Native applications"
+title: "TypeScript Live Objects/Collections"
+description: "Live Objects are supported in the TypeScript SDK with subscribable objects and collections for real-time data synchronization"
 ---
 
-Build reactive TypeScript applications with Social+'s observable data patterns that automatically sync with real-time updates.
+In the Social Plus TypeScript SDK, we have the concept of **Live Object** and **Live Collection**.
+
+Live Object is represented by an instance of Social Plus Object. It helps to observe changes in a single object whereas Live Collection is represented by an instance of Social Plus LiveCollection. It helps to observe changes in a list of objects.
+
+SDK handles lots of data received from various sources. Data can be present in the local cache. It may also be queried from the server or received from real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated and become out of sync.
+
+Live Object and Live Collection help in syncing data so you will always get the most recent one. New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
 
 <Info>
-**Modern Async Support**: TypeScript SDK provides both callback-based and Promise-based APIs with full TypeScript type safety and real-time event integration.
+Examples: `Amity.Post` for single objects or `Amity.LiveCollection<Amity.Post>` for collections.
 </Info>
 
-## Overview
+## How it Works
 
-The Social+ TypeScript SDK implements Live Objects and Collections as observable data structures that automatically synchronize with server updates and real-time events. This enables you to build responsive applications where data changes are reflected immediately across all components.
+SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
 
-### Core Concepts
+Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through subscribable objects and collections.
 
-- **Live Object**: Observable wrapper for individual entities (`Amity.Post`, `Amity.User`, etc.)
-- **Live Collection**: Observable array for lists of objects (`Amity.LiveCollection<Amity.Post>`)
-- **Real-time Integration**: Automatic updates through WebSocket subscriptions
-- **Type Safety**: Full TypeScript support with generic types
-- **Efficient Updates**: Smart diffing prevents unnecessary re-renders
+New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
 
-### Supported Collections
+### Data Sources
 
-Live Collections are available for all major Social+ data types:
+<CardGroup cols={3}>
+  <Card title="Local Cache" icon="database">
+    Data present in local storage
+  </Card>
+  <Card title="Server Queries" icon="server">
+    Data queried from the server
+  </Card>
+  <Card title="Real-time Events" icon="bolt">
+    Data received from real-time events
+  </Card>
+</CardGroup>
 
-| Collection Type | Use Case | Real-time Updates |
-|----------------|----------|-------------------|
-| **Posts** | Social feeds, user timelines | ✅ New posts, likes, comments |
-| **Comments** | Post discussions, replies | ✅ New comments, reactions |
-| **Messages** | Chat conversations | ✅ New messages, read receipts |
-| **Channels** | Chat channel lists | ✅ New channels, member changes |
-| **Communities** | Community discovery | ✅ New communities, member counts |
-| **Users** | Member lists, search results | ✅ Profile updates, online status |
-| **Stories** | Story collections | ✅ New stories, view counts |
-| **Reactions** | Like/emoji reactions | ✅ Real-time reaction updates |
+## Live Object
 
-<Warning>
-**Limitations**: Live Collections are not supported for global feeds and custom post ranking. Use regular API calls for these use cases.
-</Warning>
+Although live objects were introduced prior to v6. All getter methods for singular objects (example getPost) will now return a subscribe-able object.
 
-## Live Objects
+This means that if an object gets updated and you have subscribed to real-time events, the object will get updated automatically via real-time events.
 
-Observe individual data entities with automatic updates and type-safe access to properties.
+If for your use case, you don't require any real-time updates, you can unsubscribe immediately.
 
-### Basic Live Object Usage
+<Info>
+For further information about Live Object, please visit Live Object page.
+</Info>
 
-<Tabs>
-  <Tab title="With Real-time Updates">
-    ```typescript
-    import { PostRepository, subscribeTopic, getPostTopic } from '@amityco/ts-sdk';
-    import { useEffect, useState } from 'react';
-
-    interface PostComponentProps {
-      postId: string;
-    }
-
-    const PostComponent: React.FC<PostComponentProps> = ({ postId }) => {
-      const [post, setPost] = useState<Amity.Post | null>(null);
-      const [loading, setLoading] = useState(true);
-      const [error, setError] = useState<string | null>(null);
-
-      useEffect(() => {
-        const unsubscribers: Array<() => void> = [];
-
-        // Subscribe to post changes with real-time updates
-        const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-          const { post, loading, error } = data;
-          
-          setPost(post);
-          setLoading(loading);
-          setError(error?.message || null);
-          
-          // Enable real-time updates for this post
-          if (post) {
-            const topicUnsubscriber = subscribeTopic(
-              getPostTopic(post),
-              (error) => {
-                if (error) {
-                  console.error('Real-time subscription failed:', error);
-                }
-              }
-            );
-            unsubscribers.push(topicUnsubscriber);
-          }
-        });
-
-        unsubscribers.push(unsubscribePost);
-
-        // Cleanup subscriptions
-        return () => {
-          unsubscribers.forEach(unsubscribe => unsubscribe());
-        };
-      }, [postId]);
-
-      if (loading) return <div>Loading post...</div>;
-      if (error) return <div>Error: {error}</div>;
-      if (!post) return <div>Post not found</div>;
-
-      return (
-        <div className="post">
-          <h3>{post.data?.text}</h3>
-          <div className="post-stats">
-            <span>👍 {post.reactionsCount}</span>
-            <span>💬 {post.commentsCount}</span>
-            <span>👁 {post.viewCount}</span>
-          </div>
-          <small>
-            Last updated: {new Date(post.updatedAt).toLocaleString()}
-          </small>
-        </div>
-      );
-    };
-    ```
-  </Tab>
-  <Tab title="One-time Fetch">
-    ```typescript
-    import { PostRepository } from '@amityco/ts-sdk';
-    import { useEffect, useState } from 'react';
-
-    const StaticPostComponent: React.FC<{ postId: string }> = ({ postId }) => {
-      const [post, setPost] = useState<Amity.Post | null>(null);
-      const [loading, setLoading] = useState(true);
-
-      useEffect(() => {
-        // Get post data once without real-time updates
-        const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-          const { post, loading, error } = data;
-          
-          if (post) {
-            setPost(post);
-          }
-          setLoading(loading);
-        });
-
-        // Unsubscribe immediately after first data load
-        unsubscribePost();
-      }, [postId]);
-
-      if (loading) return <div>Loading...</div>;
-      
-      return (
-        <div className="static-post">
-          <h3>{post?.data?.text || 'Post content'}</h3>
-          <p>Snapshot taken at: {new Date().toLocaleString()}</p>
-        </div>
-      );
-    };
-    ```
-  </Tab>
-  <Tab title="Custom Hook">
-    ```typescript
-    import { PostRepository, subscribeTopic, getPostTopic } from '@amityco/ts-sdk';
-    import { useEffect, useState, useCallback } from 'react';
-
-    interface UsePostOptions {
-      enableRealtime?: boolean;
-      autoRefresh?: boolean;
-    }
-
-    const usePost = (postId: string, options: UsePostOptions = {}) => {
-      const { enableRealtime = true, autoRefresh = false } = options;
-      const [post, setPost] = useState<Amity.Post | null>(null);
-      const [loading, setLoading] = useState(true);
-      const [error, setError] = useState<Error | null>(null);
-
-      const refresh = useCallback(() => {
-        setLoading(true);
-        setError(null);
-      }, []);
-
-      useEffect(() => {
-        const unsubscribers: Array<() => void> = [];
-
-        const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-          const { post, loading, error } = data;
-          
-          setPost(post);
-          setLoading(loading);
-          setError(error || null);
-
-          // Setup real-time updates if enabled
-          if (post && enableRealtime) {
-            const topicUnsubscriber = subscribeTopic(getPostTopic(post));
-            unsubscribers.push(topicUnsubscriber);
-          }
-        });
-
-        unsubscribers.push(unsubscribePost);
-
-        // Auto-refresh interval
-        let intervalId: NodeJS.Timeout;
-        if (autoRefresh) {
-          intervalId = setInterval(refresh, 30000); // 30 seconds
-        }
-
-        return () => {
-          unsubscribers.forEach(fn => fn());
-          if (intervalId) clearInterval(intervalId);
-        };
-      }, [postId, enableRealtime, autoRefresh, refresh]);
-
-      return { post, loading, error, refresh };
-    };
-
-    // Usage
-    const MyComponent = () => {
-      const { post, loading, error, refresh } = usePost('post123', {
-        enableRealtime: true,
-        autoRefresh: false
-      });
-
-      return (
-        <div>
-          {loading && <div>Loading...</div>}
-          {error && <div>Error: {error.message}</div>}
-          {post && (
-            <div>
-              <h3>{post.data?.text}</h3>
-              <button onClick={refresh}>Refresh</button>
-            </div>
-          )}
-        </div>
-      );
-    };
-    ```
-  </Tab>
-</Tabs>
-
-## Live Collections
-
-Observe collections of data with efficient update notifications for insertions, deletions, and modifications.
-
-### Collection Observation Patterns
-
-<Tabs>
-  <Tab title="Posts Collection">
-    ```typescript
-    import {
-      PostRepository,
-      subscribeTopic,
-      getUserTopic,
-      getCommunityTopic,
-      SubscriptionLevels,
-    } from '@amityco/ts-sdk';
-    import { useEffect, useState } from 'react';
-
-    interface PostsFeedProps {
-      targetId: string;
-      targetType: 'user' | 'community';
-    }
-
-    const PostsFeed: React.FC<PostsFeedProps> = ({ targetId, targetType }) => {
-      const [posts, setPosts] = useState<Amity.Post[]>([]);
-      const [loading, setLoading] = useState(true);
-      const [hasNextPage, setHasNextPage] = useState(false);
-      const [loadingMore, setLoadingMore] = useState(false);
-
-      useEffect(() => {
-        const disposers: Array<() => void> = [];
-        let onNextPage: (() => void) | null = null;
-
-        const unsubscribe = PostRepository.getPosts(
-          { targetId, targetType },
-          ({ data: posts, onNextPage: nextPageLoader, hasNextPage, loading, error }) => {
-            if (posts) {
-              setPosts(posts);
-              setHasNextPage(hasNextPage);
-              onNextPage = nextPageLoader;
-            }
-            setLoading(loading);
-
-            if (error) {
-              console.error('Failed to load posts:', error);
-            }
-
-            // Subscribe to real-time updates for the target
-            if (posts && posts.length > 0) {
-              subscribeToPostUpdates(targetType, targetId, disposers);
-            }
-          },
-        );
-
-        disposers.push(unsubscribe);
-
-        // Load more posts function
-        const loadMore = async () => {
-          if (onNextPage && hasNextPage && !loadingMore) {
-            setLoadingMore(true);
-            onNextPage();
-            setLoadingMore(false);
-          }
-        };
-
-        // Cleanup
-        return () => {
-          disposers.forEach(dispose => dispose());
-        };
-      }, [targetId, targetType]);
-
-      const subscribeToPostUpdates = (
-        targetType: string,
-        targetId: string,
-        disposers: Array<() => void>
-      ) => {
-        if (targetType === 'user') {
-          // Subscribe to user post updates
-          const userDisposer = subscribeTopic(
-            getUserTopic({ userId: targetId } as Amity.User, SubscriptionLevels.POST),
-            (error) => {
-              if (error) console.error('User topic subscription failed:', error);
-            }
-          );
-          disposers.push(userDisposer);
-        } else if (targetType === 'community') {
-          // Subscribe to community post updates
-          const communityDisposer = subscribeTopic(
-            getCommunityTopic({ communityId: targetId } as Amity.Community, SubscriptionLevels.POST),
-            (error) => {
-              if (error) console.error('Community topic subscription failed:', error);
-            }
-          );
-          disposers.push(communityDisposer);
-        }
-      };
-
-      const loadMorePosts = () => {
-        if (onNextPage && hasNextPage && !loadingMore) {
-          setLoadingMore(true);
-          onNextPage();
-        }
-      };
-
-      return (
-        <div className="posts-feed">
-          {loading && posts.length === 0 && (
-            <div className="loading">Loading posts...</div>
-          )}
-          
-          <div className="posts-list">
-            {posts.map((post) => (
-              <div key={post.postId} className="post-item">
-                <h4>{post.data?.text || 'Post content'}</h4>
-                <div className="post-meta">
-                  <span>👍 {post.reactionsCount}</span>
-                  <span>💬 {post.commentsCount}</span>
-                  <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {hasNextPage && (
-            <button 
-              onClick={loadMorePosts} 
-              disabled={loadingMore}
-              className="load-more-btn"
-            >
-              {loadingMore ? 'Loading...' : 'Load More'}
-            </button>
-          )}
-        </div>
-      );
-    };
-    ```
-  </Tab>
-  <Tab title="Messages Collection">
-    ```typescript
-    import { MessageRepository, subscribeTopic, getChannelTopic } from '@amityco/ts-sdk';
-    import { useEffect, useState, useRef } from 'react';
-
-    interface ChatMessagesProps {
-      channelId: string;
-    }
-
-    const ChatMessages: React.FC<ChatMessagesProps> = ({ channelId }) => {
-      const [messages, setMessages] = useState<Amity.Message[]>([]);
-      const [loading, setLoading] = useState(true);
-      const messagesEndRef = useRef<HTMLDivElement>(null);
-
-      const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      };
-
-      useEffect(() => {
-        const disposers: Array<() => void> = [];
-
-        const unsubscribe = MessageRepository.getMessages(
-          { channelId },
-          ({ data: messages, hasNextPage, onNextPage, loading, error }) => {
-            if (messages) {
-              setMessages(messages);
-              
-              // Auto-scroll to bottom for new messages
-              setTimeout(scrollToBottom, 100);
-            }
-            setLoading(loading);
-
-            if (error) {
-              console.error('Failed to load messages:', error);
-            }
-
-            // Subscribe to real-time message updates
-            if (messages && messages.length > 0) {
-              const channelTopicDisposer = subscribeTopic(
-                getChannelTopic({ channelId } as Amity.Channel),
-                (error) => {
-                  if (error) console.error('Channel subscription failed:', error);
-                }
-              );
-              disposers.push(channelTopicDisposer);
-            }
-          }
-        );
-
-        disposers.push(unsubscribe);
-
-        return () => {
-          disposers.forEach(dispose => dispose());
-        };
-      }, [channelId]);
-
-      useEffect(() => {
-        // Auto-scroll when messages change
-        scrollToBottom();
-      }, [messages.length]);
-
-      return (
-        <div className="chat-messages">
-          <div className="messages-container">
-            {loading && messages.length === 0 && (
-              <div className="loading">Loading messages...</div>
-            )}
-            
-            {messages.map((message) => (
-              <div key={message.messageId} className="message">
-                <div className="message-content">
-                  <strong>{message.user?.displayName}:</strong>
-                  <span>{message.data?.text}</span>
-                </div>
-                <div className="message-time">
-                  {new Date(message.createdAt).toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-      );
-    };
-    ```
-  </Tab>
-  <Tab title="Collection without Real-time">
-    ```typescript
-    import { PostRepository } from '@amityco/ts-sdk';
-    import { useEffect, useState } from 'react';
-
-    interface StaticPostsListProps {
-      targetId: string;
-      targetType: 'user' | 'community';
-      limit?: number;
-    }
-
-    const StaticPostsList: React.FC<StaticPostsListProps> = ({ 
-      targetId, 
-      targetType, 
-      limit = 20 
-    }) => {
-      const [posts, setPosts] = useState<Amity.Post[]>([]);
-      const [loading, setLoading] = useState(true);
-
-      useEffect(() => {
-        let isCancelled = false;
-
-        const fetchPosts = async () => {
-          const unsubscribe = PostRepository.getPosts(
-            { targetId, targetType, limit },
-            ({ data: posts, loading, error }) => {
-              if (!isCancelled) {
-                if (posts) setPosts(posts);
-                setLoading(loading);
-                
-                if (error) {
-                  console.error('Failed to fetch posts:', error);
-                }
-              }
-            }
-          );
-
-          // Immediately unsubscribe after first data load
-          setTimeout(() => {
-            if (!isCancelled) {
-              unsubscribe();
-            }
-          }, 1000);
-        };
-
-        fetchPosts();
-
-        return () => {
-          isCancelled = true;
-        };
-      }, [targetId, targetType, limit]);
-
-      return (
-        <div className="static-posts-list">
-          {loading ? (
-            <div>Loading posts...</div>
-          ) : (
-            <div>
-              <h3>Posts Snapshot ({posts.length} posts)</h3>
-              {posts.map((post) => (
-                <div key={post.postId} className="post-snapshot">
-                  <p>{post.data?.text || 'Post content'}</p>
-                  <small>Created: {new Date(post.createdAt).toLocaleDateString()}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    };
-    ```
-  </Tab>
-</Tabs>
-
-## Advanced Patterns
-
-### Optimistic Updates
-
-Handle user actions optimistically while waiting for server confirmation:
+### Getting Real Time Updates for an Object
 
 ```typescript
-import { PostRepository, ReactionRepository } from '@amityco/ts-sdk';
+import { PostRepository, subscribeTopic, getPostTopic } from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
 
-class OptimisticPostManager {
-  private optimisticUpdates = new Map<string, any>();
+const disposers: Amity.Unsubscriber[] = [];
 
-  async likePost(postId: string, isLiked: boolean) {
-    // Apply optimistic update immediately
-    this.applyOptimisticUpdate(postId, {
-      reactionsCount: isLiked ? 1 : -1,
-      myReactions: isLiked ? ['like'] : []
-    });
-
-    try {
-      // Perform actual server update
-      if (isLiked) {
-        await ReactionRepository.addReaction('post', postId, 'like');
-      } else {
-        await ReactionRepository.removeReaction('post', postId, 'like');
-      }
-      
-      // Clear optimistic update on success
-      this.clearOptimisticUpdate(postId);
-    } catch (error) {
-      // Revert optimistic update on failure
-      this.revertOptimisticUpdate(postId);
-      console.error('Failed to update reaction:', error);
-    }
-  }
-
-  private applyOptimisticUpdate(postId: string, changes: any) {
-    this.optimisticUpdates.set(postId, changes);
-    // Trigger UI update
-    this.notifyUI(postId, changes);
-  }
-
-  private clearOptimisticUpdate(postId: string) {
-    this.optimisticUpdates.delete(postId);
-  }
-
-  private revertOptimisticUpdate(postId: string) {
-    const changes = this.optimisticUpdates.get(postId);
-    if (changes) {
-      // Revert the changes
-      this.notifyUI(postId, this.invertChanges(changes));
-      this.optimisticUpdates.delete(postId);
-    }
-  }
-
-  private invertChanges(changes: any) {
-    return {
-      reactionsCount: -changes.reactionsCount,
-      myReactions: changes.myReactions.length > 0 ? [] : ['like']
-    };
-  }
-
-  private notifyUI(postId: string, changes: any) {
-    // Emit event for UI components to update
-    window.dispatchEvent(new CustomEvent('post-optimistic-update', {
-      detail: { postId, changes }
-    }));
-  }
-}
-```
-
-### Connection State Management
-
-Handle network connectivity and reconnection:
-
-```typescript
-import { ConnectionStatus, getConnectionStatus } from '@amityco/ts-sdk';
-
-class ConnectionManager {
-  private isOnline = true;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
-
-  constructor() {
-    this.setupConnectionMonitoring();
-  }
-
-  private setupConnectionMonitoring() {
-    // Monitor SDK connection status
-    getConnectionStatus((status: ConnectionStatus) => {
-      const wasOnline = this.isOnline;
-      this.isOnline = status === ConnectionStatus.Connected;
-
-      if (!wasOnline && this.isOnline) {
-        console.log('Connection restored');
-        this.onReconnected();
-      } else if (wasOnline && !this.isOnline) {
-        console.log('Connection lost');
-        this.onDisconnected();
-      }
-    });
-
-    // Monitor browser connectivity
-    window.addEventListener('online', () => {
-      console.log('Browser back online');
-      this.attemptReconnection();
-    });
-
-    window.addEventListener('offline', () => {
-      console.log('Browser went offline');
-      this.onDisconnected();
-    });
-  }
-
-  private async attemptReconnection() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('Max reconnection attempts reached');
-      return;
-    }
-
-    this.reconnectAttempts++;
-    console.log(`Reconnection attempt ${this.reconnectAttempts}`);
-
-    try {
-      // Attempt to reconnect (SDK handles this automatically)
-      await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
-      
-      // Exponential backoff
-      this.reconnectDelay *= 2;
-    } catch (error) {
-      console.error('Reconnection failed:', error);
-    }
-  }
-
-  private onReconnected() {
-    this.reconnectAttempts = 0;
-    this.reconnectDelay = 1000;
-    
-    // Notify components that connection is restored
-    window.dispatchEvent(new CustomEvent('amity-connection-restored'));
-  }
-
-  private onDisconnected() {
-    // Notify components that connection is lost
-    window.dispatchEvent(new CustomEvent('amity-connection-lost'));
-  }
-
-  public getConnectionState() {
-    return {
-      isOnline: this.isOnline,
-      reconnectAttempts: this.reconnectAttempts
-    };
-  }
-}
-
-// Usage in React component
-const useConnectionStatus = () => {
-  const [isOnline, setIsOnline] = useState(true);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+const GetPost: FC<{ postId: string }> = ({ postId }) => {
+  const [post, setPost] = useState<Amity.Post>();
 
   useEffect(() => {
-    const connectionManager = new ConnectionManager();
 
-    const handleConnectionRestored = () => {
-      setIsOnline(true);
-      setReconnectAttempts(0);
-    };
+    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
+     const { post, loading, error } = data
+     
+     if (post) {
+       /*
+       * This step is important if you wish to recieve real time updates
+       * Here, you are letting the server know that you wish to recieve real time
+       * updates regarding this post
+       */
+       disposers.push(subscribeTopic(getPostTopic(post)))
+       
+       setPost(post)
+     }
+    });
+    
+    disposers.push(unsubscribePost);
+  }, [postId]);
 
-    const handleConnectionLost = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('amity-connection-restored', handleConnectionRestored);
-    window.addEventListener('amity-connection-lost', handleConnectionLost);
-
-    return () => {
-      window.removeEventListener('amity-connection-restored', handleConnectionRestored);
-      window.removeEventListener('amity-connection-lost', handleConnectionLost);
-    };
-  }, []);
-
-  return { isOnline, reconnectAttempts };
+  return null;
 };
 ```
+
+### Getting the object only once
+
+```typescript
+import { PostRepository } from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
+
+const GetPostOnce: FC<{ postId: string }> = ({ postId }) => {
+  const [post, setPost] = useState<Amity.Post>();
+
+  useEffect(() => {
+    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
+     const { post, loading, error } = data
+     
+     if (post) {       
+       setPost(post)
+     }
+    });
+    
+    unsubscribePost()
+  }, [postId]);
+
+  return null;
+};
+
+## Live Collection
+
+Although live collections were introduced prior to v6. All query methods for the collection of objects (example getPosts) will now return a subscribe-able collection.
+
+This means that if an object in the collection gets updated and you have subscribed to real-time events, the collection will get updated automatically via real-time events.
+
+If for your use case, you don't require any real-time updates, you can unsubscribe immediately. Similar to the live objects above.
+
+<Info>
+For further information about Live Collection, please visit Live Collection page.
+</Info>
+
+### Getting Real-Time updates for a collection
+
+```typescript
+import {
+  PostRepository,
+  subscribeTopic,
+  getUserTopic,
+  getCommunityTopic,
+  SubscriptionLevels,
+} from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
+
+const disposers: Amity.Unsubscriber[] = [];
+
+const GetPosts: FC<{ targetId: string; targetType: string }> = 
+({ targetId, targetType }) => {
+  const [posts, setPosts] = useState<Amity.Post[]>();
+
+  useEffect(() => {
+    const unsubscribe = PostRepository.getPosts(
+      { targetId, targetType },
+      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+        setPosts(posts);
+        /*
+         * this is only required if you want real time updates for each
+         * post in the collection
+         */
+        subscribePostTopic(targetType, targetId);
+      },
+    );
+
+    disposers.push(unsubscribe);
+
+    return () => {
+      disposers.forEach(fn => fn());
+    };
+  });
+
+  return null;
+};
+
+const subscribePostTopic = (targetType: string, targetId: string) => {
+  if (isSubscribed) return;
+
+  if (targetType === 'user') {
+    const user = {} as Amity.User; // use getUser to get user by targetId
+    disposers.push(
+      subscribeTopic(getUserTopic(user, SubscriptionLevels.POST), () => {
+        // use callback to handle errors with event subscription
+      }),
+    );
+    return;
+  }
+
+  if (targetType === 'community') {
+    // use getCommunity to get community by targetId
+    const community = {} as Amity.Community; 
+    disposers.push(
+      subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST), () => {
+        // use callback to handle errors with event subscription
+      }),
+    );
+  }
+};
+```
+
+### Getting paginated collection without real-time updates
+
+```typescript
+import {
+  PostRepository,
+  subscribeTopic,
+  getUserTopic,
+  getCommunityTopic,
+  SubscriptionLevels,
+} from '@amityco/ts-sdk';
+import { FC, useEffect, useState } from 'react';
+
+const GetPosts: FC<{ targetId: string; targetType: string }> = 
+({ targetId, targetType }) => {
+  const [posts, setPosts] = useState<Amity.Post[]>();
+
+  useEffect(() => {
+    const unsubscribe = PostRepository.getPosts(
+      { targetId, targetType },
+      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+        if (posts)
+          setPosts(posts);
+        
+        // to get next page use onNextPage()
+      },
+    );
+
+    unsubscribe()
+  });
+
+  return null;
+};
 
 ## Best Practices
 
 <AccordionGroup>
   <Accordion title="Memory Management">
-    **Always Clean Up**: Prevent memory leaks by properly disposing of subscriptions.
+    **Always Clean Up**: Prevent memory leaks by properly disposing of subscriptions and unsubscribers.
     
     ```typescript
     // Use a disposer pattern
-    class SubscriptionManager {
-      private disposers: Array<() => void> = [];
-      
-      add(disposer: () => void) {
-        this.disposers.push(disposer);
-      }
-      
-      dispose() {
-        this.disposers.forEach(dispose => dispose());
-        this.disposers = [];
-      }
-    }
+    const disposers: Amity.Unsubscriber[] = [];
     
-    // In React components
     useEffect(() => {
-      const subscriptions = new SubscriptionManager();
-      
       // Add subscriptions
-      subscriptions.add(observePost());
-      subscriptions.add(subscribeTopic());
+      disposers.push(PostRepository.getPost(postId, callback));
+      disposers.push(subscribeTopic(getPostTopic(post)));
       
-      return () => subscriptions.dispose();
+      return () => {
+        // Clean up all subscriptions
+        disposers.forEach(dispose => dispose());
+      };
     }, []);
+    ```
+  
+  <Accordion title="Real-time Subscription Management">
+    **Subscribe Selectively**: Only subscribe to real-time events when you need live updates to optimize performance.
+    
+    ```typescript
+    // For static content, unsubscribe immediately
+    const unsubscribe = PostRepository.getPost(postId, callback);
+    unsubscribe(); // No real-time updates needed
+    
+    // For live content, keep subscription active
+    const unsubscribe = PostRepository.getPost(postId, callback);
+    disposers.push(unsubscribe); // Keep for real-time updates
     ```
   </Accordion>
   
   <Accordion title="Error Handling">
-    **Graceful Degradation**: Handle errors without breaking the user experience.
+    **Handle Subscription Errors**: Always provide error callbacks for topic subscriptions.
     
     ```typescript
-    const useRobustData = <T>(
-      fetcher: () => Promise<T>,
-      fallback: T
-    ) => {
-      const [data, setData] = useState<T>(fallback);
-      const [error, setError] = useState<Error | null>(null);
-      const [retryCount, setRetryCount] = useState(0);
-      
-      const maxRetries = 3;
-      
-      useEffect(() => {
-        const fetchData = async () => {
-          try {
-            const result = await fetcher();
-            setData(result);
-            setError(null);
-            setRetryCount(0);
-          } catch (err) {
-            setError(err as Error);
-            
-            if (retryCount < maxRetries) {
-              setTimeout(() => {
-                setRetryCount(prev => prev + 1);
-              }, 1000 * (retryCount + 1));
-            }
-          }
-        };
-        
-        fetchData();
-      }, [fetcher, retryCount]);
-      
-      return { data, error, isRetrying: retryCount > 0 };
-    };
+    disposers.push(
+      subscribeTopic(getPostTopic(post), (error) => {
+        if (error) {
+          console.error('Subscription failed:', error);
+          // Handle fallback or retry logic
+        }
+      })
+    );
     ```
   </Accordion>
   
   <Accordion title="Performance Optimization">
-    **Efficient Rendering**: Use React.memo and useMemo to prevent unnecessary re-renders.
+    **Debounce Updates**: For frequently updating collections, consider debouncing UI updates.
     
     ```typescript
-    import React, { memo, useMemo } from 'react';
+    import { debounce } from 'lodash';
     
-    interface PostListProps {
-      posts: Amity.Post[];
-      onPostClick: (postId: string) => void;
-    }
+    const debouncedSetPosts = debounce(setPosts, 300);
     
-    const PostList = memo<PostListProps>(({ posts, onPostClick }) => {
-      const sortedPosts = useMemo(() => {
-        return [...posts].sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      }, [posts]);
-      
-      return (
-        <div className="post-list">
-          {sortedPosts.map((post) => (
-            <PostItem 
-              key={post.postId} 
-              post={post} 
-              onClick={() => onPostClick(post.postId)}
-            />
-          ))}
-        </div>
-      );
+    PostRepository.getPosts(query, ({ data: posts }) => {
+      if (posts) {
+        debouncedSetPosts(posts);
+      }
     });
-    
-    const PostItem = memo<{ post: Amity.Post; onClick: () => void }>(
-      ({ post, onClick }) => (
-        <div className="post-item" onClick={onClick}>
-          <h4>{post.data?.text}</h4>
-          <span>{post.reactionsCount} reactions</span>
-        </div>
-      )
-    );
     ```
   </Accordion>
-</AccordionGroup>
 
-## Integration Examples
-
-### Next.js Integration
-
-```typescript
-// pages/api/posts/[id].ts
-import { PostRepository } from '@amityco/ts-sdk';
-import type { NextApiRequest, NextApiResponse } from 'next';
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const { id } = req.query;
-  
-  try {
-    // Server-side data fetching
-    const post = await new Promise<Amity.Post>((resolve, reject) => {
-      const unsubscribe = PostRepository.getPost(id as string, ({ data }) => {
-        const { post, error } = data;
-        unsubscribe(); // Clean up immediately
-        
-        if (error) reject(error);
-        else if (post) resolve(post);
-        else reject(new Error('Post not found'));
-      });
-    });
-    
-    res.status(200).json(post);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch post' });
-  }
-}
-
-// components/PostPage.tsx
-import { GetServerSideProps } from 'next';
-import { usePost } from '../hooks/usePost';
-
-interface PostPageProps {
-  initialPost: Amity.Post;
-}
-
-const PostPage: React.FC<PostPageProps> = ({ initialPost }) => {
-  // Use client-side real-time updates with SSR data
-  const { post, loading, error } = usePost(initialPost.postId, {
-    initialData: initialPost,
-    enableRealtime: true
-  });
-  
-  return (
-    <div>
-      <h1>{post?.data?.text}</h1>
-      <p>Reactions: {post?.reactionsCount}</p>
-    </div>
-  );
-};
-
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
-  const response = await fetch(`/api/posts/${params?.id}`);
-  const initialPost = await response.json();
-  
-  return { props: { initialPost } };
-};
-```
-
-<Tip>
-**Development Tip**: Use browser DevTools to monitor WebSocket connections and verify that real-time events are being received properly.
-</Tip>
