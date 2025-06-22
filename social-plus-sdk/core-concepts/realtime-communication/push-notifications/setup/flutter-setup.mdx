@@ -1,0 +1,302 @@
+---
+title: "Flutter Push Notification Setup"
+description: "Implement cross-platform push notifications in Flutter apps using Firebase Cloud Messaging for both Android and iOS"
+---
+
+
+Integrate push notifications into your Flutter app using Firebase Cloud Messaging (FCM) to deliver real-time updates across both Android and iOS platforms with a unified codebase.
+
+<Info>
+Flutter's cross-platform nature allows you to implement push notifications once and deploy to both platforms, but platform-specific configuration is still required.
+</Info>
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Firebase Project" icon="fire-flame">
+    Active Firebase project with FCM enabled
+  </Card>
+  <Card title="Platform Setup" icon="mobile">
+    Android google-services.json and iOS GoogleService-Info.plist
+  </Card>
+  <Card title="Social+ SDK" icon="code">
+    Social Plus Flutter SDK properly integrated
+  </Card>
+  <Card title="Certificates" icon="shield">
+    iOS APNs certificate and Android FCM configuration
+  </Card>
+</CardGroup>
+
+## Step 1: Install Dependencies
+
+Add the Firebase Messaging plugin to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Social Plus SDK
+  amity_sdk: ^6.x.x
+  
+  # Firebase dependencies
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.10
+  
+  # Optional: For local notifications
+  flutter_local_notifications: ^16.3.2
+  
+  # Optional: For permission handling
+  permission_handler: ^11.1.0
+```
+
+<Warning>
+Always use the latest stable versions. Check [pub.dev](https://pub.dev) for current version numbers.
+</Warning>
+
+## Step 2: Platform Configuration
+
+### Android Configuration
+
+1. **Add google-services.json** to `android/app/`
+2. **Update build.gradle files**:
+
+```gradle
+// android/build.gradle
+buildscript {
+  dependencies {
+    classpath 'com.google.gms:google-services:4.3.15'
+  }
+}
+
+// android/app/build.gradle
+apply plugin: 'com.google.gms.google-services'
+
+android {
+  compileSdkVersion 34
+  
+  defaultConfig {
+    minSdkVersion 21
+    targetSdkVersion 34
+  }
+}
+```
+
+3. **Add permissions** to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Push notification permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <application
+        android:label="Your App"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        
+        <!-- Your activities -->
+        
+    </application>
+</manifest>
+```
+
+### iOS Configuration
+
+1. **Add GoogleService-Info.plist** to `ios/Runner/`
+2. **Enable Push Notifications capability** in Xcode
+3. **Generate APNs certificate** following the [iOS setup guide](./ios-setup)
+4. **Update Runner-Info.plist** for background modes:
+
+```xml
+<!-- ios/Runner/Info.plist -->
+<dict>
+    <!-- Existing keys -->
+    
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>background-fetch</string>
+        <string>remote-notification</string>
+    </array>
+    
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <false/>
+</dict>
+```
+
+5. **Update AppDelegate.swift**:
+
+```swift
+// ios/Runner/AppDelegate.swift
+import UIKit
+import Flutter
+import Firebase
+
+@UIApplicationMain
+@objc class AppDelegate: FlutterAppDelegate {
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    FirebaseApp.configure()
+    
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+    }
+    
+    GeneratedPluginRegistrant.register(with: self)
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+```
+
+
+## Step 3: Upload Certificates to Social+ Console
+
+### Android - FCM Service Account
+
+1. **Generate FCM service account JSON**:
+   - Go to Firebase Console → Project Settings → Service Accounts
+   - Click "Generate new private key"
+   - Download the JSON file
+
+2. **Upload to Social+ Console**:
+   - Navigate to **Settings → Push Notifications**
+   - Upload the FCM service account JSON file
+
+### iOS - APNs Certificate
+
+1. **Generate .p12 certificate** following the [iOS setup guide](./ios-setup)
+2. **Upload to Social+ Console**:
+   - Navigate to **Settings → Push Notifications**
+   - Upload the .p12 file with password
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Cross-Platform Considerations">
+    **Platform-Specific Handling**: While Flutter allows shared code, some platform-specific handling is necessary.
+    
+    ```dart
+    // Handle platform differences
+    Future<void> handlePlatformSpecificSetup() async {
+      if (Platform.isIOS) {
+        // iOS-specific handling
+        await _handleIOSSpecificSetup();
+      } else if (Platform.isAndroid) {
+        // Android-specific handling
+        await _handleAndroidSpecificSetup();
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="State Management">
+    **Token State Management**: Keep token state consistent across app lifecycle.
+    
+    ```dart
+    class NotificationState extends ChangeNotifier {
+      String? _fcmToken;
+      bool _isRegistered = false;
+      
+      String? get fcmToken => _fcmToken;
+      bool get isRegistered => _isRegistered;
+      
+      Future<void> updateToken(String token) async {
+        _fcmToken = token;
+        await _registerWithSDK(token);
+        _isRegistered = true;
+        notifyListeners();
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    **Robust Error Management**: Handle various failure scenarios gracefully.
+    
+    ```dart
+    class PushNotificationErrorHandler {
+      static void handleError(dynamic error) {
+        if (error is FirebaseException) {
+          _handleFirebaseError(error);
+        } else if (error is PlatformException) {
+          _handlePlatformError(error);
+        } else {
+          _handleGenericError(error);
+        }
+      }
+      
+      static void _handleFirebaseError(FirebaseException error) {
+        // Handle Firebase-specific errors
+        print('Firebase error: ${error.message}');
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Common Issues">
+    **Token Not Generated**:
+    - Verify Firebase configuration files are correctly placed
+    - Check internet connectivity
+    - Ensure permissions are granted
+    
+    **iOS Notifications Not Working**:
+    - Verify APNs certificate is uploaded to Social+ Console
+    - Test with TestFlight or App Store build (not debug)
+    - Check iOS project capabilities
+    
+    **Android Notifications Not Working**:
+    - Verify FCM service account JSON is uploaded
+    - Check google-services.json placement
+    - Ensure minSdkVersion >= 21
+  </Accordion>
+  
+  <Accordion title="Platform-Specific Issues">
+    **iOS Debug Builds**:
+    - Push notifications don't work with debug builds
+    - Use TestFlight for testing
+    
+    **Android 13+ Permission**:
+    - Runtime notification permission required
+    - Handle permission request properly
+    
+    ```dart
+    // Check Android version and request permission
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      if (androidInfo.version.sdkInt >= 33) {
+        await Permission.notification.request();
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Firebase Flutter Setup" href="https://firebase.flutter.dev/docs/messaging/overview" icon="fire">
+    Official Firebase Messaging for Flutter documentation
+  </Card>
+  <Card title="Flutter Local Notifications" href="https://pub.dev/packages/flutter_local_notifications" icon="bell">
+    Plugin for displaying local notifications
+  </Card>
+  <Card title="iOS APNs Guide" href="./ios-setup" icon="apple">
+    Detailed iOS certificate setup
+  </Card>
+  <Card title="Android FCM Guide" href="./android-setup" icon="android">
+    Android Firebase configuration
+  </Card>
+</CardGroup>
+
+<Tip>
+**Testing Strategy**: Always test push notifications on physical devices with production builds, as simulators and debug builds have limitations with push notification delivery.
+</Tip>
