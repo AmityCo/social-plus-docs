@@ -1,262 +1,395 @@
 ---
-title: "iOS Implementation"
-description: "Real-time reactive data handling with AmityObject and AmityCollection for iOS applications"
+title: "iOS Live Objects/Collections"  
+description: "Live Objects are supported in the iOS SDK with AmityObject and AmityCollection"
 ---
-
-Build reactive iOS applications with real-time data synchronization using `AmityObject` and `AmityCollection` - the core reactive primitives in the Social+ iOS SDK.
 
 ## Overview
 
-The iOS SDK provides two main reactive data types:
+In iOS Social Plus SDK, we have a concept of **Live Object** and **Live Collection**. LiveObject is represented by `AmityObject` and LiveCollection is represented by `AmityCollection`. These generic classes encapsulate any other object and notify the observer whenever any property of the encapsulated object changes.
 
-- **`AmityObject<T>`** - Observes changes to a single object
-- **`AmityCollection<T>`** - Observes changes to collections of objects
+- **Live Object** helps to observe changes in a single object
+- **Live Collection** helps to observe changes in a list of objects
 
-These classes automatically synchronize data across local cache, server updates, and real-time events, ensuring your UI always displays the most current information.
+Examples: `AmityObject<AmityPost>` or `AmityCollection<AmityMessage>`.
 
-<Info>
-All reactive operations require an active user session. See [Session State](../session-state.mdx) for authentication details.
-</Info>
+## How it Works
 
-## Architecture
+The SDK handles data from various sources that are constantly updating:
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Local Cache   │    │   Server API    │    │ Real-time Events│
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌─────────────▼───────────┐
-                    │    AmityObject/         │
-                    │    AmityCollection      │
-                    └─────────────┬───────────┘
-                                 │
-                    ┌─────────────▼───────────┐
-                    │   Reactive Observer     │
-                    │   (your UI code)        │
-                    └─────────────────────────┘
-```
+<CardGroup cols={3}>
+  <Card title="Local Cache" icon="database">
+    Data present in local storage
+  </Card>
+  <Card title="Server Queries" icon="server">
+    Data queried from the server
+  </Card>
+  <Card title="Real-time Events" icon="bolt">
+    Data received from real-time events
+  </Card>
+</CardGroup>
 
-## Supported Collections
+Data you're accessing can get updated by other sources and become out of sync. Live Object and Live Collection help sync this constantly updating data, so you always get the most recent version. When data updates, you're notified through helper methods.
 
-The following data types support live observation:
+**Key Benefits:**
+- Automatic data synchronization
+- No manual refresh needed
+- Real-time updates
+- Lifecycle management through tokens
 
-### Content Types
-- Posts (`AmityCollection<AmityPost>`)
-- Comments (`AmityCollection<AmityComment>`) 
-- Stories (`AmityCollection<AmityStory>`)
-- Reactions (`AmityCollection<AmityReaction>`)
-
-### Social Types
-- Users (`AmityCollection<AmityUser>`)
-- Followers/Following (`AmityCollection<AmityUserFollowInfo>`)
-
-### Chat Types
-- Channels (`AmityCollection<AmityChannel>`)
-- Sub-channels (`AmityCollection<AmityChannel>`)
-- Messages (`AmityCollection<AmityMessage>`)
-- Channel Members (`AmityCollection<AmityChannelMember>`)
-
-### Community Types  
-- Communities (`AmityCollection<AmityCommunity>`)
-- Community Members (`AmityCollection<AmityCommunityMember>`)
-- Community Categories (`AmityCollection<AmityCommunityCategory>`)
-
-### Live Streaming
-- Streams (`AmityCollection<AmityStream>`)
+Both `AmityObject` and `AmityCollection` provide methods for observing changes. The lifecycle of observation is tied to its token - when the token is invalidated or deallocated, observation ends.
 
 ## AmityNotificationToken
 
-Every observation is tied to an `AmityNotificationToken` that manages the observation lifecycle. When the token is deallocated or invalidated, observation stops automatically.
+`AmityNotificationToken` is a simple object that tracks what is being observed. Each Live Object or Live Collection observation is tied to its respective token. When the token is invalidated or deallocated, observation ends.
 
 ```swift
-class MyViewController: UIViewController {
-    private var token: AmityNotificationToken?
+class MyClass {
+    var token: AmityNotificationToken?
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        observeData()
-    }
-    
-    private func observeData() {
-        let liveObject = AmityObject<AmityPost>()
-        token = liveObject.observe { [weak self] in
-            // Handle updates
-        }
-    }
-    
-    deinit {
-        token?.invalidate()
+    func doSomething() {
+        // AmityNotification is alive in MyClass scope
     }
 }
 ```
 
-<Warning>
-Always retain tokens in the appropriate scope. If tokens are released, observations will stop working.
-</Warning>
+The token is used in combination with `AmityObject` or `AmityCollection`. Let's explore this in detail.
+
+### Token Lifecycle Management
+
+```swift
+var token1: AmityNotificationToken?
+var token2: AmityNotificationToken?
+
+func example() {
+    let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
+    
+    // observe block
+    token1 = liveObject.observe { liveObject, error in
+        // Handle changes
+    }
+    
+    // observeOnce block
+    token2 = liveObject.observeOnce { liveObject, error in
+        // Handle single observation
+    }
+}
+```
+
+### Invalidating Tokens
+
+The `AmityNotificationToken` provides an `invalidate()` method to stop observation:
+
+```swift
+// Manually invalidate the token
+token1?.invalidate()
+
+// Alternatively, deallocate the token
+token1 = nil
+```
 
 ## AmityObject - Single Object Observation
 
-Observe changes to individual objects with real-time updates.
+`AmityObject` is a generic class that tracks a single object. Any object encapsulated by `AmityObject` becomes a live object.
 
-### Basic Usage
+**Examples:**
+- `AmityObject<AmityMessage>`
+- `AmityObject<AmityChannel>`
+- `AmityObject<AmityPost>`
+
+### Available Methods
+
+`AmityObject` exposes two key methods:
+
+<CardGroup cols={2}>
+  <Card title="observe" icon="eye">
+    Can be triggered multiple times throughout the application lifetime
+  </Card>
+  <Card title="observeOnce" icon="eye-slash">
+    Triggered only once, then automatically stops observing
+  </Card>
+</CardGroup>
+
+<Warning>
+Ensure the user is logged in before observing `AmityObject`. Refer to the [authentication guide](/social-plus-sdk/getting-started/authentication) for details.
+</Warning>
+
+### Observer Behavior
+
+Both `observe` and `observeOnce` methods:
+- Are called from the main thread (safe for UI updates)
+- Trigger immediately with local data if available
+- Make parallel server requests for fresh data
+- Trigger again when server data returns
+- Respond to future changes from any source
+
+### Basic Object Observation
 
 ```swift
-import AmitySDK
+var token: AmityNotificationToken?
 
-class PostDetailViewController: UIViewController {
-    private var postToken: AmityNotificationToken?
-    private let postId: String
+func observeChannel() {
+    let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        observePost()
-    }
-    
-    private func observePost() {
-        let repository = AmityPostRepository(client: AmityUIKitManager.client)
-        let livePost = repository.getPost(postId)
-        
-        postToken = livePost.observe { [weak self] liveObject, error in
-            guard let self = self else { return }
-            
-            if let error = error {
-                self.handleError(error)
-                return
-            }
-            
-            switch liveObject.dataStatus {
-            case .fresh:
-                // Use fresh data from server
-                self.updateUI(with: liveObject.object)
-                
-            case .local:
-                // Use cached data, server update in progress
-                self.updateUI(with: liveObject.object)
-                
-            case .notExist:
-                self.showNotFoundState()
-                
-            case .error:
-                self.handleDataError()
-            }
+    token = liveObject.observe { liveObject, error in
+        guard error == nil else {
+            print("Error observing channel: \(error!)")
+            return
         }
-    }
-    
-    private func updateUI(with post: AmityPost?) {
-        guard let post = post else { return }
         
-        titleLabel.text = post.displayName
-        contentLabel.text = post.data?["text"] as? String
-        likeCountLabel.text = "\(post.reactionsCount)"
+        // Check data status
+        let dataStatus: AmityDataStatus = liveObject.dataStatus
+        print("Data status: \(dataStatus)")
         
-        // Update loading state
-        if livePost.loadingStatus == .loading {
-            showLoadingIndicator()
-        } else {
-            hideLoadingIndicator()
-        }
+        // Access the channel object
+        guard let channel = liveObject.object else { return }
+        
+        // Use channel properties
+        let channelId = channel.channelId
+        let displayName = channel.displayName
+        
+        // Update UI on main thread (already guaranteed)
+        updateChannelUI(with: channel)
     }
 }
 ```
 
-### Observe Once Pattern
+### Accessing Object Properties
 
-For one-time data fetching with fresh data guarantee:
+`AmityObject` provides several properties for data access:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `dataStatus` | `AmityDataStatus` | Whether data is fresh or local |
+| `loadingStatus` | `AmityLoadingStatus` | Current loading state |
+| `object` | `T?` | The actual encapsulated object |
+
+### Observing Fresh Data Only
+
+If you only want fresh data from the server:
 
 ```swift
-private func fetchFreshPost() {
-    let livePost = repository.getPost(postId)
+var token: AmityNotificationToken?
+
+func observeFreshChannelData() {
+    let liveObject = channelRepository.getChannel("1234")
     
-    postToken = livePost.observe { [weak self] liveObject, error in
-        guard let self = self else { return }
-        
+    token = liveObject.observe { [weak self] liveObject, error in
         // Only process fresh data
-        if liveObject.dataStatus == .fresh {
-            self.updateUI(with: liveObject.object)
-            self.postToken?.invalidate() // Stop observing
-            self.postToken = nil
-        }
+        guard liveObject.dataStatus == .fresh else { return }
+        
+        guard let channel = liveObject.object else { return }
+        
+        // Process fresh channel data
+        let channelId = channel.channelId
+        let displayName = channel.displayName
+        
+        // Stop observing after getting fresh data
+        self?.token?.invalidate()
     }
 }
 ```
 
-### Loading States
+### Direct Object Access
 
-Monitor loading status for UI feedback:
+For local data without observation:
 
 ```swift
-private func handleLoadingStates() {
-    postToken = livePost.observe { [weak self] liveObject, error in
-        switch liveObject.loadingStatus {
-        case .notLoading:
-            // Data is fresh, no loading needed
-            self?.hideLoadingIndicator()
-            
-        case .loading:
-            // Currently fetching from server
-            self?.showLoadingIndicator()
-            
-        case .loaded:
-            // Successfully loaded fresh data
-            self?.hideLoadingIndicator()
-            self?.updateUI(with: liveObject.object)
-            
-        case .error:
-            // Failed to load
-            self?.hideLoadingIndicator()
-            self?.showErrorState()
-        }
-    }
+let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
+
+// Access local data directly (if available)
+if let channel = liveObject.object {
+    print("Channel name: \(channel.displayName)")
 }
 ```
 
+<Info>
+While direct access is possible, we recommend using `observe` or `observeOnce` blocks for reliable data access.
+</Info>
+
+### AmityLoadingStatus
+
+Track loading states with `AmityLoadingStatus`:
+
+| Value | Status | Description |
+|-------|--------|-------------|
+| `0` | `notLoading` | Data is fresh locally, no loading needed |
+| `1` | `loading` | Currently loading from server |
+| `2` | `loaded` | Successfully loaded fresh data |
+| `3` | `error` | Failed to load due to error |
+
+```swift
+token = liveObject.observe { liveObject, error in
+    switch liveObject.loadingStatus {
+    case .notLoading:
+        // Data is already fresh
+        break
+    case .loading:
+        showLoadingIndicator()
+    case .loaded:
+        hideLoadingIndicator()
+        updateUI(with: liveObject.object)
+    case .error:
+        hideLoadingIndicator()
+        showErrorState()
+    }
+}
+```
 ## AmityCollection - Collection Observation
 
-Observe changes to collections with automatic pagination and real-time updates.
+`AmityCollection` is a generic class that tracks a collection of objects. Any collection encapsulated by `AmityCollection` becomes a live collection.
 
-### Basic Collection Usage
+**Examples:**
+- `AmityCollection<AmityMessage>`
+- `AmityCollection<AmityChannel>`
+- `AmityCollection<AmityPost>`
+
+### Available Methods
+
+Like `AmityObject`, `AmityCollection` exposes:
+
+<CardGroup cols={2}>
+  <Card title="observe" icon="eye">
+    Continuously observes collection changes
+  </Card>
+  <Card title="observeOnce" icon="eye-slash">
+    Observes collection once, then stops
+  </Card>
+</CardGroup>
+
+<Warning>
+Ensure the user is logged in before observing `AmityCollection`. Refer to the [authentication guide](/social-plus-sdk/getting-started/authentication) for details.
+</Warning>
+
+### Collection Data Access
+
+Unlike traditional arrays, `AmityCollection` doesn't return all data at once. Instead, data is accessed individually using the `object(at:)` method, allowing efficient memory usage.
+
+**Key Properties:**
+- `count()` - Number of objects in collection
+- `dataStatus` - Whether data is fresh or local
+- `loadingStatus` - Current loading state
+
+### Basic Collection Observation
 
 ```swift
-import AmitySDK
+var token: AmityNotificationToken?
 
-class PostListViewController: UIViewController {
-    private var postsToken: AmityNotificationToken?
-    private var postsCollection: AmityCollection<AmityPost>?
-    private var posts: [AmityPost] = []
+func observeChannels() {
+    // Create query for live channels
+    let query = AmityChannelQuery()
+    query.types = [AmityChannelQueryType.live]
+    query.includeDeleted = false
     
-    @IBOutlet weak var tableView: UITableView!
+    let liveCollection = channelRepository.getChannels(with: query)
+    
+    token = liveCollection.observe { liveCollection, change, error in
+        guard error == nil else {
+            print("Error observing channels: \(error!)")
+            return
+        }
+        
+        // Check data status
+        let dataStatus: AmityDataStatus = liveCollection.dataStatus
+        print("Data status: \(dataStatus)")
+        
+        // Access collection data
+        print("Total channels: \(liveCollection.count())")
+        
+        // Loop through all channels
+        for i in 0..<liveCollection.count() {
+            if let channel = liveCollection.object(at: i) {
+                let channelId = channel.channelId
+                let displayName = channel.displayName
+                print("Channel: \(displayName)")
+            }
+        }
+    }
+}
+```
+
+### Pagination
+
+`AmityCollection` returns a maximum of 20 items per page with built-in pagination:
+
+| Method | Description |
+|--------|-------------|
+| `nextPage()` | Load next page of results |
+| `previousPage()` | Load previous page of results |
+| `resetPage()` | Reset to first page |
+| `hasNext` | Check if next page exists |
+| `hasPrevious` | Check if previous page exists |
+
+```swift
+// Handle pagination in scroll view
+func handlePagination() {
+    guard let collection = liveCollection else { return }
+    
+    // Load next page when user scrolls to bottom
+    if collection.hasNext {
+        collection.nextPage()
+    }
+    
+    // Reset to first page
+    collection.resetPage()
+}
+```
+
+### UITableView Integration
+
+Complete example of using `AmityCollection` with UITableView:
+
+```swift
+class ChannelListViewController: UITableViewController {
+    var liveCollection: AmityCollection<AmityChannel>!
+    var token: AmityNotificationToken?
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        observePosts()
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        setupDataSource()
     }
     
-    private func observePosts() {
-        let repository = AmityPostRepository(client: AmityUIKitManager.client)
-        postsCollection = repository.getPosts()
+    func setupDataSource() {
+        let query = AmityChannelQuery()
+        query.types = [AmityChannelQueryType.live]
+        query.includeDeleted = false
         
-        postsToken = postsCollection?.observe { [weak self] liveCollection, error in
-            guard let self = self else { return }
-            
-            if let error = error {
-                self.handleError(error)
-                return
-            }
-            
-            // Update posts array
-            self.posts = []
-            for i in 0..<liveCollection.count() {
-                if let post = liveCollection.object(at: i) {
-                    self.posts.append(post)
-                }
-            }
-            
+        // Get live collection
+        liveCollection = channelRepository.getChannels(with: query)
+        
+        // Observe live collection
+        token = liveCollection.observe { [weak self] liveCollection, changes, error in
             DispatchQueue.main.async {
-                self.tableView.reloadData()
+                self?.tableView.reloadData()
             }
         }
+    }
+    
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        return 1
+    }
+    
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return Int(liveCollection.count())
+    }
+    
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        
+        if let channel = liveCollection.object(at: indexPath.row) {
+            cell.textLabel?.text = channel.displayName
+        }
+        
+        return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        // Load more when approaching the end
+        if indexPath.row == Int(liveCollection.count()) - 3 && liveCollection.hasNext {
+            liveCollection.nextPage()
+        }
+    }
+}
     }
 }
 ```
