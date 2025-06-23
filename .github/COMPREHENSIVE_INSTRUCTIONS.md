@@ -62,34 +62,6 @@ This comprehensive guide provides AI assistants and developers with complete ins
 
 ## 🏗️ Documentation Architecture
 
-### **Project Structure Overview**
-```
-social-plus-docs/
-├── .github/
-│   ├── COMPREHENSIVE_INSTRUCTIONS.md  # This file
-│   └── instructions.md                # Legacy (deprecated)
-├── docs.json                         # Mintlify navigation
-├── analytics-and-moderation/         # Analytics & Moderation docs ✅
-│   ├── console/                      # Console management
-│   ├── social+-portal/               # Portal administration  
-│   └── social+-apis-and-services/    # API documentation
-├── uikit/                           # UIKit documentation ✅
-│   ├── overview.mdx                 # Landing page
-│   ├── getting-started/             # Developer onboarding
-│   ├── components/                  # Component library
-│   └── customization/               # Theming & styling
-├── social-plus-sdk/                 # SDK documentation ✅
-│   ├── overview.mdx
-│   ├── getting-started/
-│   ├── core-concepts/
-│   ├── social/                      # Social features
-│   ├── chat/                        # Chat features
-│   └── video/                       # Video SDK
-└── api-reference/                   # API documentation ✅
-    ├── introduction.mdx
-    └── endpoint/                    # REST API endpoints
-```
-
 ### **Navigation Principles**
 1. **Logical Grouping**: Features grouped by user workflow, not technical structure
 2. **Progressive Disclosure**: Basic → Advanced → Expert level content
@@ -97,7 +69,6 @@ social-plus-docs/
 4. **Developer Journey**: Clear path from setup to advanced implementation
 
 ### **File Naming Conventions**
-- **Landing Pages**: `overview.mdx` (never `README.mdx`)
 - **Feature Pages**: Descriptive names (`story-creation.mdx`, not `create-story.mdx`)
 - **Platform Guides**: `platform-name.mdx` (`ios.mdx`, `android.mdx`)
 - **Directory Structure**: Kebab-case (`getting-started/`, `user-interactions/`)
@@ -109,137 +80,64 @@ social-plus-docs/
 ### **Required Mintlify Components**
 
 #### **Multi-Platform Code Examples**
-```mdx
-<Tabs>
-  <Tab title="iOS">
-    <CodeGroup>
-      ```swift Basic Implementation
-      import SocialPlusSDK
-      
-      let client = SocialPlusClient(apiKey: "your-api-key")
-      ```
-      
-      ```swift Advanced Implementation
-      import SocialPlusSDK
-      
-      class SocialManager {
-          private let client: SocialPlusClient
-          
-          init(apiKey: String) {
-              self.client = SocialPlusClient(apiKey: apiKey)
-          }
-          
-          func createPost(content: String) async throws -> Post {
-              // Implementation with error handling
-          }
-      }
-      ```
-    </CodeGroup>
-  </Tab>
-  
-  <Tab title="Android">
-    <CodeGroup>
-      ```kotlin Basic Implementation
-      import co.amity.socialplus.sdk.SocialPlusClient
-      
-      val client = SocialPlusClient(apiKey = "your-api-key")
-      ```
-      
-      ```kotlin Advanced Implementation
-      import co.amity.socialplus.sdk.SocialPlusClient
-      import kotlinx.coroutines.flow.Flow
-      
-      class SocialRepository(private val client: SocialPlusClient) {
-          suspend fun createPost(content: String): Result<Post> {
-              return try {
-                  val post = client.createPost(content)
-                  Result.success(post)
-              } catch (e: Exception) {
-                  Result.failure(e)
-              }
-          }
-      }
-      ```
-    </CodeGroup>
-  </Tab>
-  
-  <Tab title="JavaScript">
-    <CodeGroup>
-      ```javascript Basic Implementation
-      import { SocialPlusClient } from '@amityco/social-plus-sdk';
-      
-      const client = new SocialPlusClient({ apiKey: 'your-api-key' });
-      ```
-      
-      ```typescript React Hook Implementation
-      import { useState, useEffect } from 'react';
-      import { SocialPlusClient } from '@amityco/social-plus-sdk';
-      
-      export const useSocialPlus = (apiKey: string) => {
-          const [client, setClient] = useState<SocialPlusClient | null>(null);
-          const [isLoading, setIsLoading] = useState(true);
-          
-          useEffect(() => {
-              const initClient = async () => {
-                  try {
-                      const newClient = new SocialPlusClient({ apiKey });
-                      await newClient.connect();
-                      setClient(newClient);
-                  } catch (error) {
-                      console.error('Failed to initialize client:', error);
-                  } finally {
-                      setIsLoading(false);
-                  }
-              };
-              
-              initClient();
-          }, [apiKey]);
-          
-          return { client, isLoading };
-      };
-      ```
-    </CodeGroup>
-  </Tab>
-  
-  <Tab title="Flutter">
-    <CodeGroup>
-      ```dart Basic Implementation
-      import 'package:amity_sdk/amity_sdk.dart';
-      
-      final client = AmityClient(apiKey: 'your-api-key');
-      ```
-      
-      ```dart Provider Implementation
-      import 'package:flutter/material.dart';
-      import 'package:amity_sdk/amity_sdk.dart';
-      
-      class SocialProvider extends ChangeNotifier {
-          AmityClient? _client;
-          bool _isLoading = false;
-          
-          AmityClient? get client => _client;
-          bool get isLoading => _isLoading;
-          
-          Future<void> initialize(String apiKey) async {
-              _isLoading = true;
-              notifyListeners();
-              
-              try {
-                  _client = AmityClient(apiKey: apiKey);
-                  await _client!.connect();
-              } catch (e) {
-                  print('Failed to initialize: $e');
-              } finally {
-                  _isLoading = false;
-                  notifyListeners();
-              }
-          }
-      }
-      ```
-    </CodeGroup>
-  </Tab>
-</Tabs>
+<CodeGroup>
+```swift iOS
+Task { @MainActor in
+    do {
+        try await client.login(
+            userId: "user-123",
+            displayName: "John Doe",
+            authToken: "your-auth-token", // Optional for development
+            sessionHandler: sessionHandler
+        )
+        print("Login successful")
+    } catch {
+        print("Login failed: \(error)")
+    }
+}
 ```
+
+```kotlin Android
+AmityCoreClient.login(userId = "user-123")
+    .displayName(displayName = "John Doe")
+    .authToken(authToken) // Optional for development
+    .sessionHandler(sessionHandler)
+    .build()
+    .submit()
+    .doOnComplete {
+        // Login successful
+    }
+    .doOnError { error ->
+        // Login failed
+    }
+    .subscribe()
+```
+
+```typescript TypeScript
+try {
+    await client.login({
+        userId: 'user-123',
+        displayName: 'John Doe'
+        authToken: 'your-auth-token', // Optional for development
+    }, sessionHandler);
+    console.log('Login successful');
+} catch (error) {
+    console.error('Login failed:', error);
+}
+```
+
+```dart Flutter 
+try {
+    await AmityCoreClient.login('user-123')
+        .displayName('John Doe')
+        .authToken('your-auth-token') // Optional for development
+        .submit();
+    print('Login successful');
+} catch (error) {
+    print('Login failed: $error');
+}
+```
+</CodeGroup>
 
 #### **Feature Cards**
 ```mdx
@@ -839,57 +737,6 @@ Brief introduction explaining what the component does and its main benefits.
 }
 ```
 
-### Advanced Styling
-
-<Tabs>
-  <Tab title="React Native">
-    ```jsx
-    const customStyles = {
-        container: {
-            backgroundColor: '#F5F5F5',
-            borderRadius: 12,
-            padding: 16
-        },
-        text: {
-            fontFamily: 'CustomFont-Regular',
-            fontSize: 16,
-            color: '#333333'
-        }
-    };
-    
-    <ComponentName 
-        customization={{
-            styles: customStyles
-        }}
-    />
-    ```
-  </Tab>
-  
-  <Tab title="iOS">
-    ```swift
-    let customization = ComponentCustomization()
-    customization.backgroundColor = UIColor.systemGray6
-    customization.cornerRadius = 12
-    customization.textColor = UIColor.label
-    customization.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-    
-    component.apply(customization: customization)
-    ```
-  </Tab>
-  
-  <Tab title="Android">
-    ```kotlin
-    val customization = ComponentCustomization.Builder()
-        .setBackgroundColor(Color.parseColor("#F5F5F5"))
-        .setCornerRadius(12.dp)
-        .setTextColor(Color.parseColor("#333333"))
-        .setTextSize(16.sp)
-        .build()
-    
-    fragment.applyCustomization(customization)
-    ```
-  </Tab>
-</Tabs>
 
 ## Use Cases
 
@@ -1109,45 +956,6 @@ Brief explanation of the feature, its purpose, and key benefits.
 
 [Comprehensive parameter documentation with AccordionGroup]
 
-## Response Format
-
-<AccordionGroup>
-  <Accordion title="Success Response">
-    ```json
-    {
-      "success": true,
-      "data": {
-        "id": "string",
-        "content": "string",
-        "createdAt": "ISO 8601 timestamp",
-        "updatedAt": "ISO 8601 timestamp"
-      },
-      "metadata": {
-        "totalCount": 0,
-        "hasNext": false
-      }
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="Error Response">
-    ```json
-    {
-      "success": false,
-      "error": {
-        "code": "ERROR_CODE",
-        "message": "Human-readable error message",
-        "details": {}
-      }
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Error Handling
-
-[Comprehensive error handling patterns and best practices]
-
 ## Best Practices
 
 [AccordionGroup with performance, security, and UX guidelines]
@@ -1304,51 +1112,66 @@ Brief description of the feature and its primary use cases.
 
 ## Code Examples
 
-<Tabs>
-  <Tab title="Python">
-    ```python
-    import requests
-    
-    class APIClient:
-        def __init__(self, admin_token, region='us-east-1'):
-            self.admin_token = admin_token
-            self.base_url = f'https://apix.{region}.amity.co'
-            self.headers = {
-                'accept': 'application/json',
-                'x-admin-token': admin_token
-            }
-        
-        def example_method(self, param):
-            response = requests.get(
-                f'{self.base_url}/api/v3/endpoint/{param}',
-                headers=self.headers
-            )
-            return response.json()
-    ```
-  </Tab>
-  
-  <Tab title="JavaScript">
-    ```javascript
-    class APIClient {
-        constructor(adminToken, region = 'us-east-1') {
-            this.adminToken = adminToken;
-            this.baseURL = `https://apix.${region}.amity.co`;
-            this.headers = {
-                'accept': 'application/json',
-                'x-admin-token': adminToken
-            };
-        }
-        
-        async exampleMethod(param) {
-            const response = await fetch(`${this.baseURL}/api/v3/endpoint/${param}`, {
-                headers: this.headers
-            });
-            return response.json();
-        }
+<CodeGroup>
+```swift iOS
+Task { @MainActor in
+    do {
+        try await client.login(
+            userId: "user-123",
+            displayName: "John Doe",
+            authToken: "your-auth-token", // Optional for development
+            sessionHandler: sessionHandler
+        )
+        print("Login successful")
+    } catch {
+        print("Login failed: \(error)")
     }
-    ```
-  </Tab>
-</Tabs>
+}
+```
+
+```kotlin Android
+AmityCoreClient.login(userId = "user-123")
+    .displayName(displayName = "John Doe")
+    .authToken(authToken) // Optional for development
+    .sessionHandler(sessionHandler)
+    .build()
+    .submit()
+    .doOnComplete {
+        // Login successful
+    }
+    .doOnError { error ->
+        // Login failed
+    }
+    .subscribe()
+```
+
+```typescript TypeScript
+try {
+    await client.login({
+        userId: 'user-123',
+        displayName: 'John Doe'
+        authToken: 'your-auth-token', // Optional for development
+    }, sessionHandler);
+    console.log('Login successful');
+} catch (error) {
+    console.error('Login failed:', error);
+}
+```
+
+```dart Flutter 
+try {
+    await AmityCoreClient.login('user-123')
+        .displayName('John Doe')
+        .authToken('your-auth-token') // Optional for development
+        .submit();
+    print('Login successful');
+} catch (error) {
+    print('Login failed: $error');
+}
+```
+</CodeGroup>
+  
+
 
 ## Use Cases
 
