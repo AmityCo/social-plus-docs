@@ -1,0 +1,329 @@
+---
+title: "Query Posts"
+description: "Search and filter posts with advanced querying capabilities for communities and user feeds"
+---
+
+The Social+ SDK provides powerful post querying functionality that enables flexible content discovery and filtering. Query posts from communities, user feeds, or across the entire platform with customizable search criteria and real-time results.
+
+
+<CardGroup cols={2}>
+  <Card title="Live Collection" icon="square-bolt">
+    Query results are returned as live collections with real-time updates
+  </Card>
+
+  <Card title="Flexible Filtering" icon="filter">
+    Filter by post type, target, deletion status, and custom criteria
+  </Card>
+</CardGroup>
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `targetId` | String | Yes | ID of the community or user respectively. Use community ID for community posts or user ID for user feed posts. |
+| `targetType` | Enum | Yes | Type of the target, either a particular community (`community`) or a user feed (`user`). |
+| `types` | Array | No | Available post types: `video`, `image`, `file`, `liveStream`, `poll`, and `custom`. If not specified, returns all post types for the target. |
+| `tags` | Array | No | Filter posts by specific tags. When specified, only posts containing these tags will be returned. Useful for content categorization and topic-based filtering. |
+| `includeDeleted` | Boolean | No | Deletion filter. When `true`, retrieves both deleted and non-deleted posts. When `false` (default), only non-deleted posts are returned. Excludes all deleted posts (both soft and hard deleted) not owned by the logged-in user. Community moderators can see soft-deleted posts in community feeds, while users can see their own soft-deleted posts in their user feeds. |
+| `sortBy` | Enum | No | Sort order for results. `lastCreated` (default) shows most recently created posts first, `firstCreated` shows earliest created posts first. |
+| `feedType` | Enum | No | Type of the feed filter. Possible values: `published`, `reviewing`, `declined`. See [Feed Types](#feed-types) for details. |
+
+### Feed Types
+
+<AccordionGroup>
+  <Accordion title="Published Posts">
+    **Value**: `published`
+    
+    Posts that have been approved and are visible to community members. This is the default state for most posts in communities without review requirements.
+  </Accordion>
+  
+  <Accordion title="Reviewing Posts">
+    **Value**: `reviewing`
+    
+    Posts that are pending moderator approval. These posts are only visible to the post author and community moderators until approved.
+  </Accordion>
+  
+  <Accordion title="Declined Posts">
+    **Value**: `declined`
+    
+    Posts that have been rejected by moderators. These posts are only visible to the post author and community moderators.
+  </Accordion>
+</AccordionGroup>
+
+<CodeGroup>
+```swift iOS
+var token: AmityNotificationToken?
+
+func postQueryExample() {
+    // In this example, we will query posts to build user's media gallery.
+    // This gallery shows the feed; specifically "image" and "video".
+    //
+    // 1. Create AmityPostQueryOptions
+    // For this use-case:
+    // - Search all the "image" and "video" posts
+    // - Belong to a user, for example "steven".
+    // - Only non-deleted posts.
+    // - Sorted by last created.
+    let options = AmityPostQueryOptions(
+        targetType: .user,
+        targetId: "steven",
+        sortBy: .lastCreated,
+        deletedOption: .notDeleted,
+        filterPostTypes: ["image", "video"]
+    )
+    // 2. query the posts, and handle the results via the live collection.
+    token = postRepository.getPosts(options).observe { collection, changes, error in
+        // Observe the live collection changes here.
+    }
+}
+```
+
+```kotlin Android
+fun queryPosts(postRepository: AmityPostRepository) {
+    //User's Media Gallery Example
+    //For this use-case:
+    //  - Search all the "image" and "video" posts - Belong to the user "steven".
+    //  - Only non-deleted posts.
+    //  - Sorted by last created.
+    postRepository
+        .getPosts()
+        .targetUser(userId = "steven")
+        .types(postTypes = listOf(AmityPost.DataType.IMAGE, AmityPost.DataType.VIDEO))
+        .includeDeleted(includeDeleted = false)
+        .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
+        .build()
+        .getPagingData()
+        .doOnNext { pagingData: PagingData<AmityPost> ->
+            //Observe the changes here.
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+// Variables to handle pagination
+let nextPageFn: (() => void) | undefined; // Function to load the next page of data
+let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+
+const communityPostsParam: Amity.PostLiveCollection = {
+  targetId: 'targetId',
+  targetType: 'community',
+  sortBy: 'lastCreated'
+};
+
+const unsubscribe = PostRepository.getPosts(
+  communityPostsParam,
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (error) {
+      // Handle any errors that occur during retrieving data
+    }
+    if (loading) {
+      // Handle the loading state, e.g., show a loading spinner
+    }
+    if (posts) {
+      // Process the data
+      console.log(posts);
+    }
+    hasMore = hasNextPage; // Update the hasMore flag
+    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+  },
+);
+
+// Function to load more items (next page)
+function loadMore() {
+  // Check if more pages are available to load
+  if (hasMore) {
+    nextPageFn?.(); // Execute the nextPage function if it's defined
+  }
+}
+```
+
+```dart Flutter
+late PostLiveCollection postLiveCollection;
+List<AmityPost> amityPosts = [];
+final scrollcontroller = ScrollController();
+
+void observePosts(String userId) {
+  //initialize post live collection
+  postLiveCollection = AmitySocialClient.newPostRepository()
+      .getPosts()
+      .targetUser(userId)
+      .getLiveCollection(pageSize: 20);
+
+  //listen to data changes from live collection
+  postLiveCollection.getStreamController().stream.listen((event) {
+    // update latest results here
+    // setState(() {
+    amityPosts = event;
+    // });
+  });
+
+  //load first page when initiating widget
+  postLiveCollection.loadNext();
+
+  //add pagination listener when srolling to top/bottom
+  scrollcontroller.addListener(paginationListener);
+}
+
+void paginationListener() {
+  //check if
+  //#1 scrolling reached top/bottom
+  //#2 live collection has next page to load more
+  if ((scrollcontroller.position.pixels ==
+          (scrollcontroller.position.maxScrollExtent)) &&
+      postLiveCollection.hasNextPage()) {
+    postLiveCollection.loadNext();
+  }
+}
+```
+</CodeGroup>
+
+## Parameter Usage Examples
+
+<AccordionGroup>
+  <Accordion title="Community Media Gallery">
+    **Use Case**: Create a photo gallery showing only images and videos from a specific community
+    
+    ```typescript
+    const options = {
+      targetId: "community-123",
+      targetType: "community",
+      types: ["image", "video"],
+      includeDeleted: false,
+      sortBy: "lastCreated"
+    };
+    ```
+    
+    This query retrieves only image and video posts from community "community-123", excludes any deleted content, and shows newest posts first.
+  </Accordion>
+  
+  <Accordion title="User's Personal Timeline">
+    **Use Case**: Display a user's complete post history including their own deleted posts
+    
+    ```typescript
+    const options = {
+      targetId: "user-456",
+      targetType: "user",
+      // types not specified = all post types
+      includeDeleted: true, // Shows user's own soft-deleted posts
+      sortBy: "firstCreated"
+    };
+    ```
+    
+    This query shows all post types from the user's timeline, including their own soft-deleted posts, sorted from oldest to newest.
+  </Accordion>
+  
+  <Accordion title="Moderation Review Queue">
+    **Use Case**: Community moderators reviewing pending posts
+    
+    ```typescript
+    const options = {
+      targetId: "community-789",
+      targetType: "community",
+      feedType: "reviewing",
+      includeDeleted: false,
+      sortBy: "lastCreated"
+    };
+    ```
+    
+    This query retrieves only posts that are pending review in the community, helping moderators efficiently process approval queues.
+  </Accordion>
+  
+  <Accordion title="Tag-Based Content Discovery">
+    **Use Case**: Find posts with specific tags for topic-based content filtering
+    
+    ```typescript
+    const options = {
+      targetId: "community-101",
+      targetType: "community",
+      tags: ["tutorial", "beginner", "javascript"],
+      feedType: "published",
+      sortBy: "lastCreated"
+    };
+    ```
+    
+    This query filters for posts tagged with "tutorial", "beginner", and "javascript", perfect for creating topic-specific feeds or educational content discovery.
+  </Accordion>
+  
+  <Accordion title="Advanced Tag Filtering">
+    **Use Case**: Combine tags with content type filtering for specialized searches
+    
+    ```typescript
+    const options = {
+      targetId: "community-202",
+      targetType: "community",
+      types: ["video", "image"],
+      tags: ["product-demo", "feature-announcement"],
+      feedType: "published",
+      sortBy: "lastCreated"
+    };
+    ```
+    
+    This query finds visual content (videos and images) tagged with product or feature-related tags, ideal for creating marketing galleries or product showcase feeds.
+  </Accordion>
+  
+  <Accordion title="Archive Access">
+    **Use Case**: Access declined posts for audit or appeal purposes
+    
+    ```typescript
+    const options = {
+      targetId: "community-202",
+      targetType: "community",
+      feedType: "declined",
+      includeDeleted: true,
+      sortBy: "firstCreated"
+    };
+    ```
+    
+    This query retrieves declined posts including deleted ones, sorted chronologically for audit trail purposes. Only available to moderators and administrators.
+  </Accordion>
+</AccordionGroup>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Community Feed" icon="users">
+    Display all posts in a community with real-time updates and customizable filtering options.
+  </Card>
+  <Card title="User Profile" icon="user">
+    Show a user's post history with privacy controls and content type filtering.
+  </Card>
+  <Card title="Media Gallery" icon="images">
+    Create image and video galleries by filtering posts with media attachments.
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Query Optimization" icon="bolt">
+    - Use specific post types instead of querying all types
+    - Implement pagination for large result sets
+    - Cache frequently accessed queries
+    - Dispose of live collections when no longer needed
+  </Accordion>
+  
+  <Accordion title="User Experience" icon="heart">
+    - Show loading states during query execution
+    - Implement pull-to-refresh for live collections
+    - Provide empty states for no results
+    - Use skeleton screens for better perceived performance
+  </Accordion>
+  
+  <Accordion title="Error Handling" icon="triangle-exclamation">
+    - Handle network connectivity issues gracefully
+    - Implement retry mechanisms for failed queries
+    - Provide meaningful error messages to users
+    - Log query errors for debugging purposes
+  </Accordion>
+  
+  <Accordion title="Memory Management" icon="memory">
+    - Dispose of live collections when views are destroyed
+    - Implement proper lifecycle management
+    - Use weak references to prevent memory leaks
+    - Monitor memory usage in production
+  </Accordion>
+</AccordionGroup>
+
