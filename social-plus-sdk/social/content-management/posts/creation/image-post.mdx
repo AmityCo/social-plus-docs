@@ -5,577 +5,46 @@ description: "Create posts with single or multiple images, captions, and rich me
 
 Share visual content with support for multiple images, captions, and metadata. Image posts support up to 10 images per post with rich text descriptions.
 
+<CardGroup cols={2}>
+  <Card title="Multiple Images" icon="images">
+    Upload up to 10 images per post with individual reactions
+  </Card>
+  <Card title="Rich Media Support" icon="image">
+    JPEG, PNG, WebP formats up to 100MB per image
+  </Card>
+</CardGroup>
+
 ## Overview
 
 Image posts combine visual content with descriptive text:
 
 - **Multiple Images**: Up to 10 images per post
 - **Rich Captions**: Text descriptions with mentions and hashtags
-- **File Size Limit**: Up to 1GB per image
 - **Parent-Child Structure**: Each image becomes a child post
 - **Interactive Features**: Users can react to individual images
 
+| Requirement | Limit | Notes |
+|-------------|-------|-------|
+| **File Size** | Up to 100MB per image | Platform may have lower limits |
+| **Image Count** | Maximum 10 images | Per single post |
+| **File Formats** | JPEG, PNG, WebP, etc. | Platform dependent |
+
+
 <Warning>
-Images must be uploaded first before creating the post. See [Image Handling](../../../core-concepts/files-images-and-videos/image-handling.mdx) for upload instructions.
+Images must be uploaded first before creating the post. See [Image Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling) for upload instructions.
 </Warning>
 
-## Create Image Post
-
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    import AmitySDK
-
-    class ImagePostManager {
-        private let postRepository: AmityPostRepository
-        private let fileRepository: AmityFileRepository
-        
-        init(client: AmityClient) {
-            self.postRepository = AmityPostRepository(client: client)
-            self.fileRepository = AmityFileRepository(client: client)
-        }
-        
-        func createImagePost(
-            text: String,
-            images: [UIImage],
-            targetType: AmityPostTargetType,
-            targetId: String? = nil,
-            tags: [String] = [],
-            metadata: [String: Any]? = nil
-        ) {
-            // First upload images
-            uploadImages(images) { [weak self] uploadedImages in
-                self?.createPostWithUploadedImages(
-                    text: text,
-                    uploadedImages: uploadedImages,
-                    targetType: targetType,
-                    targetId: targetId,
-                    tags: tags,
-                    metadata: metadata
-                )
-            }
-        }
-        
-        private func uploadImages(
-            _ images: [UIImage],
-            completion: @escaping ([AmityImageData]) -> Void
-        ) {
-            var uploadedImages: [AmityImageData] = []
-            let group = DispatchGroup()
-            
-            for image in images {
-                group.enter()
-                fileRepository.uploadImage(image) { result in
-                    defer { group.leave() }
-                    
-                    switch result {
-                    case .success(let imageData):
-                        uploadedImages.append(imageData)
-                    case .failure(let error):
-                        print("Failed to upload image: \(error)")
-                    }
-                }
-            }
-            
-            group.notify(queue: .main) {
-                completion(uploadedImages)
-            }
-        }
-        
-        private func createPostWithUploadedImages(
-            text: String,
-            uploadedImages: [AmityImageData],
-            targetType: AmityPostTargetType,
-            targetId: String?,
-            tags: [String],
-            metadata: [String: Any]?
-        ) {
-            let builder = AmityImagePostBuilder()
-                .setText(text)
-                .setTargetType(targetType)
-                .setImages(uploadedImages)
-                .setTags(tags)
-            
-            if let targetId = targetId {
-                builder.setTargetId(targetId)
-            }
-            
-            if let metadata = metadata {
-                builder.setMetadata(metadata)
-            }
-            
-            postRepository.createPost(builder) { [weak self] result in
-                DispatchQueue.main.async {
-                    switch result {
-                    case .success(let post):
-                        print("Image post created: \(post.postId)")
-                        self?.handlePostCreated(post)
-                        
-                    case .failure(let error):
-                        print("Failed to create image post: \(error)")
-                        self?.handlePostError(error)
-                    }
-                }
-            }
-        }
-        
-        // Create single image post
-        func createSingleImagePost(
-            text: String,
-            image: UIImage,
-            targetType: AmityPostTargetType,
-            targetId: String? = nil
-        ) {
-            createImagePost(
-                text: text,
-                images: [image],
-                targetType: targetType,
-                targetId: targetId
-            )
-        }
-        
-        private func handlePostCreated(_ post: AmityPost) {
-            // Handle success
-        }
-        
-        private func handlePostError(_ error: AmityError) {
-            // Handle error
-        }
-    }
-    ```
-  </Tab>
-  
-  <Tab title="Android">
-    ```kotlin
-    import com.amity.socialcloud.sdk.api.social.AmitySocialClient
-    import com.amity.socialcloud.sdk.model.social.post.AmityPost
-
-    class ImagePostManager(private val client: AmitySocialClient) {
-        
-        fun createImagePost(
-            text: String,
-            imageFiles: List<File>,
-            targetType: AmityPostTargetType,
-            targetId: String? = null,
-            tags: List<String> = emptyList(),
-            metadata: Map<String, Any>? = null
-        ) {
-            // First upload images
-            uploadImages(imageFiles) { uploadedImages ->
-                createPostWithUploadedImages(
-                    text, uploadedImages, targetType, targetId, tags, metadata
-                )
-            }
-        }
-        
-        private fun uploadImages(
-            imageFiles: List<File>,
-            onComplete: (List<AmityUploadResult>) -> Unit
-        ) {
-            val uploads = mutableListOf<AmityUploadResult>()
-            var completed = 0
-            
-            imageFiles.forEach { file ->
-                client.file()
-                    .uploadImage(file)
-                    .subscribe({ uploadResult ->
-                        uploads.add(uploadResult)
-                        completed++
-                        
-                        if (completed == imageFiles.size) {
-                            onComplete(uploads)
-                        }
-                    }, { error ->
-                        println("Failed to upload image: ${error.message}")
-                        completed++
-                        
-                        if (completed == imageFiles.size) {
-                            onComplete(uploads)
-                        }
-                    })
-            }
-        }
-        
-        private fun createPostWithUploadedImages(
-            text: String,
-            uploadedImages: List<AmityUploadResult>,
-            targetType: AmityPostTargetType,
-            targetId: String?,
-            tags: List<String>,
-            metadata: Map<String, Any>?
-        ) {
-            val builder = AmityImagePostBuilder()
-                .setText(text)
-                .setTargetType(targetType)
-                .setImages(uploadedImages)
-                .setTags(tags)
-            
-            targetId?.let { builder.setTargetId(it) }
-            metadata?.let { builder.setMetadata(it) }
-            
-            client.post()
-                .createPost(builder)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    { post ->
-                        println("Image post created: ${post.postId}")
-                        handlePostCreated(post)
-                    },
-                    { error ->
-                        println("Failed to create image post: ${error.message}")
-                        handlePostError(error)
-                    }
-                )
-        }
-        
-        // Create single image post
-        fun createSingleImagePost(
-            text: String,
-            imageFile: File,
-            targetType: AmityPostTargetType,
-            targetId: String? = null
-        ) {
-            createImagePost(
-                text = text,
-                imageFiles = listOf(imageFile),
-                targetType = targetType,
-                targetId = targetId
-            )
-        }
-        
-        // Create image post with compression
-        fun createCompressedImagePost(
-            text: String,
-            imageFiles: List<File>,
-            targetType: AmityPostTargetType,
-            targetId: String? = null,
-            quality: Int = 80
-        ) {
-            val compressedFiles = compressImages(imageFiles, quality)
-            createImagePost(text, compressedFiles, targetType, targetId)
-        }
-        
-        private fun compressImages(files: List<File>, quality: Int): List<File> {
-            // Implement image compression logic
-            return files // Placeholder
-        }
-        
-        private fun handlePostCreated(post: AmityPost) {
-            // Handle success
-        }
-        
-        private fun handlePostError(error: Throwable) {
-            // Handle error
-        }
-    }
-    ```
-  </Tab>
-  
-  <Tab title="TypeScript">
-    ```typescript
-    import { 
-        PostRepository, 
-        FileRepository, 
-        Post, 
-        PostTargetType 
-    } from '@amityco/js-sdk';
-
-    interface ImagePostOptions {
-        text: string;
-        imageFiles: File[];
-        targetType: PostTargetType;
-        targetId?: string;
-        tags?: string[];
-        metadata?: Record<string, any>;
-    }
-
-    class ImagePostManager {
-        private postRepository: PostRepository;
-        private fileRepository: FileRepository;
-        
-        constructor() {
-            this.postRepository = new PostRepository();
-            this.fileRepository = new FileRepository();
-        }
-        
-        async createImagePost(options: ImagePostOptions): Promise<Post> {
-            try {
-                const {
-                    text,
-                    imageFiles,
-                    targetType,
-                    targetId,
-                    tags = [],
-                    metadata
-                } = options;
-                
-                // First upload images
-                const uploadedImages = await this.uploadImages(imageFiles);
-                
-                // Create post with uploaded image IDs
-                const postData = {
-                    dataType: 'image' as const,
-                    targetType,
-                    targetId,
-                    data: {
-                        text,
-                        imageIds: uploadedImages.map(img => img.fileId)
-                    },
-                    tags,
-                    metadata
-                };
-                
-                const post = await this.postRepository.createPost(postData);
-                
-                console.log('Image post created:', post.postId);
-                this.handlePostCreated(post);
-                
-                return post;
-                
-            } catch (error) {
-                console.error('Failed to create image post:', error);
-                this.handlePostError(error);
-                throw error;
-            }
-        }
-        
-        private async uploadImages(files: File[]): Promise<any[]> {
-            const uploadPromises = files.map(file => 
-                this.fileRepository.uploadImage(file)
-            );
-            
-            try {
-                const results = await Promise.all(uploadPromises);
-                return results.filter(result => result.fileId); // Filter successful uploads
-            } catch (error) {
-                console.error('Some images failed to upload:', error);
-                throw error;
-            }
-        }
-        
-        // Create single image post
-        async createSingleImagePost(
-            text: string,
-            imageFile: File,
-            targetType: PostTargetType = 'user',
-            targetId?: string
-        ): Promise<Post> {
-            return this.createImagePost({
-                text,
-                imageFiles: [imageFile],
-                targetType,
-                targetId
-            });
-        }
-        
-        // Create image post with progress tracking
-        async createImagePostWithProgress(
-            options: ImagePostOptions,
-            onProgress?: (progress: number) => void
-        ): Promise<Post> {
-            const { imageFiles } = options;
-            
-            let uploadedCount = 0;
-            const uploadPromises = imageFiles.map(async (file) => {
-                const result = await this.fileRepository.uploadImage(file);
-                uploadedCount++;
-                onProgress?.(uploadedCount / imageFiles.length);
-                return result;
-            });
-            
-            const uploadedImages = await Promise.all(uploadPromises);
-            
-            const postData = {
-                dataType: 'image' as const,
-                targetType: options.targetType,
-                targetId: options.targetId,
-                data: {
-                    text: options.text,
-                    imageIds: uploadedImages.map(img => img.fileId)
-                },
-                tags: options.tags || [],
-                metadata: options.metadata
-            };
-            
-            return this.postRepository.createPost(postData);
-        }
-        
-        private handlePostCreated(post: Post): void {
-            console.log('Image post created successfully:', {
-                id: post.postId,
-                imageCount: post.childrenPosts?.length || 0,
-                createdAt: post.createdAt
-            });
-        }
-        
-        private handlePostError(error: any): void {
-            console.error('Image post creation failed:', error);
-        }
-    }
-    ```
-  </Tab>
-  
-  <Tab title="Flutter">
-    ```dart
-    import 'package:amity_sdk/amity_sdk.dart';
-    import 'dart:io';
-
-    class ImagePostManager {
-        final AmitySocialClient _socialClient;
-        
-        ImagePostManager(this._socialClient);
-        
-        Future<AmityPost> createImagePost({
-            required String text,
-            required List<File> imageFiles,
-            required AmityPostTargetType targetType,
-            String? targetId,
-            List<String> tags = const [],
-            Map<String, dynamic>? metadata,
-        }) async {
-            try {
-                // First upload images
-                final uploadedImages = await _uploadImages(imageFiles);
-                
-                // Create post with uploaded images
-                final builder = AmityImagePostBuilder()
-                    ..setText(text)
-                    ..setTargetType(targetType)
-                    ..setImages(uploadedImages)
-                    ..setTags(tags);
-                
-                if (targetId != null) {
-                    builder.setTargetId(targetId);
-                }
-                
-                if (metadata != null) {
-                    builder.setMetadata(metadata);
-                }
-                
-                final post = await _socialClient
-                    .newPostRepository()
-                    .createPost(builder);
-                
-                print('Image post created: ${post.postId}');
-                _handlePostCreated(post);
-                
-                return post;
-                
-            } catch (error) {
-                print('Failed to create image post: $error');
-                _handlePostError(error);
-                rethrow;
-            }
-        }
-        
-        Future<List<AmityUploadResult>> _uploadImages(List<File> imageFiles) async {
-            final List<Future<AmityUploadResult>> uploadFutures = imageFiles
-                .map((file) => _socialClient.newFileRepository().uploadImage(file))
-                .toList();
-            
-            try {
-                final results = await Future.wait(uploadFutures);
-                return results.where((result) => result.fileId != null).toList();
-            } catch (error) {
-                print('Some images failed to upload: $error');
-                rethrow;
-            }
-        }
-        
-        // Create single image post
-        Future<AmityPost> createSingleImagePost(
-            String text,
-            File imageFile, {
-            AmityPostTargetType targetType = AmityPostTargetType.USER,
-            String? targetId,
-        }) async {
-            return createImagePost(
-                text: text,
-                imageFiles: [imageFile],
-                targetType: targetType,
-                targetId: targetId,
-            );
-        }
-        
-        // Create image post with compression
-        Future<AmityPost> createCompressedImagePost({
-            required String text,
-            required List<File> imageFiles,
-            required AmityPostTargetType targetType,
-            String? targetId,
-            int quality = 80,
-        }) async {
-            // Compress images before upload
-            final compressedFiles = await _compressImages(imageFiles, quality);
-            
-            return createImagePost(
-                text: text,
-                imageFiles: compressedFiles,
-                targetType: targetType,
-                targetId: targetId,
-            );
-        }
-        
-        Future<List<File>> _compressImages(List<File> files, int quality) async {
-            // Implement image compression logic
-            // This is a placeholder - use image compression package
-            return files;
-        }
-        
-        // Create image post with progress callback
-        Future<AmityPost> createImagePostWithProgress({
-            required String text,
-            required List<File> imageFiles,
-            required AmityPostTargetType targetType,
-            String? targetId,
-            Function(double progress)? onProgress,
-        }) async {
-            try {
-                int uploadedCount = 0;
-                final uploadedImages = <AmityUploadResult>[];
-                
-                for (final file in imageFiles) {
-                    final result = await _socialClient
-                        .newFileRepository()
-                        .uploadImage(file);
-                    
-                    uploadedImages.add(result);
-                    uploadedCount++;
-                    
-                    onProgress?.call(uploadedCount / imageFiles.length);
-                }
-                
-                final builder = AmityImagePostBuilder()
-                    ..setText(text)
-                    ..setTargetType(targetType)
-                    ..setImages(uploadedImages);
-                
-                if (targetId != null) {
-                    builder.setTargetId(targetId);
-                }
-                
-                return await _socialClient
-                    .newPostRepository()
-                    .createPost(builder);
-                    
-            } catch (error) {
-                print('Failed to create image post with progress: $error');
-                rethrow;
-            }
-        }
-        
-        void _handlePostCreated(AmityPost post) {
-            print('Image post created successfully: ${post.postId}');
-        }
-        
-        void _handlePostError(dynamic error) {
-            print('Image post creation failed: $error');
-        }
-    }
-    ```
-  </Tab>
-</Tabs>
+<Steps>
+  <Step title="Upload Images">
+    Use the File Repository to upload your images and get file IDs
+  </Step>
+  <Step title="Create Post">
+    Use the file IDs in your post creation request
+  </Step>
+  <Step title="Handle Response">
+    The post will contain parent and child posts for each image
+  </Step>
+</Steps>
 
 ## Parameters
 
@@ -588,150 +57,91 @@ Images must be uploaded first before creating the post. See [Image Handling](../
 | `tags` | Array\<String\> | ❌ | Tags for categorization |
 | `metadata` | Object | ❌ | Custom metadata |
 
-## Image Requirements
 
-| Requirement | Limit | Notes |
-|-------------|-------|-------|
-| **File Size** | Up to 1GB per image | Platform may have lower limits |
-| **Image Count** | Maximum 10 images | Per single post |
-| **File Formats** | JPEG, PNG, GIF, WebP | Platform dependent |
-| **Resolution** | No fixed limit | Higher resolution = larger file size |
+<CodeGroup>
+```swift iOS
+func createImagePostExample(images: [AmityImageData], text: String) async {
+    // Build your post structure
+    let builder = AmityImagePostBuilder()
+    builder.setText(text)
+    builder.setImages(images)
+    // Create a post from the builder
+    do {
+        let post = try await postRepository.createImagePost(builder, targetId: nil, targetType: .user, metadata: nil, mentionees: nil)
+    } catch {
+        // Handle error here
+    }
+}
+```
 
-## Advanced Features
-
-### Image Optimization
-
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    // Resize image before upload
-    func resizeImage(_ image: UIImage, targetSize: CGSize) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
+```kotlin Android
+fun createImagePost(
+    postRepository: AmityPostRepository,
+    uploadedImage1: AmityImage,
+    uploadedImage2: AmityImage
+) {
+    postRepository.createPost()
+        .targetUser(userId = "user1")
+        .image(images = arrayOf(uploadedImage1, uploadedImage2))
+        .text("new image post!")
+        .build()
+        .post()
+        .doOnSuccess { amityPost: AmityPost ->
+            //success
         }
-    }
-    
-    // Create post with optimized images
-    let optimizedImages = originalImages.map { image in
-        resizeImage(image, targetSize: CGSize(width: 1080, height: 1080))
-    }
-    
-    imagePostManager.createImagePost(
-        text: "Beautiful sunset!",
-        images: optimizedImages,
-        targetType: .community,
-        targetId: "photography"
-    )
-    ```
-  </Tab>
-  
-  <Tab title="Android">
-    ```kotlin
-    // Compress image before upload
-    fun compressImage(file: File, quality: Int = 80): File {
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
-        
-        val compressedFile = File(file.parent, "compressed_${file.name}")
-        FileOutputStream(compressedFile).use { fos ->
-            fos.write(outputStream.toByteArray())
-        }
-        
-        return compressedFile
-    }
-    
-    // Create post with compressed images
-    val compressedImages = imageFiles.map { compressImage(it, 80) }
-    
-    imagePostManager.createImagePost(
-        text = "Beautiful sunset!",
-        imageFiles = compressedImages,
-        targetType = AmityPostTargetType.COMMUNITY,
-        targetId = "photography"
-    )
-    ```
-  </Tab>
-  
-  <Tab title="TypeScript">
-    ```typescript
-    // Resize image before upload
-    function resizeImage(file: File, maxWidth: number, maxHeight: number): Promise<File> {
-        return new Promise((resolve) => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d')!;
-            const img = new Image();
-            
-            img.onload = () => {
-                const { width, height } = calculateNewDimensions(
-                    img.width, img.height, maxWidth, maxHeight
-                );
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                canvas.toBlob((blob) => {
-                    const newFile = new File([blob!], file.name, { type: 'image/jpeg' });
-                    resolve(newFile);
-                }, 'image/jpeg', 0.8);
-            };
-            
-            img.src = URL.createObjectURL(file);
-        });
-    }
-    
-    // Create post with optimized images
-    const optimizedImages = await Promise.all(
-        imageFiles.map(file => resizeImage(file, 1080, 1080))
-    );
-    
-    await imagePostManager.createImagePost({
-        text: "Beautiful sunset!",
-        imageFiles: optimizedImages,
-        targetType: 'community',
-        targetId: 'photography'
-    });
-    ```
-  </Tab>
-  
-  <Tab title="Flutter">
-    ```dart
-    import 'package:image/image.dart' as img;
-    
-    // Compress image before upload
-    Future<File> compressImage(File file, {int quality = 80}) async {
-        final bytes = await file.readAsBytes();
-        final image = img.decodeImage(bytes);
-        
-        if (image == null) return file;
-        
-        final compressedBytes = img.encodeJpg(image, quality: quality);
-        
-        final compressedFile = File('${file.path}_compressed.jpg');
-        await compressedFile.writeAsBytes(compressedBytes);
-        
-        return compressedFile;
-    }
-    
-    // Create post with compressed images
-    final compressedImages = <File>[];
-    for (final file in imageFiles) {
-        final compressed = await compressImage(file, quality: 80);
-        compressedImages.add(compressed);
-    }
-    
-    await imagePostManager.createImagePost(
-        text: "Beautiful sunset!",
-        imageFiles: compressedImages,
-        targetType: AmityPostTargetType.COMMUNITY,
-        targetId: 'photography',
-    );
-    ```
-  </Tab>
-</Tabs>
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { PostRepository, PostContentType } from '@amityco/ts-sdk';
+
+async function createImagePost(): Promise<Amity.Post> {
+  const newPost = {
+    tags: ['a', 'b'], // optional, max no.of tags = 5, max length per tag = 24 chars
+    data: {
+      text: 'hello!',
+    },
+    attachments: [
+      { type: PostContentType.IMAGE, fileId: 'imageFileId1' },
+      { type: PostContentType.IMAGE, fileId: 'imageFileId2' },
+    ],
+    targetType: 'user',
+    targetId: 'userId1',
+  };
+
+  const { data: post } = await PostRepository.createPost(newPost);
+
+  return post;
+}
+```
+
+```dart Flutter
+//current post collection from feed repository
+late PagingController<AmityPost> _controller;
+
+void createImagePost(AmityImage uploadedImage) {
+  AmitySocialClient.newPostRepository()
+      .createPost()
+      .targetUser('userId') // or targetMe(), targetCommunity(communityId: String)
+      .image([uploadedImage])
+      .text('Hello from flutter with image!')
+      .post()
+      .then((AmityPost post) => {
+            //handle result
+            //optional: to present the created post in to the current post collection
+            //you will need manually put the newly created post in to the collection
+            //for example :
+            _controller.add(post)
+          })
+      .onError((error, stackTrace) => {
+            //handle error
+          });
+}
+```
+
+
+</CodeGroup>
 
 ## Best Practices
 
@@ -758,6 +168,75 @@ Images must be uploaded first before creating the post. See [Image Handling](../
   </Accordion>
 </AccordionGroup>
 
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Image Upload Failures" icon="upload">
+    **Problem**: Images fail to upload or post creation fails
+    
+    **Solutions**:
+    - Check file size (must be under 100MB per image)
+    - Verify supported format (JPEG, PNG, WebP)
+    - Ensure stable internet connection
+    - Implement retry logic with exponential backoff
+    
+    ```typescript
+    try {
+      const fileId = await FileRepository.uploadImage(imageFile);
+      // Proceed with post creation
+    } catch (error) {
+      if (error.code === 'FILE_TOO_LARGE') {
+        // Compress image and retry
+      } else if (error.code === 'NETWORK_ERROR') {
+        // Implement retry logic
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Image Quality Issues" icon="image">
+    **Problem**: Images appear blurry or low quality
+    
+    **Solutions**:
+    - Upload images at optimal resolution (1080x1080 or higher)
+    - Avoid excessive compression before upload
+    - Use appropriate file formats (JPEG for photos, PNG for graphics)
+    
+    ```typescript
+    // Recommended image dimensions
+    const optimalDimensions = {
+      square: { width: 1080, height: 1080 },
+      landscape: { width: 1200, height: 630 },
+      portrait: { width: 1080, height: 1350 }
+    };
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory Issues" icon="memory">
+    **Problem**: App crashes or becomes slow with large images
+    
+    **Solutions**:
+    - Implement image compression before upload
+    - Use image loading libraries with memory management
+    - Resize images to appropriate dimensions
+    - Clear image cache periodically
+    
+    ```typescript
+    // Example: Compress image before upload
+    const compressedImage = await compressImage(originalImage, {
+      maxWidth: 1200,
+      maxHeight: 1200,
+      quality: 0.8
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+
+<Info>
+**Parent-Child Structure**: When you upload multiple images, the main post becomes the parent, and each image creates a child post that users can individually react to and comment on.
+</Info>
+
 ## Common Use Cases
 
 - **Photo Sharing**: Share personal photos and memories
@@ -766,3 +245,21 @@ Images must be uploaded first before creating the post. See [Image Handling](../
 - **Before/After Comparisons**: Show transformations or progress
 - **Step-by-Step Guides**: Visual tutorials and instructions
 - **Gallery Posts**: Curated collections of related images
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Image Upload" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling" icon="upload">
+    Learn how to upload and manage images before creating posts
+  </Card>
+  <Card title="Text Posts" href="./text-post" icon="text">
+    Create text-based posts with mentions and hashtags
+  </Card>
+  <Card title="Video Posts" href="./video-post" icon="video">
+    Share video content and multimedia experiences
+  </Card>
+</CardGroup>
+
+
+
+
