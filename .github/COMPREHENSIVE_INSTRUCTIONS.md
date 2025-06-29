@@ -285,7 +285,7 @@ Brief introduction explaining the feature's purpose and key benefits.
   <Step title="Step 2">
     Second step building on the first
   </Step>
-  <Step title="Step 3">
+  <Step title="Final Step">
     Final step to complete basic implementation
   </Step>
 </Steps>
@@ -334,6 +334,20 @@ Brief introduction explaining the feature's purpose and key benefits.
 ## Troubleshooting
 
 Common issues and their solutions
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Related Feature 1" href="./related-feature-1" icon="icon-name">
+    Brief description of how this feature relates or builds upon the current topic
+  </Card>
+  <Card title="Related Feature 2" href="./related-feature-2" icon="icon-name">
+    Another related feature that users might want to explore next
+  </Card>
+  <Card title="Related Feature 3" href="./related-feature-3" icon="icon-name">
+    Third related topic that complements the current functionality
+  </Card>
+</CardGroup>
 ```
 
 ---
@@ -683,7 +697,7 @@ Brief introduction explaining what the component does and its main benefits.
   </Tab>
 </Tabs>
 
-## Configuration Options
+## Parameters
 
 <AccordionGroup>
   <Accordion title="Required Props" icon="star">
@@ -813,6 +827,20 @@ Brief introduction explaining what the component does and its main benefits.
     4. Monitor memory usage and implement proper cleanup
   </Accordion>
 </AccordionGroup>
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Related Feature 1" href="./related-feature-1" icon="icon-name">
+    Brief description of how this feature relates or builds upon the current topic
+  </Card>
+  <Card title="Related Feature 2" href="./related-feature-2" icon="icon-name">
+    Another related feature that users might want to explore next
+  </Card>
+  <Card title="Related Feature 3" href="./related-feature-3" icon="icon-name">
+    Third related topic that complements the current functionality
+  </Card>
+</CardGroup>
 ```
 
 ### **Landing Page Standards**
@@ -954,7 +982,14 @@ Brief explanation of the feature, its purpose, and key benefits.
 
 ## Parameters
 
-[Comprehensive parameter documentation with AccordionGroup]
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `text` | String | ✅ | Text content (max 20,000 characters) |
+| `targetType` | Enum | ✅ | Target type (`user` or `community`) |
+| `targetId` | String | ❌ | Target ID (null for own feed) |
+| `tags` | Array\<String\> | ❌ | Tags for categorization and search |
+| `metadata` | Object | ❌ | Custom metadata for the post |
+| `mentionUsers` | Array\<String\> | ❌ | User IDs to mention in the post |
 
 ## Best Practices
 
