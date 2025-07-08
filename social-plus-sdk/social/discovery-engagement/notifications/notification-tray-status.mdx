@@ -1,0 +1,452 @@
+---
+title: "Notification Tray Status"
+description: "Manage notification tray seen status with get and mark operations for accurate read/unread indicators across devices"
+---
+
+Notification tray status management provides essential functionality for tracking whether users have seen their notifications. This enables accurate badge counts, notification indicators, and cross-device synchronization in your app.
+
+<CardGroup cols={2}>
+  <Card title="Get Tray Status" icon="eye">
+    Retrieve current seen status to show/hide notification badges
+  </Card>
+  <Card title="Mark as Seen" icon="check">
+    Update tray status when users view their notifications
+  </Card>
+  <Card title="Cross-Device Sync" icon="rotate">
+    Server-managed state ensures consistency across all user sessions
+  </Card>
+  <Card title="Real-time Updates" icon="clock">
+    LiveObject observation provides immediate local updates
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Status Tracking
+- **Global tray-level seen status** - Track whether the entire notification tray has been viewed
+- **Server-managed timestamps** - Reliable `lastTraySeenAt` and `lastTrayOccurredAt` tracking
+- **Cross-device consistency** - Seen status synchronizes across all user devices
+
+### Real-time Updates
+- **LiveObject observation** - Immediate local updates when status changes
+- **Optimal refresh strategy** - Get updated status when returning to app
+- **Smart polling** - Optional background refresh strategies
+
+## Status Data Model
+
+The notification tray status contains three key properties:
+
+<Tabs>
+  <Tab title="Properties">
+    | Property | Type | Description |
+    |----------|------|-------------|
+    | `isSeen` | `Boolean` | Whether the tray has been seen since the last notification |
+    | `lastTraySeenAt` | `Datetime` | Timestamp when the tray was last marked as seen |
+    | `lastTrayOccurredAt` | `Datetime` | Timestamp when the most recent notification occurred |
+  </Tab>
+  
+  <Tab title="Usage Examples">
+    ```javascript
+    // Badge visibility logic
+    const showBadge = !status.isSeen;
+    
+    // Time-based logic
+    const hasNewNotifications = status.lastTrayOccurredAt > status.lastTraySeenAt;
+    
+    // User engagement tracking
+    const timeSinceLastSeen = Date.now() - status.lastTraySeenAt;
+    ```
+  </Tab>
+  
+  <Tab title="State Logic">
+    **Common Status Patterns**
+    ```javascript
+    // Check if user has unseen notifications
+    const hasUnseenNotifications = !isSeen;
+    
+    // Determine badge count
+    const badgeCount = isSeen ? 0 : getUnreadItemCount();
+    
+    // Show last activity
+    const lastActivity = lastTrayOccurredAt > lastTraySeenAt 
+      ? 'New notifications available'
+      : 'All caught up';
+    ```
+  </Tab>
+</Tabs>
+
+## Core SDK Methods
+
+<Tabs>
+  <Tab title="Get Tray Status">
+  <CodeGroup>
+  ```swift iOS
+  token = client.notificationTray.getNotificationTraySeen().observe({ liveObject, error in
+    
+    guard let snapshot = liveObject.snapshot else { return }
+    // Usage
+    // snapshot.lastTraySeenAt
+    // snapshot.lastTrayOccurredAt
+    // snapshot.isSeen
+})
+  ```
+
+  ```kotlin Android
+  fun getNotificationTraySeen() {
+    AmityCoreClient
+        .notificationTray()
+        .getNotificationTraySeen()
+        .doOnNext { notificationTraySeen ->
+            // AmityNotificationTraySeen
+        }
+        .doOnError {
+            // Exception
+        }.subscribe()
+}
+  ```
+
+  ```typescript TypeScript
+  import { notificationTray } from '@amityco/ts-sdk';
+
+async function getNotificationTraySeen() {
+  const getNotificationTraySeen = await notificationTray.getNotificationTraySeen(
+    ({ data: notificationTraySeen, loading, error }) => {
+      // Callback function to trigger
+      if (!loading && notificationTraySeen) {
+        console.log(notificationTraySeen);
+      }
+
+      if (error) {
+        // handle error
+      }
+    },
+  );
+
+  return getNotificationTraySeen;
+}
+  ```
+
+  </CodeGroup>
+  </Tab>
+
+  <Tab title="Mark as Seen">
+  <CodeGroup>
+  ```swift iOS
+  Task { @MainActor in
+    try await client.notificationTray.markSeen()
+}
+  ```
+
+  ```kotlin Android
+  fun markNotificationTraySeen() {
+     AmityCoreClient.notificationTray().markTraySeen()
+         .doOnComplete {
+             // Marked as seen.
+         }
+         .doOnError {
+             // Exception
+         }
+         .subscribe()
+}
+  ```
+
+  ```typescript TypeScript
+import { notificationTray } from '@amityco/ts-sdk';
+
+async function markTraySeen(lastSeenAt: string) {
+  // lastSeenAt is the timestamp of when the tray was last seen example format is "2025-04-22T11:26:54.441622000Z"
+  const markTraySeen = await notificationTray.markTraySeen(lastSeenAt);
+
+  return markTraySeen;
+}
+  ```
+
+  </CodeGroup>
+  </Tab>
+</Tabs>
+
+## Implementation Workflow
+
+<AccordionGroup>
+  <Accordion title="Complete Workflow" icon="arrow-progress">
+    **Typical Implementation Pattern**
+    
+    ```javascript
+    class NotificationTrayManager {
+      constructor() {
+        this.unsubscribe = null;
+      }
+      
+      async initialize() {
+        // 1. Get current status on app launch
+        await this.subscribeToStatus();
+        
+        // 2. Setup app lifecycle listeners
+        this.setupAppStateListeners();
+      }
+      
+      async subscribeToStatus() {
+        this.unsubscribe = await getNotificationTraySeen(
+          ({ data: status, loading, error }) => {
+            if (!loading && status) {
+              this.updateUI(status);
+            }
+          }
+        );
+      }
+      
+      async openNotificationTray() {
+        // 3. Mark as seen when tray is opened
+        await this.markAsSeen();
+      }
+      
+      async markAsSeen() {
+        try {
+          const timestamp = new Date().toISOString();
+          await markTraySeen(timestamp);
+          
+          // UI updates automatically via LiveObject
+        } catch (error) {
+          console.error('Failed to mark as seen:', error);
+        }
+      }
+      
+      updateUI(status) {
+        // Update badge visibility
+        const showBadge = !status.isSeen;
+        this.updateBadgeVisibility(showBadge);
+        
+        // Update last activity display
+        this.updateLastActivity(status);
+      }
+      
+      cleanup() {
+        if (this.unsubscribe) {
+          this.unsubscribe();
+        }
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="App Lifecycle Integration" icon="mobile">
+    **Handle App State Changes**
+    
+    ```javascript
+    class AppStateManager {
+      constructor(trayManager) {
+        this.trayManager = trayManager;
+        this.setupListeners();
+      }
+      
+      setupListeners() {
+        // React Native
+        AppState.addEventListener('change', this.handleAppStateChange);
+        
+        // Web
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
+      }
+      
+      handleAppStateChange = (nextAppState) => {
+        if (nextAppState === 'active') {
+          // App became active - refresh status
+          this.trayManager.refreshStatus();
+        }
+      };
+      
+      handleVisibilityChange = () => {
+        if (!document.hidden) {
+          // Page became visible - refresh status
+          this.trayManager.refreshStatus();
+        }
+      };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Error Handling & Retry" icon="shield">
+    **Robust Error Handling**
+    
+    ```javascript
+    class TrayStatusManager {
+      async safeMarkAsSeen(retryCount = 0) {
+        const maxRetries = 3;
+        
+        try {
+          const timestamp = new Date().toISOString();
+          await markTraySeen(timestamp);
+          
+          // Success - update UI
+          this.updateBadgeVisibility(false);
+          
+        } catch (error) {
+          console.error('Failed to mark tray as seen:', error);
+          
+          if (retryCount < maxRetries) {
+            // Retry with exponential backoff
+            const delay = Math.pow(2, retryCount) * 1000;
+            setTimeout(() => {
+              this.safeMarkAsSeen(retryCount + 1);
+            }, delay);
+          } else {
+            // Max retries reached - handle gracefully
+            this.handleMarkSeenFailure();
+          }
+        }
+      }
+      
+      handleMarkSeenFailure() {
+        // Update UI optimistically
+        this.updateBadgeVisibility(false);
+        
+        // Show user feedback
+        this.showErrorMessage('Failed to update notification status');
+        
+        // Schedule retry for later
+        setTimeout(() => this.safeMarkAsSeen(), 30000);
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Refresh Strategies
+
+<Tabs>
+  <Tab title="On-Demand (Recommended)">
+    **When to Use**
+    - App launch and foreground transitions
+    - User-initiated refresh actions
+    - Navigation to notification tray
+    - After marking notifications as seen
+    
+    **Implementation**
+    ```javascript
+    class OnDemandRefresh {
+      async refreshOnAppLaunch() {
+        // Get status when app starts
+        await this.getStatus();
+      }
+      
+      async refreshOnTrayOpen() {
+        // Refresh before showing tray
+        await this.getStatus();
+        
+        // Mark as seen after tray is displayed
+        await this.markAsSeen();
+      }
+      
+      async refreshOnPullToRefresh() {
+        // User-initiated refresh
+        await this.getStatus();
+      }
+    }
+    ```
+    
+    **Benefits**
+    - Reduces server load
+    - Provides up-to-date status when needed
+    - Better user experience with immediate feedback
+    - No unnecessary background requests
+  </Tab>
+
+  <Tab title="Periodic Refresh">
+    **When to Use**
+    - Long-running background applications
+    - Critical notification systems
+    - When real-time accuracy is essential
+    
+    **Implementation**
+    ```javascript
+    class PeriodicRefresh {
+      constructor() {
+        this.interval = null;
+        this.REFRESH_INTERVAL = 120000; // 2 minutes minimum
+      }
+      
+      startPeriodicRefresh() {
+        this.interval = setInterval(() => {
+          this.refreshStatus();
+        }, this.REFRESH_INTERVAL);
+      }
+      
+      stopPeriodicRefresh() {
+        if (this.interval) {
+          clearInterval(this.interval);
+          this.interval = null;
+        }
+      }
+      
+      async refreshStatus() {
+        try {
+          await getNotificationTraySeen();
+        } catch (error) {
+          console.error('Periodic refresh failed:', error);
+        }
+      }
+    }
+    ```
+    
+    **⚠️ Important Considerations**
+    - Minimum interval: 120 seconds
+    - Risk of server rate limiting
+    - Increased battery usage
+    - Should be used sparingly
+  </Tab>
+
+  <Tab title="Smart Refresh">
+    **Adaptive Strategy**
+    ```javascript
+    class SmartRefresh {
+      constructor() {
+        this.isAppActive = true;
+        this.hasActiveNotifications = false;
+        this.lastRefresh = null;
+      }
+      
+      async smartRefresh() {
+        const now = Date.now();
+        const timeSinceLastRefresh = now - (this.lastRefresh || 0);
+        
+        // Only refresh if enough time has passed
+        if (timeSinceLastRefresh < 60000) return; // 1 minute
+        
+        // Refresh based on app state
+        if (this.shouldRefresh()) {
+          await this.refreshStatus();
+          this.lastRefresh = now;
+        }
+      }
+      
+      shouldRefresh() {
+        return this.isAppActive && (
+          this.hasActiveNotifications || 
+          this.userRecentlyActive()
+        );
+      }
+      
+      userRecentlyActive() {
+        // Check if user has interacted with app recently
+        return this.lastUserInteraction > Date.now() - 300000; // 5 minutes
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Notification Overview" href="./overview" icon="bell">
+    Complete guide to notification tray implementation
+  </Card>
+  <Card title="Notification Items" href="./notification-items" icon="list">
+    Query and manage individual notification items
+  </Card>
+  <Card title="Notification Events" href="./notification-events-reference" icon="bolt">
+    Reference for notification event types and triggers
+  </Card>
+  <Card title="Real-time Updates" href="../realtime-communication" icon="clock">
+    Learn about LiveObject and real-time communication
+  </Card>
+</CardGroup>
