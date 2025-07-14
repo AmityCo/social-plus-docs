@@ -1,0 +1,794 @@
+---
+title: "Android Platform Guide"
+description: "Advanced Android-specific features, optimizations, and best practices for Social+ UIKit"
+icon: "android"
+---
+
+# Android Platform Guide
+
+This guide covers Android-specific features, optimizations, and advanced configurations for Social+ UIKit. For basic installation, see our [Installation Guide](/uikit/getting-started/installation#android).
+
+<Info>
+**Prerequisites**: Android 5.0+ (API 21), Kotlin support, Data Binding enabled. Ensure you've completed the basic installation before following these advanced guides.
+</Info>
+
+## Advanced Installation & Configuration
+
+### 🔧 **Build Variants & Flavors**
+
+Configure UIKit for different build environments:
+
+<Tabs>
+  <Tab title="Debug Configuration">
+    ```kotlin
+    // Application class - Debug setup
+    class DebugApplication : Application() {
+        override fun onCreate() {
+            super.onCreate()
+            
+            if (BuildConfig.DEBUG) {
+                AmityUIKitClient.setup(
+                    context = this,
+                    apiKey = "DEBUG_API_KEY",
+                    region = AmityRegion.US,
+                    enableLogging = true
+                )
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Release Configuration">
+    ```kotlin
+    // Application class - Production setup
+    class ProductionApplication : Application() {
+        override fun onCreate() {
+            super.onCreate()
+            
+            AmityUIKitClient.setup(
+                context = this,
+                apiKey = "PRODUCTION_API_KEY",
+                region = AmityRegion.US,
+                enableLogging = false
+            )
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Gradle Build Types">
+    ```gradle
+    // app/build.gradle
+    android {
+        buildTypes {
+            debug {
+                buildConfigField "String", "AMITY_API_KEY", "\"DEBUG_API_KEY\""
+                buildConfigField "String", "AMITY_REGION", "\"US\""
+                debuggable true
+            }
+            
+            release {
+                buildConfigField "String", "AMITY_API_KEY", "\"PRODUCTION_API_KEY\""
+                buildConfigField "String", "AMITY_REGION", "\"US\""
+                minifyEnabled true
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            }
+            
+            staging {
+                buildConfigField "String", "AMITY_API_KEY", "\"STAGING_API_KEY\""
+                buildConfigField "String", "AMITY_REGION", "\"EU\""
+                debuggable true
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 🎯 **Performance Optimizations**
+
+#### Memory Management
+```kotlin
+class ChatActivity : AppCompatActivity() {
+    private var chatFragment: AmityChatFragment? = null
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_chat)
+        
+        setupChatFragment()
+    }
+    
+    private fun setupChatFragment() {
+        chatFragment = AmityChatFragment.newInstance()
+        
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, chatFragment!!)
+            .commit()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Proper cleanup
+        chatFragment?.cleanup()
+        chatFragment = null
+    }
+}
+```
+
+#### Proguard Configuration
+```proguard
+# proguard-rules.pro
+-keep class co.amity.** { *; }
+-keep class com.amity.** { *; }
+-dontwarn co.amity.**
+-dontwarn com.amity.**
+
+# Realm
+-keep class io.realm.annotations.RealmModule
+-keep @io.realm.annotations.RealmModule class *
+-keep class io.realm.internal.Keep
+-keep @io.realm.internal.Keep class *
+-dontwarn javax.**
+-dontwarn io.realm.**
+```
+
+#### Image Loading Optimization
+```kotlin
+// Configure Glide for better performance
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        // Setup UIKit with custom image loader
+        AmityUIKitClient.setup(
+            context = this,
+            apiKey = BuildConfig.AMITY_API_KEY,
+            region = AmityRegion.valueOf(BuildConfig.AMITY_REGION),
+            imageLoader = CustomImageLoader()
+        )
+    }
+}
+
+class CustomImageLoader : AmityImageLoader {
+    override fun loadImage(imageView: ImageView, url: String, placeholder: Int) {
+        Glide.with(imageView.context)
+            .load(url)
+            .placeholder(placeholder)
+            .error(R.drawable.error_placeholder)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .into(imageView)
+    }
+}
+```
+
+---
+
+## Android-Specific Features
+
+### 📱 **Native Android Integrations**
+
+#### Push Notifications (FCM)
+```kotlin
+// FirebaseMessagingService integration
+class MyFirebaseMessagingService : FirebaseMessagingService() {
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        super.onMessageReceived(remoteMessage)
+        
+        // Check if message is from Amity
+        if (AmityUIKitClient.isAmityNotification(remoteMessage)) {
+            AmityUIKitClient.handleNotification(this, remoteMessage)
+        } else {
+            // Handle other notifications
+            handleCustomNotification(remoteMessage)
+        }
+    }
+    
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        
+        // Register FCM token with Amity
+        AmityUIKitClient.registerFCMToken(token)
+    }
+}
+```
+
+#### Background Processing
+```kotlin
+// Handle background states
+class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
+    private var activityCount = 0
+    
+    override fun onCreate() {
+        super.onCreate()
+        registerActivityLifecycleCallbacks(this)
+        AmityUIKitClient.setup(this, apiKey, region)
+    }
+    
+    override fun onActivityStarted(activity: Activity) {
+        activityCount++
+        if (activityCount == 1) {
+            // App came to foreground
+            AmityUIKitClient.onAppForeground()
+        }
+    }
+    
+    override fun onActivityStopped(activity: Activity) {
+        activityCount--
+        if (activityCount == 0) {
+            // App went to background
+            AmityUIKitClient.onAppBackground()
+        }
+    }
+}
+```
+
+#### Deep Linking
+```kotlin
+// Handle deep links to UIKit components
+class DeepLinkActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        handleDeepLink(intent)
+    }
+    
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { handleDeepLink(it) }
+    }
+    
+    private fun handleDeepLink(intent: Intent) {
+        val data = intent.data
+        when (data?.pathSegments?.firstOrNull()) {
+            "chat" -> {
+                val conversationId = data.getQueryParameter("id")
+                openConversation(conversationId)
+            }
+            "community" -> {
+                val communityId = data.getQueryParameter("id")
+                openCommunity(communityId)
+            }
+            "profile" -> {
+                val userId = data.getQueryParameter("id")
+                openUserProfile(userId)
+            }
+        }
+    }
+    
+    private fun openConversation(conversationId: String?) {
+        conversationId?.let {
+            val fragment = AmityConversationFragment.newInstance(it)
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.container, fragment)
+                .commit()
+        }
+    }
+}
+```
+
+### 🎨 **Material Design Integration**
+
+#### Theme Integration
+```kotlin
+// Integrate with Material Design themes
+class ThemedActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Apply Material Design theme to UIKit
+        val materialTheme = AmityTheme.Builder()
+            .primaryColor(ContextCompat.getColor(this, R.color.colorPrimary))
+            .secondaryColor(ContextCompat.getColor(this, R.color.colorSecondary))
+            .backgroundColor(ContextCompat.getColor(this, R.color.colorBackground))
+            .surfaceColor(ContextCompat.getColor(this, R.color.colorSurface))
+            .build()
+            
+        AmityUIKitClient.setTheme(materialTheme)
+    }
+}
+```
+
+#### Dark Theme Support
+```kotlin
+// Automatic dark theme detection
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Detect system theme
+        val isDarkMode = when (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
+            Configuration.UI_MODE_NIGHT_YES -> true
+            else -> false
+        }
+        
+        AmityUIKitClient.setThemeMode(if (isDarkMode) AmityThemeMode.DARK else AmityThemeMode.LIGHT)
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        
+        // Handle theme changes
+        val isDarkMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        AmityUIKitClient.setThemeMode(if (isDarkMode) AmityThemeMode.DARK else AmityThemeMode.LIGHT)
+    }
+}
+```
+
+#### Adaptive Layout
+```xml
+<!-- res/layout/activity_main.xml -->
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize" />
+            
+    </com.google.android.material.appbar.AppBarLayout>
+    
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+        
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
+```
+
+---
+
+## Advanced Customization
+
+### 🎭 **Custom Styling**
+
+#### Custom Attributes
+```xml
+<!-- res/values/attrs.xml -->
+<resources>
+    <declare-styleable name="AmityTheme">
+        <attr name="amityPrimaryColor" format="color" />
+        <attr name="amitySecondaryColor" format="color" />
+        <attr name="amityBackgroundColor" format="color" />
+        <attr name="amityTextColor" format="color" />
+        <attr name="amityBorderRadius" format="dimension" />
+    </declare-styleable>
+</resources>
+
+<!-- res/values/styles.xml -->
+<style name="CustomAmityTheme" parent="Theme.MaterialComponents.DayNight">
+    <item name="amityPrimaryColor">@color/brand_primary</item>
+    <item name="amitySecondaryColor">@color/brand_secondary</item>
+    <item name="amityBackgroundColor">@color/brand_background</item>
+    <item name="amityTextColor">@color/brand_text</item>
+    <item name="amityBorderRadius">8dp</item>
+</style>
+```
+
+#### Custom Components
+```kotlin
+// Custom RecyclerView Adapter
+class CustomPostAdapter : AmityPostAdapter() {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return when (viewType) {
+            POST_TYPE_TEXT -> CustomTextPostViewHolder(
+                LayoutInflater.from(parent.context).inflate(R.layout.custom_text_post, parent, false)
+            )
+            POST_TYPE_IMAGE -> CustomImagePostViewHolder(
+                LayoutInflater.from(parent.context).inflate(R.layout.custom_image_post, parent, false)
+            )
+            else -> super.onCreateViewHolder(parent, viewType)
+        }
+    }
+}
+
+class CustomTextPostViewHolder(itemView: View) : AmityPostViewHolder(itemView) {
+    override fun bind(post: AmityPost) {
+        super.bind(post)
+        
+        // Custom binding logic
+        itemView.setBackgroundResource(R.drawable.custom_post_background)
+        // Add custom animations, styling, etc.
+    }
+}
+```
+
+### 🔧 **Component Extensions**
+
+#### Custom Fragment Extensions
+```kotlin
+// Extended fragment with custom features
+class EnhancedChatFragment : AmityChatFragment() {
+    
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        
+        setupCustomFeatures()
+    }
+    
+    private fun setupCustomFeatures() {
+        // Add custom FAB
+        val fab = view?.findViewById<FloatingActionButton>(R.id.fab_custom)
+        fab?.setOnClickListener {
+            // Custom action
+            showCustomDialog()
+        }
+        
+        // Add custom message types
+        registerCustomMessageRenderer(CustomGifMessageRenderer())
+        registerCustomMessageRenderer(CustomLocationMessageRenderer())
+    }
+    
+    private fun showCustomDialog() {
+        CustomBottomSheetDialog().show(childFragmentManager, "custom_dialog")
+    }
+}
+```
+
+---
+
+## Testing & Quality Assurance
+
+### 🧪 **Unit Testing**
+
+```kotlin
+// Test UIKit components
+@RunWith(MockitoJUnitRunner::class)
+class AmityUIKitTest {
+    
+    @Mock
+    private lateinit var mockContext: Context
+    
+    @Mock
+    private lateinit var mockApiClient: AmityApiClient
+    
+    @Before
+    fun setup() {
+        MockitoAnnotations.openMocks(this)
+    }
+    
+    @Test
+    fun testUIKitInitialization() {
+        // Test UIKit setup
+        AmityUIKitClient.setup(mockContext, "test_api_key", AmityRegion.US)
+        
+        verify(mockApiClient).initialize(any(), any(), any())
+    }
+    
+    @Test
+    fun testMessageSending() {
+        // Test message functionality
+        val chatFragment = AmityChatFragment.newInstance("test_channel_id")
+        
+        // Simulate message sending
+        chatFragment.sendMessage("Test message")
+        
+        // Verify message was sent
+        verify(mockApiClient).sendMessage(any(), any())
+    }
+}
+```
+
+### 🎯 **UI Testing with Espresso**
+
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class UIKitUITest {
+    
+    @get:Rule
+    val activityRule = ActivityTestRule(MainActivity::class.java)
+    
+    @Test
+    fun testChatFlow() {
+        // Test chat functionality
+        onView(withId(R.id.chat_tab))
+            .perform(click())
+            
+        onView(withId(R.id.conversation_list))
+            .check(matches(isDisplayed()))
+            
+        onView(withText("Test Conversation"))
+            .perform(click())
+            
+        onView(withId(R.id.message_input))
+            .perform(typeText("Test message"), closeSoftKeyboard())
+            
+        onView(withId(R.id.send_button))
+            .perform(click())
+            
+        onView(withText("Test message"))
+            .check(matches(isDisplayed()))
+    }
+}
+```
+
+---
+
+## Debugging & Troubleshooting
+
+### 🐛 **Common Android Issues**
+
+<AccordionGroup>
+  <Accordion title="Build Issues" icon="hammer">
+    **Issue**: Gradle sync failures or build errors
+    
+    **Solutions**:
+    ```bash
+    # Clean project
+    ./gradlew clean
+    
+    # Invalidate caches and restart
+    # Android Studio → File → Invalidate Caches and Restart
+    
+    # Check for dependency conflicts
+    ./gradlew app:dependencies
+    ```
+    
+    **Common fixes**:
+    - Ensure Java 8+ compatibility
+    - Verify minimum SDK version (API 21+)
+    - Check for conflicting library versions
+    - Enable data binding in build.gradle
+  </Accordion>
+  
+  <Accordion title="Runtime Crashes" icon="bug">
+    **Issue**: App crashes when using UIKit components
+    
+    **Debugging steps**:
+    ```kotlin
+    // Enable verbose logging
+    AmityUIKitClient.setLogLevel(AmityLogLevel.VERBOSE)
+    
+    // Add crash reporting
+    class CustomCrashHandler : Thread.UncaughtExceptionHandler {
+        override fun uncaughtException(thread: Thread, exception: Throwable) {
+            Log.e("UIKit", "Uncaught exception", exception)
+            // Send to crash reporting service
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory Leaks" icon="memory">
+    **Issue**: Memory leaks in UIKit components
+    
+    **Detection and fixes**:
+    ```kotlin
+    // Use LeakCanary for detection
+    dependencies {
+        debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.10'
+    }
+    
+    // Proper cleanup in fragments
+    override fun onDestroyView() {
+        super.onDestroyView()
+        
+        // Clean up subscriptions
+        compositeDisposable.clear()
+        
+        // Remove callbacks
+        handler.removeCallbacksAndMessages(null)
+        
+        // Clear references
+        customAdapter = null
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 📊 **Performance Profiling**
+
+```kotlin
+// Custom performance monitoring
+class PerformanceTracker {
+    companion object {
+        fun trackFragmentLoad(fragmentName: String, startTime: Long) {
+            val duration = System.currentTimeMillis() - startTime
+            Log.d("Performance", "$fragmentName loaded in ${duration}ms")
+            
+            // Send to analytics
+            FirebasePerformance.getInstance()
+                .newTrace("fragment_load_$fragmentName")
+                .apply {
+                    putAttribute("fragment_name", fragmentName)
+                    putMetric("load_time_ms", duration)
+                    start()
+                    stop()
+                }
+        }
+    }
+}
+
+// Usage in fragments
+class TimedChatFragment : AmityChatFragment() {
+    private val startTime = System.currentTimeMillis()
+    
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        
+        PerformanceTracker.trackFragmentLoad("ChatFragment", startTime)
+    }
+}
+```
+
+---
+
+## Production Deployment
+
+### 🚀 **Release Preparation**
+
+#### Manifest Configuration
+```xml
+<!-- AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Required permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                     android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- Optional for file uploads -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <application
+        android:name=".MyApplication"
+        android:allowBackup="true"
+        android:theme="@style/AppTheme">
+        
+        <!-- File provider for sharing -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        
+    </application>
+</manifest>
+```
+
+#### Security Configuration
+```xml
+<!-- res/xml/network_security_config.xml -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.amity.co</domain>
+        <domain includeSubdomains="true">api.eu.amity.co</domain>
+        <domain includeSubdomains="true">api.sg.amity.co</domain>
+    </domain-config>
+</network-security-config>
+```
+
+### 📈 **Analytics & Monitoring**
+
+```kotlin
+// Production monitoring setup
+class ProductionApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        setupCrashReporting()
+        setupAnalytics()
+        setupUIKit()
+    }
+    
+    private fun setupCrashReporting() {
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
+    }
+    
+    private fun setupAnalytics() {
+        FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(!BuildConfig.DEBUG)
+    }
+    
+    private fun setupUIKit() {
+        AmityUIKitClient.setup(
+            context = this,
+            apiKey = BuildConfig.AMITY_API_KEY,
+            region = AmityRegion.valueOf(BuildConfig.AMITY_REGION),
+            analyticsHandler = CustomAnalyticsHandler()
+        )
+    }
+}
+
+class CustomAnalyticsHandler : AmityAnalyticsHandler {
+    override fun track(event: String, properties: Map<String, Any>) {
+        FirebaseAnalytics.getInstance(context).logEvent(event, Bundle().apply {
+            properties.forEach { (key, value) ->
+                when (value) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Double -> putDouble(key, value)
+                    is Boolean -> putBoolean(key, value)
+                }
+            }
+        })
+    }
+}
+```
+
+---
+
+## Resources & Best Practices
+
+### 📚 **Architecture Patterns**
+
+```kotlin
+// MVVM with Repository pattern
+class ChatRepository {
+    private val amityClient = AmityUIKitClient.getClient()
+    
+    fun getConversations(): LiveData<List<AmityConversation>> {
+        return amityClient.conversationRepository.getConversations()
+    }
+    
+    fun sendMessage(channelId: String, message: String): Completable {
+        return amityClient.messageRepository.sendTextMessage(channelId, message)
+    }
+}
+
+class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
+    private val _conversations = MutableLiveData<List<AmityConversation>>()
+    val conversations: LiveData<List<AmityConversation>> = _conversations
+    
+    private val compositeDisposable = CompositeDisposable()
+    
+    fun loadConversations() {
+        repository.getConversations().observeForever { conversations ->
+            _conversations.value = conversations
+        }
+    }
+    
+    fun sendMessage(channelId: String, message: String) {
+        repository.sendMessage(channelId, message)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { /* Success */ },
+                { error -> /* Handle error */ }
+            )
+            .let { compositeDisposable.add(it) }
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        compositeDisposable.clear()
+    }
+}
+```
+
+### 🔗 **Additional Resources**
+
+<CardGroup cols={2}>
+  <Card title="Android Sample App" icon="github" href="https://github.com/AmityCo/Amity-Social-UIKit-Android-Sample">
+    Complete Android sample application with best practices
+  </Card>
+  <Card title="Android Documentation" icon="book" href="/uikit/components/overview">
+    Detailed component documentation for Android
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/uikit/troubleshooting/android-specific">
+    Android-specific troubleshooting and solutions
+  </Card>
+  <Card title="Performance Guide" icon="gauge" href="/uikit/optimization/android-performance">
+    Android performance optimization techniques
+  </Card>
+</CardGroup>
+
+<Tip>
+**Need Help?** Join our [Android developers community](https://community.socialplus.com/android) for platform-specific discussions and support.
+</Tip>

@@ -1,102 +1,979 @@
 ---
 title: "Authentication & Setup"
 description: "Configure user authentication and initialize Social+ UIKit in your application"
-icon: "key"
 ---
 
-## Overview
+This guide covers user authentication and device registration for Social+ UIKit. Authentication is essential for personalizing the user experience and enabling social features.
 
-Before using Social+ UIKit, you need to initialize the SDK with your API credentials and authenticate users. This guide covers the setup process for all supported platforms.
+<Note>
+  **New to Social+ Authentication?** For comprehensive authentication concepts, security patterns, and backend implementation, see the [SDK Authentication Guide](/social-plus-sdk/getting-started/authentication). This guide focuses specifically on UIKit implementation.
+</Note>
 
-## Get Your API Key
+## Prerequisites
+
+Before setting up authentication, ensure you have:
+
+<CardGroup cols={2}>
+  <Card title="API Credentials" icon="key">
+    Your API key and region from Social+ Console
+  </Card>
+  <Card title="UIKit Installed" icon="package">
+    Social+ UIKit installed in your project
+  </Card>
+</CardGroup>
+
+<Info>
+  **Coming from First Steps?** If you followed the [First Steps guide](/uikit/getting-started/first-steps), you've already completed basic authentication. This guide provides comprehensive details and production-ready patterns.
+</Info>
+
+---
+
+## Get Your API Credentials
+
+### Access Social+ Console
 
 <Steps>
-  <Step title="Access Social+ Console">
-    Visit the [Social+ Console](https://console.socialplus.com) and log in to your account.
+  <Step title="Visit Console">
+    Go to [Social+ Console](https://console.socialplus.com) and sign in to your account.
   </Step>
   
-  <Step title="Navigate to Settings">
-    Click **Settings** in the left sidebar to expand the menu.
+  <Step title="Navigate to Security">
+    In the left sidebar, click **Settings** → **Security**.
   </Step>
   
-  <Step title="Select Security">
-    Choose **Security** from the settings menu.
-  </Step>
-  
-  <Step title="Copy API Key">
-    Find your API key in the **Keys** section and copy it for use in your application.
+  <Step title="Copy Credentials">
+    Find your **API Key** and note your **Region**. You'll need both for authentication.
   </Step>
 </Steps>
 
+### Regional Configuration
+
+Social+ operates in multiple regions for optimal performance and compliance:
+
+<Tabs>
+  <Tab title="United States">
+    ```typescript
+    apiRegion: "us"
+    endpoint: "api.us.amity.co"
+    ```
+  </Tab>
+  <Tab title="Europe">
+    ```typescript
+    apiRegion: "eu" 
+    endpoint: "api.eu.amity.co"
+    ```
+  </Tab>
+  <Tab title="Singapore">
+    ```typescript
+    apiRegion: "sg"
+    endpoint: "api.sg.amity.co"
+    ```
+  </Tab>
+</Tabs>
+
 <Warning>
-  Keep your API key secure and never expose it in client-side code. For production applications, implement proper server-side authentication.
+  **Region Consistency**: Your API region must match the region where your Social+ application was created. Mismatched regions will cause authentication failures.
 </Warning>
 
 ---
 
-## Regional Endpoints
+## Authentication Modes
 
-Social+ supports multiple data centers for optimal performance and compliance:
+Social+ UIKit supports two authentication modes depending on your security requirements:
 
-| Region | Endpoint Code | Endpoint URL |
-|--------|---------------|--------------|
-| United States | `US` | `api.us.amity.co` |
-| Europe | `EU` | `api.eu.amity.co` |
-| Singapore | `SG` | `api.sg.amity.co` |
+<Tabs>
+  <Tab title="Development Mode">
+    **Quick Setup (API Key Only)**
+    
+    Perfect for development, testing, and proof-of-concept applications:
+    
+    ```typescript
+    // Development authentication - API key only
+    <AmityUiKitProvider
+      apiKey="YOUR_API_KEY"
+      apiRegion="us"
+      userId="user-123"
+      displayName="John Doe"
+    >
+      {/* Your app */}
+    </AmityUiKitProvider>
+    ```
+    
+    <Note>
+      Development mode is great for getting started quickly, but should not be used in production applications.
+    </Note>
+  </Tab>
+  
+  <Tab title="Production Mode">
+    **Secure Setup (API Key + Auth Token)**
+    
+    Required for production applications with proper backend verification:
+    
+    ```typescript
+    // Production authentication - with auth token
+    const getAuthToken = async () => {
+      // Get auth token from your secure backend
+      const response = await fetch('/api/auth/social-plus-token');
+      const { authToken } = await response.json();
+      return authToken;
+    };
+    
+    <AmityUiKitProvider
+      apiKey="YOUR_API_KEY"
+      apiRegion="us"
+      userId="user-123"
+      displayName="John Doe"
+      getAuthToken={getAuthToken}
+    >
+      {/* Your app */}
+    </AmityUiKitProvider>
+    ```
+    
+    <Warning>
+      **Auth Token Security**: Auth tokens must be generated by your backend server after verifying the user. Never generate auth tokens on the client side.
+    </Warning>
+  </Tab>
+</Tabs>
 
-<Note>
-  Choose the region closest to your users for optimal performance. The endpoint must match the region where your Social+ application was created.
-</Note>
+<Card title="Learn About Auth Tokens" icon="shield-check" href="/social-plus-sdk/getting-started/authentication#how-auth-tokens-work">
+  Understanding auth tokens, server-to-server verification, and backend implementation patterns
+</Card>
 
 ---
 
-## Platform-Specific Setup
+## Device Registration
 
-### iOS Setup
+### Understanding Device Binding
 
-<Steps>
-  <Step title="Initialize SDK">
-    Initialize the Social+ SDK in your `AppDelegate` or early in your app lifecycle:
-    
+<Warning>
+  **Important**: Once registered, a device is permanently tied to a `userId` until explicitly unregistered or inactive for 90+ days. Plan your authentication flow carefully.
+</Warning>
+
+When you authenticate a user with Social+ UIKit, you're registering the current device with that user's ID. This device will receive all messages and notifications belonging to that user.
+
+### Platform Implementation
+
+Choose your platform for device registration:
+
+<Tabs>
+  <Tab title="iOS">
     ```swift
-    import AmitySDK
     import AmityUIKit
     
-    // In AppDelegate.swift or App.swift
-    AmitySDK.setup(apiKey: "YOUR_API_KEY", 
-                   region: .US) // or .EU, .SG
-    ```
-  </Step>
-  
-  <Step title="Register User">
-    Register and authenticate the current user:
+    // 1. Register device with user (basic)
+    AmityUIKitManager.registerDevice(
+        withUserId: "user-123",
+        displayName: "John Doe"
+    )
     
-    ```swift
-    AmitySDK.register(userId: "unique_user_id",
-                      displayName: "User Display Name") { success, error in
-        if success {
-            print("User registered successfully")
-            // Proceed with UIKit setup
+    // 2. Register device with auth token (production)
+    AmityUIKitManager.registerDevice(
+        withUserId: "user-123",
+        displayName: "John Doe",
+        authToken: "auth-token-from-backend"
+    )
+    
+    // 3. Register for push notifications (optional)
+    UIKitManager.registerDeviceForPushNotification("device-token") { isSuccess, error in
+        if isSuccess {
+            print("Push notifications registered")
         } else {
-            print("Registration failed: \(error?.localizedDescription ?? "Unknown error")")
+            print("Push registration failed: \(error?.localizedDescription ?? "")")
         }
     }
     ```
+    
+    <Note>
+      **Push Notifications**: Social+ UIKit doesn't manage push permission requests or token creation. Your app must handle these and pass the device token.
+    </Note>
+  </Tab>
+  
+  <Tab title="Android">
+    ```kotlin
+    import com.amity.socialcloud.sdk.AmityCoreClient
+    
+    // Production login with auth token
+    fun login(userId: String, authToken: String) {
+        AmityCoreClient.login(
+            userId = userId,
+            sessionHandler = object : SessionHandler {
+                override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
+                    renewal.renew()
+                }
+            }
+        ).authToken(authToken)
+            .displayName("John Doe")
+            .build()
+            .submit()
+            .subscribeOn(Schedulers.io())
+            .doOnComplete {
+                // Device registered successfully
+                Log.d("Auth", "User logged in successfully")
+            }
+            .doOnError { error ->
+                Log.e("Auth", "Login failed", error)
+            }
+            .subscribe()
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Web/React">
+    ```typescript
+    import React from 'react';
+    import { AmityUiKitProvider, AmityUiKitSocial } from '@amityco/ui-kit-open-source';
+    import '@amityco/ui-kit-open-source/dist/index.css';
+    
+    export default function App() {
+      // Function to get auth token from your backend
+      const getAuthToken = async () => {
+        const authToken = await getAuthTokenFromApi();
+        return authToken;
+      };
+      
+      return (
+        <AmityUiKitProvider
+          key="user-123" // Important: key should match userId
+          apiKey="YOUR_API_KEY"
+          userId="user-123"
+          displayName="John Doe"
+          apiRegion="us" // eu, us, or sg
+          getAuthToken={getAuthToken} // For secure mode authentication
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: "100vw",
+              height: "100dvh",
+            }}
+          >
+            <AmityUiKitSocial />
+          </div>
+        </AmityUiKitProvider>
+      );
+    }
+    ```
+    
+    <Warning>
+      **Provider Placement**: `AmityUiKitProvider` should be placed only once at the top of your application. Multiple providers will create connection problems.
+    </Warning>
+  </Tab>
+  
+  <Tab title="React Native">
+    ```typescript
+    import React from 'react';
+    import {
+      AmityUiKitSocial,
+      AmityUiKitProvider,
+    } from 'amity-react-native-social-ui-kit';
+    
+    export default function App() {
+      const getAuthToken = async () => {
+        // Get auth token from your backend
+        const response = await fetch('https://yourapi.com/auth/token');
+        const { authToken } = await response.json();
+        return authToken;
+      };
+      
+      return (
+        <AmityUiKitProvider
+          apiKey="YOUR_API_KEY"
+          apiRegion="us" // eu, us, or sg
+          userId="user-123"
+          displayName="John Doe"
+          getAuthToken={getAuthToken}
+          apiEndpoint="https://api.us.amity.co"
+        >
+          <AmityUiKitSocial />
+        </AmityUiKitProvider>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Flutter">
+    ```dart
+    import 'package:amity_uikit_beta_service/amity_uikit_beta_service.dart';
+    
+    void login() async {
+      try {
+        await AmityCoreClient.login(
+          'user-123',
+          sessionHandler: (AccessTokenRenewal renewal) {
+            renewal.renew();
+          }
+        )
+        .displayName('John Doe')
+        .authToken('auth-token-from-backend')
+        .submit();
+        
+        print('Login successful');
+      } catch (error) {
+        print('Login failed: $error');
+      }
+    }
+    
+    class MyApp extends StatelessWidget {
+      @override
+      Widget build(BuildContext context) {
+        return MaterialApp(
+          home: AmityApp(
+            apiKey: 'YOUR_API_KEY',
+            apiRegion: 'us',
+            userId: 'user-123',
+            displayName: 'John Doe',
+            child: AmitySocialHomePage(),
+          ),
+        );
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## User Management
+
+### User ID Guidelines
+
+Your user identification strategy is crucial for a smooth user experience:
+
+<AccordionGroup>
+  <Accordion title="Unique Identification">
+    **Best Practices:**
+    - Use your internal user ID or UUID
+    - Ensure IDs are unique across your entire user base
+    - Keep IDs consistent across all platforms
+    
+    **Avoid:**
+    - Email addresses (users might change emails)
+    - Phone numbers (users might change numbers)
+    - Display names (not unique)
+  </Accordion>
+  
+  <Accordion title="Character Requirements">
+    **Valid Characters:**
+    - Alphanumeric characters (a-z, A-Z, 0-9)
+    - Underscores (_) and hyphens (-)
+    - Maximum length: 255 characters
+    
+    **Invalid Characters:**
+    - Spaces or special characters (@, #, $, etc.)
+    - Emojis or unicode characters
+  </Accordion>
+  
+  <Accordion title="Production Considerations">
+    **Security:**
+    - Don't expose sensitive information in user IDs
+    - Consider hashing user IDs if needed
+    - Implement server-side validation
+    
+    **Scalability:**
+    - Use a consistent ID format
+    - Plan for user merging scenarios
+    - Consider ID migration strategies
+  </Accordion>
+</AccordionGroup>
+
+### Session Management
+
+<Steps>
+  <Step title="User Login">
+    When a user logs into your app, register them with Social+. The device will be tied to this user.
   </Step>
   
-  <Step title="Present UIKit">
-    Present Social+ UIKit components:
+  <Step title="Session Persistence">
+    The SDK automatically maintains sessions across app launches. No additional action needed.
+  </Step>
+  
+  <Step title="User Logout">
+    When users log out, properly unregister the device to prevent unauthorized access:
     
-    ```swift
-    import AmityUIKit
+    <Tabs>
+      <Tab title="iOS">
+        ```swift
+        // Unregister device on logout
+        AmityUIKitManager.unregisterDevice()
+        ```
+        
+        <Info>
+          Unregistering a device is synchronous. Once called, the SDK disconnects from the server and wipes the user session.
+        </Info>
+      </Tab>
+      <Tab title="Android">
+        ```kotlin
+        AmityCoreClient.logout()
+            .submit()
+            .subscribe({
+                // Successfully logged out
+                navigateToLogin()
+            }, { error ->
+                Log.e("Logout", "Failed", error)
+            })
+        ```
+      </Tab>
+      <Tab title="Web/React">
+        ```typescript
+        // For web applications, remove the provider or navigate away
+        const handleLogout = () => {
+          // Clear user state and navigate to login
+          setCurrentUser(null);
+          navigate('/login');
+        };
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="User Switching">
+    To switch users, unregister the current user first, then register the new user:
     
-    let socialViewController = AmitySocialViewController()
-    navigationController?.pushViewController(socialViewController, animated: true)
+    ```typescript
+    // 1. Unregister current user
+    await amitySDK.unregisterDevice();
+    
+    // 2. Register new user
+    await amitySDK.registerDevice(newUserId, newDisplayName);
     ```
   </Step>
 </Steps>
 
-### Android Setup
+---
+
+## Advanced Configuration
+
+### Environment Management
+
+Organize your configuration for different environments:
+
+<Tabs>
+  <Tab title="Development">
+    ```typescript
+    const config = {
+      apiKey: "dev_b24c28bc...",
+      apiRegion: "us",
+      debug: true,
+      // No auth token needed for development
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Production">
+    ```typescript
+    const config = {
+      apiKey: process.env.REACT_APP_AMITY_API_KEY,
+      apiRegion: process.env.REACT_APP_AMITY_REGION,
+      debug: false,
+      // Auth token required for production
+      getAuthToken: async () => {
+        const response = await fetch('/api/auth/social-plus-token');
+        const { authToken } = await response.json();
+        return authToken;
+      }
+    };
+    ```
+  </Tab>
+</Tabs>
+
+### Error Handling
+
+Implement comprehensive error handling for authentication:
+
+```typescript
+const AuthenticationService = {
+  async authenticateUser(userId: string, displayName: string, authToken?: string) {
+    try {
+      if (authToken) {
+        // Production mode with auth token
+        await amitySDK.registerDevice(userId, displayName, authToken);
+      } else {
+        // Development mode
+        await amitySDK.registerDevice(userId, displayName);
+      }
+      
+      console.log('Authentication successful');
+      return { success: true };
+    } catch (error) {
+      console.error('Authentication failed:', error);
+      
+      // Handle specific error types
+      if (error.code === 'INVALID_API_KEY') {
+        return { success: false, error: 'Invalid API credentials' };
+      } else if (error.code === 'INVALID_AUTH_TOKEN') {
+        return { success: false, error: 'Invalid or expired auth token' };
+      } else if (error.code === 'NETWORK_ERROR') {
+        return { success: false, error: 'Network connection failed' };
+      }
+      
+      return { success: false, error: 'Authentication failed' };
+    }
+  },
+  
+  async logoutUser() {
+    try {
+      await amitySDK.unregisterDevice();
+      return { success: true };
+    } catch (error) {
+      console.error('Logout failed:', error);
+      return { success: false, error: 'Logout failed' };
+    }
+  }
+};
+```
+
+---
+
+## Backend Integration
+
+For production applications, you'll need to implement auth token generation on your backend:
+
+<Card title="Backend Auth Token Implementation" icon="server" href="/social-plus-sdk/getting-started/authentication#backend-token-generation">
+  Learn how to implement secure auth token generation, token validation, and server-to-server communication with Social+
+</Card>
+
+### Quick Backend Example
+
+Here's a simplified example of auth token generation:
+
+```javascript
+// Example Node.js backend endpoint
+app.post('/api/auth/social-plus-token', authenticateUser, async (req, res) => {
+  try {
+    // User is already authenticated by your middleware
+    const { userId } = req.user;
+    
+    // Generate auth token for Social+
+    const authToken = await generateSocialPlusAuthToken(userId);
+    
+    res.json({ authToken });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate auth token' });
+  }
+});
+```
+
+<Warning>
+  **Security Note**: Never generate auth tokens on the client side. They must be created by your secure backend after verifying the user's identity.
+</Warning>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication Failures">
+    **Invalid API Key (401 Error):**
+    - Verify API key is correct and not truncated
+    - Check that the API key matches your console account
+    - Ensure no extra spaces or characters
+    
+    **Invalid Auth Token (403 Error):**
+    - Verify auth token is properly generated by your backend
+    - Check token hasn't expired
+    - Ensure token format matches Social+ requirements
+    
+    **Region Mismatch:**
+    - Verify region matches your console setup
+    - Check endpoint URLs are correct
+    - Confirm region code format (us/eu/sg)
+  </Accordion>
+  
+  <Accordion title="Device Registration Issues">
+    **Device Already Registered:**
+    - Unregister existing user first
+    - Wait for previous session to properly close
+    - Clear app data if needed (development only)
+    
+    **Invalid User ID Format:**
+    - Remove special characters and spaces
+    - Check user ID length (max 255 characters)
+    - Use only alphanumeric characters and underscores
+    
+    **Session Conflicts:**
+    - Ensure proper logout before switching users
+    - Check for multiple provider instances (Web/React)
+    - Verify device registration cleanup
+  </Accordion>
+  
+  <Accordion title="Platform-Specific Issues">
+    **iOS:**
+    - Ensure registration is called on main thread
+    - Check for proper app lifecycle handling
+    - Verify push notification setup if using
+    
+    **Android:**
+    - Implement proper Activity/Fragment lifecycle
+    - Check for ProGuard/R8 obfuscation issues
+    - Verify session handler implementation
+    
+    **Web/React:**
+    - Ensure single provider instance at app root
+    - Import CSS styles for proper component rendering
+    - Check for CORS issues in development
+    
+    **React Native:**
+    - Verify native module linking
+    - Check platform-specific permissions
+    - Test on physical devices for push notifications
+    
+    **Flutter:**
+    - Check session handler implementation
+    - Verify platform permissions are configured
+    - Ensure proper async/await usage
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+Now that authentication is configured, you can explore Social+ UIKit features:
+
+<CardGroup cols={2}>
+  <Card title="Explore Components" icon="puzzle-piece" href="/uikit/components/overview">
+    Browse available UI components and features
+  </Card>
+  <Card title="Customize Appearance" icon="palette" href="/uikit/customization/overview">
+    Learn how to customize themes and styling
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Platform Guides" icon="mobile" href="/uikit/platform-guides/ios-specific">
+    Platform-specific configuration and optimization
+  </Card>
+  <Card title="Authentication Deep Dive" icon="shield" href="/social-plus-sdk/getting-started/authentication">
+    Complete authentication concepts and backend implementation
+  </Card>
+</CardGroup>
+
+### User ID Guidelines
+
+Your user identification strategy is crucial for a smooth user experience:
+
+<AccordionGroup>
+  <Accordion title="Unique Identification">
+    **Best Practices:**
+    - Use your internal user ID or UUID
+    - Ensure IDs are unique across your entire user base
+    - Keep IDs consistent across all platforms
+    
+    **Avoid:**
+    - Email addresses (users might change emails)
+    - Phone numbers (users might change numbers)
+    - Display names (not unique)
+  </Accordion>
+  
+  <Accordion title="Character Requirements">
+    **Valid Characters:**
+    - Alphanumeric characters (a-z, A-Z, 0-9)
+    - Underscores (_) and hyphens (-)
+    - Maximum length: 255 characters
+    
+    **Invalid Characters:**
+    - Spaces or special characters (@, #, $, etc.)
+    - Emojis or unicode characters
+  </Accordion>
+  
+  <Accordion title="Production Considerations">
+    **Security:**
+    - Don't expose sensitive information in user IDs
+    - Consider hashing user IDs if needed
+    - Implement server-side validation
+    
+    **Scalability:**
+    - Use a consistent ID format
+    - Plan for user merging scenarios
+    - Consider ID migration strategies
+  </Accordion>
+</AccordionGroup>
+
+### Session Management
+
+<Warning>
+  **Device Binding**: Once registered, a device is permanently tied to a user ID until explicitly unregistered or inactive for 90+ days. Plan your authentication flow carefully.
+</Warning>
+
+<Steps>
+  <Step title="User Login">
+    When a user logs into your app, register them with Social+:
+    
+    ```typescript
+    // Register the current device with the user
+    await amitySDK.register(userId, displayName);
+    ```
+  </Step>
+  
+  <Step title="Session Persistence">
+    The SDK automatically maintains sessions across app launches. No additional action needed.
+  </Step>
+  
+  <Step title="User Logout">
+    When users log out, properly unregister the device:
+    
+    <Tabs>
+      <Tab title="iOS">
+        ```swift
+        AmitySDK.unregisterDevice { success, error in
+            if success {
+                // Device unregistered successfully
+                self.returnToLoginScreen()
+            } else {
+                // Handle error
+                print("Logout failed: \(error?.localizedDescription ?? "")")
+            }
+        }
+        ```
+      </Tab>
+      <Tab title="Android">
+        ```kotlin
+        AmityCoreClient.logout()
+            .submit()
+            .subscribe({
+                // Successfully logged out
+                navigateToLogin()
+            }, { error ->
+                Log.e("Logout", "Failed", error)
+            })
+        ```
+      </Tab>
+      <Tab title="Web/React">
+        ```typescript
+        // For web applications, simply remove the provider
+        // or navigate away from UIKit components
+        const handleLogout = () => {
+          // Clear user state
+          setCurrentUser(null);
+          // Navigate to login
+          navigate('/login');
+        };
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="User Switching">
+    To switch users, unregister the current user first, then register the new user:
+    
+    ```typescript
+    // 1. Unregister current user
+    await amitySDK.unregisterDevice();
+    
+    // 2. Register new user
+    await amitySDK.register(newUserId, newDisplayName);
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Advanced Configuration
+
+### Environment Management
+
+Organize your configuration for different environments:
+
+<Tabs>
+  <Tab title="Development">
+    ```typescript
+    const config = {
+      apiKey: "dev_b24c28bc...",
+      apiRegion: "us",
+      debug: true,
+      enableLogging: true,
+      // Optional: Use test endpoints
+      apiEndpoint: "https://api.staging.amity.co"
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Production">
+    ```typescript
+    const config = {
+      apiKey: process.env.REACT_APP_AMITY_API_KEY,
+      apiRegion: process.env.REACT_APP_AMITY_REGION,
+      debug: false,
+      enableLogging: false,
+      // Use production endpoints
+      apiEndpoint: `https://api.${process.env.REACT_APP_AMITY_REGION}.amity.co`
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Enterprise">
+    ```typescript
+    // For enterprise customers with custom domains
+    const config = {
+      apiKey: "your_enterprise_api_key",
+      apiEndpoint: "https://api.your-company.com",
+      // Additional enterprise features
+      enableCustomBranding: true,
+      enableAdvancedModeration: true
+    };
+    ```
+  </Tab>
+</Tabs>
+
+### Error Handling
+
+Implement comprehensive error handling for authentication:
+
+```typescript
+const AuthenticationService = {
+  async authenticateUser(userId: string, displayName: string) {
+    try {
+      await amitySDK.register(userId, displayName);
+      console.log('Authentication successful');
+      return { success: true };
+    } catch (error) {
+      console.error('Authentication failed:', error);
+      
+      // Handle specific error types
+      if (error.code === 'INVALID_API_KEY') {
+        return { success: false, error: 'Invalid API credentials' };
+      } else if (error.code === 'NETWORK_ERROR') {
+        return { success: false, error: 'Network connection failed' };
+      } else if (error.code === 'INVALID_USER_ID') {
+        return { success: false, error: 'Invalid user ID format' };
+      }
+      
+      return { success: false, error: 'Authentication failed' };
+    }
+  },
+  
+  async logoutUser() {
+    try {
+      await amitySDK.unregisterDevice();
+      return { success: true };
+    } catch (error) {
+      console.error('Logout failed:', error);
+      return { success: false, error: 'Logout failed' };
+    }
+  }
+};
+```
+
+### Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="API Key Security">
+    **Client-Side Applications:**
+    - Store API keys in environment variables
+    - Never commit API keys to version control
+    - Use different keys for development and production
+    
+    **Server-Side Authentication (Recommended):**
+    - Implement server-side token generation
+    - Use short-lived authentication tokens
+    - Validate users on your backend before issuing tokens
+  </Accordion>
+  
+  <Accordion title="User Validation">
+    **Input Validation:**
+    - Validate user IDs before registration
+    - Sanitize display names
+    - Implement rate limiting for authentication attempts
+    
+    **Session Security:**
+    - Monitor for unusual authentication patterns
+    - Implement proper logout flows
+    - Consider implementing session timeouts
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication Failures">
+    **Invalid API Key (401 Error):**
+    - Verify API key is correct and not truncated
+    - Check that the API key matches your console account
+    - Ensure no extra spaces or characters
+    
+    **Region Mismatch (403 Error):**
+    - Verify region matches your console setup
+    - Check endpoint URLs are correct
+    - Confirm region code format (us/eu/sg)
+    
+    **Network Issues:**
+    - Test internet connectivity
+    - Check firewall/proxy settings
+    - Verify DNS resolution for amity.co domains
+  </Accordion>
+  
+  <Accordion title="User Registration Issues">
+    **Invalid User ID Format:**
+    - Remove special characters and spaces
+    - Check user ID length (max 255 characters)
+    - Use only alphanumeric characters and underscores
+    
+    **Device Already Registered:**
+    - Unregister existing user first
+    - Wait for previous session to properly close
+    - Clear app data if needed (development only)
+    
+    **Display Name Issues:**
+    - Ensure display name is not empty
+    - Check for special character restrictions
+    - Verify UTF-8 encoding for international names
+  </Accordion>
+  
+  <Accordion title="Platform-Specific Issues">
+    **iOS:**
+    - Ensure setup is called on main thread
+    - Check for proper delegate implementations
+    - Verify bundle identifier permissions
+    
+    **Android:**
+    - Implement proper Activity/Fragment lifecycle
+    - Check for ProGuard/R8 obfuscation issues
+    - Verify network permissions in manifest
+    
+    **Web/React:**
+    - Ensure provider wraps all UIKit components
+    - Check for CORS issues in development
+    - Verify React version compatibility
+    
+    **React Native:**
+    - Check platform-specific permissions
+    - Verify native module linking
+    - Test on physical devices, not just simulators
+    
+    **Flutter:**
+    - Check pubspec.yaml dependencies
+    - Verify platform permissions are configured
+    - Test hot reload vs full restart
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+Now that authentication is configured, you can explore Social+ UIKit features:
+
+<CardGroup cols={2}>
+  <Card title="Explore Components" icon="puzzle-piece" href="/uikit/components/overview">
+    Browse available UI components and features
+  </Card>
+  <Card title="Customize Appearance" icon="palette" href="/uikit/customization/overview">
+    Learn how to customize themes and styling
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Platform Guides" icon="mobile" href="/uikit/platform-guides/ios-specific">
+    Platform-specific configuration and optimization
+  </Card>
+  <Card title="View Examples" icon="code" href="/uikit/examples/overview">
+    See real-world implementation examples
+  </Card>
+</CardGroup>
 
 <Steps>
   <Step title="Initialize SDK">
