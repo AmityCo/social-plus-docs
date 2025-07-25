@@ -109,14 +109,14 @@ Successfully modernized the `webhook-event.md` file to modern Mintlify .mdx form
 ### Added to API Reference Tab
 ```json
 {
-  "group": "Social+ APIs & Services",
+  "group": "social.plus APIs & Services",
   "pages": [
-    "analytics-and-moderation/social+-apis-and-services/overview",
-    "analytics-and-moderation/social+-apis-and-services/README",
-    "analytics-and-moderation/social+-apis-and-services/generate-user-last-activity-report",
-    "analytics-and-moderation/social+-apis-and-services/network-settings", 
-    "analytics-and-moderation/social+-apis-and-services/pre-hook-event",
-    "analytics-and-moderation/social+-apis-and-services/webhook-event" // ← Added
+    "analytics-and-moderation/social.plus-apis-and-services/overview",
+    "analytics-and-moderation/social.plus-apis-and-services/README",
+    "analytics-and-moderation/social.plus-apis-and-services/generate-user-last-activity-report",
+    "analytics-and-moderation/social.plus-apis-and-services/network-settings", 
+    "analytics-and-moderation/social.plus-apis-and-services/pre-hook-event",
+    "analytics-and-moderation/social.plus-apis-and-services/webhook-event" // ← Added
   ]
 }
 ```

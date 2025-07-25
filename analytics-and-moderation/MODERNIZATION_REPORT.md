@@ -27,17 +27,17 @@ The comprehensive modernization of the `/analytics-and-moderation` section has b
 - ✅ **console/premium-ads/README.md** - Monetization, campaign management, and analytics
 
 ### Portal Documentation
-- ✅ **social+-portal/README.md** - Portal overview, navigation, and feature integration
-- ✅ **social+-portal/getting-started.md** - Complete setup guide with modern components
-- ✅ **social+-portal/application-management.md** - Application lifecycle and regional deployment
-- ✅ **social+-portal/account-management.md** - Team management, role-based access, and security
-- ✅ **social+-portal/changelogs.md** - Portal update history with modern formatting
+- ✅ **social.plus-portal/README.md** - Portal overview, navigation, and feature integration
+- ✅ **social.plus-portal/getting-started.md** - Complete setup guide with modern components
+- ✅ **social.plus-portal/application-management.md** - Application lifecycle and regional deployment
+- ✅ **social.plus-portal/account-management.md** - Team management, role-based access, and security
+- ✅ **social.plus-portal/changelogs.md** - Portal update history with modern formatting
 
 ### APIs and Services
-- ✅ **social+-apis-and-services/README.md** - API structure, authentication, and best practices
-- ✅ **social+-apis-and-services/pre-hook-event.md** - Event handling with modern examples
-- ✅ **social+-apis-and-services/network-settings.md** - Configuration and management
-- ✅ **social+-apis-and-services/generate-user-last-activity-report.md** - Analytics and reporting
+- ✅ **social.plus-apis-and-services/README.md** - API structure, authentication, and best practices
+- ✅ **social.plus-apis-and-services/pre-hook-event.md** - Event handling with modern examples
+- ✅ **social.plus-apis-and-services/network-settings.md** - Configuration and management
+- ✅ **social.plus-apis-and-services/generate-user-last-activity-report.md** - Analytics and reporting
 
 ## Modernization Features Implemented
 

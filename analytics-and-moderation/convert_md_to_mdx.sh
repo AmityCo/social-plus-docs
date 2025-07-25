@@ -14,8 +14,8 @@ converted_count=0
 
 # Array of .md files to convert to .mdx
 declare -a files_to_convert=(
-    "social+-portal/dashboard/raw-data-export.md"
-    "social+-portal/dashboard/README.md"
+    "social.plus-portal/dashboard/raw-data-export.md"
+    "social.plus-portal/dashboard/README.md"
     "console/settings/push-notifications.md"
     "console/settings/security/admin-token-management.md"
     "console/settings/security/README.md"

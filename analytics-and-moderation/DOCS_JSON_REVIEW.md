@@ -40,7 +40,7 @@ Completed comprehensive review of `docs.json` navigation structure for the analy
 Analytics & Moderation Tab
 ├── Overview
 │   └── analytics-and-moderation/overview
-├── Social+ Console
+├── social.plus Console
 │   ├── analytics-and-moderation/console/overview (✅ Enhanced)
 │   ├── Getting Started
 │   │   └── analytics-and-moderation/console/getting-started/overview
@@ -78,21 +78,21 @@ Analytics & Moderation Tab
 │   │       ├── analytics-and-moderation/console/settings/security/README
 │   │       └── analytics-and-moderation/console/settings/security/admin-token-management (✅ Added)
 │   └── analytics-and-moderation/console/changelogs (✅ Modernized)
-├── Social+ APIs & Services
-│   ├── analytics-and-moderation/social+-apis-and-services/overview
-│   ├── analytics-and-moderation/social+-apis-and-services/README (✅ Modernized)
-│   ├── analytics-and-moderation/social+-apis-and-services/generate-user-last-activity-report (✅ Modernized)
-│   ├── analytics-and-moderation/social+-apis-and-services/network-settings (✅ Modernized)
-│   └── analytics-and-moderation/social+-apis-and-services/pre-hook-event (✅ Modernized)
-└── Social+ Portal
-    ├── analytics-and-moderation/social+-portal/README (✅ Modernized)
-    ├── analytics-and-moderation/social+-portal/getting-started (✅ Modernized)
-    ├── analytics-and-moderation/social+-portal/application-management (✅ Modernized)
-    ├── analytics-and-moderation/social+-portal/account-management (✅ Modernized)
+├── social.plus APIs & Services
+│   ├── analytics-and-moderation/social.plus-apis-and-services/overview
+│   ├── analytics-and-moderation/social.plus-apis-and-services/README (✅ Modernized)
+│   ├── analytics-and-moderation/social.plus-apis-and-services/generate-user-last-activity-report (✅ Modernized)
+│   ├── analytics-and-moderation/social.plus-apis-and-services/network-settings (✅ Modernized)
+│   └── analytics-and-moderation/social.plus-apis-and-services/pre-hook-event (✅ Modernized)
+└── social.plus Portal
+    ├── analytics-and-moderation/social.plus-portal/README (✅ Modernized)
+    ├── analytics-and-moderation/social.plus-portal/getting-started (✅ Modernized)
+    ├── analytics-and-moderation/social.plus-portal/application-management (✅ Modernized)
+    ├── analytics-and-moderation/social.plus-portal/account-management (✅ Modernized)
     ├── Dashboard
-    │   ├── analytics-and-moderation/social+-portal/dashboard/README
-    │   └── analytics-and-moderation/social+-portal/dashboard/raw-data-export
-    └── analytics-and-moderation/social+-portal/changelogs (✅ Modernized)
+    │   ├── analytics-and-moderation/social.plus-portal/dashboard/README
+    │   └── analytics-and-moderation/social.plus-portal/dashboard/raw-data-export
+    └── analytics-and-moderation/social.plus-portal/changelogs (✅ Modernized)
 ```
 
 ## File Existence Validation ✅

@@ -36,8 +36,8 @@ All active .md files have been successfully converted to .mdx format:
 - ✅ `console/social-management/social-management-1/comment-creation-and-reply.md` → `.mdx`
 
 #### Portal Dashboard (2 files)
-- ✅ `social+-portal/dashboard/README.md` → `.mdx` (+ frontmatter added)
-- ✅ `social+-portal/dashboard/raw-data-export.md` → `.mdx`
+- ✅ `social.plus-portal/dashboard/README.md` → `.mdx` (+ frontmatter added)
+- ✅ `social.plus-portal/dashboard/raw-data-export.md` → `.mdx`
 
 ## Technical Implementation ✅
 
