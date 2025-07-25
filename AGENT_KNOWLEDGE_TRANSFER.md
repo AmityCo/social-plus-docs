@@ -6,20 +6,39 @@ This document contains essential knowledge and patterns for continuing the moder
 
 ## Project Overview
 
-**Objective**: Modernize, clarify, and reorganize Social Plus documentation for community management, feed, intelligent search, notification tray, and chat features, ensuring best practices, visual clarity, and workflow orientation.
+**Objective**: Modernize, clarify, and reorganize Social Plus documentation for SDK and UIKit components, ensuring best practices, visual clarity, and workflow orientation across all platforms.
 
 **Current Status**: 
-- ✅ Social module documentation (Communities & Spaces, Feed, Intelligent Search, Notification Tray) completed
-- ✅ Chat module structure reorganized and significantly modernized
-- ✅ Chat Conversation Management: overview, channels (create, get, query, update, archive), members (join-leave, query) - COMPLETED
-- ✅ Chat Messaging Features: overview, message-creation (overview + 8 message types), messages (get-view, edit-delete) - COMPLETED
+- ✅ SDK Documentation: Social module documentation (Communities & Spaces, Feed, Intelligent Search, Notification Tray) completed
+- ✅ SDK Documentation: Chat module structure reorganized and significantly modernized
+- ✅ SDK Documentation: Chat Conversation Management and Messaging Features - COMPLETED
+- ✅ UIKit Documentation: Chat components (conversation, recent chats, group chat, live chat) - COMPLETED
+- ✅ UIKit Documentation: Social components (feeds, posts, comments-reactions, content discovery) - COMPLETED
 - ✅ Consistent modern patterns established across all completed pages
 - ✅ Knowledge transfer documentation created and comprehensive
-- 🔄 Remaining: Chat engagement features, moderation-safety, and any additional advanced features
+- 🔄 Remaining: Chat engagement features, moderation-safety, and additional advanced SDK features
+
+## Critical Architecture Understanding
+
+### UIKit vs SDK Relationship
+
+**IMPORTANT**: UIKit is implemented **on top of** the SDK. This fundamental relationship must be understood and reflected in all UIKit documentation:
+
+- **SDK**: Handles all data management, API calls, caching, business logic, and core functionality
+- **UIKit**: Provides pre-built UI components that use the SDK internally for data and functionality
+- **Developer Benefits**: UIKit accelerates development by providing ready-to-use components while maintaining full SDK flexibility
+
+#### Documentation Implications:
+- UIKit documentation focuses on component usage, customization, and integration
+- SDK documentation focuses on data management, API integration, and business logic
+- UIKit components leverage SDK features seamlessly without developers needing to manage data layer
+- Cross-references between UIKit and SDK documentation should highlight this relationship
 
 ## Documentation Structure Standards
 
 ### 1. File Structure and Naming
+
+#### SDK Documentation Structure
 ```
 social-plus-sdk/
 ├── chat/
@@ -44,30 +63,69 @@ social-plus-sdk/
     └── notification-tray/
 ```
 
+#### UIKit Documentation Structure
+```
+uikit/
+├── overview.mdx
+├── getting-started/
+│   ├── installation.mdx
+│   └── overview.mdx
+└── components/
+    ├── chat.mdx (overview)
+    ├── chat/
+    │   ├── conversation-chat.mdx
+    │   ├── recent-chats.mdx
+    │   ├── group-chat.mdx
+    │   └── live-chat.mdx
+    ├── social/
+    │   ├── overview.mdx
+    │   ├── feeds.mdx
+    │   ├── posts.mdx
+    │   ├── comments-reactions.mdx
+    │   ├── content-discovery.mdx
+    │   ├── communities.mdx
+    │   ├── moderation.mdx
+    │   └── users.mdx
+    ├── customization/
+    └── examples/
+```
+
 ### 2. Required Frontmatter Template
+
+#### SDK Documentation Frontmatter
 ```yaml
 ---
 title: "Clear, Descriptive Title"
-description: "Concise description explaining the feature and its primary benefits (max 160 chars)"
+description: "Concise description explaining the SDK feature and its primary benefits (max 160 chars)"
+---
+```
+
+#### UIKit Documentation Frontmatter
+```yaml
+---
+title: "Component Name"
+description: "Brief description of UIKit component functionality and visual benefits (max 160 chars)"
 ---
 ```
 
 ### 3. Standard Page Structure
-Every page MUST follow this exact structure:
+
+#### SDK Documentation Structure
+Every SDK page MUST follow this exact structure:
 
 ```mdx
 ---
 title: "Feature Name"
-description: "Brief description of functionality and benefits"
+description: "Brief description of SDK functionality and benefits"
 ---
 
 <Info>
-**Key Benefit**: Brief explanation of the most important aspect or unique value proposition of this feature.
+**Key Benefit**: Brief explanation of the most important aspect or unique value proposition of this SDK feature.
 </Info>
 
 ## Feature Overview
 
-Brief introduction explaining what the feature does and why it's important.
+Brief introduction explaining what the SDK feature does and why it's important.
 
 <CardGroup cols={2}>
   <Card title="Primary Aspect" icon="relevant-icon">
@@ -149,6 +207,146 @@ Brief introduction explaining what the feature does and why it's important.
     [Platform-specific code and guidance]
   </Tab>
 </Tabs>
+```
+
+#### UIKit Documentation Structure
+Every UIKit page MUST follow this exact structure:
+
+```mdx
+---
+title: "Component Name"
+description: "Brief description of UIKit component functionality and visual benefits"
+---
+
+<Info>
+**UIKit Component**: This component is built on top of the Social Plus SDK, providing ready-to-use UI with full data management handled automatically.
+</Info>
+
+## Component Overview
+
+Brief introduction explaining what the UIKit component provides and its key visual/UX benefits.
+
+### Platform Support
+
+| Platform | Status | Version |
+|----------|---------|---------|
+| iOS | ✅ Available | 1.0+ |
+| Android | ✅ Available | 1.0+ |
+| Flutter | ✅ Available | 1.0+ |
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Primary Feature" icon="relevant-icon">
+    **Brief description**
+    - Feature 1
+    - Feature 2
+    - Feature 3
+  </Card>
+  <Card title="Secondary Feature" icon="relevant-icon">
+    **Brief description**
+    - Feature 1
+    - Feature 2
+    - Feature 3
+  </Card>
+</CardGroup>
+
+## Implementation Guide
+
+<Tabs>
+  <Tab title="Basic Setup">
+    **Getting started with the component**
+    
+    Step-by-step implementation for basic use cases.
+
+    ### Required Properties
+
+    | Property | Type | Description |
+    |----------|------|-------------|
+    | `prop1` | String | Description of property |
+    | `prop2` | Object | Description of property |
+
+    ### Code Examples
+
+    <CodeGroup>
+    ```swift iOS
+    // iOS UIKit component implementation
+    ```
+
+    ```kotlin Android
+    // Android UIKit component implementation
+    ```
+
+    ```dart Flutter
+    // Flutter UIKit component implementation
+    ```
+    </CodeGroup>
+
+    <Note>
+    **SDK Integration**: This component automatically handles all data fetching and management through the SDK.
+    </Note>
+  </Tab>
+
+  <Tab title="Customization">
+    **Customizing the component appearance and behavior**
+    
+    Styling, theming, and behavior customization options.
+
+    [Customization code examples and options]
+  </Tab>
+
+  <Tab title="Navigation Behavior">
+    **Handling user interactions and navigation**
+    
+    Examples of how to handle taps, navigation, and user flows.
+
+    [Navigation and interaction code examples]
+  </Tab>
+</Tabs>
+
+## Customization Options
+
+<AccordionGroup>
+  <Accordion title="Styling & Theming" icon="palette">
+    **Customize visual appearance**
+    
+    How to modify colors, fonts, spacing, and overall visual design.
+  </Accordion>
+
+  <Accordion title="Behavior Configuration" icon="gear">
+    **Configure component behavior**
+    
+    How to modify interactions, animations, and functional behavior.
+  </Accordion>
+
+  <Accordion title="Data Handling" icon="database">
+    **Customize data presentation**
+    
+    How to modify what data is shown and how it's formatted.
+  </Accordion>
+</AccordionGroup>
+
+## Related Components
+
+<CardGroup cols={3}>
+  <Card title="Related Component 1" href="relative-path" icon="relevant-icon">
+    **Brief description**
+    How it connects to this component
+  </Card>
+  <Card title="Related Component 2" href="relative-path" icon="relevant-icon">
+    **Brief description**
+    How it connects to this component
+  </Card>
+  <Card title="Related Component 3" href="relative-path" icon="relevant-icon">
+    **Brief description**
+    How it connects to this component
+  </Card>
+</CardGroup>
+
+<Tip>
+**Implementation Tip**: Practical advice about using this component effectively, including common patterns and best practices.
+</Tip>
+```
 
 ## Feature Management Strategies
 
@@ -218,16 +416,18 @@ Brief introduction explaining what the feature does and why it's important.
 
 ## Completed Documentation Pages
 
-### ✅ Social Module (COMPLETE)
+### ✅ SDK Documentation (SIGNIFICANTLY COMPLETE)
+
+#### Social Module (COMPLETE)
 - **social/overview.mdx**: Comprehensive module overview with CardGroups and workflow guidance
 - **social/communities-spaces/overview.mdx**: Complete modernization with all patterns
 - **social/feed/overview.mdx**: Full implementation guide with best practices
 - **social/intelligent-search/overview.mdx**: Advanced search features documentation
 - **social/notification-tray/overview.mdx**: Notification management and customization
 
-### ✅ Chat Module (SIGNIFICANTLY COMPLETE)
+#### Chat Module (SIGNIFICANTLY COMPLETE)
 
-#### Conversation Management (COMPLETE)
+##### Conversation Management (COMPLETE)
 - **chat/conversation-management/overview.mdx**: Section overview with workflow guidance
 - **chat/conversation-management/channels/create-channel.mdx**: Full implementation with all platforms
 - **chat/conversation-management/channels/get-channel.mdx**: Complete parameter tables and examples
@@ -237,7 +437,7 @@ Brief introduction explaining what the feature does and why it's important.
 - **chat/conversation-management/members/join-leave-channel.mdx**: Complete member management
 - **chat/conversation-management/members/query-members.mdx**: Advanced member querying
 
-#### Messaging Features (COMPLETE)
+##### Messaging Features (COMPLETE)
 - **chat/messaging-features/overview.mdx**: Complete section overview
 - **chat/messaging-features/message-creation/overview.mdx**: Comprehensive message creation guide
 - **chat/messaging-features/message-creation/send-a-message.mdx**: Basic message sending
@@ -251,11 +451,38 @@ Brief introduction explaining what the feature does and why it's important.
 - **chat/messaging-features/messages/get-and-view-a-message.mdx**: Message retrieval and display
 - **chat/messaging-features/messages/edit-and-delete-messages.mdx**: Message modification workflows
 
+### ✅ UIKit Documentation (COMPLETE)
+
+#### Getting Started (COMPLETE)
+- **uikit/getting-started/installation.mdx**: Installation and setup guide
+- **uikit/getting-started/overview.mdx**: UIKit overview and benefits
+
+#### Chat Components (COMPLETE)
+- **uikit/components/chat.mdx**: Chat components overview with feature comparison
+- **uikit/components/chat/conversation-chat.mdx**: One-on-one chat implementation
+- **uikit/components/chat/recent-chats.mdx**: Chat list and recent conversations
+- **uikit/components/chat/group-chat.mdx**: Group chat functionality
+- **uikit/components/chat/live-chat.mdx**: Live streaming chat features
+
+#### Social Components (COMPLETE)
+- **uikit/components/social/overview.mdx**: Social components overview with platform matrix
+- **uikit/components/social/feeds.mdx**: Social feeds and content discovery
+- **uikit/components/social/posts.mdx**: Post components (detail, content, composer, media, polls)
+- **uikit/components/social/comments-reactions.mdx**: Comments and reactions system
+- **uikit/components/social/content-discovery.mdx**: Search, categories, and notifications
+
+#### Pending UIKit Components
+- **uikit/components/social/communities.mdx**: Community management components (exists, needs modernization)
+- **uikit/components/social/moderation.mdx**: Content moderation components (exists, needs modernization)
+- **uikit/components/social/users.mdx**: User profile and management components (exists, needs modernization)
+- **chat/messaging-features/messages/get-and-view-a-message.mdx**: Message retrieval and display
+- **chat/messaging-features/messages/edit-and-delete-messages.mdx**: Message modification workflows
+
 ## Remaining Work Priorities
 
-### 🔄 Chat Module - Pending Areas
+### 🔄 SDK Documentation - Pending Areas
 
-#### High Priority - Core Features
+#### High Priority - Core Chat Features
 1. **Engagement Features** (`engagement-features/`)
    - Message reactions and emoji responses
    - Message threading capabilities (if different from replies)
@@ -275,37 +502,34 @@ Brief introduction explaining what the feature does and why it's important.
    - User presence and online status
    - Real-time connection management
 
-#### Medium Priority - Advanced Features
-4. **Advanced Member Management**
-   - `conversation-management/members/search-members.mdx`
-   - Member role management and permissions
-   - Member invitation workflows
-   - Member analytics and insights
+### 🔄 UIKit Documentation - Pending Areas
 
-5. **Channel Discovery & Organization**
-   - Channel categories and organization
-   - Channel discovery and search
-   - Channel recommendations
-   - Public vs private channel management
+#### Medium Priority - Social Components
+1. **Communities Management** (`social/communities.mdx`)
+   - Community components and interfaces
+   - Member management UI
+   - Community settings and configuration
 
-6. **Notification Management**
-   - Push notification configuration
-   - In-app notification preferences
-   - Channel-specific notification settings
-   - Notification analytics
+2. **Content Moderation** (`social/moderation.mdx`)
+   - Moderation interface components
+   - Content flagging and reporting UI
+   - Moderation dashboard components
 
-#### Lower Priority - Specialized Features
-7. **Integration Features**
-   - Third-party service integrations
-   - Webhook configurations
-   - Custom data synchronization
-   - External authentication
+3. **User Management** (`social/users.mdx`)
+   - User profile components
+   - User settings interfaces
+   - User search and discovery
 
-8. **Analytics & Insights**
-   - Chat analytics and metrics
-   - User engagement tracking
-   - Performance monitoring
-   - Usage reporting
+#### Low Priority - Advanced Features
+4. **Customization Documentation** (`customization/`)
+   - Theming and styling guides
+   - Advanced customization patterns
+   - Brand integration guidelines
+
+5. **Example Applications** (`examples/`)
+   - Complete implementation examples
+   - Best practice demonstrations
+   - Integration pattern examples
 
 ## Critical Success Factors
 
@@ -327,38 +551,51 @@ Brief introduction explaining what the feature does and why it's important.
 ### 🚨 Quality Control Checkpoints
 
 #### Before Starting Any Page
+- [ ] Identify if this is SDK or UIKit documentation (different templates!)
 - [ ] Read existing content completely to understand current state
 - [ ] Check docs.json navigation to understand page relationships
 - [ ] Search for related content and cross-references
 - [ ] Identify any user-specific customizations to preserve
 
-#### During Modernization
-- [ ] Follow standard template structure exactly
+#### During SDK Documentation
+- [ ] Follow SDK template structure exactly
+- [ ] Focus on data management, API integration, business logic
+- [ ] Include comprehensive parameter documentation
 - [ ] Preserve all existing code examples unless explicitly requested to change
 - [ ] Ensure all platforms are represented in code examples
-- [ ] Add comprehensive parameter documentation
-- [ ] Include practical use cases and examples
+
+#### During UIKit Documentation
+- [ ] Follow UIKit template structure exactly
+- [ ] Include "UIKit Component" info callout mentioning SDK relationship
+- [ ] Include Platform Support table
+- [ ] Focus on component usage, customization, visual features
+- [ ] Include Navigation Behavior tab with interaction examples
+- [ ] Add Customization Options accordion group
+- [ ] Reference related UIKit components in CardGroup
 
 #### After Completion
 - [ ] Validate all internal links work correctly
 - [ ] Check syntax highlighting on all code blocks
 - [ ] Ensure consistent formatting and structure
-- [ ] Verify parameter tables are complete and accurate
+- [ ] Verify parameter/property tables are complete and accurate
 - [ ] Test that examples are implementable and correct
+- [ ] Confirm SDK vs UIKit distinction is clear throughout
 
 ### 🎯 Success Metrics for Completed Work
 
 #### Quantitative Measures
-- **Structure Compliance**: 100% adherence to modern template
+- **Structure Compliance**: 100% adherence to correct template (SDK vs UIKit)
 - **Platform Coverage**: iOS, Android, TypeScript (+ Flutter where applicable)
 - **Content Completeness**: All required sections present and comprehensive
 - **Link Accuracy**: All internal cross-references working correctly
+- **Architecture Clarity**: Clear distinction between SDK and UIKit documented
 
 #### Qualitative Measures
 - **Developer Experience**: Information is clear, practical, and implementable
 - **Visual Appeal**: Proper use of components creates engaging, scannable content
 - **Workflow Alignment**: Content follows logical developer implementation journey
 - **Consistency**: Matches tone, depth, and structure of other modernized pages
+- **SDK/UIKit Relationship**: Clear understanding of how components relate to underlying SDK
 
 ## Emergency Troubleshooting
 
@@ -409,24 +646,26 @@ If encountering issues beyond this guide:
 2. **Consistency First**: Following established patterns is more important than individual creativity
 3. **Quality First**: Better to complete fewer pages excellently than many pages poorly
 4. **Preservation First**: Never modify user content without explicit permission
+5. **Architecture Clarity**: Always maintain clear distinction between SDK and UIKit functionality
 
 ### 🚀 Path to Success
 
-1. **Master the Template**: Understand and follow the standard structure religiously
+1. **Master Both Templates**: Understand and follow SDK vs UIKit structure patterns religiously
 2. **Preserve Context**: Always read existing content before making changes
 3. **Validate Continuously**: Check your work against the quality standards
-4. **Link Thoughtfully**: Ensure strong navigation between related features
+4. **Link Thoughtfully**: Ensure strong navigation between related features and clear SDK/UIKit cross-references
 5. **Test Thoroughly**: Verify all code examples and links work correctly
+6. **Maintain Architecture**: Keep SDK (data/API) and UIKit (components/UI) roles distinct and clear
 
 ### 📈 Continuous Improvement
 
 This documentation system is designed to evolve. As you work with it:
-- Note any patterns that work particularly well
-- Identify areas where the template could be improved
-- Update this guide with new insights and discoveries
-- Maintain the high standards that have been established
+- Note any patterns that work particularly well for SDK vs UIKit documentation
+- Identify areas where the templates could be improved
+- Update this guide with new insights about SDK/UIKit relationship documentation
+- Maintain the high standards that have been established for both documentation types
 
-**Remember**: The goal is to create documentation that developers love to use and that helps them build amazing applications with Social Plus. Every page should feel like it was crafted by an expert developer who understands both the technical implementation and the user experience.
+**Remember**: The goal is to create documentation that developers love to use and that helps them build amazing applications with Social Plus. Every page should feel like it was crafted by an expert developer who understands both the technical implementation and the user experience, with clear understanding of whether they're working with SDK features or UIKit components.
 
 ---
 
