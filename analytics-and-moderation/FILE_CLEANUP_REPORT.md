@@ -8,15 +8,15 @@ Successfully completed cleanup of obsolete .md files in the analytics-and-modera
 ### Files Removed: 23 Total
 
 #### .md Files Replaced by .mdx Versions (21 files)
-- ✅ `social+-portal/changelogs.md` → `changelogs.mdx` 
-- ✅ `social+-portal/account-management.md` → `account-management.mdx`
-- ✅ `social+-portal/getting-started.md` → `getting-started.mdx`
-- ✅ `social+-portal/README.md` → `README.mdx`
-- ✅ `social+-portal/application-management.md` → `application-management.mdx`
-- ✅ `social+-apis-and-services/pre-hook-event.md` → `pre-hook-event.mdx`
-- ✅ `social+-apis-and-services/network-settings.md` → `network-settings.mdx`
-- ✅ `social+-apis-and-services/generate-user-last-activity-report.md` → `generate-user-last-activity-report.mdx`
-- ✅ `social+-apis-and-services/README.md` → `README.mdx`
+- ✅ `social.plus-portal/changelogs.md` → `changelogs.mdx` 
+- ✅ `social.plus-portal/account-management.md` → `account-management.mdx`
+- ✅ `social.plus-portal/getting-started.md` → `getting-started.mdx`
+- ✅ `social.plus-portal/README.md` → `README.mdx`
+- ✅ `social.plus-portal/application-management.md` → `application-management.mdx`
+- ✅ `social.plus-apis-and-services/pre-hook-event.md` → `pre-hook-event.mdx`
+- ✅ `social.plus-apis-and-services/network-settings.md` → `network-settings.mdx`
+- ✅ `social.plus-apis-and-services/generate-user-last-activity-report.md` → `generate-user-last-activity-report.mdx`
+- ✅ `social.plus-apis-and-services/README.md` → `README.mdx`
 - ✅ `console/changelogs.md` → `changelogs.mdx`
 - ✅ `console/settings/README.md` → `README.mdx`
 - ✅ `console/chat-management/README.md` → `README.mdx`
