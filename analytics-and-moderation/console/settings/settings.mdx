@@ -1,0 +1,117 @@
+# Security & Authentication
+
+<Info>
+Console workflows for securing access: enabling Secure Mode, generating Server Keys, protecting API usage with mTLS, and enforcing token hygiene.
+</Info>
+
+<CardGroup cols={3}>
+  <Card title="Enable Secure Mode" icon="lock">Require server‑generated auth tokens</Card>
+  <Card title="Generate Server Key" icon="key">One-time secret for backend</Card>
+  <Card title="View API Key" icon="eye">Identify network (non-secret)</Card>
+  <Card title="mTLS Certificates" icon="shield">Mutual TLS for token calls</Card>
+  <Card title="Auth Modes" icon="layers">Compare Unsecure vs Secure vs mTLS</Card>
+  <Card title="Governance" icon="clipboard">Rotation & audit practices</Card>
+</CardGroup>
+
+## Secure Mode Overview
+
+Without Secure Mode the client can request access tokens directly using API key + userId (higher abuse risk). With Secure Mode the client must present a short‑lived auth token minted by your backend (using Server Key) before an access token is issued.
+
+<Warning>Always enable Secure Mode in production to prevent session impersonation or scripted user creation.</Warning>
+
+## Enable Secure Mode & Generate Server Key
+
+<Steps>
+  <Step title="Navigate">Console → Settings → Integrations → Security section.</Step>
+  <Step title="Toggle On">Enable Secure Mode (confirm impact dialogue).</Step>
+  <Step title="Generate Key">Click “Generate new server key” (shown once).</Step>
+  <Step title="Store Securely">Copy to secrets manager (never commit to code).</Step>
+  <Step title="Implement Backend">Update backend to exchange Server Key for auth tokens.</Step>
+</Steps>
+
+<Info>User must be a non Super‑Admin admin account to generate the Server Key.</Info>
+
+## Authentication Flow
+
+<Tabs>
+  <Tab title="Unsecure">Client posts userId + apiKey → receives long‑lived access token. Suitable ONLY for prototyping.</Tab>
+  <Tab title="Secure Mode">Client asks backend → backend exchanges Server Key + userId for short‑lived auth token → client trades auth token + apiKey for access token.</Tab>
+  <Tab title="mTLS Layer">Adds mutual TLS between backend and Social Plus token endpoint; both sides validate certificates, mitigating MITM & key exfiltration risk.</Tab>
+</Tabs>
+
+| Mode | Secrets Exposed Client | Attack Surface | Recommended Use |
+|------|------------------------|----------------|-----------------|
+| Unsecure | API Key only | Token endpoint abuse, impersonation | Local testing only |
+| Secure | None (API Key + short auth token) | Compromised client still needs backend | Production baseline |
+| Secure + mTLS | None | Further reduces MITM / replay | High compliance / sensitive data |
+
+## API Key vs Server Key
+
+<AccordionGroup>
+  <Accordion title="API Key">Identifies network; safe to embed in client. Does NOT authenticate user identity.</Accordion>
+  <Accordion title="Server Key">High-privilege secret; ONLY on backend. Mint auth tokens. Rotate if suspected leak.</Accordion>
+  <Accordion title="Auth Token">Short‑lived (≈10 min) token produced using Server Key; proves backend mediation.</Accordion>
+  <Accordion title="Access Token">User session credential (~30 days) returned after presenting auth token (or directly in Unsecure Mode).</Accordion>
+</AccordionGroup>
+
+## mTLS Certificates
+
+<Steps>
+  <Step title="Pre‑Req">Secure Mode enabled.</Step>
+  <Step title="Create CSR">Generate CSR internally (align CN with service name).</Step>
+  <Step title="Console Upload">Settings → Security → “+ Create Certificate”. Provide Name (≤30 chars) & CSR.</Step>
+  <Step title="Activate">After issuance, enable mTLS toggle.</Step>
+  <Step title="Deploy Client Cert">Install issued client cert + private key on backend only.</Step>
+</Steps>
+
+<Info>Max 2 active certificates. Stage rotation by uploading new cert before disabling old.</Info>
+
+## Governance & Rotation
+
+<AccordionGroup>
+  <Accordion title="Server Key Rotation">Rotate at least annually or upon suspicion. Maintain dual operation window: mint new auth tokens while honoring old for ≤1 hour.</Accordion>
+  <Accordion title="Credential Storage">Use secret manager (KMS / Vault); never environment-commit.</Accordion>
+  <Accordion title="Logging">Log token mint requests (timestamp, userId, success). Avoid logging raw Server Key.</Accordion>
+  <Accordion title="mTLS Renewal">Track certificate expiry; schedule renewal ≥30 days prior.</Accordion>
+</AccordionGroup>
+
+## Metrics
+
+| Metric | Target | Action Trigger |
+|--------|--------|----------------|
+| Unauthorized Token Attempts | 0 | Any >0 → investigate key exposure |
+| Server Key Age (days) | < 365 | Approaching 365 → schedule rotation |
+| mTLS Coverage (%) | 100% for auth endpoints | &lt;100% → migrate remaining services |
+| Auth Token Failure Rate | < 2% | Spike → inspect backend logic / clock skew |
+| Cert Expiry Lead Time (days) | > 30 | < 30 → renew immediately |
+
+## Troubleshooting
+
+| Symptom | Likely Cause | Resolution |
+|---------|--------------|-----------|
+| Auth token request 401 | Wrong / rotated Server Key | Update secret; verify not using Super Admin account |
+| Access token mint fails | Missing auth token in Secure Mode | Ensure backend flow implemented; client passing token |
+| mTLS handshake failure | Expired / mismatched cert | Renew cert; confirm CN & chain; sync system clocks |
+| Elevated unauthorized attempts | Key compromise | Rotate Server Key; audit logs; enable IP allowlist (if available) |
+| Clock skew errors | Server time drift | Sync NTP across backend nodes |
+
+## Quick Reference
+
+<CardGroup cols={2}>
+  <Card title="Prod Baseline" icon="check">Enable Secure Mode + rotation policy</Card>
+  <Card title="High Assurance" icon="shield">Add mTLS layer</Card>
+  <Card title="Key Storage" icon="lock">Secrets manager only</Card>
+  <Card title="Rotate" icon="refresh">Annually or on incident</Card>
+</CardGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Admin Tokens" icon="key" href="./admin-tokens">Operational token lifecycle</Card>
+  <Card title="Integrations" icon="plug" href="./integrations">Webhooks & Push setup</Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Branding" icon="image" href="./branding">Console logo & brand account</Card>
+  <Card title="Admin Access" icon="users" href="../management/admin-access-control">Role governance</Card>
+</CardGroup>
