@@ -1,0 +1,314 @@
+---
+title: "PII Detection"
+description: "Automatically detect and optionally redact personally identifiable information (PII) in user-generated text across posts, comments, and messages."
+---
+
+<Info>
+Automatically locate and classify personally identifiable information (PII) within text content (Posts, Comments, Messages) and optionally redact it before display or export.
+</Info>
+
+## Why It Matters
+Moderating user-generated content requires balancing safety, privacy, and transparency. PII Detection helps you:
+
+- Reduce accidental exposure of sensitive user data.
+- Enforce compliance (GDPR, SOC2 readiness, internal data handling policies).
+- Streamline moderator workflows with structured PII metadata.
+- Give client apps a consistent way to mask or highlight sensitive snippets.
+
+## Core Capabilities
+<CardGroup cols={3}>
+	<Card title="Multi-Object Support" icon="layer-group">
+		Works uniformly on Post, Comment, and Message text bodies.
+	</Card>
+	<Card title="Structured Metadata" icon="brackets-curly">
+		Offset + length + category + confidence for each detection.
+	</Card>
+	<Card title="SDK Redaction API" icon="wand-magic-sparkles">
+		Simple helpers to produce redacted strings per category set.
+	</Card>
+</CardGroup>
+
+## Quick Start
+<Steps>
+<Step title="Enable Feature Flag">Contact Support to enable PII Detection for your network (Max plan+).</Step>
+<Step title="Create / Update Content">Users submit posts, comments, or chat messages as usual.</Step>
+<Step title="Fetch Objects">Retrieve objects through the SDK; each may contain zero or more PII entities.</Step>
+<Step title="Apply Redaction (Optional)">Call the redaction helper with category filters + replacement char.</Step>
+<Step title="Render / Export Safely">Display redacted text to end users; log or export masked forms.</Step>
+</Steps>
+
+## Availability & Billing
+<Info>
+PII Detection is available on <strong>Max plan and above</strong>. It is disabled by default; contact Support to have the feature flag enabled for your network.
+</Info>
+
+<Warning>
+Each processed text item (post, comment, or message) that runs through PII Detection counts toward your <strong>AI Moderation quota</strong>. Large backfills or bulk imports can consume quota quickly—coordinate with Support before running retrospective scans.
+</Warning>
+
+<Tip>
+Staging / sandbox environments share quota policies; throttle batch operations or segment traffic if you are load‑testing PII detection.
+</Tip>
+
+## High-Level Flow
+1. User submits text (post/comment/message create or update).
+2. Backend pipeline runs PII classification (synchronous or queued depending on volume).
+3. Detected entities are appended to the stored object as an embedded `pii` (or array) structure.
+4. Fetching the object via SDK includes PII metadata.
+5. Client optionally calls helper to generate a redacted representation for UI rendering, logs, or exports.
+
+## Data Model Extension
+The core schema is augmented with an embedded PII block per detection. (Shown conceptually below — actual shape may be array-based in future revisions.)
+
+```json
+{
+	"...": "other content fields",
+	"pii": {
+		"category": "string",          // e.g. email, phone, name
+		"offset": 123,                  // UTF-16 / SDK string index start
+		"length": 14,                   // number of characters in match
+		"confidenceScore": 0.96         // 0..1 model confidence
+	}
+}
+```
+
+<Note>
+If multiple PII entities are present, SDKs may expose them as a list. Plan for zero, one, or many.
+</Note>
+
+## Typical Moderation Use Case
+> As an admin, I want to filter the moderation feed by AI-detected topic so I can efficiently review content flagged under specific PII categories.
+
+You can index `pii.category` in internal tools to provide: facet filters, auto-redaction toggles, and export safeguards.
+
+## Redaction Strategy
+Client apps decide how to display sensitive text:
+
+- Full mask (default replacement char, e.g. `*`).
+- Partial mask (apply only to specific categories, e.g. email + phone, keep names visible).
+- Contextual highlight (do NOT replace, but visually annotate; implement using offsets).  
+
+<Warning>
+Redaction is a presentation concern. Raw original content remains accessible to authorized roles unless you also purge/transform at the source.
+</Warning>
+
+## SDK Usage
+PII data is accessed through helper methods exposed on Post / Comment / Message models. Use redaction helpers to mask selected categories before rendering.
+
+<Info>
+Supported today on Backend API, native Android & iOS SDKs. Web / React Native can consume metadata via API but must implement redaction manually. UIKit has no built‑in toggle yet (see integration section below).
+</Info>
+
+<Tabs>
+  <Tab title="iOS">
+
+  **Accessing PII Data**
+
+  ```swift
+  // Post
+  var post: AmityPost // fetched from SDK
+  post.getPIIData()
+
+  // Comment
+  var comment: AmityComment
+  comment.getPIIData()
+
+  // Message
+  var message: AmityMessage
+  message.getPIIData()
+  ```
+
+  **PII Data Object**
+
+  ```swift
+  let piiInfo: AmityPII = post.getPIIData()
+
+  piiInfo.offset      // Start index
+  piiInfo.length      // Length of detected entity
+  piiInfo.category    // Category returned by server
+  piiInfo.confidence  // 0.0 - 1.0
+  ```
+
+  **Redaction Helper**
+
+  ```swift
+  let post: AmityPost
+
+  // Mask all categories with '*':  Hi Steve -> Hi *****
+  let redactedAll = post.redactedText()
+
+  // Mask only email entities, use '#'
+  let redactedEmail = post.redactedText(piiCategories: [.email], replaceChar: "#")
+  ```
+
+  <Tip>Cache (original, redacted) pairs if you offer a moderator reveal toggle.</Tip>
+  </Tab>
+
+  <Tab title="Android">
+
+  **Accessing PII Data**
+
+  ```kotlin
+  // Post
+  val post: AmityPost // fetched from SDK
+  val postPii: List<AmityPII> = post.getPIIData()
+
+  // Comment
+  val comment: AmityComment
+  val commentPii: List<AmityPII> = comment.getPIIData()
+
+  // Message
+  val message: AmityMessage
+  val messagePii: List<AmityPII> = message.getPIIData()
+  ```
+
+  **Iterate Entities**
+
+  ```kotlin
+  postPii.forEach { pii ->
+	  val offset = pii.offset
+	  val length = pii.length
+	  val category = pii.category
+	  val confidence = pii.confidence
+  }
+  ```
+
+  **Redaction Helper**
+
+  ```kotlin
+  // Post – redact all
+  val postRedactedAll: String =
+	  (post.getData() as? AmityPost.Data.TEXT)?.redactedText() ?: "N/A"
+
+  // Comment – only email
+  val commentRedacted: String =
+	  (comment.getData() as? AmityComment.Data.TEXT)?.redactedText(
+		  piiCategories = listOf(AmityPII.Category.EMAIL),
+		  replaceChar = '#'
+	  ) ?: "N/A"
+  ```
+
+  <Tip>Group multiple entities before manual string transformations to avoid index shifts.</Tip>
+  </Tab>
+</Tabs>
+
+### Handling Multiple Entities
+When multiple detections exist, either:
+1. Apply redaction helper (handles ordering internally), or
+2. Sort entities by offset descending and splice manually if you need custom formatting (e.g. colored highlights).
+
+## Categories (Full Current Set)
+Below is the current set of PII categories emitted by the detection service:
+
+```json
+[
+	"Person",
+	"PersonType",
+	"LicensePlate",
+	"SortCode",
+	"PhoneNumber",
+	"Organization",
+	"Address",
+	"Email",
+	"IPAddress",
+	"DateTime",
+	"BankAccountNumber",
+	"DriversLicenseNumber",
+	"PassportNumber"
+]
+```
+
+### SDK Representation (Android / Kotlin)
+Below is the model structure (as provided) used within the Android SDK:
+
+```kotlin
+class AmityPII(
+		val offset: Int,          // Start index of detected entity
+		val length: Int,          // Length of the entity
+		val confidence: Double,   // 0.0 - 1.0 confidence score
+		val category: Category    // Normalized category type
+)
+
+sealed class Category {
+		object EMAIL : Category()
+		object PHONE_NUMBER : Category()
+		object IP_ADDRESS : Category()
+		object ADDRESS : Category()
+		object PASSPORT_NUMBER : Category()
+		class OTHERS(val value: String) : Category() // For categories not enumerated above
+}
+```
+
+<Note>
+Categories like <code>Person</code>, <code>PersonType</code>, <code>LicensePlate</code>, <code>SortCode</code>, <code>BankAccountNumber</code>, <code>DriversLicenseNumber</code>, and generic IDs are surfaced via <code>Category.OTHERS(value)</code> when a dedicated constant is not defined. Handle them gracefully (e.g., map <code>OTHERS("Person")</code> to a user-friendly label and redaction policy).
+</Note>
+
+### Redaction Policy Tips
+- Maintain a mapping table from raw category string → display label → redact (Y/N) → replacement char.
+- Keep an allowlist of safe categories to show unmasked (e.g., DateTime) if policy permits.
+- Log unexpected new category strings to monitoring so you can update UI mappings.
+
+<Tip>
+Not all detected categories must be redacted. Align category → action mappings with your internal compliance & privacy matrix.
+</Tip>
+
+## Confidence Handling
+- Treat very low confidence (e.g. < 0.50) as informational only.
+- Provide UI toggle to show/hide low-confidence detections.
+- Consider server-side thresholding to reduce noise (e.g. only persist ≥0.60).
+
+## Performance & Scaling
+- Detection runs server-side; client cost is O(n) over number of entities for redaction.
+- Multiple entities are safe; ensure your UI redaction logic accounts for shifting indices if you transform the string manually.
+
+## Privacy & Compliance Notes
+- PII metadata is derivative; deleting the parent object removes the metadata.
+- For export/audit pipelines, store only redacted form unless explicit legal basis for raw text access.
+- Log access to unredacted content if operating in regulated environments.
+
+
+
+
+## FAQ
+**Q: Can I force server-side redaction so raw text never leaves?**  
+A: Roadmap item; today redaction is client-driven using provided metadata.  
+**Q: What if multiple overlapping detections occur?**  
+A: Use highest-confidence or merge spans before rendering.  
+**Q: Do offsets reflect UTF-8 or UTF-16?**  
+A: Follow SDK string index semantics (documented per platform); when in doubt, validate with sample extraction.  
+
+## UIKit Integration (Optional Customization)
+Although UIKit does not yet ship a pre-wired PII redaction toggle, you can layer the redacted text helpers into the relevant content rendering components:
+
+### Android UIKit
+- Post component: `AmityPostContentElement`
+- Comment component: `AmityCommentContentContainer`
+
+Usage pattern:
+1. Fetch the `AmityPost` / `AmityComment` as usual.
+2. Call the underlying SDK method (e.g. `redactedText(...)`).
+3. Inject the resulting string into your custom view binding inside the component.
+
+### iOS UIKit
+- Post component: `AmityPostContentComponent`
+- Comment component: `AmityCommentView`
+
+Usage pattern:
+1. Retrieve the model (e.g. `AmityPost`).
+2. Generate the redacted variant via `redactedText(...)` (choose categories / replacement char).
+3. Assign to the text label / attributed string before layout.
+
+<Tip>
+Keep both original and redacted strings in memory if you offer a user role–based toggle (e.g., moderators can reveal originals). Avoid recomputing on every bind to reduce UI churn.
+</Tip>
+
+<Warning>
+If you cache redacted content, ensure cache keys include the selected category set and replacement character to prevent stale or mismatched redactions.
+</Warning>
+
+---
+<Info>
+Next: integrate PII category filters into your moderation console and add unit tests around redaction formatting.
+</Info>
+
+
