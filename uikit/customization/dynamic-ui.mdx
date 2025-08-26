@@ -2,17 +2,18 @@
 title: "Dynamic UI"
 description: "Level 1: Minimal customization with real-time updates using configuration files"
 ---
+<Info>
+<strong>Key Benefit:</strong> Ship brand updates instantly. Dynamic UI lets non-engineering teams update theme tokens (colors today; typography & spacing roadmap) without app rebuilds.
+</Info>
 
-# Minimal Customization
-
-Perfect for teams who want **quick brand consistency** without writing code or rebuilding apps. Dynamic UI enables real-time customization through configuration files and the social.plus Console.
+## Feature Overview
 
 <CardGroup cols={2}>
-  <Card title="No Code Required" icon="magic-wand">
-    Pure configuration-based customization
+  <Card title="Low code" icon="wand-magic-sparkles">
+    Pure configuration-based customization, just need to trigger the sync function.
   </Card>
-  <Card title="Real-time Updates" icon="bolt">
-    Changes apply instantly without app updates
+  <Card title="Near Real-time Updates" icon="bolt">
+    Changes apply almost instantly without app updates
   </Card>
   <Card title="Team Friendly" icon="users">
     Non-technical team members can make changes
@@ -26,301 +27,141 @@ Perfect for teams who want **quick brand consistency** without writing code or r
 
 Dynamic UI is ideal when you need:
 
-✅ **Quick brand implementation** - Get your colors and styling live fast  
-✅ **Real-time updates** - Change themes without app store releases  
-✅ **Team collaboration** - Let design teams update independently  
-✅ **Consistent branding** - Maintain uniform look across platforms  
-✅ **A/B testing** - Test different themes with live users  
+✅ **Rapid brand implementation** – Ship palette changes fast without rebuilds  
+✅ **Near real-time theme rollout** – Toggle or refine colors almost instantly (A/B ready)  
+✅ **Non-engineering updates** – Design / product can adjust safely  
+✅ **Cross-platform consistency** – One remote source drives all clients  
+✅ **Low-risk experimentation** – Revert by re‑publishing a previous config  
 
-❌ **Complex layouts** - Use Component Styling or Fork & Extend instead  
-❌ **Custom interactions** - Requires code-level customization  
-❌ **Unique components** - Need component-level or source code access
+❌ **Structural layout changes** – Use Component Styling or Fork & Extend  
+❌ **Per-component state styling depth** – Escalate to Component Styling  
+❌ **Custom data flows / logic injection** – Fork & Extend  
+❌ **Brand-new UI or primitives** – Fork & Extend  
 
-## How Dynamic UI Works
+<Tip>
+Start here; you can layer Component Styling or Fork & Extend later without discarding work.
+</Tip>
 
-The Dynamic UI system allows you to override your app's built-in theme configuration remotely:
+## How It Works
 
 <Steps>
-  <Step title="Configure in Console">
-    Make changes using the Dynamic UI editor in the social.plus Console
-  </Step>
-  <Step title="Preview Changes">
-    See real-time updates in the device mockup
-  </Step>
-  <Step title="Publish Updates">
-    Push changes live to all app users instantly
-  </Step>
-  <Step title="Automatic Sync">
-    Apps sync changes automatically using `syncNetworkConfig()`
-  </Step>
+  <Step title="Edit in Console">Adjust tokens in Dynamic UI editor.</Step>
+  <Step title="Preview">Device mock updates in real-time.</Step>
+  <Step title="Publish">Commit changes server-side (versioned).</Step>
+  <Step title="Client Sync">App calls <code>syncNetworkConfig()</code> to pull latest config.</Step>
 </Steps>
 
-<Info>
-Edits remain in **preview** mode until you click **Publish**. Publishing immediately replaces the stored values on our servers.
-</Info>
+<Note>
+Edits remain in preview until published. A publish atomically replaces prior values. Clients already running will pick it up on the next sync trigger.
+</Note>
 
-## Current Capabilities
-
-Dynamic UI currently supports:
+## Sync & Caching Behavior
 
 <AccordionGroup>
-  <Accordion title="Global Color Tokens">
-    - Primary and secondary colors
-    - Base color system (base, shade1-4)
-    - Background colors
-    - Alert colors
-    - Light and dark theme variants
+  <Accordion title="Online Sync">
+    Fetches JSON → validates → caches → applies tokens → triggers UI re-render where token consumers exist.
   </Accordion>
-  
-  <Accordion title="Future Enhancements">
-    - Typography settings
-    - Component spacing
-    - Border radius values
-    - Additional styling properties
+  <Accordion title="Offline Mode">
+    Uses last cached config. If none, falls back to build defaults (no crash / safe visuals).
+  </Accordion>
+  <Accordion title="Partial Failure">
+    If validation fails, client ignores new payload and keeps prior cache (defensive). Log a warning.
+  </Accordion>
+  <Accordion title="Security">
+    Auth required; only roles with Console permission can publish new themes.
   </Accordion>
 </AccordionGroup>
 
 ## Implementation
 
-### Prerequisites
+<Tabs>
+  <Tab title="Sync Configuration">
+    Call once at launch + on resume (and optionally a manual refresh action).
 
-<Warning>
-Dynamic UI requires proper setup and authentication to function. Ensure your app is configured with social.plus credentials.
-</Warning>
+    <CodeGroup>
+    ```swift iOS
+    import AmityUIKit
 
-### Sync Network Configuration
-
-To deliver the latest configuration to users, call `syncNetworkConfig()` in your application flow. This method:
-
-- Makes a lightweight request to the Dynamic UI endpoint
-- Downloads the current customization payload
-- Caches it locally on the device
-- Applies new values across all active UIKit screens
-
-<CodeGroup>
-```swift iOS (4.5.0+)
-import AmityUIKit
-
-// Sync dynamic configuration
-AmityUIKitManager.syncNetworkConfig { [weak self] success, error in
-    if success {
-        print("Dynamic UI configuration synced successfully")
-        // Configuration applied automatically
-    } else {
-        print("Failed to sync configuration: \(error?.localizedDescription ?? "Unknown error")")
+    @MainActor
+    func syncTheme() async {
+        do {
+            try await AmityUIKit4Manager.syncNetworkConfig()
+            print("Dynamic UI synced")
+        } catch {
+            print("Sync failed: \(error)")
+        }
     }
-}
-```
+    ```
 
-```kotlin Android (4.5.1+)
-import com.amity.socialcloud.uikit.AmityUIKit
-
-// Sync dynamic configuration
-AmityUIKit.syncNetworkConfig(object : AmityUIKit.AmityConfigCallback {
-    override fun onSuccess() {
-        Log.d("DynamicUI", "Configuration synced successfully")
-        // Configuration applied automatically
+    ```kotlin Android
+    fun syncTheme() {
+      AmityUIKit4Manager.syncNetworkConfig()
+        .subscribeOn(Schedulers.io())
+        .doOnComplete { Log.d("DynamicUI", "Synced") }
+        .doOnError { e -> Log.e("DynamicUI", "Failed", e) }
+        .subscribe()
     }
-    
-    override fun onError(error: Throwable) {
-        Log.e("DynamicUI", "Failed to sync configuration", error)
-    }
-})
-```
+    ```
 
-```javascript Web (4.6.1+)
-import { AmityUIKitManager } from '@amityco/ui-kit';
+    ```typescript React
+    import { AmityUIKitManager } from '@amityco/ui-kit';
 
-// Sync dynamic configuration
-try {
-    await AmityUIKitManager.syncNetworkConfig();
-    console.log('Dynamic UI configuration synced successfully');
-    // Configuration applied automatically
-} catch (error) {
-    console.error('Failed to sync configuration:', error);
-}
-```
-
-```typescript React Native
-import { AmityUIKitManager } from '@amityco/react-native-ui-kit';
-
-// Sync dynamic configuration
-const syncConfiguration = async () => {
-    try {
+    export async function syncTheme() {
+      try {
         await AmityUIKitManager.syncNetworkConfig();
-        console.log('Configuration synced successfully');
-    } catch (error) {
-        console.error('Sync failed:', error);
+        console.log('Dynamic UI synced');
+      } catch (e) {
+        console.error('Sync failed', e);
+      }
     }
-};
-```
-</CodeGroup>
+    ```
 
-### Best Practices
+    ```jsx React Native
+    import { AmityUIKitManager } from 'amity-react-native-social-ui-kit';
 
-<CardGroup cols={2}>
-  <Card title="Sync Frequency" icon="clock">
-    Call sync at app launch and when resuming from background
-  </Card>
-  <Card title="Error Handling" icon="exclamation-triangle">
-    Always handle sync failures gracefully
-  </Card>
-  <Card title="User Experience" icon="heart">
-    Sync during splash screens to avoid visual disruption
-  </Card>
-  <Card title="Testing" icon="flask">
-    Test offline behavior and fallback scenarios
-  </Card>
-</CardGroup>
+    const syncTheme = async () => {
+      try {
+        await AmityUIKitManager.syncNetworkConfig();
+        console.log('Dynamic UI synced');
+      } catch (e) {
+        console.log('Sync failed', e);
+      }
+    };
+    ```
 
-### Recommended Sync Points
+    ```dart Flutter
+    import 'package:amity_uikit/amity_uikit.dart';
 
-```javascript
-// App Launch
-app.on('launch', () => {
-    syncNetworkConfig();
-});
+    Future<void> syncTheme() async {
+      try {
+        await AmityUIKit4Manager.syncNetworkConfig();
+        print('Dynamic UI synced');
+      } catch (e) {
+        print('Sync failed: $e');
+      }
+    }
+    ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Recommended Triggers">
+    ```js
+    // Pseudocode lifecycle examples
+    app.on('launch', syncTheme);
+    app.on('resume', syncTheme);
+    refreshButton.on('click', syncTheme);
+    ```
+  </Tab>
+</Tabs>
 
-// App Resume
-app.on('resume', () => {
-    syncNetworkConfig();
-});
-
-// Manual Refresh
-refreshButton.on('click', () => {
-    syncNetworkConfig();
-});
-```
-
-## Offline and Fallback Behavior
-
-The Dynamic UI system handles various connectivity scenarios:
-
-<AccordionGroup>
-  <Accordion title="Online Behavior">
-    - Downloads latest configuration from server
-    - Caches configuration locally
-    - Applies changes immediately
-  </Accordion>
-  
-  <Accordion title="Offline Behavior">
-    - Uses last cached configuration
-    - Maintains consistent appearance
-    - Syncs when connectivity returns
-  </Accordion>
-  
-  <Accordion title="No Cache Available">
-    - Falls back to build-time defaults
-    - Ensures app remains functional
-    - Syncs configuration when possible
-  </Accordion>
-</AccordionGroup>
-
-<Note>
-The fallback system ensures your app maintains a consistent appearance even when network conditions are poor.
-</Note>
-
-## Console Management
-
-### Accessing Dynamic UI
-
-1. Log into the [social.plus Console](https://console.amity.co)
-2. Navigate to your application
-3. Select **UIKit** → **Dynamic UI**
-4. Use the device mockup to preview changes
-
-### Making Changes
-
-<Steps>
-  <Step title="Select Component">
-    Choose the UI element you want to customize
-  </Step>
-  <Step title="Adjust Properties">
-    Modify colors, spacing, or other available properties
-  </Step>
-  <Step title="Preview Changes">
-    See updates in real-time on the device mockup
-  </Step>
-  <Step title="Test Themes">
-    Switch between light and dark themes to test both
-  </Step>
-  <Step title="Publish">
-    Click **Publish** to make changes live
-  </Step>
-</Steps>
-
-### Team Workflow
-
-<CardGroup cols={2}>
-  <Card title="Design Team" icon="paint-brush">
-    Creates and previews customizations
-  </Card>
-  <Card title="Product Team" icon="check-circle">
-    Reviews and approves changes
-  </Card>
-  <Card title="Engineering Team" icon="code">
-    Implements sync calls in the app
-  </Card>
-  <Card title="QA Team" icon="bug">
-    Tests changes across different scenarios
-  </Card>
-</CardGroup>
-
-## Troubleshooting
-
-### Common Issues
-
-<AccordionGroup>
-  <Accordion title="Changes Not Appearing">
-    **Solution:**
-    - Verify `syncNetworkConfig()` is being called
-    - Check network connectivity
-    - Ensure proper authentication
-    - Clear app cache if necessary
-  </Accordion>
-  
-  <Accordion title="Sync Errors">
-    **Solution:**
-    - Check authentication credentials
-    - Verify network permissions
-    - Handle errors gracefully in your code
-    - Implement retry logic for failed syncs
-  </Accordion>
-  
-  <Accordion title="Inconsistent Appearance">
-    **Solution:**
-    - Ensure all theme colors are defined
-    - Test both light and dark themes
-    - Verify contrast ratios
-    - Check for cached configurations
-  </Accordion>
-</AccordionGroup>
-
-### Debug Mode
-
-Enable debug logging to troubleshoot Dynamic UI issues:
-
-<CodeGroup>
-```swift iOS
-AmityUIKitManager.enableDebugMode(true)
-```
-
-```kotlin Android
-AmityUIKit.setDebugMode(true)
-```
-
-```javascript Web
-AmityUIKitManager.setDebugMode(true)
-```
-</CodeGroup>
 
 ## Next Steps
 
-<CardGroup cols={2}>
-  <Card title="Component Styling" href="/uikit/customization/component-styling">
-    Learn about specific component customizations
-  </Card>
-  <Card title="Advanced Customization" href="/uikit/customization/advanced-customization">
-    Explore advanced theming techniques
-  </Card>
+<CardGroup cols={3}>
+  <Card title="Component Styling" href="/uikit/customization/component-styling" icon="code">Per-component overrides</Card>
+  <Card title="Theming Basics" href="/uikit/customization/theming-basics" icon="book">Layering model & tokens</Card>
+  <Card title="Advanced Customization" href="/uikit/customization/advanced-customization" icon="code-fork">Fork & extend</Card>
 </CardGroup>
+
+<Tip>
+Log a design token adoption plan early so future roadmap features (typography/spacing) slot in without refactors.
+</Tip>
