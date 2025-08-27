@@ -491,32 +491,6 @@ Excluding structural elements (like a required close button) may degrade usabili
 Group related overrides together to prevent accidental shadowing by later blocks.
 </Tip>
 
-## Validation Checklist
-
-<Checklist>
-  <Check>All hex colors valid (#RRGGBB / #RRGGBBAA)</Check>
-  <Check>No trailing commas in JSON objects</Check>
-  <Check>Wildcard positions correct (`page/*/*`, `*/component/*`, `*/*/element`)</Check>
-  <Check>Excluded IDs exist before removing</Check>
-  <Check>Dark theme provides sufficient contrast</Check>
-</Checklist>
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="Override Not Applying">
-    Confirm path accuracy; test with a more generic wildcard to isolate which segment mismatches.
-  </Accordion>
-  <Accordion title="Unexpected Color in Dark Mode">
-    Missing dark fallback—ensure both themes defined or rely on global token.
-  </Accordion>
-  <Accordion title="Icon Not Showing">
-    Verify asset filename, case sensitivity, and bundling path.
-  </Accordion>
-  <Accordion title="Broken Layout After Exclusion">
-    Re-add element; some components expect internal spacing anchors.
-  </Accordion>
-</AccordionGroup>
 
 ## Best Practices
 
@@ -528,6 +502,120 @@ Group related overrides together to prevent accidental shadowing by later blocks
   <Card title="Dark Mode QA" icon="moon">Visually inspect every high-contrast surface.</Card>
   <Card title="Minimal Exclusions" icon="scissors">Prefer styling adjustments over removal.</Card>
 </CardGroup>
+
+## Overriding Navigation Behaviour
+
+<Info>
+Navigation can be customized without forking by overriding the provided Behaviour classes. UIKit isolates navigation & event hooks into behaviour objects per page/component so you can inject custom flows (e.g., presenting a different creation screen, analytics, guards) while keeping styling overrides separate.
+</Info>
+
+### Behaviour Architecture
+
+- Each major screen/component exposes a `Behaviour` (iOS) / `Behavior` (Android) class with overridable navigation methods.
+- A top-level `AmityUIKit4Manager.behaviour` (iOS) / `AmityUIKit4Manager.behavior` (Android) aggregates these instances.
+- Replace only the concrete behaviour you need; leave others at default.
+
+### Override Example: Story Tab Navigation
+
+<CodeGroup>
+```swift iOS
+// Custom behaviour for Story Tab component
+class CustomStoryTabComponentBehaviour: AmityStoryTabComponentBehaviour {
+  override init() { super.init() }
+
+  override func goToViewStoryPage(context: AmityStoryTabComponentBehaviour.Context) {
+    // Custom navigation (e.g., analytics, gated modal, custom host)
+  }
+
+  override func goToCreateStoryPage(context: AmityStoryTabComponentBehaviour.Context) {
+    // Present alternative creation UI or permission flow
+  }
+}
+
+// Register once (e.g. after SDK init)
+func configureNavigationOverrides() {
+  AmityUIKit4Manager.behaviour.storyTabComponentBehaviour = CustomStoryTabComponentBehaviour()
+}
+```
+
+```kotlin Android
+// Custom behavior for Story Tab component
+class CustomStoryTabComponentBehavior : AmityStoryTabComponentBehavior() {
+
+  override fun goToViewStoryPage(
+    context: Context,
+    type: AmityViewStoryPageType,
+  ) {
+    // Launch custom activity / compose destination
+  }
+
+  override fun goToCreateStoryPage(
+    context: Context,
+    targetId: String,
+    targetType: AmityStory.TargetType
+  ) {
+    // Inject permission checks or route to experimental editor
+  }
+}
+
+fun configureNavigationOverrides() {
+  AmityUIKit4Manager.behavior.storyTabComponentBehavior = CustomStoryTabComponentBehavior()
+}
+```
+</CodeGroup>
+
+<Tip>
+Only override the specific methods you need; keep defaults for forward compatibility.
+</Tip>
+
+### Advanced iOS Navigation (Swipe Back & SwiftUI Hosting)
+
+UIKit v4 pages are predominantly SwiftUI, embedded in `UINavigationController` via helper controllers:
+
+| Class | Purpose |
+|-------|---------|
+| `AmitySwiftUIHostingController` | Wrap a single SwiftUI view |
+| `AmitySwiftUIHostingNavigationController` | Provide a navigation stack hosting SwiftUI pages |
+
+To preserve the interactive swipe‑to‑go‑back gesture while customizing appearance, UIKit globally overrides navigation gesture delegate methods. You can supply your own gesture behaviour logic via `AmitySwipeToBackGestureBehavior`.
+
+<CodeGroup>
+```swift iOS
+// Default usage
+let defaultGestureBehavior = AmitySwipeToBackGestureBehavior()
+
+// Custom gesture policy
+class CustomSwipeBackGestureBehavior: AmitySwipeToBackGestureBehavior {
+  override func gestureRecognizerShouldBegin(
+    navigationController: UINavigationController,
+    _ gestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    // Example: disable swipe on root page or during modal overlay
+    return navigationController.viewControllers.count > 1
+  }
+
+  override func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    // Allow simultaneous recognition with horizontally scrollable carousels
+    return true
+  }
+}
+
+func configureGestureBehavior() {
+  AmityUIKit4Manager.behaviour.swipeToBackGestureBehavior = CustomSwipeBackGestureBehavior()
+}
+```
+</CodeGroup>
+
+<Note>
+Keep gesture logic lightweight—long operations here can block UI responsiveness.
+</Note>
+
+### When to Escalate
+
+If navigation changes require altering internal view composition (e.g., embedding a new container architecture), consider moving to <a href="/uikit/customization/advanced-customization">Fork & Extend</a>. Simple route substitutions, analytics, permission gates, and gesture tweaks belong here.
 
 ## Next Steps
 
