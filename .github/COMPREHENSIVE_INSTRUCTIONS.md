@@ -776,7 +776,7 @@ Brief introduction explaining what the component does and its main benefits.
     
     **Solutions**:
     1. Implement pagination for large data sets
-    2. Optimize image loading with proper sizing
+    2. Optimize image loading with proper sizing 
     3. Use FlatList/RecyclerView for long lists
     4. Monitor memory usage and implement proper cleanup
   </Accordion>
