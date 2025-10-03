@@ -3,20 +3,28 @@ title: "Poll Posts"
 description: "Create interactive poll posts to gather community feedback and engagement"
 ---
 
-Create engaging poll posts that drive community interaction and gather valuable feedback. Poll posts combine questions with multiple voting options, time limits, and real-time results.
+Create engaging poll posts that drive community interaction and gather valuable feedback. Poll posts combine questions with multiple voting options, time limits, and real-time results. Choose between text-only polls or visual image polls for different engagement styles.
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Multiple Options" icon="list">
     Create polls with 2-10 answer options
   </Card>
   <Card title="Time Limits" icon="clock">
     Set custom voting deadlines or keep open indefinitely
   </Card>
+  <Card title="Image Options" icon="image">
+    Add visual elements with text+image poll options
+  </Card>
 </CardGroup>
 
 ## Overview
 
-Poll posts enable interactive community engagement by allowing users to vote on questions. Create polls with multiple options, set time limits, and track real-time voting results.
+Poll posts enable interactive community engagement by allowing users to vote on questions. Create polls with multiple options, set time limits, and track real-time voting results. You can choose between:
+
+- **Text Polls**: Traditional polls with text-only answer options
+- **Image Polls**: Visual polls where users vote on image options with optional captions
+
+Both poll types follow the same creation process: create the poll first, then create a post that references the poll ID.
 
 
 <Warning>
@@ -45,6 +53,22 @@ A Poll must be created first before creating the post. See [Poll Creation Guidel
 | `tags` | Array | No | Searchable tags (not available in Flutter) |
 | `metadata` | Object | No | Custom fields for extended functionality |
 
+### Answer Object Structure (Image Polls Only)
+
+For image polls, each answer option requires the following structure:
+
+| Parameter  | Type   | Required | Description                              |
+| ---------- | ------ | -------- | ---------------------------------------- |
+| `dataType` | String | Yes      | Must be set to `'image'` for image polls |
+| `fileId`   | String | Yes      | ID of the uploaded image file            |
+| `text`     | String | No       | Optional caption for the image option    |
+
+<Info>
+**Image Requirements**: Images must be uploaded first using the File Repository before creating the poll. Supported formats include JPEG, PNG, and WebP with a maximum file size of 100MB per image.
+</Info>
+
+
+## Text Poll Creation
 
 <CodeGroup>
 ```swift iOS
@@ -105,8 +129,116 @@ async function creatPollPost(): Promise<Amity.Post> {
   });
 ```
 
-
 </CodeGroup>
+
+## Image Poll Creation
+
+<Tabs>
+<Tab title="iOS">
+```swift
+// Implementation example coming soon
+```
+</Tab>
+
+<Tab title="Android">
+```kotlin
+fun createImagePoll(
+    pollQuestion: String,
+    answer1: String,
+    answer2: String,
+    image1: AmityImage? = null,
+    image2: AmityImage? = null,
+    isMultipleChoice: Boolean,
+    closedInMinutes: Int?,
+    postTitle: String?,
+    targetType: AmityPost.TargetType,
+    targetId: String,
+) {
+    val answers = mutableListOf<AmityPollAnswer.Data>().apply {
+        // Add first answer with its image
+        if (image1 != null) {
+            add(AmityPollAnswer.Data.IMAGE(fileId = image1.getFileId(), data = answer1))
+        }
+
+        // Add second answer with its image
+        if (image2 != null) {
+            add(AmityPollAnswer.Data.IMAGE(fileId = image2.getFileId(), data = answer2))
+        }
+    }
+    AmitySocialClient.newPollRepository()
+        .createPoll(
+            question = pollQuestion,
+        )
+        .answers(answers)
+        .answerType(if (isMultipleChoice) AmityPoll.AnswerType.MULTIPLE else AmityPoll.AnswerType.SINGLE)
+        .apply {
+            closedInMinutes?.let {
+                closedIn(Minutes.minutes(it).toStandardDuration().millis)
+            }
+        }
+        .build()
+        .create()
+        .flatMap { pollId: String ->
+            AmitySocialClient.newPostRepository()
+                .createPollPost(
+                    targetType = targetType,
+                    targetId = targetId,
+                    pollId = pollId,
+                    text = pollQuestion,
+                    title = postTitle,
+                )
+        }
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .doOnSuccess { post: AmityPost ->
+          // Post creation successful
+        }
+        .doOnError {
+          // Handle error
+        }
+        .subscribe()
+}
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { PostRepository, PollRepository } from '@amityco/ts-sdk';
+
+async function createImagePollPost(): Promise<Amity.Post> {
+  // Setup your poll params with image answers
+  const newPoll = {
+    answerType: 'single',
+    answers: [
+      { dataType: 'image', data: 'Option A', fileId: 'imageFileId1' },
+      { dataType: 'image', data: 'Option B', fileId: 'imageFileId2' },
+    ],
+    question: 'Which design do you prefer?',
+  };
+
+  // Create a poll from poll params
+  const { data: poll } = await PollRepository.createPoll(newPoll);
+
+  // Create a poll post on the user's feed
+  const newPollPost = {
+    targetType: 'community',
+    targetId: 'communityId1',
+    data: { text: 'Vote for your favorite design!', pollId: poll.pollId },
+  };
+
+  const { data: post } = await PostRepository.createPost(newPollPost);
+
+  return post;
+}
+```
+</Tab>
+
+<Tab title="Flutter">
+```dart
+// Implementation example coming soon
+```
+</Tab>
+</Tabs>
 
 ## Troubleshooting
 
@@ -152,7 +284,41 @@ async function creatPollPost(): Promise<Amity.Post> {
     - Handle cases where vote counts are not available
     - Provide fallback UI for loading states
     
-   
+  </Accordion>
+
+  <Accordion title="Image Upload Issues" icon="upload">
+    **Problem**: Images fail to upload or poll creation fails (Image Polls)
+    
+    **Solutions**:
+    - Check file size (must be under 100MB per image)
+    - Verify supported format (JPEG, PNG, WebP)
+    - Ensure stable internet connection
+    - Implement retry logic with exponential backoff
+
+    ```typescript
+    try {
+      const fileId = await FileRepository.uploadImage(imageFile);
+      // Proceed with poll creation
+    } catch (error) {
+      if (error.code === "FILE_TOO_LARGE") {
+        // Compress image and retry
+      } else if (error.code === "NETWORK_ERROR") {
+        // Implement retry logic
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Image Reference Issues" icon="image">
+    **Problem**: Image references in polls become unavailable (Image Polls)
+    
+    **Solutions**:
+    - Images used in active polls cannot be deleted from file storage
+    - Consider the poll lifecycle when managing image assets
+    - Implement proper cleanup after poll expiration
+    - Implement fallback UI for missing poll option images
+    - Show placeholder or error state for broken image references
+    - Consider caching strategies for poll option images
   </Accordion>
 </AccordionGroup>
 
@@ -160,16 +326,22 @@ async function creatPollPost(): Promise<Amity.Post> {
 
 <CardGroup cols={2}>
   <Card title="Community Feedback" icon="comments">
-    Gather opinions on community decisions and improvements
+    Gather opinions on community decisions and improvements using text polls
   </Card>
   <Card title="Event Planning" icon="calendar">
-    Coordinate dates, times, and preferences for events
+    Coordinate dates, times, and preferences for events with either text or image options
+  </Card>
+  <Card title="Design Feedback" icon="palette">
+    Gather visual preferences on UI mockups and design concepts using image polls
+  </Card>
+  <Card title="Photo Contests" icon="camera">
+    Let communities vote on best photos and creative submissions with image polls
   </Card>
   <Card title="Product Research" icon="vial">
-    Collect user preferences and feature requests
+    Collect user preferences and feature requests using text-based polls
   </Card>
-  <Card title="Quick Surveys" icon="clipboard-list">
-    Run simple polls for engagement and data collection
+  <Card title="Product Selection" icon="cart-shopping">
+    Help users choose between visual product options and variants with image polls
   </Card>
 </CardGroup>
 
@@ -178,6 +350,12 @@ async function creatPollPost(): Promise<Amity.Post> {
 <CardGroup cols={3}>
   <Card title="Poll Display" href="/social-plus-sdk/social/posts/viewing-post-content#poll-post" icon="square-poll-vertical">
     Learn how to create and manage polls before posting
+  </Card>
+  <Card title="Image Posts" href="./image-post" icon="image">
+    Share single or multiple images in posts
+  </Card>
+  <Card title="File Upload" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling" icon="cloud-arrow-up">
+    Learn about image upload and handling for image polls
   </Card>
   <Card title="Text Posts" href="./text-post" icon="text">
     Create simple text-based posts with discussions
