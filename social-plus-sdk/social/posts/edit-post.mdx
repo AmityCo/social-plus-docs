@@ -22,28 +22,24 @@ graph TD
 
 <CardGroup cols={2}>
   <Card title="Supported Post Types" icon="edit">
-    - Text posts
-    - Image posts  
-    - Video posts
-    - File posts
+    - Text posts - Image posts - Video posts - File posts
   </Card>
   <Card title="Key Features" icon="sparkles">
-    - Edit timestamp tracking
-    - Permission-based editing
-    - Media file management
+    - Edit timestamp tracking - Permission-based editing - Media file management
     - Content validation
   </Card>
 </CardGroup>
 
 ## Edit Parameters
 
-| Parameter | Type | Description | Required |
-|-----------|------|-------------|----------|
-| `postId` | String | ID of the post to edit | ✅ |
-| `data` | Object | New post content data | ✅ |
-| `metadata` | Object | Additional post metadata | ❌ |
-| `tags` | Array\<String\> | Post tags (max 5, 24 chars each) | ❌ |
-| `mentionees` | Array | Users mentioned in post | ❌ |
+| Parameter    | Type            | Description                      | Required |
+| ------------ | --------------- | -------------------------------- | -------- |
+| `postId`     | String          | ID of the post to edit           | ✅       |
+| `title`      | String          | Post title (max 150 characters)  | ❌       |
+| `data`       | Object          | New post content data            | ✅       |
+| `metadata`   | Object          | Additional post metadata         | ❌       |
+| `tags`       | Array\<String\> | Post tags (max 5, 24 chars each) | ❌       |
+| `mentionees` | Array           | Users mentioned in post          | ❌       |
 
 ## Post Editing Examples
 
@@ -56,12 +52,16 @@ Update text content while preserving post metadata and engagement metrics.
 ```swift
 import AmitySDK
 
-func editTextPost(postId: String, newText: String) {
+func editTextPost(postId: String, newTitle: String? = nil, newText: String) {
     let textPostBuilder = AmityTextPostBuilder()
         .setText(newText)
         .setTags(["updated", "edited"])
         .setMetadata(["editReason": "typo_correction"])
-    
+
+    if let title = newTitle {
+        textPostBuilder.setTitle(title)
+    }
+
     let repository = AmityPostRepository(client: client)
     repository.editPost(withId: postId, builder: textPostBuilder)
         .subscribe { [weak self] result in
@@ -79,11 +79,11 @@ func editTextPost(postId: String, newText: String) {
 func editMultiplePosts(posts: [(id: String, text: String)]) {
     let group = DispatchGroup()
     var results: [String: Bool] = [:]
-    
+
     for postData in posts {
         group.enter()
         let builder = AmityTextPostBuilder().setText(postData.text)
-        
+
         AmityPostRepository(client: client)
             .editPost(withId: postData.id, builder: builder)
             .subscribe { result in
@@ -91,7 +91,7 @@ func editMultiplePosts(posts: [(id: String, text: String)]) {
                 group.leave()
             }
     }
-    
+
     group.notify(queue: .main) {
         print("Batch edit complete: \(results)")
     }
@@ -107,9 +107,9 @@ func editImagePost(postId: String, newImages: [UIImage], keepExisting: Bool = tr
     // First upload new images
     let fileRepository = AmityFileRepository(client: client)
     var uploadedFiles: [AmityFile] = []
-    
+
     let group = DispatchGroup()
-    
+
     for image in newImages {
         group.enter()
         fileRepository.uploadImage(image) { result in
@@ -122,13 +122,13 @@ func editImagePost(postId: String, newImages: [UIImage], keepExisting: Bool = tr
             group.leave()
         }
     }
-    
+
     group.notify(queue: .main) {
         // Build image post with new files
         let imageBuilder = AmityImagePostBuilder()
             .setImages(uploadedFiles)
             .setText("Updated with new images")
-        
+
         AmityPostRepository(client: client)
             .editPost(withId: postId, builder: imageBuilder)
             .subscribe { result in
@@ -151,7 +151,7 @@ Update file attachments with proper validation and error handling.
 func editFilePost(postId: String, newFileURLs: [URL]) {
     let fileRepository = AmityFileRepository(client: client)
     var uploadedFiles: [AmityFile] = []
-    
+
     // Upload new files
     for fileURL in newFileURLs {
         fileRepository.uploadFile(fileURL) { result in
@@ -164,12 +164,12 @@ func editFilePost(postId: String, newFileURLs: [URL]) {
             }
         }
     }
-    
+
     // Edit post with new files
     let fileBuilder = AmityFilePostBuilder()
         .setFiles(uploadedFiles)
         .setText("Updated file attachments")
-    
+
     AmityPostRepository(client: client)
         .editPost(withId: postId, builder: fileBuilder)
         .subscribe { result in
@@ -186,7 +186,7 @@ Manage video content updates with transcoding support.
 func editVideoPost(postId: String, newVideoURLs: [URL]) {
     let fileRepository = AmityFileRepository(client: client)
     var uploadedVideos: [AmityFile] = []
-    
+
     // Upload videos with progress tracking
     for videoURL in newVideoURLs {
         fileRepository.uploadVideo(videoURL) { progress in
@@ -200,12 +200,12 @@ func editVideoPost(postId: String, newVideoURLs: [URL]) {
             }
         }
     }
-    
+
     // Update post with new videos
     let videoBuilder = AmityVideoPostBuilder()
         .setVideos(uploadedVideos)
         .setText("Updated video content")
-    
+
     AmityPostRepository(client: client)
         .editPost(withId: postId, builder: videoBuilder)
         .subscribe { result in
@@ -213,6 +213,7 @@ func editVideoPost(postId: String, newVideoURLs: [URL]) {
         }
 }
 ```
+
 </Tab>
 
 <Tab title="Android">
@@ -223,15 +224,20 @@ import co.amity.sdk.AmityPost
 import co.amity.sdk.AmityPostRepository
 
 class PostEditManager {
-    
-    fun editTextPost(postId: String, newText: String) {
-        AmityPostRepository.Builder()
+
+    fun editTextPost(postId: String, newTitle: String? = null, newText: String) {
+        val editBuilder = AmityPostRepository.Builder()
             .build()
             .edit(postId)
             .text(newText)
             .metadata(mapOf("editReason" to "content_update"))
             .tags(listOf("edited", "updated"))
-            .build()
+
+        newTitle?.let { title ->
+            editBuilder.title(title)
+        }
+
+        editBuilder.build()
             .edit()
             .subscribe(
                 { result ->
@@ -250,17 +256,17 @@ class PostEditManager {
                 }
             )
     }
-    
+
     // Batch editing with error handling
     fun editMultiplePosts(posts: List<Pair<String, String>>) {
         val repository = AmityPostRepository.Builder().build()
-        
+
         posts.forEach { (postId, newText) ->
             repository.edit(postId)
                 .text(newText)
                 .build()
                 .edit()
-                .doOnSuccess { 
+                .doOnSuccess {
                     println("Successfully edited post: $postId")
                 }
                 .doOnError { error ->
@@ -279,7 +285,7 @@ fun editImagePost(postId: String, newImages: List<Uri>, keepExisting: Boolean = 
     // Upload new images first
     val fileRepository = AmityFileRepository.Builder().build()
     val uploadedFiles = mutableListOf<AmityFile>()
-    
+
     newImages.forEach { imageUri ->
         fileRepository.uploadImage(imageUri)
             .doOnNext { result ->
@@ -290,7 +296,7 @@ fun editImagePost(postId: String, newImages: List<Uri>, keepExisting: Boolean = 
                     }
                     is AmityUploadResult.COMPLETE -> {
                         uploadedFiles.add(result.file)
-                        
+
                         // When all uploads complete, edit the post
                         if (uploadedFiles.size == newImages.size) {
                             updateImagePost(postId, uploadedFiles)
@@ -335,14 +341,14 @@ private fun updateImagePost(postId: String, images: List<AmityFile>) {
 fun editFilePost(postId: String, newFiles: List<Uri>) {
     val fileRepository = AmityFileRepository.Builder().build()
     val uploadedFiles = mutableListOf<AmityFile>()
-    
+
     newFiles.forEach { fileUri ->
         fileRepository.uploadFile(fileUri)
             .doOnNext { result ->
                 when (result) {
                     is AmityUploadResult.COMPLETE -> {
                         uploadedFiles.add(result.file)
-                        
+
                         if (uploadedFiles.size == newFiles.size) {
                             // Update post with all uploaded files
                             AmityPostRepository.Builder()
@@ -371,7 +377,7 @@ fun editFilePost(postId: String, newFiles: List<Uri>) {
 fun editVideoPost(postId: String, newVideos: List<Uri>) {
     val fileRepository = AmityFileRepository.Builder().build()
     val uploadedVideos = mutableListOf<AmityFile>()
-    
+
     newVideos.forEach { videoUri ->
         fileRepository.uploadVideo(videoUri)
             .doOnNext { result ->
@@ -381,7 +387,7 @@ fun editVideoPost(postId: String, newVideos: List<Uri>) {
                     }
                     is AmityUploadResult.COMPLETE -> {
                         uploadedVideos.add(result.file)
-                        
+
                         if (uploadedVideos.size == newVideos.size) {
                             updateVideoPost(postId, uploadedVideos)
                         }
@@ -408,210 +414,108 @@ private fun updateVideoPost(postId: String, videos: List<AmityFile>) {
         }
 }
 ```
+
 </Tab>
 
 <Tab title="TypeScript">
 ### Text Post Editing
 
 ```typescript
-import { PostRepository, UpdatePostParams } from '@amityco/ts-sdk';
+import { PostRepository, PostContentType } from "@amityco/ts-sdk";
 
-class PostEditManager {
-  async editTextPost(postId: string, newText: string): Promise<void> {
-    try {
-      const params: UpdatePostParams = {
-        postId,
-        data: { text: newText },
-        metadata: { editReason: 'content_update' },
-        tags: ['edited', 'updated']
-      };
-      
-      const success = await PostRepository.updatePost(params);
-      
-      if (success) {
-        console.log('Post edited successfully');
-        
-        // Get updated post to show edit timestamp
-        const updatedPost = await PostRepository.getPost(postId);
-        console.log('Edit timestamp:', updatedPost.editedAt);
-      }
-    } catch (error) {
-      console.error('Edit failed:', error);
-      throw error;
-    }
-  }
-  
-  // Edit with mention updates
-  async editPostWithMentions(
-    postId: string, 
-    text: string, 
-    mentionedUserIds: string[]
-  ): Promise<void> {
-    const params: UpdatePostParams = {
-      postId,
-      data: { text },
-      mentionees: [{
-        type: 'user',
-        userIds: mentionedUserIds
-      }]
-    };
-    
-    await PostRepository.updatePost(params);
-  }
-  
-  // Batch editing with error handling
-  async editMultiplePosts(
-    edits: Array<{ postId: string; text: string }>
-  ): Promise<{ success: string[]; failed: string[] }> {
-    const results = { success: [], failed: [] };
-    
-    await Promise.allSettled(
-      edits.map(async ({ postId, text }) => {
-        try {
-          await this.editTextPost(postId, text);
-          results.success.push(postId);
-        } catch (error) {
-          results.failed.push(postId);
-          console.error(`Failed to edit ${postId}:`, error);
-        }
-      })
-    );
-    
-    return results;
-  }
-}
+const editPost = async function (
+  postId: Amity.Post["postId"]
+): Promise<Amity.Post> {
+  const editPost = {
+    data: {
+      title: "Greeting",
+      text: "hello!",
+    },
+  };
+
+  const { data: post } = await PostRepository.editPost(postId, editPost);
+
+  return post;
+};
 ```
 
 ### Image Post Editing
 
 ```typescript
-import { PostRepository, FileRepository, FileType } from '@amityco/ts-sdk';
+import { PostRepository, PostContentType } from "@amityco/ts-sdk";
 
-async function editImagePost(
-  postId: string, 
-  newImages: File[], 
-  caption?: string
-): Promise<void> {
-  try {
-    // Upload new images
-    const uploadPromises = newImages.map(image => 
-      FileRepository.uploadFile(image)
-    );
-    
-    const uploadResults = await Promise.all(uploadPromises);
-    const attachments = uploadResults.map(result => ({
-      fileId: result.fileId,
-      type: FileType.Image
-    }));
-    
-    // Update post with new images
-    await PostRepository.updatePost({
-      postId,
-      data: { text: caption || 'Updated images' },
-      attachments
-    });
-    
-    console.log('Image post updated successfully');
-  } catch (error) {
-    console.error('Failed to update image post:', error);
-    throw error;
-  }
-}
+const editPost = async function (
+  postId: Amity.Post["postId"]
+): Promise<Amity.Post> {
+  const editPost = {
+    data: {
+      title: "Greeting",
+      text: "hello!",
+    },
+    attachments: [
+      { type: PostContentType.IMAGE, fileId: "fileId1" },
+      { type: PostContentType.IMAGE, fileId: "fileId2" },
+    ],
+  };
+
+  const { data: post } = await PostRepository.editPost(postId, editPost);
+
+  return post;
+};
 ```
 
 ### Video Post Editing
 
 ```typescript
-async function editVideoPost(
-  postId: string,
-  newVideos: File[],
-  description?: string
-): Promise<void> {
-  try {
-    // Upload videos with progress tracking
-    const uploadPromises = newVideos.map(async video => {
-      const uploadResult = await FileRepository.uploadFile(video, {
-        onProgress: (progress) => {
-          console.log(`Upload progress: ${progress.loaded}/${progress.total}`);
-        }
-      });
-      return uploadResult;
-    });
-    
-    const uploadResults = await Promise.all(uploadPromises);
-    const attachments = uploadResults.map(result => ({
-      fileId: result.fileId,
-      type: FileType.Video
-    }));
-    
-    await PostRepository.updatePost({
-      postId,
-      data: { text: description || 'Updated video content' },
-      attachments
-    });
-    
-  } catch (error) {
-    console.error('Video post edit failed:', error);
-    throw error;
-  }
-}
+import { PostRepository, PostContentType } from "@amityco/ts-sdk";
+
+const editPost = async function (
+  postId: Amity.Post["postId"]
+): Promise<Amity.Post> {
+  const editPost = {
+    data: {
+      title: "Greeting",
+      text: "hello!",
+    },
+    attachments: [
+      { type: PostContentType.VIDEO, fileId: "fileId1" },
+      { type: PostContentType.VIDEO, fileId: "fileId2" },
+    ],
+  };
+
+  const { data: post } = await PostRepository.editPost(postId, editPost);
+
+  return post;
+};
 ```
 
 ### Advanced Edit Features
 
 ```typescript
-class AdvancedPostEditor {
-  // Edit with validation
-  async editWithValidation(
-    postId: string, 
-    newContent: string
-  ): Promise<boolean> {
-    // Validate content
-    if (newContent.length > 5000) {
-      throw new Error('Content too long');
-    }
-    
-    if (newContent.trim().length === 0) {
-      throw new Error('Content cannot be empty');
-    }
-    
-    // Check if user has permission to edit
-    const post = await PostRepository.getPost(postId);
-    const currentUser = await UserRepository.getCurrentUser();
-    
-    if (post.userId !== currentUser.userId && !currentUser.isModerator) {
-      throw new Error('No permission to edit this post');
-    }
-    
-    return await PostRepository.updatePost({
-      postId,
-      data: { text: newContent }
-    });
-  }
-  
-  // Edit with history tracking
-  async editWithHistory(postId: string, newContent: string): Promise<void> {
-    const post = await PostRepository.getPost(postId);
-    
-    // Store edit history in metadata
-    const editHistory = post.metadata?.editHistory || [];
-    editHistory.push({
-      timestamp: new Date().toISOString(),
-      previousContent: post.data.text,
-      editedBy: (await UserRepository.getCurrentUser()).userId
-    });
-    
-    await PostRepository.updatePost({
-      postId,
-      data: { text: newContent },
-      metadata: {
-        ...post.metadata,
-        editHistory
-      }
-    });
-  }
-}
+import { PostRepository, PostContentType } from "@amityco/ts-sdk";
+
+const editPost = async function (
+  postId: Amity.Post["postId"]
+): Promise<Amity.Post> {
+  const editPost = {
+    data: {
+      title: "Greeting",
+      text: "hello!",
+    },
+    attachments: [
+      { type: PostContentType.VIDEO, fileId: "fileId1" },
+      { type: PostContentType.VIDEO, fileId: "fileId2" },
+    ],
+    tags: ["tag1", "tag2"],
+    mentionees: [{ type: "user", userIds: ["userId1", "userId2"] }],
+  };
+
+  const { data: post } = await PostRepository.editPost(postId, editPost);
+
+  return post;
+};
 ```
+
 </Tab>
 
 <Tab title="Flutter">
@@ -621,44 +525,64 @@ class AdvancedPostEditor {
 import 'package:amity_sdk/amity_sdk.dart';
 
 class PostEditManager {
-  Future<void> editTextPost(String postId, String newText) async {
+  Future<void> editTextPost(String postId, {String? newTitle, String? newText}) async {
     try {
-      await AmitySocialClient.newPostRepository()
+      final updateBuilder = AmitySocialClient.newPostRepository()
           .updatePost(postId)
-          .text(newText)
-          .metadata({'editReason': 'content_update'})
-          .update();
-      
+          .metadata({'editReason': 'content_update'});
+
+      if (newText != null) {
+        updateBuilder.text(newText);
+      }
+
+      if (newTitle != null) {
+        updateBuilder.title(newTitle);
+      }
+
+      await updateBuilder.update();
+
       print('Post edited successfully');
-      
+
       // Get updated post to verify changes
       final updatedPost = await AmitySocialClient.newPostRepository()
           .getPost(postId);
-      
+
       print('Edit timestamp: ${updatedPost.editedAt}');
     } catch (error) {
       print('Edit failed: $error');
       rethrow;
     }
   }
-  
+
   // Edit with comprehensive error handling
-  Future<bool> editPostSafely(String postId, String newText) async {
+  Future<bool> editPostSafely(String postId, {String? newTitle, String? newText}) async {
     try {
       // Validate input
-      if (newText.trim().isEmpty) {
+      if (newText != null && newText.trim().isEmpty) {
         throw ArgumentError('Text cannot be empty');
       }
-      
-      if (newText.length > 5000) {
+
+      if (newText != null && newText.length > 5000) {
         throw ArgumentError('Text too long (max 5000 characters)');
       }
-      
-      await AmitySocialClient.newPostRepository()
-          .updatePost(postId)
-          .text(newText)
-          .update();
-      
+
+      if (newTitle != null && newTitle.length > 150) {
+        throw ArgumentError('Title too long (max 150 characters)');
+      }
+
+      final updateBuilder = AmitySocialClient.newPostRepository()
+          .updatePost(postId);
+
+      if (newText != null) {
+        updateBuilder.text(newText);
+      }
+
+      if (newTitle != null) {
+        updateBuilder.title(newTitle);
+      }
+
+      await updateBuilder.update();
+
       return true;
     } on AmityException catch (e) {
       print('Amity error: ${e.message}');
@@ -668,13 +592,13 @@ class PostEditManager {
       return false;
     }
   }
-  
+
   // Batch editing
   Future<Map<String, bool>> editMultiplePosts(
     Map<String, String> postsToEdit
   ) async {
     final results = <String, bool>{};
-    
+
     await Future.wait(
       postsToEdit.entries.map((entry) async {
         try {
@@ -686,7 +610,7 @@ class PostEditManager {
         }
       }),
     );
-    
+
     return results;
   }
 }
@@ -698,45 +622,45 @@ class PostEditManager {
 class AdvancedPostEditor {
   // Edit with permission check
   Future<void> editWithPermissionCheck(
-    String postId, 
+    String postId,
     String newContent
   ) async {
     final post = await AmitySocialClient.newPostRepository()
         .getPost(postId);
-    
+
     final currentUser = AmityCoreClient.getCurrentUser();
-    
+
     // Check editing permissions
     if (post.userId != currentUser.userId) {
       // Check if user is admin/moderator
       final community = await AmitySocialClient.newCommunityRepository()
           .getCommunity(post.targetId!);
-      
+
       final membership = await AmitySocialClient.newCommunityRepository()
           .getMember(community.communityId!, currentUser.userId!);
-      
+
       if (!membership.isAdmin && !membership.isModerator) {
         throw Exception('No permission to edit this post');
       }
     }
-    
+
     await AmitySocialClient.newPostRepository()
         .updatePost(postId)
         .text(newContent)
         .update();
   }
-  
+
   // Edit with rollback capability
   Future<void> editWithRollback(
-    String postId, 
+    String postId,
     String newContent
   ) async {
     // Get original content for rollback
     final originalPost = await AmitySocialClient.newPostRepository()
         .getPost(postId);
-    
+
     final originalContent = originalPost.data?['text'] as String?;
-    
+
     try {
       await AmitySocialClient.newPostRepository()
           .updatePost(postId)
@@ -744,7 +668,7 @@ class AdvancedPostEditor {
           .update();
     } catch (error) {
       print('Edit failed, attempting rollback...');
-      
+
       if (originalContent != null) {
         try {
           await AmitySocialClient.newPostRepository()
@@ -756,7 +680,7 @@ class AdvancedPostEditor {
           print('Rollback failed: $rollbackError');
         }
       }
-      
+
       rethrow;
     }
   }
@@ -768,30 +692,31 @@ class AdvancedPostEditor {
 ```dart
 void main() async {
   final editor = PostEditManager();
-  
+
   // Simple text edit
   await editor.editTextPost('post123', 'Updated content');
-  
+
   // Safe edit with validation
   final success = await editor.editPostSafely('post123', 'New content');
-  
+
   if (success) {
     print('Edit completed successfully');
   } else {
     print('Edit failed - check logs for details');
   }
-  
+
   // Batch editing
   final batchResults = await editor.editMultiplePosts({
     'post1': 'Updated content 1',
     'post2': 'Updated content 2',
     'post3': 'Updated content 3',
   });
-  
+
   final successCount = batchResults.values.where((v) => v).length;
   print('Successfully edited $successCount out of ${batchResults.length} posts');
 }
 ```
+
 </Tab>
 </Tabs>
 
@@ -829,35 +754,43 @@ void main() async {
 
 ## Error Handling
 
-| Error Code | Description | Solution |
-|------------|-------------|----------|
-| `403` | Insufficient permissions | Check user role and post ownership |
-| `404` | Post not found | Verify post ID and existence |
-| `413` | File too large | Reduce file size or compress media |
-| `422` | Invalid content format | Validate input data structure |
-| `429` | Rate limit exceeded | Implement exponential backoff |
+| Error Code | Description              | Solution                           |
+| ---------- | ------------------------ | ---------------------------------- |
+| `403`      | Insufficient permissions | Check user role and post ownership |
+| `404`      | Post not found           | Verify post ID and existence       |
+| `413`      | File too large           | Reduce file size or compress media |
+| `422`      | Invalid content format   | Validate input data structure      |
+| `429`      | Rate limit exceeded      | Implement exponential backoff      |
 
 ## Real-World Use Cases
 
 <CardGroup cols={2}>
   <Card title="Content Moderation" icon="gavel">
-    Enable moderators to edit posts for compliance while maintaining edit history and transparency through timestamps.
+    Enable moderators to edit posts for compliance while maintaining edit
+    history and transparency through timestamps.
   </Card>
   <Card title="Collaborative Editing" icon="users">
-    Allow team members to collaboratively improve posts with proper permission controls and change tracking.
+    Allow team members to collaboratively improve posts with proper permission
+    controls and change tracking.
   </Card>
   <Card title="Content Updates" icon="refresh">
-    Keep evergreen content current by allowing authors to update posts with new information while preserving engagement.
+    Keep evergreen content current by allowing authors to update posts with new
+    information while preserving engagement.
   </Card>
   <Card title="Error Correction" icon="spell-check">
-    Quick fixes for typos and factual errors while maintaining the original post's context and replies.
+    Quick fixes for typos and factual errors while maintaining the original
+    post's context and replies.
   </Card>
 </CardGroup>
 
 <Note>
-**File Upload Limits**: You can upload a maximum of 10 images/files in a single post. Ensure your builder type matches the original post type when editing.
+  **File Upload Limits**: You can upload a maximum of 10 images/files in a
+  single post. Ensure your builder type matches the original post type when
+  editing.
 </Note>
 
 <Warning>
-**Important**: When editing posts with media attachments, you must first upload new files before updating the post. The edit operation will replace existing attachments based on the new attachment list provided.
+  **Important**: When editing posts with media attachments, you must first
+  upload new files before updating the post. The edit operation will replace
+  existing attachments based on the new attachment list provided.
 </Warning>
