@@ -79,16 +79,16 @@ Understanding the different user types helps you design the right access pattern
 <Tab title="Signed-In Users">
 ```typescript
 // Full authenticated user with read/write access
-const client = Client.create({
-  apiKey: 'your-api-key',
-  region: 'sg'
-});
+import { Client } from '@amityco/ts-sdk';
 
-await client.login({
+const client = Client.createClient('apiKey', 'apiRegion');
+
+...
+
+await Client.login({
   userId: 'user-123',
   displayName: 'John Doe',
-  authToken: 'backend-generated-token'
-});
+}, sessionHandler);
 ```
 
 **Capabilities:**
@@ -102,13 +102,13 @@ await client.login({
 <Tab title="Visitor Users">
 ```typescript
 // Anonymous visitor with read-only access
-const client = Client.create({
-  apiKey: 'your-api-key',
-  region: 'sg'
-});
+import { Client } from '@amityco/ts-sdk';
 
-const deviceId = client.getVisitorDeviceId();
-await client.loginAsVisitor();
+const client = Client.createClient('your-api-key', 'sg');
+
+await Client.loginAsVisitor({
+    sestionHandler,
+});
 ```
 
 **Capabilities:**
@@ -124,12 +124,11 @@ await client.loginAsVisitor();
 <Tab title="Bot Users">
 ```typescript
 // Search engine crawler with read-only access
-const client = Client.create({
-  apiKey: 'your-api-key',
-  region: 'sg'
-});
+import { Client } from '@amityco/ts-sdk';
 
-await client.loginAsBot();
+const client = Client.createClient('your-api-key', 'sg');
+
+await Client.loginAsBot();
 ```
 
 **Capabilities:**
@@ -163,10 +162,7 @@ AmityCoreClient.setup(
 ```typescript TypeScript
 import { Client } from '@amityco/ts-sdk';
 
-const client = Client.create({
-  apiKey: 'your-api-key',
-  region: 'sg'
-});
+const client = Client.createClient('your-api-key', 'sg');
 ```
 </CodeGroup>
 
@@ -186,7 +182,10 @@ Log.d("Visitor", "Device ID: $deviceId")
 ```
 
 ```typescript TypeScript
+
+const client = Client.createClient('your-api-key', 'sg');
 const deviceId = client.getVisitorDeviceId();
+
 console.log('Device ID:', deviceId);
 ```
 </CodeGroup>
@@ -237,7 +236,7 @@ AmityCoreClient.loginAsVisitor(object : SessionHandler {
 ```typescript TypeScript
 try {
     // Simple visitor login (development)
-    await client.loginAsVisitor();
+    await Client.loginAsVisitor({ sessionHandler });
     console.log('Visitor login successful');
 } catch (error) {
     console.error('Visitor login failed:', error);
@@ -251,7 +250,7 @@ For search engine crawlers and automated indexers:
 
 ```typescript TypeScript
 try {
-    await client.loginAsBot();
+    await Client.loginAsBot({ sessionHandler });
     console.log('Bot login successful');
 } catch (error) {
     console.error('Bot login failed:', error);
@@ -289,15 +288,17 @@ when (userType) {
 ```
 
 ```typescript TypeScript
-const userType = client.getCurrentUserType();
+import { Client, UserTypeEnum } from '@amityco/ts-sdk';
+
+const userType = Client.getCurrentUserType();
 switch (userType) {
-    case AmityUserType.SIGNED_IN:
+    case UserTypeEnum.SIGNED_IN:
         console.log('User is authenticated');
         break;
-    case AmityUserType.VISITOR:
+    case UserTypeEnum.VISITOR:
         console.log('User is a visitor');
         break;
-    case AmityUserType.BOT:
+    case UserTypeEnum.BOT:
         console.log('User is a bot');
         break;
 }
@@ -332,6 +333,7 @@ AmityCoreClient.secureLogout()
 const handleSecureLogout = async () => {
   await Client.secureLogout();
 };
+
 handleSecureLogout();
 ```
 </CodeGroup>
@@ -429,7 +431,7 @@ try {
         await fetchAuthSignature(deviceId);
     
     // Login with secure mode
-    await client.loginAsVisitor(
+    await Client.loginAsVisitor(
         authSignature,
         authSignatureExpiresAt,
         visitorSessionHandler
@@ -523,7 +525,7 @@ const createVisitorSessionHandler = (): Amity.SessionHandler => ({
             const { authSignature, authSignatureExpiresAt } = 
                 await AuthService.fetchVisitorAuthSignature(deviceId);
             
-            renewal.renewWithAuthSignature(authSignature, authSignatureExpiresAt);
+            renewal.renewWithAuthSignature({ authSignature, authSignatureExpiresAt });
         } catch (error) {
             console.error('Failed to refresh visitor token:', error);
             renewal.unableToRetrieveAuthSignature();
@@ -532,11 +534,11 @@ const createVisitorSessionHandler = (): Amity.SessionHandler => ({
 });
 
 // Use during visitor login
-await client.loginAsVisitor(
+await Client.loginAsVisitor({
     authSignature,
     authSignatureExpiresAt,
-    createVisitorSessionHandler()
-);
+    sessionHandler: createVisitorSessionHandler(),
+});
 ```
 </Tab>
 </Tabs>
@@ -583,7 +585,7 @@ ServerError.BOT_PERMISSION_DENIED: 488998
 try {
     await createPost({ text: 'Hello world' });
 } catch (error) {
-    if (error.code === 488999) {
+    if (error.message.includes('488999')) {
         // Show visitor upgrade prompt
         showVisitorWarning('Create an account or sign in to post');
     }
@@ -606,8 +608,8 @@ Visitors and bots are excluded from resource-intensive features:
 
 ```typescript
 // SDK automatically skips MQTT connection for visitors
-const userType = client.getCurrentUserType();
-if (userType === AmityUserType.VISITOR || userType === AmityUserType.BOT) {
+const userType = Client.getCurrentUserType();
+if (userType === UserTypeEnum.VISITOR || userType === UserTypeEnum.BOT) {
     // mqtt.connect() is NOT called
 }
 ```
@@ -640,7 +642,7 @@ if (userType === AmityUserType.VISITOR || userType === AmityUserType.BOT) {
 ```typescript
 // Visitors are automatically filtered from user queries
 // Your queries return only signed-in users
-const users = await queryUsers({ displayName: 'John' });
+const users = await UserRepository.searchUserByDisplayName({ displayName: 'John' });
 // Returns: only SIGNED_IN users, no VISITOR or BOT users
 ```
 </Tab>
@@ -721,22 +723,16 @@ UIKit provides default behaviors for visitor interaction attempts:
 
 ```typescript
 // AmityGlobalBehavior - Default visitor interaction handling
-class AmityGlobalBehavior {
-  function handleVisitorUserAction() {
-    // Default: Show toast "Create an account or sign in to continue."
-    // Overridable for custom behavior
-  }
 
-  function handleNonMemberAction() {
-    // Default: Show toast "Join community to interact."
-    // Overridable for custom behavior
-  }
+const { AmityGlobalBehavior } = usePageBehavior();
 
-  function handleNonFollowerAction() {
-    // Default: Show toast "Follow user to interact."
-    // Overridable for custom behavior
-  }
-}
+// Visitor user
+AmityGlobalBehavior.handleGuestUserAction();
+// Non-Member user in a community
+AmityGlobalBehavior.handleNonMemberAction();
+// Non-Follower user of a user
+AmityGlobalBehavior.handleNonFollowerAction();
+
 ```
 
 ### Action Button States
@@ -788,20 +784,29 @@ Override default behaviors to match your app's UX:
 
 ```typescript
 // Example: Custom visitor action handling
-const customBehavior = new AmityGlobalBehavior();
 
-customBehavior.handleVisitorUserAction = () => {
-  // Custom implementation
-  showCustomModal({
-    title: 'Join Our Community',
-    message: 'Sign up to interact with posts and connect with others',
-    primaryAction: () => navigateToSignUp(),
-    secondaryAction: () => navigateToLogin()
-  });
-};
-
-// Apply custom behavior to UIKit
-AmityUIKit.setBehavior(customBehavior);
+ <AmityUIKitProvider
+  apiKey="API_KEY"
+  apiRegion="API_REGION"
+  userId="userId"
+  displayName="displayName"
+  configs={config}
+  pageBehavior={{
+    AmityGlobalBehavior: {
+        handleGuestUserAction: () => {
+            // Overridable for custom behavior
+        },
+        handleNonMemberAction: () => {
+            // Overridable for custom behavior
+        },
+        handleNonFollowerAction: () => {
+            // Overridable for custom behavior
+        },
+    }
+  }}
+>
+ <UikitComponent>
+</AmityUIKitProvider>
 ```
 
 ## Data Management & Lifecycle
@@ -974,7 +979,7 @@ await client.loginAsVisitor(); // No auth signature
 const handleVisitorAction = (action: string) => {
   const userType = client.getCurrentUserType();
   
-  if (userType === AmityUserType.VISITOR) {
+  if (userType === UserTypeEnum.VISITOR) {
     showUpgradePrompt({
       action,
       message: getContextualMessage(action),
