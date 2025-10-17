@@ -47,10 +47,14 @@ Every post now has a `structureType` field that describes its media composition:
   <Accordion title="Pure Types (Single Media Type)" icon="file">
     | Structure Type | Description | Example |
     |----------------|-------------|---------|
+    | `text` | Contains only text content, no attachments | Text-only announcement or discussion |
     | `image` | Contains only image attachments | Photo gallery with 3 images |
     | `video` | Contains only video attachments | Video post with 2 clips |
-    | `audio` | Contains only audio attachments | Podcast episode |
+    | `audio` | Contains only audio attachments | Podcast episode or voice message |
     | `file` | Contains only file attachments | Document sharing (PDFs, docs) |
+    | `liveStream` | Contains only live stream content | Live broadcast session |
+    | `poll` | Contains only poll content | Survey or voting post |
+    | `clip` | Contains only short-form video clips | Short video content (up to 15 min) |
     
     <Info>
     Pure type posts maintain backward compatibility with existing filtering behavior.
@@ -60,9 +64,7 @@ Every post now has a `structureType` field that describes its media composition:
   <Accordion title="Mixed Type (Multiple Media Types)" icon="layer-group">
     **Structure Type**: `mixed`
     
-    A post is classified as `mixed` when it contains:
-    - **2+ distinct media types** (e.g., images + videos)
-    - **OR any combination including audio** (e.g., image + audio, or just audio with any other type)
+    A post is classified as `mixed` when it contains attachments of 2 or more distinct media types (image, video, audio, file).
     
     **Examples**:
     - Image + Video = `mixed`
@@ -71,14 +73,14 @@ Every post now has a `structureType` field that describes its media composition:
     - Image + Video + Audio + File = `mixed`
     
     <Note>
-    The `structureType` is automatically determined when you create or edit a post. You don't need to specify it manually.
+    The `structureType` is automatically determined when you create or edit a post. You don't need to specify it manually. Special post types like `poll`, `liveStream`, and `clip` are not combined into mixed posts.
     </Note>
   </Accordion>
   
-  <Accordion title="Text-Only Posts" icon="text">
+  <Accordion title="Legacy/Null Structure Type" icon="text">
     **Structure Type**: `null` or absent
     
-    Posts with no attachments (text-only) don't have a `structureType` value.
+    Some older posts or text-only posts may not have a `structureType` value. This is equivalent to the `text` structure type for backward compatibility.
   </Accordion>
 </AccordionGroup>
 
@@ -242,24 +244,28 @@ func uploadAndCreateMixedPost() async {
 ```kotlin Android
 fun createMixedMediaPost(
     postRepository: AmityPostRepository,
-    uploadedImages: Array<AmityImage>,
-    uploadedVideos: Array<AmityVideo>,
-    uploadedAudios: Array<AmityAudio>,
-    uploadedFiles: Array<AmityFile>
+    uploadedImages: Set<AmityImage>,
+    uploadedVideos: Set<AmityVideo>,
+    uploadedAudios: Set<AmityAudio>,
+    uploadedFiles: Set<AmityFile>
 ) {
-    postRepository.createPost()
-        .targetCommunity(communityId = "community123")
-        .text("Amazing mixed media content!")
-        .image(images = uploadedImages)
-        .video(videos = uploadedVideos)
-        .audio(audios = uploadedAudios)
-        .file(files = uploadedFiles)
-        .build()
-        .post()
+    // Combine all attachments into a single Set<AmityAttachment>
+    // AmityAttachment is a sealed interface implemented by AmityImage, AmityVideo, AmityAudio, and AmityFile
+    val attachments = buildSet<AmityAttachment> {
+        addAll(uploadedImages)
+        addAll(uploadedVideos)
+        addAll(uploadedAudios)
+        addAll(uploadedFiles)
+    }
+    
+    postRepository.createMixedAttachmentPost(
+        targetType = AmityPost.TargetType.COMMUNITY,
+        targetId = "community123",
+        attachments = attachments,
+        text = "Amazing mixed media content!",
+    )
         .doOnSuccess { amityPost: AmityPost ->
             Log.d("Post", "Mixed media post created: ${amityPost.postId}")
-            Log.d("Post", "Structure Type: ${amityPost.structureType}")
-            Log.d("Post", "Children count: ${amityPost.children.size}")
         }
         .doOnError { error ->
             Log.e("Post", "Failed to create mixed media post: ${error.message}")
@@ -274,51 +280,46 @@ fun uploadAndCreateMixedPost(
     videoUri: Uri
 ) {
     val fileRepo = AmityCoreClient.newFileRepository()
-    val uploadedMedia = mutableListOf<Any>()
+    val postRepo = AmitySocialClient.newPostRepository()
     
-    // Upload all media types
-    // (In production, handle these uploads with proper error handling and progress tracking)
+    // Upload all media types in parallel
+    val imageUpload = fileRepo.uploadImage(imageUri)
+    val audioUpload = fileRepo.uploadAudio(audioUri)
+    val videoUpload = fileRepo.uploadVideo(videoUri)
     
-    fileRepo.uploadImage(imageUri)
-        .doOnNext { result ->
-            if (result is AmityUploadResult.COMPLETE) {
-                uploadedMedia.add(result.getFile())
-                checkAndCreatePost(uploadedMedia)
-            }
-        }
-        .subscribe()
-    
-    fileRepo.uploadAudio(audioUri)
-        .doOnNext { result ->
-            if (result is AmityUploadResult.COMPLETE) {
-                uploadedMedia.add(result.getFile())
-                checkAndCreatePost(uploadedMedia)
-            }
-        }
-        .subscribe()
-}
-
-fun checkAndCreatePost(uploadedMedia: List<Any>) {
-    // When all uploads complete, create the mixed post
-    if (uploadedMedia.size == 3) {
-        val images = uploadedMedia.filterIsInstance<AmityImage>().toTypedArray()
-        val audios = uploadedMedia.filterIsInstance<AmityAudio>().toTypedArray()
-        val videos = uploadedMedia.filterIsInstance<AmityVideo>().toTypedArray()
-        
-        AmitySocialClient.newPostRepository()
-            .createPost()
-            .targetCommunity("community123")
-            .text("Mixed media post!")
-            .image(images = images)
-            .audio(audios = audios)
-            .video(videos = videos)
-            .build()
-            .post()
-            .doOnSuccess { post ->
-                Log.d("Post", "Complete! Structure Type: ${post.structureType}")
-            }
-            .subscribe()
+    // Combine upload results
+    Single.zip(imageUpload, audioUpload, videoUpload) { imageResult, audioResult, videoResult ->
+        Triple(imageResult, audioResult, videoResult)
     }
+        .flatMap { (imageResult, audioResult, videoResult) ->
+            // Extract uploaded files
+            val uploadedImage = (imageResult as? AmityUploadResult.COMPLETE)?.getFile() as? AmityImage
+            val uploadedAudio = (audioResult as? AmityUploadResult.COMPLETE)?.getFile() as? AmityAudio
+            val uploadedVideo = (videoResult as? AmityUploadResult.COMPLETE)?.getFile() as? AmityVideo
+            
+            // Build attachments set
+            val attachments = buildSet<AmityAttachment> {
+                uploadedImage?.let { add(it) }
+                uploadedAudio?.let { add(it) }
+                uploadedVideo?.let { add(it) }
+            }
+            
+            // Create mixed media post
+            postRepo.createMixedAttachmentPost(
+                targetType = AmityPost.TargetType.COMMUNITY,
+                targetId = "community123",
+                attachments = attachments,
+                text = "Mixed media post with image, audio, and video!",
+                hashtags = listOf("mixed-media")
+            )
+        }
+        .doOnSuccess { post ->
+            Log.d("Post", "Complete! Structure Type: ${post.structureType}")
+        }
+        .doOnError { error ->
+            Log.e("Post", "Error: ${error.message}")
+        }
+        .subscribe()
 }
 ```
 
