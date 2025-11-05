@@ -22,28 +22,25 @@ Use this report when you need a lightweight snapshot of user activity recency ra
 
 ## Access & Permissions
 
-- Admin credentials (session cookie) required
+- Admin credentials (admin token) required in Authorization header
 - Scoped to your network / application only
 - Rate limits apply (avoid high-frequency polling—prefer scheduled exports)
 
 <Warning>
-	Do not embed admin cookie logic in front-end code. Generate and process reports using a secure backend or internal admin tool.
+	Do not embed admin token logic in front-end code. Generate and process reports using a secure backend or internal admin tool.
 </Warning>
 
 ## Export Flow
 
 <Steps>
 	<Step title="Authenticate Admin Session">
-		Submit credentials to obtain an authenticated admin session (cookie-based). Store cookie securely in memory only.
+		Submit credentials to obtain an authenticated admin session (token-based).
 	</Step>
 	<Step title="Request Report Export">
-		Call the report endpoint. Large datasets may stream or paginate depending on infrastructure.
-	</Step>
-	<Step title="Download / Stream Data">
-		Parse JSON or save CSV output (depending on Accept header or tool). Validate column presence.
+		Call the report endpoint. Response will return in CSV format.
 	</Step>
 	<Step title="Process & Act">
-		Join with internal user tables. Segment inactive cohorts. Trigger re‑engagement or cleanup workflows.
+		Using the CSV output to trigger re‑engagement or cleanup workflows (bulk user delete API).
 	</Step>
 </Steps>
 
@@ -52,10 +49,9 @@ Use this report when you need a lightweight snapshot of user activity recency ra
 | Aspect | Value |
 |--------|-------|
 | Method | GET |
-| Path | `/admin/v1/reports/user-last-activity` |
-| Auth | Admin session cookie |
-| Format | JSON (default) or CSV (if `Accept: text/csv`) |
-| Pagination | Implementation-specific (check `nextCursor` if present) |
+| Path | `/api/v1/reports/user-last-activity` |
+| Auth | Admin token |
+| Format | CSV |
 
 <Tip>
 	Prefer cursor-based pagination (if available) for large networks instead of increasing page size.
@@ -63,31 +59,41 @@ Use this report when you need a lightweight snapshot of user activity recency ra
 
 ### Request
 
-```
-GET https://{region-host}/admin/v1/reports/user-last-activity
-Cookie: <admin-session-cookie>
-Accept: application/json
-```
-
-
+<Card title="View Full API Reference" icon="code" href="/api-reference/user/get-users-last-activity-report">
+	See complete request/response schemas, parameters, and examples. This API only accepts admin token as authorization.
+</Card>
 
 ## Interpreting Results
 
+The report returns a CSV with the following columns:
+
+| Column | Description |
+|--------|-------------|
+| `user_id` | Internal user identifier |
+| `user_public_id` | Public-facing user ID |
+| `display_name` | User's display name |
+| `last_active_utc` | Most recent activity timestamp (UTC) |
+
+### Activity Patterns
+
 | Scenario | Interpretation | Suggested Action |
 |----------|----------------|------------------|
-| All fields null | Newly created / never logged in | Onboarding reminder |
-| Read present, write null | Lurker / consumer only | Engagement nudge (posting tips) |
-| Write recent, login stale | Background activity? Validate session tracking | Verify auth flows |
-| No activity ≥ 90 days | Dormant account | Re‑engagement or archival workflow |
+| `last_active_utc` is null | Newly created / never logged in | Onboarding reminder |
+| `last_active_utc` < 30 days ago | Active user | Continue regular engagement |
+| `last_active_utc` 30-90 days ago | At-risk user | Re-engagement campaign |
+| `last_active_utc` ≥ 90 days ago | Dormant account | Re‑engagement or archival workflow |
 
 ## Automation Ideas
 
 <AccordionGroup>
 	<Accordion title="Re‑Engagement Campaigns">
-		Export weekly, filter users with `lastActivityAt` older than threshold, send personalized email or push, measure reactivation rate.
+		Export weekly, filter users with `last_active_utc` older than threshold, send personalized email or push, measure reactivation rate.
 	</Accordion>
 	<Accordion title="Dormant Cleanup">
 		Flag accounts inactive > 180 days for soft archival. After notice period, proceed with deletion respecting compliance rules.
+	</Accordion>
+	<Accordion title="Bulk Delete Inactive Users">
+		Use the CSV output directly with the [Bulk User Delete API](/api-reference/user/create-bulk-user-delete-job) to clean up inactive accounts. The API accepts the CSV format from this report, making it seamless to process dormant users at scale while maintaining audit trails.
 	</Accordion>
 	<Accordion title="Security Monitoring">
 		Detect sudden stop in activity of high‑value users—trigger internal review or outreach.
