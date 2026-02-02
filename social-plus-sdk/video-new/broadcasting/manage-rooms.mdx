@@ -490,7 +490,71 @@ try {
 
 Track room status changes in real-time:
 
-```typescript
+<CodeGroup>
+
+```swift iOS
+let roomLiveObject = AmityRoomRepository.shared.getRoom(roomId: roomId)
+
+roomLiveObject.observe { room in
+    switch room.status {
+    case .idle:
+        showStatus("Room created, ready to start")
+        enableStartButton()
+        
+    case .live:
+        showStatus("Broadcasting live")
+        updateViewerCount()
+        enableStopButton()
+        
+    case .waitingReconnect:
+        showStatus("Reconnecting...")
+        showReconnectingUI()
+        
+    case .ended:
+        showStatus("Stream ended")
+        disableStreamControls()
+        checkForRecording()
+        
+    case .recorded:
+        showStatus("Recording available")
+        enablePlaybackButton()
+    }
+}
+```
+
+```kotlin Android
+val roomLiveObject = AmityRoomRepository.getRoom(roomId = roomId)
+
+roomLiveObject.observe()
+    .subscribe { room ->
+        when (room.status) {
+            AmityRoomStatus.IDLE -> {
+                showStatus("Room created, ready to start")
+                enableStartButton()
+            }
+            AmityRoomStatus.LIVE -> {
+                showStatus("Broadcasting live")
+                updateViewerCount()
+                enableStopButton()
+            }
+            AmityRoomStatus.WAITING_RECONNECT -> {
+                showStatus("Reconnecting...")
+                showReconnectingUI()
+            }
+            AmityRoomStatus.ENDED -> {
+                showStatus("Stream ended")
+                disableStreamControls()
+                checkForRecording()
+            }
+            AmityRoomStatus.RECORDED -> {
+                showStatus("Recording available")
+                enablePlaybackButton()
+            }
+        }
+    }
+```
+
+```typescript TypeScript
 const roomLiveObject = roomRepository.getRoom(roomId);
 
 roomLiveObject.on("dataUpdated", (room) => {
@@ -525,11 +589,97 @@ roomLiveObject.on("dataUpdated", (room) => {
 });
 ```
 
+```dart Flutter
+final roomLiveObject = AmityRoomRepository().getRoom(roomId: roomId);
+
+roomLiveObject.listen((room) {
+    switch (room.status) {
+        case AmityRoomStatus.idle:
+            showStatus("Room created, ready to start");
+            enableStartButton();
+            break;
+            
+        case AmityRoomStatus.live:
+            showStatus("Broadcasting live");
+            updateViewerCount();
+            enableStopButton();
+            break;
+            
+        case AmityRoomStatus.waitingReconnect:
+            showStatus("Reconnecting...");
+            showReconnectingUI();
+            break;
+            
+        case AmityRoomStatus.ended:
+            showStatus("Stream ended");
+            disableStreamControls();
+            checkForRecording();
+            break;
+            
+        case AmityRoomStatus.recorded:
+            showStatus("Recording available");
+            enablePlaybackButton();
+            break;
+    }
+});
+```
+
+</CodeGroup>
+
 ### Display Live Rooms List
 
 Show currently active broadcasts:
 
-```typescript
+<CodeGroup>
+
+```swift iOS
+let liveRooms = AmityRoomRepository.shared.getRooms(
+    statuses: [.live],
+    types: [.coHosts],
+    isDeleted: false,
+    sortBy: .lastCreated
+)
+
+liveRooms.observe { rooms in
+    let roomList = rooms.map { room in
+        RoomListItem(
+            roomId: room.roomId,
+            title: room.title,
+            thumbnail: room.getThumbnail()?.fileUrl,
+            participantCount: room.participants.count,
+            playbackUrl: room.livePlaybackUrl,
+            channelId: room.channelId
+        )
+    }
+    updateLiveRoomsList(roomList)
+}
+```
+
+```kotlin Android
+val liveRooms = AmityRoomRepository.getRooms(
+    statuses = listOf(AmityRoomStatus.LIVE),
+    types = listOf(AmityRoomType.CO_HOSTS),
+    isDeleted = false,
+    sortBy = AmityRoomSortOption.LAST_CREATED
+)
+
+liveRooms.observe()
+    .subscribe { rooms ->
+        val roomList = rooms.map { room ->
+            RoomListItem(
+                roomId = room.roomId,
+                title = room.title,
+                thumbnail = room.getThumbnail()?.fileUrl,
+                participantCount = room.participants.size,
+                playbackUrl = room.livePlaybackUrl,
+                channelId = room.channelId
+            )
+        }
+        updateLiveRoomsList(roomList)
+    }
+```
+
+```typescript TypeScript
 const liveRooms = roomRepository.getRooms({
     statuses: [AmityRoomStatus.LIVE],
     types: [AmityRoomType.CO_HOSTS],
@@ -550,11 +700,129 @@ liveRooms.on("dataUpdated", (rooms) => {
 });
 ```
 
+```dart Flutter
+final liveRooms = AmityRoomRepository().getRooms(
+    statuses: [AmityRoomStatus.live],
+    types: [AmityRoomType.coHosts],
+    isDeleted: false,
+    sortBy: AmityRoomSortOption.lastCreated
+);
+
+liveRooms.listen((rooms) {
+    final roomList = rooms.map((room) => RoomListItem(
+        roomId: room.roomId,
+        title: room.title,
+        thumbnail: room.getThumbnail()?.fileUrl,
+        participantCount: room.participants.length,
+        playbackUrl: room.livePlaybackUrl,
+        channelId: room.channelId,
+    )).toList();
+    
+    updateLiveRoomsList(roomList);
+});
+```
+
+</CodeGroup>
+
 ### Stream Lifecycle Management
 
 Complete stream management workflow:
 
-```typescript
+<CodeGroup>
+
+```swift iOS
+// Start streaming
+func startStreaming(roomId: String) async {
+    do {
+        let broadcasterData = try await AmityRoomRepository.shared.getBroadcastData(
+            roomId: roomId
+        )
+        
+        if case .coHosts(let token, let url) = broadcasterData {
+            try await initializeLiveKit(url: url, token: token)
+        }
+        
+        try await beginBroadcast()
+        print("Streaming started")
+    } catch {
+        print("Failed to start streaming: \(error)")
+    }
+}
+
+// Stop streaming
+func stopStreaming(roomId: String) async {
+    do {
+        endBroadcast()
+        try await AmityRoomRepository.shared.stop(roomId: roomId)
+        print("Streaming stopped")
+        
+        // Wait for recording
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+            Task {
+                if let urls = try? await AmityRoomRepository.shared.getRecordedUrls(roomId: roomId),
+                   let firstUrl = urls.first {
+                    print("Recording available: \(firstUrl)")
+                }
+            }
+        }
+    } catch {
+        print("Failed to stop streaming: \(error)")
+    }
+}
+```
+
+```kotlin Android
+// Start streaming
+fun startStreaming(roomId: String) {
+    AmityRoomRepository.getBroadcastData(roomId = roomId)
+        .subscribe(
+            onSuccess = { broadcasterData ->
+                when (broadcasterData) {
+                    is AmityRoomBroadcastData.CoHosts -> {
+                        initializeLiveKit(
+                            url = broadcasterData.coHostUrl,
+                            token = broadcasterData.coHostToken
+                        )
+                    }
+                    is AmityRoomBroadcastData.DirectStreaming -> {
+                        initializeRTMP(url = broadcasterData.directStreamUrl)
+                    }
+                }
+                beginBroadcast()
+                Log.d("Stream", "Streaming started")
+            },
+            onError = { error ->
+                Log.e("Stream", "Failed to start streaming", error)
+            }
+        )
+}
+
+// Stop streaming
+fun stopStreaming(roomId: String) {
+    endBroadcast()
+    AmityRoomRepository.stop(roomId = roomId)
+        .subscribe(
+            onComplete = {
+                Log.d("Stream", "Streaming stopped")
+                
+                // Wait for recording
+                Handler(Looper.getMainLooper()).postDelayed({
+                    AmityRoomRepository.getRecordedUrls(roomId = roomId)
+                        .subscribe { urls ->
+                            if (urls.isNotEmpty()) {
+                                Log.d("Stream", "Recording available: ${urls.first()}")
+                            }
+                        }
+                }, 30000)
+            },
+            onError = { error ->
+                Log.e("Stream", "Failed to stop streaming", error)
+            }
+        )
+}
+```
+
+```typescript TypeScript
 // Start streaming
 async function startStreaming(roomId: string) {
     try {
@@ -594,11 +862,119 @@ async function stopStreaming(roomId: string) {
 }
 ```
 
+```dart Flutter
+// Start streaming
+Future<void> startStreaming(String roomId) async {
+    try {
+        final broadcasterData = await AmityRoomRepository().getBroadcastData(
+            roomId: roomId
+        );
+        
+        if (broadcasterData is CoHostsBroadcastData) {
+            await initializeLiveKit(
+                url: broadcasterData.coHostUrl,
+                token: broadcasterData.coHostToken,
+            );
+        }
+        
+        await beginBroadcast();
+        print("Streaming started");
+    } catch (error) {
+        print("Failed to start streaming: $error");
+    }
+}
+
+// Stop streaming
+Future<void> stopStreaming(String roomId) async {
+    try {
+        endBroadcast();
+        await AmityRoomRepository().stop(roomId: roomId);
+        print("Streaming stopped");
+        
+        // Wait for recording
+        await Future.delayed(Duration(seconds: 30));
+        final urls = await AmityRoomRepository().getRecordedUrls(roomId: roomId);
+        if (urls.isNotEmpty) {
+            print("Recording available: ${urls.first}");
+        }
+    } catch (error) {
+        print("Failed to stop streaming: $error");
+    }
+}
+```
+
+</CodeGroup>
+
 ### Room Cleanup
 
 Clean up ended rooms:
 
-```typescript
+<CodeGroup>
+
+```swift iOS
+func cleanupEndedRooms() {
+    let endedRooms = AmityRoomRepository.shared.getRooms(
+        statuses: [.ended, .recorded],
+        types: nil,
+        isDeleted: false,
+        sortBy: .firstCreated
+    )
+    
+    endedRooms.observe { rooms in
+        let oldRooms = rooms.filter { room in
+            guard let endedAt = room.endedAt else { return false }
+            let daysSinceEnd = Date().timeIntervalSince(endedAt) / (60 * 60 * 24)
+            return daysSinceEnd > 7 // Older than 7 days
+        }
+        
+        for room in oldRooms {
+            Task {
+                do {
+                    try await AmityRoomRepository.shared.deleteRoom(roomId: room.roomId)
+                    print("Deleted old room: \(room.roomId)")
+                } catch {
+                    print("Failed to delete room \(room.roomId): \(error)")
+                }
+            }
+        }
+    }
+}
+```
+
+```kotlin Android
+fun cleanupEndedRooms() {
+    val endedRooms = AmityRoomRepository.getRooms(
+        statuses = listOf(AmityRoomStatus.ENDED, AmityRoomStatus.RECORDED),
+        types = null,
+        isDeleted = false,
+        sortBy = AmityRoomSortOption.FIRST_CREATED
+    )
+    
+    endedRooms.observe()
+        .subscribe { rooms ->
+            val oldRooms = rooms.filter { room ->
+                room.endedAt?.let { endedAt ->
+                    val daysSinceEnd = (System.currentTimeMillis() - endedAt.time) / (1000 * 60 * 60 * 24)
+                    daysSinceEnd > 7 // Older than 7 days
+                } ?: false
+            }
+            
+            oldRooms.forEach { room ->
+                AmityRoomRepository.deleteRoom(roomId = room.roomId)
+                    .subscribe(
+                        onComplete = {
+                            Log.d("Cleanup", "Deleted old room: ${room.roomId}")
+                        },
+                        onError = { error ->
+                            Log.e("Cleanup", "Failed to delete room ${room.roomId}", error)
+                        }
+                    )
+            }
+        }
+}
+```
+
+```typescript TypeScript
 async function cleanupEndedRooms() {
     const endedRooms = roomRepository.getRooms({
         statuses: [AmityRoomStatus.ENDED, AmityRoomStatus.RECORDED],
@@ -623,6 +999,36 @@ async function cleanupEndedRooms() {
     });
 }
 ```
+
+```dart Flutter
+void cleanupEndedRooms() {
+    final endedRooms = AmityRoomRepository().getRooms(
+        statuses: [AmityRoomStatus.ended, AmityRoomStatus.recorded],
+        types: null,
+        isDeleted: false,
+        sortBy: AmityRoomSortOption.firstCreated
+    );
+    
+    endedRooms.listen((rooms) async {
+        final oldRooms = rooms.where((room) {
+            if (room.endedAt == null) return false;
+            final daysSinceEnd = DateTime.now().difference(room.endedAt!).inDays;
+            return daysSinceEnd > 7; // Older than 7 days
+        }).toList();
+        
+        for (final room in oldRooms) {
+            try {
+                await AmityRoomRepository().deleteRoom(roomId: room.roomId);
+                print("Deleted old room: ${room.roomId}");
+            } catch (error) {
+                print("Failed to delete room ${room.roomId}: $error");
+            }
+        }
+    });
+}
+```
+
+</CodeGroup>
 
 ## Best Practices
 
@@ -668,19 +1074,117 @@ async function cleanupEndedRooms() {
 
 Verify permissions before operations:
 
-```typescript
-// Check if user can stop/delete room
-const room = await roomRepository.getRoom(roomId);
-const isCreator = room.creatorId === currentUserId;
+<CodeGroup>
 
-if (isCreator) {
-    // User can stop or delete the room
-    showStreamControls();
-} else {
-    // User is viewer or co-host
-    showViewerControls();
+```swift iOS
+// Check if user can stop/delete room
+let roomLiveObject = AmityRoomRepository.shared.getRoom(roomId: roomId)
+
+roomLiveObject.observe { room in
+    let isCreator = room.creatorId == AmityCoreClient.currentUserId
+    let isHost = room.participants.first { $0.type == .host && $0.userId == AmityCoreClient.currentUserId } != nil
+    let isCoHost = room.participants.first { $0.type == .coHost && $0.userId == AmityCoreClient.currentUserId } != nil
+    
+    if isCreator || isHost {
+        // User can stop or delete the room
+        showStreamControls()
+    } else if isCoHost {
+        // Co-host can leave but not stop/delete
+        showCoHostControls()
+    } else {
+        // User is viewer
+        showViewerControls()
+    }
 }
 ```
+
+```kotlin Android
+// Check if user can stop/delete room
+val roomLiveObject = AmityRoomRepository.getRoom(roomId = roomId)
+
+roomLiveObject.observe()
+    .subscribe { room ->
+        val currentUserId = AmityCoreClient.getUserId()
+        val isCreator = room.creatorId == currentUserId
+        val isHost = room.participants.any { 
+            it.type == AmityRoom.ParticipantType.HOST && it.userId == currentUserId 
+        }
+        val isCoHost = room.participants.any { 
+            it.type == AmityRoom.ParticipantType.CoHost && it.userId == currentUserId 
+        }
+        
+        when {
+            isCreator || isHost -> {
+                // User can stop or delete the room
+                showStreamControls()
+            }
+            isCoHost -> {
+                // Co-host can leave but not stop/delete
+                showCoHostControls()
+            }
+            else -> {
+                // User is viewer
+                showViewerControls()
+            }
+        }
+    }
+```
+
+```typescript TypeScript
+// Check if user can stop/delete room
+const roomLiveObject = roomRepository.getRoom(roomId);
+
+roomLiveObject.on("dataUpdated", (room) => {
+    const currentUserId = amityClient.userId;
+    const isCreator = room.creatorId === currentUserId;
+    const isHost = room.participants.some(
+        p => p.type === 'host' && p.userId === currentUserId
+    );
+    const isCoHost = room.participants.some(
+        p => p.type === 'coHost' && p.userId === currentUserId
+    );
+
+    if (isCreator || isHost) {
+        // User can stop or delete the room
+        showStreamControls();
+    } else if (isCoHost) {
+        // Co-host can leave but not stop/delete
+        showCoHostControls();
+    } else {
+        // User is viewer
+        showViewerControls();
+    }
+});
+```
+
+```dart Flutter
+// Check if user can stop/delete room
+final roomLiveObject = AmityRoomRepository().getRoom(roomId: roomId);
+
+roomLiveObject.listen((room) {
+    final currentUserId = AmityCoreClient.userId;
+    final isCreator = room.creatorId == currentUserId;
+    final isHost = room.participants.any(
+        (p) => p.type == ParticipantType.host && p.userId == currentUserId
+    );
+    final isCoHost = room.participants.any(
+        (p) => p.type == ParticipantType.coHost && p.userId == currentUserId
+    );
+    
+    if (isCreator || isHost) {
+        // User can stop or delete the room
+        showStreamControls();
+    } else if (isCoHost) {
+        // Co-host can leave but not stop/delete
+        showCoHostControls();
+    } else {
+        // User is viewer
+        showViewerControls();
+    }
+});
+```
+
+</CodeGroup>
 
 ## Error Handling
 
