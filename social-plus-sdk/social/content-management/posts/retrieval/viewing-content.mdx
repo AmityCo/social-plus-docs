@@ -593,80 +593,6 @@ void getVideo(AmityPost post) {
 
 </CodeGroup>
 
-### Live Stream Posts
-
-Live stream posts offer an effective means of creating captivating and interactive content that engages users and promotes deeper connections among them. The social.plus SDK enables developers to swiftly integrate live stream posts into social feeds.
-
-<CardGroup cols={2}>
-  <Card title="Real-time Interaction" icon="tower-broadcast">
-    Live engagement with audience
-  </Card>
-  <Card title="Stream Integration" icon="video">
-    Easy integration into social feeds
-  </Card>
-</CardGroup>
-
-<Info>
-For more information about live streaming, please refer to [Video Streaming](/social-plus-sdk/video/README).
-</Info>
-
-<CodeGroup>
-
-```swift iOS
-// Grab the stream object from the first child post
-if let firstChildPost = post.childrenPosts.first,
-   let _ = firstChildPost.getLiveStreamInfo() {
-    // Handle `stream` data here
-}
-```
-
-```kotlin Android
-fun getLivestreamInfo(
-    post: AmityPost,
-    videoPlayer: AmityVideoPlayer
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.LIVE_STREAM -> {
-            data.getStream()
-                .doOnNext { stream ->
-                    val title = stream.getTitle()
-                    val description = stream.getDescription()
-                    val thumbnailUrl = stream.getThumbnailImage()?.getUrl()
-
-                    val status = stream.getStatus()
-                    when (status) {
-                        AmityStream.Status.LIVE, AmityStream.Status.RECORDED  -> {
-                            videoPlayer.play(stream.getStreamId())
-                        }
-                        else -> {
-                            // content is not playable
-                        }
-                    }
-                }
-                .doOnError {
-                    // Exception
-                }
-                .subscribe()
-        }
-
-        else -> {}
-    }
-}
-```
-
-```typescript TypeScript
-import { StreamRepository } from '@amityco/ts-sdk';
-
-async function getStream() {
-  const stream = await StreamRepository.getStream('streamId');
-
-  return stream;
-}
-```
-</CodeGroup>
-
-
 ### Poll Posts
 
 Implement poll functionality in posts by leveraging the existing poll features in social.plus SDK. Polls can be created as child posts within the post thread, with poll data and options easily accessible to users.
@@ -797,6 +723,330 @@ void getPollPost(AmityPost post) {
 }
 ```
 
+</CodeGroup>
+
+
+### Room Posts
+
+Room posts enable interactive live room experiences with co-hosting capabilities. Rooms can be live (currently broadcasting) or recorded (playback available). Access room data to retrieve playback URLs based on the room status.
+
+<CardGroup cols={2}>
+  <Card title="Live Playback" icon="tower-broadcast">
+    Stream live content in real-time
+  </Card>
+  <Card title="Recorded Playback" icon="video">
+    Access recorded sessions after broadcast ends
+  </Card>
+</CardGroup>
+
+**Room Statuses**
+
+| Status | Description | Playback URL |
+|--------|-------------|--------------|
+| `live` | Room is currently broadcasting | Use `getLivePlaybackUrl()` |
+| `recorded` | Recording available for playback | Use `getRecordedPlaybackInfos()` |
+| `idle` | Room created but not yet live | No playback available |
+| `ended` | Broadcast ended, processing recording | No playback available yet |
+
+<Info>
+For more information about creating room posts, please refer to [Room Posts](/social-plus-sdk/social/content-management/posts/creation/room-post).
+</Info>
+
+#### Getting Room Playback URLs
+
+<CodeGroup>
+
+```swift iOS
+func getRoomPlaybackUrls(from post: AmityPost) {
+    guard let roomData = post.getRoomInfo() else { return }
+    
+    let status = roomData.status
+    var playbackUrls: [String] = []
+    
+    switch status {
+    case .live:
+        // Get live playback URL for active broadcast
+        if let liveUrl = roomData.getLivePlaybackUrl() {
+            playbackUrls.append(liveUrl)
+        }
+    case .recorded:
+        // Get recorded playback URLs after broadcast ends
+        let recordedInfos = roomData.getRecordedPlaybackInfos()
+        playbackUrls = recordedInfos.compactMap { $0.url }
+    default:
+        // Room is idle or ended, no playback available
+        break
+    }
+    
+    print("Playback URLs: \(playbackUrls)")
+}
+```
+
+```kotlin Android
+fun getRoomPlaybackUrls(room: AmityRoom): List<String> {
+    val liveUrl = room.getLivePlaybackUrl()
+    
+    val urls = if (room.getStatus() != AmityRoomStatus.RECORDED && !liveUrl.isNullOrBlank()) {
+        // Room is live, use live playback URL
+        listOf(liveUrl)
+    } else if (room.getStatus() == AmityRoomStatus.RECORDED) {
+        // Room has ended and recording is available
+        room.getRecordedPlaybackInfos()
+            ?.mapNotNull { it.url }
+            ?: emptyList()
+    } else {
+        // Room is idle or ended without recording
+        emptyList()
+    }
+    
+    return urls
+}
+```
+
+```typescript TypeScript
+import { PostRepository, RoomRepository } from '@amityco/ts-sdk';
+
+async function getRoomPlaybackUrls(roomId: string): Promise<string[]> {
+  const room = await RoomRepository.getRoom(roomId);
+  
+  let playbackUrls: string[] = [];
+  
+  if (room.status === 'live') {
+    // Get live playback URL for active broadcast
+    const liveUrl = room.livePlaybackUrl;
+    if (liveUrl) {
+      playbackUrls.push(liveUrl);
+    }
+  } else if (room.status === 'recorded') {
+    // Get recorded playback URLs after broadcast ends
+    const recordedInfos = room.recordedPlaybackInfos || [];
+    playbackUrls = recordedInfos
+      .map(info => info.url)
+      .filter((url): url is string => !!url);
+  }
+  
+  return playbackUrls;
+}
+```
+
+</CodeGroup>
+
+#### Rendering Video Playback
+
+Once you have the playback URL, use platform-specific video players to render the content.
+
+<CodeGroup>
+
+```swift iOS
+import AVKit
+
+func playRoomVideo(url: String) {
+    guard let videoURL = URL(string: url) else { return }
+    
+    // Create AVPlayer with the playback URL
+    let player = AVPlayer(url: videoURL)
+    
+    // Create player view controller
+    let playerViewController = AVPlayerViewController()
+    playerViewController.player = player
+    
+    // Present and play
+    present(playerViewController, animated: true) {
+        player.play()
+    }
+}
+
+// Usage with room post
+func playRoom(from post: AmityPost) {
+    guard let roomData = post.getRoomInfo() else { return }
+    
+    if roomData.status == .live, let liveUrl = roomData.getLivePlaybackUrl() {
+        playRoomVideo(url: liveUrl)
+    } else if roomData.status == .recorded {
+        if let firstRecordedUrl = roomData.getRecordedPlaybackInfos().first?.url {
+            playRoomVideo(url: firstRecordedUrl)
+        }
+    }
+}
+```
+
+```kotlin Android
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+
+fun playRoomVideo(
+    context: Context,
+    urls: List<String>
+) {
+    if (urls.isEmpty()) return
+    
+    // Create ExoPlayer instance
+    val exoPlayer = ExoPlayer.Builder(context).build()
+    
+    // Add media items for each URL
+    urls.forEach { url ->
+        val mediaItem = MediaItem.fromUri(url)
+        exoPlayer.addMediaItem(mediaItem)
+    }
+    
+    // Prepare and start playback
+    exoPlayer.prepare()
+    exoPlayer.playWhenReady = true
+}
+
+// Complete example with room data
+fun playRoomFromPost(
+    context: Context,
+    room: AmityRoom,
+    playerView: PlayerView
+) {
+    val urls = getRoomPlaybackUrls(room)
+    
+    if (urls.isNotEmpty()) {
+        val exoPlayer = ExoPlayer.Builder(context).build()
+        
+        // Bind player to view
+        playerView.player = exoPlayer
+        
+        // Add all playback URLs as media items
+        urls.forEach { url ->
+            exoPlayer.addMediaItem(MediaItem.fromUri(url))
+        }
+        
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+    }
+}
+```
+
+```typescript TypeScript
+// Using HTML5 Video element or a video library like Video.js or HLS.js
+
+function playRoomVideo(url: string, videoElement: HTMLVideoElement) {
+  // For HLS streams, use HLS.js library
+  if (url.includes('.m3u8')) {
+    import('hls.js').then(({ default: Hls }) => {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(videoElement);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoElement.play();
+        });
+      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        videoElement.src = url;
+        videoElement.play();
+      }
+    });
+  } else {
+    // For regular video URLs
+    videoElement.src = url;
+    videoElement.play();
+  }
+}
+
+// React example
+function RoomVideoPlayer({ roomId }: { roomId: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  useEffect(() => {
+    async function loadVideo() {
+      const urls = await getRoomPlaybackUrls(roomId);
+      if (urls.length > 0 && videoRef.current) {
+        playRoomVideo(urls[0], videoRef.current);
+      }
+    }
+    loadVideo();
+  }, [roomId]);
+  
+  return <video ref={videoRef} controls />;
+}
+```
+
+<Note>
+For Android, add Media3 ExoPlayer dependency to your `build.gradle`:
+```gradle
+dependencies {
+    implementation "androidx.media3:media3-exoplayer:1.+"
+    implementation "androidx.media3:media3-ui:1.+"
+    implementation "androidx.media3:media3-exoplayer-hls:1.+" // For HLS streams
+}
+```
+</Note>
+
+
+### Live Stream Posts (Deprecated)
+
+Live stream posts offer an effective means of creating captivating and interactive content that engages users and promotes deeper connections among them. The social.plus SDK enables developers to swiftly integrate live stream posts into social feeds.
+
+<CardGroup cols={2}>
+  <Card title="Real-time Interaction" icon="tower-broadcast">
+    Live engagement with audience
+  </Card>
+  <Card title="Stream Integration" icon="video">
+    Easy integration into social feeds
+  </Card>
+</CardGroup>
+
+<Info>
+For more information about live streaming, please refer to [Video Streaming](/social-plus-sdk/video/README).
+</Info>
+
+<CodeGroup>
+
+```swift iOS
+// Grab the stream object from the first child post
+if let firstChildPost = post.childrenPosts.first,
+   let _ = firstChildPost.getLiveStreamInfo() {
+    // Handle `stream` data here
+}
+```
+
+```kotlin Android
+fun getLivestreamInfo(
+    post: AmityPost,
+    videoPlayer: AmityVideoPlayer
+) {
+    val data = post.getData()
+    when (data) {
+        is AmityPost.Data.LIVE_STREAM -> {
+            data.getStream()
+                .doOnNext { stream ->
+                    val title = stream.getTitle()
+                    val description = stream.getDescription()
+                    val thumbnailUrl = stream.getThumbnailImage()?.getUrl()
+
+                    val status = stream.getStatus()
+                    when (status) {
+                        AmityStream.Status.LIVE, AmityStream.Status.RECORDED  -> {
+                            videoPlayer.play(stream.getStreamId())
+                        }
+                        else -> {
+                            // content is not playable
+                        }
+                    }
+                }
+                .doOnError {
+                    // Exception
+                }
+                .subscribe()
+        }
+
+        else -> {}
+    }
+}
+```
+
+```typescript TypeScript
+import { StreamRepository } from '@amityco/ts-sdk';
+
+async function getStream() {
+  const stream = await StreamRepository.getStream('streamId');
+
+  return stream;
+}
+```
 </CodeGroup>
 
 

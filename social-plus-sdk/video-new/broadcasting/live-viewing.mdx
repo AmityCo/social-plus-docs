@@ -1,0 +1,712 @@
+---
+title: Live Room Viewing
+description: Watch live rooms and handle real-time playback across all platforms
+---
+
+# Live Room Viewing
+
+This guide covers how to view and play live rooms in real-time, including room discovery, player setup, and handling different room states.
+
+## Room Discovery & Loading
+
+### Retrieve Room from Post
+
+Get a room from a post to access room metadata and playback information:
+
+<CodeGroup>
+```swift iOS
+import AmitySDK
+import AVKit
+
+class LiveRoomViewer {
+    
+    func getRoomFromPost(_ post: AmityPost) {
+        guard let roomData = post.getRoomInfo() else {
+            print("No room data available")
+            return
+        }
+        
+        // Access room information
+        print("Room ID: \(roomData.roomId)")
+        print("Status: \(roomData.status)")
+        
+        // Handle different room states
+        switch roomData.status {
+        case .live:
+            // Room is currently live - ready to play
+            if let liveUrl = roomData.getLivePlaybackUrl() {
+                playLiveRoom(url: liveUrl)
+            }
+        case .recorded:
+            // Room has ended and recording is available
+            let recordedInfos = roomData.getRecordedPlaybackInfos()
+            if let firstUrl = recordedInfos.first?.url {
+                playRecordedRoom(url: firstUrl)
+            }
+        case .ended:
+            // Room ended but recording may not be ready
+            showMessage("Room has ended, recording will be available soon")
+        case .idle:
+            // Room created but not started
+            showMessage("Room hasn't started yet")
+        default:
+            break
+        }
+    }
+    
+    private func playLiveRoom(url: String) {
+        guard let videoURL = URL(string: url) else { return }
+        
+        let player = AVPlayer(url: videoURL)
+        let playerViewController = AVPlayerViewController()
+        playerViewController.player = player
+        
+        present(playerViewController, animated: true) {
+            player.play()
+        }
+    }
+}
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.video.AmityRoom
+import com.amity.socialcloud.sdk.video.AmityRoomStatus
+
+class LiveRoomViewer(private val context: Context) {
+    
+    fun getRoomFromPost(post: AmityPost) {
+        val roomData = post.getData() as? AmityPost.Data.ROOM
+        
+        roomData?.let { data ->
+            val room = data.getRoom()
+            
+            // Access room information
+            Log.d("Room", "Room ID: ${room.getRoomId()}")
+            Log.d("Room", "Status: ${room.getStatus()}")
+            
+            // Handle different room states
+            when (room.getStatus()) {
+                AmityRoomStatus.LIVE -> {
+                    // Room is currently live - ready to play
+                    room.getLivePlaybackUrl()?.let { liveUrl ->
+                        playLiveRoom(liveUrl)
+                    }
+                }
+                AmityRoomStatus.RECORDED -> {
+                    // Room has ended and recording is available
+                    val recordedInfos = room.getRecordedPlaybackInfos()
+                    recordedInfos?.firstOrNull()?.url?.let { recordedUrl ->
+                        playRecordedRoom(recordedUrl)
+                    }
+                }
+                AmityRoomStatus.ENDED -> {
+                    // Room ended but recording may not be ready
+                    showMessage("Room has ended, recording will be available soon")
+                }
+                AmityRoomStatus.IDLE -> {
+                    // Room created but not started
+                    showMessage("Room hasn't started yet")
+                }
+                else -> {}
+            }
+        }
+    }
+    
+    private fun playLiveRoom(url: String) {
+        // Use ExoPlayer for playback
+        val exoPlayer = ExoPlayer.Builder(context).build()
+        val mediaItem = MediaItem.fromUri(url)
+        
+        exoPlayer.setMediaItem(mediaItem)
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+    }
+}
+```
+
+```typescript TypeScript
+import { PostRepository, RoomRepository } from '@amityco/ts-sdk';
+
+class LiveRoomViewer {
+    
+    async getRoomFromPost(postId: string) {
+        const { data: post } = await PostRepository.getPost(postId);
+        
+        if (post.dataType !== 'room') {
+            console.log('Post is not a room post');
+            return;
+        }
+        
+        const roomId = post.data?.roomId;
+        if (!roomId) {
+            console.log('No room ID available');
+            return;
+        }
+        
+        const room = await RoomRepository.getRoom(roomId);
+        
+        // Access room information
+        console.log('Room ID:', room.roomId);
+        console.log('Status:', room.status);
+        
+        // Handle different room states
+        switch (room.status) {
+            case 'live':
+                // Room is currently live - ready to play
+                if (room.livePlaybackUrl) {
+                    this.playLiveRoom(room.livePlaybackUrl);
+                }
+                break;
+            case 'recorded':
+                // Room has ended and recording is available
+                const recordedInfos = room.recordedPlaybackInfos || [];
+                if (recordedInfos.length > 0 && recordedInfos[0].url) {
+                    this.playRecordedRoom(recordedInfos[0].url);
+                }
+                break;
+            case 'ended':
+                // Room ended but recording may not be ready
+                this.showMessage("Room has ended, recording will be available soon");
+                break;
+            case 'idle':
+                // Room created but not started
+                this.showMessage("Room hasn't started yet");
+                break;
+        }
+    }
+    
+    private playLiveRoom(url: string) {
+        const videoElement = document.getElementById('roomVideo') as HTMLVideoElement;
+        
+        if (url.includes('.m3u8')) {
+            // Use HLS.js for HLS streams
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(videoElement);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    videoElement.play();
+                });
+            }
+        } else {
+            // Direct playback for other formats
+            videoElement.src = url;
+            videoElement.play();
+        }
+    }
+}
+```
+</CodeGroup>
+
+
+## Room States & Status
+
+Understanding room lifecycle and handling state transitions:
+
+### Room Status Types
+
+| Status | Description | Playback Action |
+|--------|-------------|-----------------|
+| **idle** | Room created but not started | Show "Coming Soon" message |
+| **live** | Currently broadcasting | Use `getLivePlaybackUrl()` |
+| **ended** | Broadcasting finished, processing recording | Show "Processing" message |
+| **recorded** | Recording available for playback | Use `getRecordedPlaybackInfos()` |
+
+### Real-Time State Monitoring
+
+<CodeGroup>
+```swift iOS
+class RoomStateManager {
+    private var roomToken: AmityNotificationToken?
+    
+    func observeRoomState(roomId: String) {
+        let roomRepository = AmityVideoClient.newRoomRepository()
+        let liveRoom = roomRepository.getRoom(roomId)
+        
+        roomToken = liveRoom.observe { [weak self] liveObject, error in
+            guard let room = liveObject.object else { return }
+            self?.updateUI(for: room)
+        }
+    }
+    
+    private func updateUI(for room: AmityRoom) {
+        DispatchQueue.main.async {
+            switch room.status {
+            case .idle:
+                self.hidePlayer()
+                self.showWaitingMessage("Room will start soon...")
+            case .live:
+                self.showPlayer()
+                if let liveUrl = room.getLivePlaybackUrl() {
+                    self.startLivePlayback(url: liveUrl)
+                }
+                self.showLiveIndicator(true)
+            case .ended:
+                self.stopPlayback()
+                self.showMessage("Room has ended. Recording will be available soon.")
+            case .recorded:
+                self.showPlayer()
+                let recordedInfos = room.getRecordedPlaybackInfos()
+                if let firstUrl = recordedInfos.first?.url {
+                    self.startRecordedPlayback(url: firstUrl)
+                }
+                self.showLiveIndicator(false)
+            default:
+                break
+            }
+        }
+    }
+}
+```
+
+```kotlin Android
+class RoomStateManager(private val context: Context) {
+    
+    fun observeRoomState(roomId: String) {
+        AmityVideoClient.newRoomRepository()
+            .getRoom(roomId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { room ->
+                updateUI(room)
+            }
+    }
+    
+    private fun updateUI(room: AmityRoom) {
+        when (room.getStatus()) {
+            AmityRoomStatus.IDLE -> {
+                hidePlayer()
+                showWaitingMessage("Room will start soon...")
+            }
+            AmityRoomStatus.LIVE -> {
+                showPlayer()
+                room.getLivePlaybackUrl()?.let { liveUrl ->
+                    startLivePlayback(liveUrl)
+                }
+                showLiveIndicator(true)
+            }
+            AmityRoomStatus.ENDED -> {
+                stopPlayback()
+                showMessage("Room has ended. Recording will be available soon.")
+            }
+            AmityRoomStatus.RECORDED -> {
+                showPlayer()
+                room.getRecordedPlaybackInfos()?.firstOrNull()?.url?.let { recordedUrl ->
+                    startRecordedPlayback(recordedUrl)
+                }
+                showLiveIndicator(false)
+            }
+            else -> {}
+        }
+    }
+}
+```
+
+```typescript TypeScript
+import { RoomRepository } from '@amityco/ts-sdk';
+
+class RoomStateManager {
+    private unsubscribe: (() => void) | null = null;
+    
+    observeRoomState(roomId: string) {
+        this.unsubscribe = RoomRepository.observeRoom(roomId, (room) => {
+            this.updateUI(room);
+        });
+    }
+    
+    private updateUI(room: any) {
+        switch (room.status) {
+            case 'idle':
+                this.hidePlayer();
+                this.showWaitingMessage("Room will start soon...");
+                break;
+            case 'live':
+                this.showPlayer();
+                if (room.livePlaybackUrl) {
+                    this.startLivePlayback(room.livePlaybackUrl);
+                }
+                this.showLiveIndicator(true);
+                break;
+            case 'ended':
+                this.stopPlayback();
+                this.showMessage("Room has ended. Recording will be available soon.");
+                break;
+            case 'recorded':
+                this.showPlayer();
+                const recordedInfos = room.recordedPlaybackInfos || [];
+                if (recordedInfos.length > 0 && recordedInfos[0].url) {
+                    this.startRecordedPlayback(recordedInfos[0].url);
+                }
+                this.showLiveIndicator(false);
+                break;
+        }
+    }
+    
+    cleanup() {
+        this.unsubscribe?.();
+    }
+}
+```
+</CodeGroup>
+
+
+## Live Room Playback
+
+### Getting Live Playback URL
+
+Use `getLivePlaybackUrl()` to get the URL for live room playback:
+
+<CodeGroup>
+```swift iOS
+func getLivePlaybackUrl(from room: AmityRoom) -> String? {
+    guard room.status == .live else {
+        print("Room is not live")
+        return nil
+    }
+    
+    return room.getLivePlaybackUrl()
+}
+```
+
+```kotlin Android
+fun getLivePlaybackUrl(room: AmityRoom): String? {
+    if (room.getStatus() != AmityRoomStatus.LIVE) {
+        Log.d("Room", "Room is not live")
+        return null
+    }
+    
+    return room.getLivePlaybackUrl()
+}
+```
+
+```typescript TypeScript
+function getLivePlaybackUrl(room: any): string | null {
+    if (room.status !== 'live') {
+        console.log('Room is not live');
+        return null;
+    }
+    
+    return room.livePlaybackUrl || null;
+}
+```
+</CodeGroup>
+
+
+### Platform-Specific Player Setup
+
+#### iOS - AVPlayer for Live Rooms
+
+<CodeGroup>
+```swift iOS
+import AVKit
+
+class LiveRoomPlayer {
+    private var player: AVPlayer?
+    private var playerViewController: AVPlayerViewController?
+    
+    func setupPlayer() -> AVPlayerViewController {
+        playerViewController = AVPlayerViewController()
+        return playerViewController!
+    }
+    
+    func playLiveRoom(url: String) {
+        guard let videoURL = URL(string: url) else { return }
+        
+        player = AVPlayer(url: videoURL)
+        playerViewController?.player = player
+        
+        // Start playback
+        player?.play()
+    }
+    
+    func pause() {
+        player?.pause()
+    }
+    
+    func resume() {
+        player?.play()
+    }
+    
+    func cleanup() {
+        player?.pause()
+        player = nil
+        playerViewController = nil
+    }
+}
+```
+</CodeGroup>
+
+#### Android - ExoPlayer for Live Rooms
+
+<CodeGroup>
+```kotlin Android
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+
+class LiveRoomPlayer(private val context: Context) {
+    
+    private var exoPlayer: ExoPlayer? = null
+    
+    fun setupPlayer(playerView: PlayerView) {
+        exoPlayer = ExoPlayer.Builder(context).build()
+        playerView.player = exoPlayer
+        
+        // Add player event listeners
+        exoPlayer?.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                when (state) {
+                    Player.STATE_READY -> Log.d("Player", "Ready to play")
+                    Player.STATE_BUFFERING -> Log.d("Player", "Buffering...")
+                    Player.STATE_ENDED -> Log.d("Player", "Playback ended")
+                    Player.STATE_IDLE -> Log.d("Player", "Player idle")
+                }
+            }
+            
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e("Player", "Playback error: ${error.message}")
+            }
+        })
+    }
+    
+    fun playLiveRoom(url: String) {
+        val mediaItem = MediaItem.fromUri(url)
+        exoPlayer?.setMediaItem(mediaItem)
+        exoPlayer?.prepare()
+        exoPlayer?.playWhenReady = true
+    }
+    
+    fun pause() {
+        exoPlayer?.pause()
+    }
+    
+    fun resume() {
+        exoPlayer?.play()
+    }
+    
+    fun release() {
+        exoPlayer?.release()
+        exoPlayer = null
+    }
+}
+```
+
+```xml Android Layout
+<androidx.constraintlayout.widget.ConstraintLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintTop_toTopOf="parent"
+        app:use_controller="true"
+        app:show_buffering="when_playing" />
+    
+    <TextView
+        android:id="@+id/live_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LIVE"
+        android:textColor="#FFFFFF"
+        android:background="#FF0000"
+        android:padding="8dp"
+        app:layout_constraintTop_toTopOf="@id/player_view"
+        app:layout_constraintStart_toStartOf="@id/player_view"
+        android:layout_margin="16dp" />
+        
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+</CodeGroup>
+
+#### TypeScript - HTML5 Video Player
+
+<CodeGroup>
+```typescript TypeScript
+class LiveRoomPlayer {
+    private videoElement: HTMLVideoElement;
+    private hls: Hls | null = null;
+    
+    constructor(videoElementId: string) {
+        this.videoElement = document.getElementById(videoElementId) as HTMLVideoElement;
+        this.setupEventListeners();
+    }
+    
+    async playLiveRoom(url: string) {
+        try {
+            if (url.includes('.m3u8')) {
+                await this.setupHLSPlayer(url);
+            } else {
+                this.videoElement.src = url;
+                await this.videoElement.play();
+            }
+        } catch (error) {
+            console.error('Failed to play live room:', error);
+            throw error;
+        }
+    }
+    
+    private async setupHLSPlayer(hlsUrl: string) {
+        if (Hls.isSupported()) {
+            this.hls = new Hls();
+            this.hls.loadSource(hlsUrl);
+            this.hls.attachMedia(this.videoElement);
+            
+            this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                this.videoElement.play();
+            });
+            
+            this.hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('HLS error:', data);
+            });
+        } else if (this.videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+            this.videoElement.src = hlsUrl;
+            await this.videoElement.play();
+        } else {
+            throw new Error('HLS not supported');
+        }
+    }
+    
+    private setupEventListeners() {
+        this.videoElement.addEventListener('loadstart', () => console.log('Room loading started'));
+        this.videoElement.addEventListener('canplay', () => console.log('Room ready to play'));
+        this.videoElement.addEventListener('error', (e) => console.error('Player error:', e));
+        this.videoElement.addEventListener('waiting', () => console.log('Buffering...'));
+        this.videoElement.addEventListener('playing', () => console.log('Playback started'));
+    }
+    
+    pause() { this.videoElement.pause(); }
+    resume() { this.videoElement.play(); }
+    
+    destroy() {
+        this.hls?.destroy();
+        this.videoElement.pause();
+        this.videoElement.src = '';
+    }
+}
+```
+</CodeGroup>
+
+
+## Error Handling & Recovery
+
+### Common Playback Issues
+
+<CodeGroup>
+```swift iOS
+class PlaybackErrorHandler {
+    
+    func handlePlayerError(_ error: Error) {
+        let errorDescription = error.localizedDescription.lowercased()
+        
+        if errorDescription.contains("network") {
+            showAlert("Network Error", message: "Please check your internet connection")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.retryPlayback()
+            }
+        } else if errorDescription.contains("format") {
+            showAlert("Format Error", message: "Unsupported video format")
+        } else if errorDescription.contains("permission") {
+            showAlert("Access Denied", message: "You don't have permission to view this room")
+        } else {
+            showAlert("Playback Error", message: error.localizedDescription)
+        }
+    }
+    
+    private func retryPlayback() {
+        // Implement retry logic
+    }
+}
+```
+
+```kotlin Android
+class PlaybackErrorHandler {
+    
+    fun handlePlayerError(error: String) {
+        when {
+            error.contains("network", ignoreCase = true) -> {
+                showMessage("Network error. Please check your connection.")
+                Handler(Looper.getMainLooper()).postDelayed({
+                    retryPlayback()
+                }, 3000)
+            }
+            error.contains("format", ignoreCase = true) -> {
+                showMessage("Unsupported video format")
+            }
+            error.contains("permission", ignoreCase = true) -> {
+                showMessage("You don't have permission to view this room")
+            }
+            else -> {
+                showMessage("Playback error: $error")
+            }
+        }
+    }
+    
+    private fun retryPlayback() {
+        // Implement retry logic
+    }
+}
+```
+
+```typescript TypeScript
+class PlaybackErrorHandler {
+    private retryCount = 0;
+    private maxRetries = 3;
+    
+    handlePlayerError(error: any) {
+        const errorMessage = error?.message?.toLowerCase() || '';
+        
+        if (errorMessage.includes('network')) {
+            this.showMessage('Network error. Please check your connection.');
+            if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+                setTimeout(() => this.retryPlayback(), 3000);
+            }
+        } else if (errorMessage.includes('format')) {
+            this.showMessage('Unsupported video format');
+        } else if (errorMessage.includes('permission')) {
+            this.showMessage("You don't have permission to view this room");
+        } else {
+            this.showMessage(`Playback error: ${error?.message || 'Unknown error'}`);
+        }
+    }
+    
+    private retryPlayback() {
+        // Implement retry logic
+    }
+    
+    private showMessage(message: string) {
+        console.log(message);
+    }
+}
+```
+</CodeGroup>
+
+<Warning>
+**Concurrency Limit**: There is a limitation on the maximum number of concurrent live rooms. Contact [community.social.plus.co](https://community.amity.co/) with your use case to determine if limits can be raised.
+</Warning>
+
+<Tip>
+**Performance Tip**: For mobile applications, monitor device temperature and network conditions. Consider reducing video quality during poor network conditions to maintain playback stability.
+</Tip>
+
+## Next Steps
+
+With live viewing implemented:
+
+<CardGroup cols={2}>
+  <Card title="Recorded Playback" href="./recorded-playback" icon="video">
+    Handle recorded room playback after broadcast ends
+  </Card>
+  <Card title="Start Broadcasting" href="./start-broadcasting" icon="play">
+    Learn how to start your own broadcast
+  </Card>
+  <Card title="Co-Host Management" href="./co-host-management" icon="users">
+    Invite and manage broadcast co-hosts
+  </Card>
+  <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
+    Query, update, and manage room lifecycle
+  </Card>
+</CardGroup>

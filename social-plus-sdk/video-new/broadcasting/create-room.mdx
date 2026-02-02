@@ -23,8 +23,7 @@ Task { @MainActor in
             thumbnailFileId: nil,
             metadata: nil,
             channelEnabled: true,
-            parentRoomId: nil,
-            participants: ["host-user-id", "co-host-user-id"]
+            parentRoomId: nil
         )
         print("Room created: \(room.roomId)")
         print("Status: \(room.status)")
@@ -41,8 +40,7 @@ AmityRoomRepository.createRoom(
     thumbnailFileId = null,
     metadata = null,
     channelEnabled = true,
-    parentRoomId = null,
-    participants = listOf("host-user-id", "co-host-user-id")
+    parentRoomId = null
 ).subscribe(
     onSuccess = { room ->
         Log.d("Room", "Created: ${room.roomId}")
@@ -62,8 +60,7 @@ try {
         thumbnailFileId: null,
         metadata: null,
         channelEnabled: true,
-        parentRoomId: null,
-        participants: ["host-user-id", "co-host-user-id"]
+        parentRoomId: null
     });
     console.log("Room created:", room.roomId);
     console.log("Status:", room.status);
@@ -71,97 +68,121 @@ try {
     console.error("Failed to create room:", error);
 }
 ```
-
-```dart Flutter
-try {
-    final room = await AmityRoomRepository().createRoom(
-        title: "Product Launch Event",
-        description: "Join us for the unveiling of our latest features",
-        thumbnailFileId: null,
-        metadata: null,
-        channelEnabled: true,
-        parentRoomId: null,
-        participants: ["host-user-id", "co-host-user-id"]
-    );
-    print("Room created: ${room.roomId}");
-    print("Status: ${room.status}");
-} catch (error) {
-    print("Failed to create room: $error");
-}
-```
 </CodeGroup>
 
-### Room with Chat Channel
+### Room with Live Chat Channel
 
-Enable integrated chat for viewer interaction:
+To enable live chat for viewer interaction, you must create a live channel **after** creating the room and livestream post. The channel requires both the `postId` and `roomId` to be properly linked.
+
+<Note>
+Channels are **not** automatically created. You must manually create the channel after the post is created, passing both the `postId` and `roomId`.
+</Note>
 
 <CodeGroup>
 ```swift iOS
+// 1. First create the room
 let room = try await AmityRoomRepository.shared.createRoom(
     title: "Weekly Q&A Session",
     description: "Ask us anything about our product",
     thumbnailFileId: nil,
     metadata: ["category": "education"],
-    channelEnabled: true, // Chat channel enabled
-    parentRoomId: nil,
-    participants: ["host-user-id"]
+    channelEnabled: true,
+    parentRoomId: nil
 )
 
-// Channel is automatically created
-if let channelId = room.channelId {
-    print("Chat channel ID: \(channelId)")
-}
+// 2. Create the livestream post
+let post = try await AmityPostRepository.shared.createLiveStreamPost(
+    targetType: .community,
+    targetId: communityId,
+    roomId: room.roomId,
+    text: "Join our Q&A session!",
+    title: room.title,
+    metadata: nil,
+    mentionUserIds: nil,
+    hashtags: nil
+)
+
+// 3. Create the live chat channel with postId and roomId
+let channelRepository = AmityChatClient.shared.channelRepository
+let channel = try await channelRepository.createChannel(room.title)
+    .live()
+    .postId(postId: post.postId)
+    .roomId(roomId: room.roomId)
+    .build()
+    .create()
+
+print("Live chat channel created: \(channel.channelId)")
 ```
 
 ```kotlin Android
-val room = AmityRoomRepository.createRoom(
+// Create room, post, and channel using reactive chain
+AmityRoomRepository.createRoom(
     title = "Weekly Q&A Session",
     description = "Ask us anything about our product",
     thumbnailFileId = null,
     metadata = mapOf("category" to "education"),
-    channelEnabled = true, // Chat channel enabled
-    parentRoomId = null,
-    participants = listOf("host-user-id")
-).blockingGet()
-
-// Channel is automatically created
-room.channelId?.let { channelId ->
-    Log.d("Room", "Chat channel ID: $channelId")
-}
+    channelEnabled = true,
+    parentRoomId = null
+).flatMap { room ->
+    // 2. Create the livestream post
+    AmityPostRepository.createLiveStreamPost(
+        targetType = AmityPostTargetType.COMMUNITY,
+        targetId = communityId,
+        roomId = room.roomId,
+        text = "Join our Q&A session!",
+        title = room.title,
+        metadata = null,
+        mentionUserIds = null,
+        hashtags = null
+    ).map { post -> Pair(room, post) }
+}.flatMap { (room, post) ->
+    // 3. Create the live chat channel with postId and roomId
+    AmityChatClient.newChannelRepository()
+        .createChannel(room.title)
+        .live()
+        .postId(postId = post.postId)
+        .roomId(roomId = room.roomId)
+        .build()
+        .create()
+}.subscribe(
+    { channel ->
+        Log.d("Channel", "Live chat channel created: ${channel.getChannelId()}")
+    },
+    { error ->
+        Log.e("Channel", "Failed to create", error)
+    }
+)
 ```
 
 ```typescript TypeScript
+// 1. First create the room
 const room = await roomRepository.createRoom({
     title: "Weekly Q&A Session",
     description: "Ask us anything about our product",
     thumbnailFileId: null,
     metadata: { category: "education" },
-    channelEnabled: true, // Chat channel enabled
-    parentRoomId: null,
-    participants: ["host-user-id"]
+    channelEnabled: true,
+    parentRoomId: null
 });
 
-// Channel is automatically created
-if (room.channelId) {
-    console.log("Chat channel ID:", room.channelId);
-}
-```
+// 2. Create the livestream post
+const post = await postRepository.createLiveStreamPost({
+    targetType: AmityPostTargetType.COMMUNITY,
+    targetId: communityId,
+    roomId: room.roomId,
+    text: "Join our Q&A session!",
+    title: room.title
+});
 
-```dart Flutter
-final room = await AmityRoomRepository().createRoom(
-    title: "Weekly Q&A Session",
-    description: "Ask us anything about our product",
-    thumbnailFileId: null,
-    metadata: {"category": "education"},
-    channelEnabled: true, // Chat channel enabled
-    parentRoomId: null,
-    participants: ["host-user-id"]
-);
+// 3. Create the live chat channel with postId and roomId
+const channel = await ChannelRepository.createChannel({
+    displayName: room.title,
+    type: 'live',
+    postId: post.postId,
+    roomId: room.roomId
+});
 
-// Channel is automatically created
-if (room.channelId != null) {
-    print("Chat channel ID: ${room.channelId}");
-}
+console.log("Live chat channel created:", channel.channelId);
 ```
 </CodeGroup>
 
@@ -182,25 +203,30 @@ let room = try await AmityRoomRepository.shared.createRoom(
     thumbnailFileId: thumbnailFile.fileId,
     metadata: nil,
     channelEnabled: true,
-    parentRoomId: nil,
-    participants: ["host-user-id", "co-host-1-id", "co-host-2-id"]
+    parentRoomId: nil
 )
 ```
 
 ```kotlin Android
-// First upload the thumbnail
-val thumbnailFile = AmityFileRepository.uploadImage(thumbnailUri).blockingGet()
-
-// Create room with thumbnail
-val room = AmityRoomRepository.createRoom(
-    title = "Community Livestream",
-    description = "Join our weekly community gathering",
-    thumbnailFileId = thumbnailFile.fileId,
-    metadata = null,
-    channelEnabled = true,
-    parentRoomId = null,
-    participants = listOf("host-user-id", "co-host-1-id", "co-host-2-id")
-).blockingGet()
+// Upload thumbnail and create room using reactive chain
+AmityFileRepository.uploadImage(thumbnailUri)
+    .flatMap { thumbnailFile ->
+        AmityRoomRepository.createRoom(
+            title = "Community Livestream",
+            description = "Join our weekly community gathering",
+            thumbnailFileId = thumbnailFile.fileId,
+            metadata = null,
+            channelEnabled = true,
+            parentRoomId = null
+        )
+    }.subscribe(
+        { room ->
+            Log.d("Room", "Room created with thumbnail: ${room.roomId}")
+        },
+        { error ->
+            Log.e("Room", "Failed to create room", error)
+        }
+    )
 ```
 
 ```typescript TypeScript
@@ -214,91 +240,8 @@ const room = await roomRepository.createRoom({
     thumbnailFileId: thumbnailFile.fileId,
     metadata: null,
     channelEnabled: true,
-    parentRoomId: null,
-    participants: ["host-user-id", "co-host-1-id", "co-host-2-id"]
+    parentRoomId: null
 });
-```
-
-```dart Flutter
-// First upload the thumbnail
-final thumbnailFile = await AmityFileRepository().uploadImage(thumbnailImage);
-
-// Create room with thumbnail
-final room = await AmityRoomRepository().createRoom(
-    title: "Community Livestream",
-    description: "Join our weekly community gathering",
-    thumbnailFileId: thumbnailFile.fileId,
-    metadata: null,
-    channelEnabled: true,
-    parentRoomId: null,
-    participants: ["host-user-id", "co-host-1-id", "co-host-2-id"]
-);
-```
-</CodeGroup>
-
-### Room for Event
-
-Create a room linked to a scheduled event:
-
-<CodeGroup>
-```swift iOS
-// Assume we have an event
-let event = try await AmityEventRepository.shared.getEvent(id: "event-123")
-
-let room = try await AmityRoomRepository.shared.createRoom(
-    title: event.title,
-    description: event.description,
-    thumbnailFileId: event.coverImageFileId,
-    metadata: ["eventId": event.eventId],
-    channelEnabled: true,
-    parentRoomId: nil,
-    participants: [event.userId] // Event creator as host
-)
-```
-
-```kotlin Android
-// Assume we have an event
-val event = AmityEventRepository.getEvent(id = "event-123").blockingFirst()
-
-val room = AmityRoomRepository.createRoom(
-    title = event.title,
-    description = event.description,
-    thumbnailFileId = event.coverImageFileId,
-    metadata = mapOf("eventId" to event.eventId),
-    channelEnabled = true,
-    parentRoomId = null,
-    participants = listOf(event.userId) // Event creator as host
-).blockingGet()
-```
-
-```typescript TypeScript
-// Assume we have an event
-const event = await eventRepository.getEvent("event-123");
-
-const room = await roomRepository.createRoom({
-    title: event.title,
-    description: event.description,
-    thumbnailFileId: event.coverImageFileId,
-    metadata: { eventId: event.eventId },
-    channelEnabled: true,
-    parentRoomId: null,
-    participants: [event.userId] // Event creator as host
-});
-```
-
-```dart Flutter
-// Assume we have an event
-final event = await AmityEventRepository().getEvent(id: "event-123");
-
-final room = await AmityRoomRepository().createRoom(
-    title: event.title,
-    description: event.description,
-    thumbnailFileId: event.coverImageFileId,
-    metadata: {"eventId": event.eventId},
-    channelEnabled: true,
-    parentRoomId: null,
-    participants: [event.userId] // Event creator as host
-);
 ```
 </CodeGroup>
 
@@ -376,12 +319,13 @@ final room = await AmityRoomRepository().createRoom(
     **Type:** `boolean`  
     **Required:** No  
     **Default:** `false`  
-    **Description:** Enable integrated chat channel
+    **Description:** Indicates the room supports integrated chat
     
     **Behavior:**
-    - When `true`, chat channel is auto-created
-    - Channel ID available in `room.channelId`
-    - Viewers can interact via chat
+    - When `true`, signals that the room supports live chat
+    - You must **manually create** the live channel after creating the post
+    - Use `postId` and `roomId` when creating the channel
+    - See [Room with Live Chat Channel](#room-with-live-chat-channel) for full workflow
     
     **Example:**
     ```typescript
@@ -404,22 +348,6 @@ final room = await AmityRoomRepository().createRoom(
     parentRoomId: "room-main-session"
     ```
   </Accordion>
-  
-  <Accordion title="participants" icon="users">
-    **Type:** `string[]`  
-    **Required:** Yes  
-    **Description:** Array of user IDs who can broadcast
-    
-    **Guidelines:**
-    - Include host (creator)
-    - Add co-hosts for collaborative streaming
-    - Can be updated later
-    
-    **Example:**
-    ```typescript
-    participants: ["host-id", "co-host-1-id", "co-host-2-id"]
-    ```
-  </Accordion>
 </AccordionGroup>
 
 ## Getting Broadcaster Data
@@ -434,16 +362,11 @@ Task { @MainActor in
             roomId: room.roomId
         )
         
-        // Handle broadcaster data based on type
-        switch broadcasterData {
-        case .coHosts(let token, let url):
+        // Handle broadcaster data
+        if case .coHosts(let token, let url) = broadcasterData {
             print("Co-host token: \(token)")
             print("Co-host URL: \(url)")
             // Use LiveKit SDK with these credentials
-            
-        case .directStreaming(let streamUrl):
-            print("Stream URL: \(streamUrl)")
-            // Use RTMP with this URL
         }
     } catch {
         print("Failed to get broadcaster data: \(error)")
@@ -455,16 +378,10 @@ Task { @MainActor in
 AmityRoomRepository.getBroadcastData(roomId = room.roomId)
     .subscribe(
         onSuccess = { broadcasterData ->
-            when (broadcasterData) {
-                is AmityRoomBroadcastData.CoHosts -> {
-                    Log.d("Broadcast", "Token: ${broadcasterData.coHostToken}")
-                    Log.d("Broadcast", "URL: ${broadcasterData.coHostUrl}")
-                    // Use LiveKit SDK with these credentials
-                }
-                is AmityRoomBroadcastData.DirectStreaming -> {
-                    Log.d("Broadcast", "Stream URL: ${broadcasterData.directStreamUrl}")
-                    // Use RTMP with this URL
-                }
+            if (broadcasterData is AmityRoomBroadcastData.CoHosts) {
+                Log.d("Broadcast", "Token: ${broadcasterData.coHostToken}")
+                Log.d("Broadcast", "URL: ${broadcasterData.coHostUrl}")
+                // Use LiveKit SDK with these credentials
             }
         },
         onError = { error ->
@@ -477,41 +394,17 @@ AmityRoomRepository.getBroadcastData(roomId = room.roomId)
 try {
     const broadcasterData = await roomRepository.getBroadcastData(room.roomId);
     
-    if (broadcasterData.type === "coHosts") {
-        console.log("Co-host token:", broadcasterData.coHostToken);
-        console.log("Co-host URL:", broadcasterData.coHostUrl);
-        // Use LiveKit SDK with these credentials
-    } else if (broadcasterData.type === "directStreaming") {
-        console.log("Stream URL:", broadcasterData.directStreamUrl);
-        // Use RTMP with this URL
-    }
+    console.log("Co-host token:", broadcasterData.coHostToken);
+    console.log("Co-host URL:", broadcasterData.coHostUrl);
+    // Use LiveKit SDK with these credentials
 } catch (error) {
     console.error("Failed to get broadcaster data:", error);
-}
-```
-
-```dart Flutter
-try {
-    final broadcasterData = await AmityRoomRepository().getBroadcastData(
-        roomId: room.roomId
-    );
-    
-    if (broadcasterData is CoHostsBroadcastData) {
-        print("Co-host token: ${broadcasterData.coHostToken}");
-        print("Co-host URL: ${broadcasterData.coHostUrl}");
-        // Use LiveKit SDK with these credentials
-    } else if (broadcasterData is DirectStreamingBroadcastData) {
-        print("Stream URL: ${broadcasterData.directStreamUrl}");
-        // Use RTMP with this URL
-    }
-} catch (error) {
-    print("Failed to get broadcaster data: $error");
 }
 ```
 </CodeGroup>
 
 <Info>
-**Broadcaster Credentials**: The broadcast data contains credentials needed to start streaming. For co-hosts rooms, you'll use LiveKit SDK. For direct streaming, you'll use RTMP clients.
+**Broadcaster Credentials**: The broadcast data contains credentials needed to start streaming. Use LiveKit SDK with the `coHostToken` and `coHostUrl` to connect to the streaming server.
 </Info>
 
 ## Creating Livestream Post
@@ -576,67 +469,192 @@ try {
     console.error("Failed to create post:", error);
 }
 ```
-
-```dart Flutter
-try {
-    final post = await AmityPostRepository().createLiveStreamPost(
-        targetType: AmityPostTargetType.COMMUNITY,
-        targetId: "community-123",
-        roomId: room.roomId,
-        text: "Join us for today's live session!",
-        title: room.title,
-        metadata: null,
-        mentionUserIds: null,
-        hashtags: null
-    );
-    print("Livestream post created: ${post.postId}");
-} catch (error) {
-    print("Failed to create post: $error");
-}
-```
 </CodeGroup>
 
 ## Complete Workflow Example
 
-Full room creation and streaming setup:
+Full room creation, post, channel, and streaming setup:
 
-```typescript
-// 1. Create room
-const room = await roomRepository.createRoom({
-    title: "Product Demo",
-    description: "Live demo of our new features",
-    channelEnabled: true,
-    participants: [currentUserId, "co-host-id"]
-});
+<CodeGroup>
 
-// 2. Get broadcaster credentials
-const broadcasterData = await roomRepository.getBroadcastData(room.roomId);
-
-// 3. Create livestream post
-const post = await postRepository.createLiveStreamPost({
-    targetType: AmityPostTargetType.COMMUNITY,
-    targetId: communityId,
-    roomId: room.roomId,
-    text: "Going live now! Join us for a product demo.",
-    title: room.title
-});
-
-// 4. Initialize broadcaster (LiveKit example)
-if (broadcasterData.type === "coHosts") {
-    await initializeLiveKitBroadcaster(
-        broadcasterData.coHostUrl,
-        broadcasterData.coHostToken
-    );
+```swift iOS
+Task { @MainActor in
+    do {
+        // 1. Create room
+        let room = try await AmityRoomRepository.shared.createRoom(
+            title: "Product Demo",
+            description: "Live demo of our new features",
+            thumbnailFileId: nil,
+            metadata: nil,
+            channelEnabled: true,
+            parentRoomId: nil
+        )
+        
+        // 2. Create livestream post
+        let post = try await AmityPostRepository.shared.createLiveStreamPost(
+            targetType: .community,
+            targetId: communityId,
+            roomId: room.roomId,
+            text: "Going live now! Join us for a product demo.",
+            title: room.title,
+            metadata: nil,
+            mentionUserIds: nil,
+            hashtags: nil
+        )
+        
+        // 3. Create live chat channel (must be after post creation)
+        let channelRepository = AmityChatClient.shared.channelRepository
+        let channel = try await channelRepository.createChannel(room.title)
+            .live()
+            .postId(postId: post.postId)
+            .roomId(roomId: room.roomId)
+            .build()
+            .create()
+        
+        // 4. Get broadcaster credentials
+        let broadcasterData = try await AmityRoomRepository.shared.getBroadcastData(
+            roomId: room.roomId
+        )
+        
+        // 5. Initialize broadcaster (LiveKit example)
+        if case .coHosts(let token, let url) = broadcasterData {
+            try await initializeLiveKitBroadcaster(url: url, token: token)
+        }
+        
+        // 6. Start broadcasting
+        try await startStreaming()
+        
+        print("Room created and streaming started!")
+        print("Room ID: \(room.roomId)")
+        print("Post ID: \(post.postId)")
+        print("Channel ID: \(channel.channelId)")
+    } catch {
+        print("Failed to create room and start streaming: \(error)")
+    }
 }
-
-// 5. Start broadcasting
-await startStreaming();
-
-console.log("Room created and streaming started!");
-console.log("Room ID:", room.roomId);
-console.log("Post ID:", post.postId);
-console.log("Channel ID:", room.channelId);
 ```
+
+```kotlin Android
+fun createRoomAndStartStreaming(
+    communityId: String,
+) {
+    // 1. Create room
+    AmityRoomRepository.createRoom(
+        title = "Product Demo",
+        description = "Live demo of our new features",
+        thumbnailFileId = null,
+        metadata = null,
+        channelEnabled = true,
+        parentRoomId = null
+    ).flatMap { room ->
+        // 2. Create livestream post
+        AmityPostRepository.createLiveStreamPost(
+            targetType = AmityPostTargetType.COMMUNITY,
+            targetId = communityId,
+            roomId = room.roomId,
+            text = "Going live now! Join us for a product demo.",
+            title = room.title,
+            metadata = null,
+            mentionUserIds = null,
+            hashtags = null
+        ).map { post -> Pair(room, post) }
+    }.flatMap { (room, post) ->
+        // 3. Create live chat channel (must be after post creation)
+        AmityChatClient.newChannelRepository()
+            .createChannel(room.title)
+            .live()
+            .postId(postId = post.postId)
+            .roomId(roomId = room.roomId)
+            .build()
+            .create()
+            .map { channel -> Triple(room, post, channel) }
+    }.flatMap { (room, post, channel) ->
+        // 4. Get broadcaster credentials
+        AmityRoomRepository.getBroadcastData(roomId = room.roomId)
+            .doOnSuccess { broadcasterData ->
+                // 5. Initialize broadcaster (LiveKit example)
+                if (broadcasterData is AmityRoomBroadcastData.CoHosts) {
+                    initializeLiveKitBroadcaster(
+                        url = broadcasterData.coHostUrl,
+                        token = broadcasterData.coHostToken
+                    )
+                }
+                
+                // 6. Start broadcasting
+                startStreaming()
+                
+                Log.d("Room", "Room created and streaming started!")
+                Log.d("Room", "Room ID: ${room.roomId}")
+                Log.d("Room", "Post ID: ${post.postId}")
+                Log.d("Room", "Channel ID: ${channel.getChannelId()}")
+            }
+    }.subscribe(
+        { },
+        { error ->
+            Log.e("Room", "Failed to create room and start streaming", error)
+        }
+    )
+}
+```
+
+```typescript TypeScript
+async function createRoomAndStartStreaming(
+    communityId: string,
+) {
+    try {
+        // 1. Create room
+        const room = await roomRepository.createRoom({
+            title: "Product Demo",
+            description: "Live demo of our new features",
+            channelEnabled: true
+        });
+
+        // 2. Create livestream post
+        const post = await postRepository.createLiveStreamPost({
+            targetType: AmityPostTargetType.COMMUNITY,
+            targetId: communityId,
+            roomId: room.roomId,
+            text: "Going live now! Join us for a product demo.",
+            title: room.title
+        });
+
+        // 3. Create live chat channel (must be after post creation)
+        const channel = await ChannelRepository.createChannel({
+            displayName: room.title,
+            type: 'live',
+            postId: post.postId,
+            roomId: room.roomId
+        });
+
+        // 4. Get broadcaster credentials
+        const broadcasterData = await roomRepository.getBroadcastData(room.roomId);
+
+        // 5. Initialize broadcaster (LiveKit example)
+        if (broadcasterData.type === "coHosts") {
+            await initializeLiveKitBroadcaster(
+                broadcasterData.coHostUrl,
+                broadcasterData.coHostToken
+            );
+        }
+
+        // 6. Start broadcasting
+        await startStreaming();
+
+        console.log("Room created and streaming started!");
+        console.log("Room ID:", room.roomId);
+        console.log("Post ID:", post.postId);
+        console.log("Channel ID:", channel.channelId);
+    } catch (error) {
+        console.error("Failed to create room and start streaming:", error);
+    }
+}
+```
+
+</CodeGroup>
+
+<Warning>
+**Important:** The live chat channel must be created **after** the post is created, as it requires the `postId`. The order is: Room → Post → Channel.
+</Warning>
 
 ## Best Practices
 
@@ -702,8 +720,7 @@ do {
         thumbnailFileId: thumbnailId,
         metadata: metadata,
         channelEnabled: true,
-        parentRoomId: nil,
-        participants: participants
+        parentRoomId: nil
     )
     // Success
 } catch AmityError.invalidParameter(let message) {
@@ -756,35 +773,18 @@ try {
     }
 }
 ```
-
-```dart Flutter
-try {
-    final room = await AmityRoomRepository().createRoom(/* parameters */);
-    // Success
-} catch (error) {
-    if (error is AmityInvalidParameterException) {
-        showError("Invalid room data: ${error.message}");
-    } else if (error is AmityQuotaExceededException) {
-        showError("Room creation limit reached");
-    } else if (error is AmityPermissionDeniedException) {
-        showError("You don't have permission to create rooms");
-    } else {
-        showError("Failed to create room: $error");
-    }
-}
-```
 </CodeGroup>
 
 ## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Rooms Overview" href="./rooms-overview" icon="book">
-    Learn about room concepts
+  <Card title="Start Broadcasting" href="./start-broadcasting" icon="play">
+    Connect to LiveKit and go live
+  </Card>
+  <Card title="Co-Host Management" href="./co-host-management" icon="users">
+    Invite and manage co-hosts
   </Card>
   <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
     Update and control rooms
-  </Card>
-  <Card title="Livestream Posts" href="/social-plus-sdk/social/posts/livestream-posts" icon="video">
-    Create posts with rooms
   </Card>
 </CardGroup>
