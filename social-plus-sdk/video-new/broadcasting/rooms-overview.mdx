@@ -5,7 +5,7 @@ description: "Interactive live rooms with co-hosting, broadcasting, and playback
 
 # Rooms Overview
 
-Rooms provide an advanced broadcasting infrastructure that enables interactive live streaming with co-hosting capabilities. From room creation to live broadcasting and recorded playback, this guide covers the complete streaming lifecycle.
+Rooms provide an advanced broadcasting infrastructure that enables interactive live streaming with co-hosting capabilities. This page covers the core concepts, data models, and architecture of the room system.
 
 ## Overview
 
@@ -101,11 +101,53 @@ graph LR
 | **Ended** | Broadcast finished | View recording, delete room |
 | **Recorded** | Recording available | Playback, download, delete |
 
+### Status Flow
+
+1. **Creation → Idle**: Room created, awaiting first broadcast
+2. **Idle → Live**: Broadcaster starts streaming
+3. **Live → Waiting Reconnect**: Temporary disconnection (automatic)
+4. **Waiting Reconnect → Live**: Reconnection successful
+5. **Live → Ended**: Broadcast stopped (manual or automatic)
+6. **Ended → Recorded**: Recording processing complete
+
 ## Room Participants
 
 Participants represent users who can broadcast in the room:
 
-```typescript
+<CodeGroup>
+```swift iOS
+// AmityRoomParticipant structure
+struct AmityRoomParticipant {
+    let type: AmityRoomParticipantType  // .host, .coHost, .unknown
+    let userId: String
+    let userInternalId: String?
+    let user: AmityUser?  // Linked user object
+}
+
+enum AmityRoomParticipantType {
+    case host      // Creator of the room, full control
+    case coHost    // Invited broadcaster, limited controls
+    case unknown   // Unknown participant type
+}
+```
+
+```kotlin Android
+// AmityRoomParticipant structure
+data class AmityRoomParticipant(
+    val type: AmityRoomParticipantType,  // HOST, CO_HOST, UNKNOWN
+    val userId: String,
+    val userInternalId: String?,
+    val user: AmityUser?  // Linked user object
+)
+
+enum class AmityRoomParticipantType {
+    HOST,      // Creator of the room, full control
+    CO_HOST,   // Invited broadcaster, limited controls
+    UNKNOWN    // Unknown participant type
+}
+```
+
+```typescript TypeScript
 interface AmityRoomParticipant {
   type: ParticipantType;
   userId: string;
@@ -119,6 +161,7 @@ enum ParticipantType {
   UNKNOWN = "unknown" // Unknown participant type
 }
 ```
+</CodeGroup>
 
 **Participant Roles:**
 
@@ -128,31 +171,77 @@ enum ParticipantType {
 | **Co-Host** | Invited broadcaster | Broadcast audio/video, leave stream |
 | **Viewer** | Watching the stream | View only (not a room participant) |
 
+<Info>
+For detailed co-host invitation and management workflows, see [Co-Host Management](./co-host-management).
+</Info>
+
 ## Room Targets
 
 Rooms can be created for different contexts:
 
 ### Community Room
 
-```typescript
+<CodeGroup>
+```swift iOS
+// Community target
+let target = AmityRoomTarget(
+    type: .community,
+    communityId: "community-123",
+    community: community  // Linked AmityCommunity object
+)
+```
+
+```kotlin Android
+// Community target
+val target = AmityRoomTarget(
+    type = AmityRoomTargetType.COMMUNITY,
+    communityId = "community-123",
+    community = community  // Linked AmityCommunity object
+)
+```
+
+```typescript TypeScript
+// Community target
 {
   type: "community",
   communityId: "community-123",
   community: AmityCommunity // Linked object
 }
 ```
+</CodeGroup>
 
 Broadcast to a specific community's audience.
 
 ### User Room
 
-```typescript
+<CodeGroup>
+```swift iOS
+// User target
+let target = AmityRoomTarget(
+    type: .user,
+    userId: "user-123",
+    user: user  // Linked AmityUser object
+)
+```
+
+```kotlin Android
+// User target
+val target = AmityRoomTarget(
+    type = AmityRoomTargetType.USER,
+    userId = "user-123",
+    user = user  // Linked AmityUser object
+)
+```
+
+```typescript TypeScript
+// User target
 {
   type: "user",
   userId: "user-123",
   user: AmityUser // Linked object
 }
 ```
+</CodeGroup>
 
 Broadcast to user's timeline followers.
 
@@ -165,71 +254,63 @@ Link rooms to other content types:
 - **User**: Room on user's timeline
 - **Event**: Room linked to a scheduled event
 
-```typescript
+<CodeGroup>
+```swift iOS
+struct AmityRoomReference {
+    let referenceType: AmityRoomReferenceType  // .community, .user, .event
+    let referenceId: String
+}
+```
+
+```kotlin Android
+data class AmityRoomReference(
+    val referenceType: AmityRoomReferenceType,  // COMMUNITY, USER, EVENT
+    val referenceId: String
+)
+```
+
+```typescript TypeScript
 interface AmityRoomReference {
   referenceType: string; // "community" | "user" | "event"
   referenceId: string;
 }
 ```
+</CodeGroup>
 
 ## Channel Integration
 
 Rooms can have integrated live chat channels for viewer interaction. Channels must be manually created after the livestream post is created.
 
-```typescript
+<CodeGroup>
+```swift iOS
+// Channel properties on AmityRoom
+let channelEnabled: Bool      // Indicates room supports live chat
+let channelId: String?        // Set after channel is created
+let channel: AmityChannel?    // Linked channel object
+```
+
+```kotlin Android
+// Channel properties on AmityRoom
+val channelEnabled: Boolean      // Indicates room supports live chat
+val channelId: String?           // Set after channel is created
+val channel: AmityChannel?       // Linked channel object
+```
+
+```typescript TypeScript
+// Channel properties on AmityRoom
 {
   channelEnabled: boolean, // Indicates room supports live chat
   channelId: string,       // Set after channel is created
   channel: AmityChannel    // Linked channel object
 }
 ```
+</CodeGroup>
 
 **Channel Features:**
 - Live chat during broadcast
 - Host/Co-host badges
 - Moderation tools
 - Message history
-
-### Creating a Live Chat Channel
-
-To enable live chat, create a channel **after** the post is created using both `postId` and `roomId`:
-
-<CodeGroup>
-
-```swift iOS
-let channel = try await AmityChatClient.shared.channelRepository
-    .createChannel(room.title)
-    .live()
-    .postId(postId: post.postId)
-    .roomId(roomId: room.roomId)
-    .build()
-    .create()
-```
-
-```kotlin Android
-AmityChatClient.newChannelRepository()
-    .createChannel(room.title)
-    .live()
-    .postId(postId = post.postId)
-    .roomId(roomId = room.roomId)
-    .build()
-    .create()
-    .doOnSuccess { channel ->
-        // Channel created successfully
-    }
-    .subscribe()
-```
-
-```typescript TypeScript
-const channel = await ChannelRepository.createChannel({
-    displayName: room.title,
-    type: 'live',
-    postId: post.postId,
-    roomId: room.roomId
-});
-```
-
-</CodeGroup>
 
 <Warning>
 **Manual Channel Creation Required**: Channels are **not** automatically created. You must create the channel after the post is created, passing both `postId` and `roomId`. See [Create Room - Room with Live Chat Channel](./create-room#room-with-live-chat-channel) for the complete workflow.
@@ -239,7 +320,40 @@ const channel = await ChannelRepository.createChannel({
 
 AI-powered moderation monitors room content in real-time:
 
-```typescript
+<CodeGroup>
+```swift iOS
+struct AmityRoomModeration {
+    let moderationId: String
+    let roomId: String
+    let flagLabels: [AmityRoomModerationLabel]
+    let terminateLabels: [AmityRoomModerationLabel]
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct AmityRoomModerationLabel {
+    let category: String  // e.g., "violence", "nudity", "hate_speech"
+    let detectedAt: Date
+}
+```
+
+```kotlin Android
+data class AmityRoomModeration(
+    val moderationId: String,
+    val roomId: String,
+    val flagLabels: List<AmityRoomModerationLabel>,
+    val terminateLabels: List<AmityRoomModerationLabel>,
+    val createdAt: DateTime,
+    val updatedAt: DateTime
+)
+
+data class AmityRoomModerationLabel(
+    val category: String,  // e.g., "violence", "nudity", "hate_speech"
+    val detectedAt: DateTime
+)
+```
+
+```typescript TypeScript
 interface AmityRoomModeration {
   moderationId: string;
   roomId: string;
@@ -254,6 +368,7 @@ interface AmityRoomModerationLabel {
   detectedAt: string;
 }
 ```
+</CodeGroup>
 
 **Flag Labels**: Content detected but stream continues
 **Terminate Labels**: Content causes automatic stream termination
@@ -266,13 +381,30 @@ interface AmityRoomModerationLabel {
 
 Rooms can have hierarchical relationships for complex streaming scenarios:
 
-```typescript
+<CodeGroup>
+```swift iOS
+// Parent-child properties on AmityRoom
+let parentRoomId: String?
+let parentRoom: AmityRoom?       // Linked parent room
+let childRoomIds: [String]       // Array of child room IDs
+```
+
+```kotlin Android
+// Parent-child properties on AmityRoom
+val parentRoomId: String?
+val parentRoom: AmityRoom?           // Linked parent room
+val childRoomIds: List<String>       // Array of child room IDs
+```
+
+```typescript TypeScript
+// Parent-child properties on AmityRoom
 {
   parentRoomId: string,
   parentRoom: AmityRoom, // Linked parent room
   childRoomIds: string[] // Array of child room IDs
 }
 ```
+</CodeGroup>
 
 **Use Cases:**
 - Breakout sessions from main room
@@ -348,638 +480,27 @@ interface AmityRoom {
 }
 ```
 
-## Room Status Flow
+## Integration with Posts
 
-Understanding room transitions:
-
-1. **Creation → Idle**: Room created, awaiting first broadcast
-2. **Idle → Live**: Broadcaster starts streaming
-3. **Live → Waiting Reconnect**: Temporary disconnection (automatic)
-4. **Waiting Reconnect → Live**: Reconnection successful
-5. **Live → Ended**: Broadcast stopped (manual or automatic)
-6. **Ended → Recorded**: Recording processing complete
-
-## Co-Host Management
-
-The co-host system allows hosts to invite users to broadcast together in real-time. Co-hosts can join the stream, broadcast their audio/video, and interact with viewers.
-
-### Co-Host Invitations
-
-Hosts can invite users to join as co-hosts. The invitation system supports accepting, rejecting, and cancelling invitations.
-
-<Note>
-Co-host invitations are sent one user at a time. To invite multiple co-hosts, call the invitation function for each user.
-</Note>
-
-#### Send Co-Host Invitation
-
-<CodeGroup>
-
-```swift iOS
-do {
-    try await room.createInvitation("<user_id>")
-    print("Co-host invitation sent successfully.")
-} catch {
-    print("Failed to send co-host invitation: \(error.localizedDescription)")
-}
-```
-
-```kotlin Android
-fun inviteCoHost(
-    room: AmityRoom,
-    userId: String
-) {
-    room.createInvitation(userId)
-        .doOnComplete {
-            // Co-host invitation sent successfully
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-async function inviteCoHost(room: Amity.Room, userId: string) {
-  try {
-    await room.createInvitation(userId);
-    // Handle successful invitation
-  } catch (error) {
-    // Handle error
-  }
-}
-```
-
-</CodeGroup>
-
-#### Get Room Invitations
-
-Retrieve all invitations sent for a specific room.
-
-<CodeGroup>
-
-```swift iOS
-var token: AmityNotificationToken?
-let repository = AmityInvitationRepository(client: client)
-token = repository.getInvitations(
-    targetId: room.roomId,
-    targetType: .room
-).observe({ collection, change, error in
-    // Observe changes in the invitation collection
-})
-```
-
-```kotlin Android
-fun getCoHostInvitations(roomId: String) {
-    AmityVideoClient.newInvitationRepository()
-        .getInvitations(
-            targetId = roomId,
-            targetType = AmityInvitation.TargetType.ROOM.value
-        )
-        .doOnNext { invitations ->
-            // PagingData<AmityInvitation>
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { InvitationRepository, InvitationTargetType } from '@amityco/ts-sdk';
-
-function getCoHostInvitations(roomId: string) {
-  const unsubscribe = InvitationRepository.getInvitations(
-    {
-      targetId: roomId,
-      targetType: InvitationTargetType.Room,
-      limit: 20,
-    },
-    ({ data, loading, error }) => {
-      if (data) {
-        // Process the invitations
-      }
-    },
-  );
-  return unsubscribe;
-}
-```
-
-</CodeGroup>
-
-#### Accept/Reject Co-Host Invitation
-
-<CodeGroup>
-
-```swift iOS
-// Accept invitation
-if let invitation = await room.getInvitation() {
-    do {
-        try await invitation.accept()
-        print("Co-host invitation accepted.")
-    } catch {
-        print("Failed to accept: \(error.localizedDescription)")
-    }
-}
-
-// Reject invitation
-if let invitation = await room.getInvitation() {
-    do {
-        try await invitation.reject()
-        print("Co-host invitation rejected.")
-    } catch {
-        print("Failed to reject: \(error.localizedDescription)")
-    }
-}
-```
-
-```kotlin Android
-// Accept invitation
-fun acceptCoHostInvitation(invitation: AmityInvitation) {
-    invitation.accept()
-        .doOnComplete {
-            // Co-host invitation accepted
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-
-// Reject invitation
-fun rejectCoHostInvitation(invitation: AmityInvitation) {
-    invitation.reject()
-        .doOnComplete {
-            // Co-host invitation rejected
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-// Accept invitation
-async function acceptCoHostInvitation(invitation: Amity.Invitation) {
-  try {
-    await invitation.accept();
-    // Handle successful acceptance
-  } catch (error) {
-    // Handle error
-  }
-}
-
-// Reject invitation
-async function rejectCoHostInvitation(invitation: Amity.Invitation) {
-  try {
-    await invitation.reject();
-    // Handle successful rejection
-  } catch (error) {
-    // Handle error
-  }
-}
-```
-
-</CodeGroup>
-
-### Co-Host Events
-
-Monitor real-time co-host activity by subscribing to co-host events. These events notify you when invitations are sent, accepted, rejected, cancelled, or when co-hosts join, leave, or are removed from the room.
-
-#### Event Types
-
-| Event | Description | Triggered When |
-|-------|-------------|----------------|
-| `CoHostInvited` | New invitation sent | Host invites a user to co-host |
-| `CoHostInviteAccepted` | Invitation accepted | Invited user accepts the invitation |
-| `CoHostInviteRejected` | Invitation rejected | Invited user declines the invitation |
-| `CoHostInviteCancelled` | Invitation cancelled | Host cancels a pending invitation |
-| `CoHostJoined` | Co-host joined stream | Co-host connects and starts broadcasting |
-| `CoHostLeft` | Co-host left stream | Co-host voluntarily leaves the broadcast |
-| `CoHostRemoved` | Co-host removed | Host removes a co-host from the stream |
-
-#### Subscribing to Co-Host Events
-
-<CodeGroup>
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func observeCoHostEvents(roomId: String) {
-    let repository = AmityVideoClient.shared.roomRepository
-    token = repository.getCoHostEvent(roomId: roomId).observe { event in
-        switch event {
-        case .coHostInvited(let invitation):
-            if invitation.invitedUserId == AmityClient.currentUserId {
-                // Current user was invited as co-host
-                handleInvitation(invitation)
-            }
-            
-        case .coHostInviteAccepted(let invitation):
-            if invitation.invitedUserId == AmityClient.currentUserId {
-                // Current user's invitation was accepted
-                handleAccepted(invitation)
-            }
-            
-        case .coHostJoined(let room, let actorId):
-            // A co-host joined the stream
-            if let cohost = room.participants.first(where: { $0.type == .coHost }) {
-                updateCoHostUI(cohost)
-            }
-            
-        case .coHostLeft(let room, let actorId):
-            // Co-host voluntarily left
-            clearCoHostUI()
-            
-        case .coHostRemoved(let room, let actorId):
-            // Co-host was removed by host
-            clearCoHostUI()
-            
-        case .coHostInviteCancelled(let invitation):
-            // Invitation was cancelled
-            clearInvitationUI()
-            
-        case .coHostInviteRejected(let invitation):
-            // Invitation was rejected
-            clearInvitationUI()
-        }
-    }
-}
-```
-
-```kotlin Android
-fun observeCoHostEvents(roomId: String) {
-    AmityVideoClient.newRoomRepository()
-        .getCoHostEvent(roomId)
-        .doOnNext { event ->
-            when (event) {
-                is AmityCoHostEvent.CoHostInvited -> {
-                    // Check if current user was invited
-                    if (event.invitation.getInvitedUserId() == AmityCoreClient.getUserId()) {
-                        // Show invitation UI
-                        updateState(
-                            invitation = event.invitation
-                        )
-                    }
-                }
-
-                is AmityCoHostEvent.CoHostInviteAccepted -> {
-                    // Invitation was accepted
-                    if (event.invitation.getInvitedUserId() == AmityCoreClient.getUserId()) {
-                        updateState(
-                            cohostUserId = event.invitation.getInvitedUserId(),
-                            cohostUser = event.invitation.getInvitedUser()
-                        )
-                    }
-                }
-
-                is AmityCoHostEvent.CoHostJoined -> {
-                    // Co-host joined the stream
-                    event.room
-                        .getParticipants()
-                        .firstOrNull { it.type == AmityRoom.ParticipantType.CoHost }
-                        ?.let { cohostParticipant ->
-                            updateState(
-                                cohostUserId = cohostParticipant.userId,
-                                cohostUser = cohostParticipant.user
-                            )
-                        }
-                }
-
-                is AmityCoHostEvent.CoHostRemoved,
-                is AmityCoHostEvent.CoHostLeft,
-                is AmityCoHostEvent.CoHostInviteCancelled,
-                is AmityCoHostEvent.CoHostInviteRejected -> {
-                    // Clear co-host state
-                    updateState(
-                        invitation = null,
-                        cohostUserId = null,
-                        cohostUser = null
-                    )
-                }
-            }
-        }
-        .onErrorComplete()
-        .subscribeOn(Schedulers.io())
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { RoomRepository, CoHostEvent } from '@amityco/ts-sdk';
-
-function observeCoHostEvents(roomId: string) {
-  const unsubscribe = RoomRepository.getCoHostEvent(roomId, (event) => {
-    switch (event.type) {
-      case CoHostEvent.CoHostInvited:
-        // Check if current user was invited
-        if (event.invitation.invitedUserId === currentUserId) {
-          setInvitation(event.invitation);
-        }
-        break;
-
-      case CoHostEvent.CoHostInviteAccepted:
-        // Invitation was accepted
-        setCoHost({
-          userId: event.invitation.invitedUserId,
-          user: event.invitation.invitedUser,
-        });
-        break;
-
-      case CoHostEvent.CoHostJoined:
-        // Co-host joined the stream
-        const cohost = event.room.participants.find(
-          (p) => p.type === 'coHost'
-        );
-        if (cohost) {
-          setCoHost({ userId: cohost.userId, user: cohost.user });
-        }
-        break;
-
-      case CoHostEvent.CoHostLeft:
-      case CoHostEvent.CoHostRemoved:
-      case CoHostEvent.CoHostInviteCancelled:
-      case CoHostEvent.CoHostInviteRejected:
-        // Clear co-host state
-        setInvitation(null);
-        setCoHost(null);
-        break;
-    }
-  });
-
-  return unsubscribe;
-}
-```
-
-</CodeGroup>
-
-#### Event Data Structure
+Rooms are linked to posts for social distribution. See [Room Posts](/social-plus-sdk/social/content-management/posts/creation/room-post) for detailed post creation.
 
 ```typescript
-// Base event structure
-interface AmityCoHostEvent {
-  roomId: string;
-}
-
-// Invitation-based events
-interface CoHostInvited extends AmityCoHostEvent {
-  invitationId: string;
-  invitation: AmityInvitation;
-}
-
-interface CoHostInviteAccepted extends AmityCoHostEvent {
-  invitationId: string;
-  invitation: AmityInvitation;
-}
-
-interface CoHostInviteCancelled extends AmityCoHostEvent {
-  invitationId: string;
-  invitation: AmityInvitation;
-}
-
-interface CoHostInviteRejected extends AmityCoHostEvent {
-  invitationId: string;
-  invitation: AmityInvitation;
-}
-
-// Room-based events
-interface CoHostJoined extends AmityCoHostEvent {
-  room: AmityRoom;
-  actorInternalId?: string;
-}
-
-interface CoHostLeft extends AmityCoHostEvent {
-  room: AmityRoom;
-  actorInternalId?: string;
-}
-
-interface CoHostRemoved extends AmityCoHostEvent {
-  room: AmityRoom;
-  actorInternalId?: string;
-}
-```
-
-### Getting Broadcaster Data
-
-After accepting a co-host invitation, retrieve the broadcaster data to connect to the streaming service.
-
-**Broadcast Data**
-
-| Type | Description | Properties |
-|------|-------------|------------|
-| `CoHosts` | Multi-host co-streaming | `coHostToken`, `coHostUrl` |
-
-<CodeGroup>
-
-```swift iOS
-func getBroadcasterData(roomId: String) async {
-    do {
-        let broadcastData = try await roomRepository.getBroadcastData(roomId: roomId)
-        
-        if case .coHosts(let data) = broadcastData {
-            // Use coHostToken and coHostUrl for multi-host streaming
-            let token = data.coHostToken
-            let url = data.coHostUrl
-            // Connect to LiveKit with these credentials
-        }
-    } catch {
-        // Handle error
-    }
-}
-```
-
-```kotlin Android
-fun getBroadcasterData(
-    roomRepository: AmityRoomRepository,
-    roomId: String
-) {
-    roomRepository.getBroadcastData(roomId = roomId)
-        .doOnSuccess { broadcastData: AmityRoomBroadcastData ->
-            if (broadcastData is AmityRoomBroadcastData.CoHosts) {
-                // Use coHostToken and coHostUrl for multi-host streaming
-                val token = broadcastData.getCoHostToken()
-                val url = broadcastData.getCoHostUrl()
-                // Connect to LiveKit with these credentials
-            }
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { RoomRepository } from '@amityco/ts-sdk';
-
-async function getBroadcasterData(roomId: string) {
-  const broadcastData = await RoomRepository.getBroadcastData(roomId);
-
-  // Use coHostToken and coHostUrl for multi-host streaming
-  const token = broadcastData.coHostToken;
-  const url = broadcastData.coHostUrl;
-  // Connect to LiveKit with these credentials
-
-  return broadcastData;
-}
-```
-
-</CodeGroup>
-
-### Connecting to LiveKit
-
-After retrieving the co-host broadcast data, use the LiveKit client library to connect to the streaming server.
-
-<CodeGroup>
-
-```swift iOS
-import LiveKit
-
-func connectToLiveKit(coHostUrl: String, coHostToken: String) async {
-    // Create LiveKit Room instance (not to be confused with AmityRoom)
-    let liveKitRoom = Room()
-    
-    do {
-        try await liveKitRoom.connect(url: coHostUrl, token: coHostToken)
-        print("Connected to LiveKit room successfully")
-        
-        // Start publishing audio/video tracks
-        let localParticipant = liveKitRoom.localParticipant
-        try await localParticipant.setCamera(enabled: true)
-        try await localParticipant.setMicrophone(enabled: true)
-    } catch {
-        print("Failed to connect: \(error.localizedDescription)")
-    }
-}
-```
-
-```kotlin Android
-import io.livekit.android.room.Room as LiveKitRoom
-import io.livekit.android.LiveKit
-
-fun connectToLiveKit(
-    broadcastData: AmityRoomBroadcastData.CoHosts
-) {
-    // Create LiveKit Room instance (not to be confused with AmityRoom)
-    val liveKitRoom: LiveKitRoom = LiveKit.create(applicationContext)
-    
-    liveKitRoom.connect(
-        url = broadcastData.getCoHostUrl(),
-        token = broadcastData.getCoHostToken()
-    )
-    
-    // Start publishing audio/video tracks
-    val localParticipant = liveKitRoom.localParticipant
-    localParticipant.setCameraEnabled(true)
-    localParticipant.setMicrophoneEnabled(true)
-}
-```
-
-```typescript TypeScript
-import { Room as LiveKitRoom, RoomEvent } from 'livekit-client';
-
-async function connectToLiveKit(coHostUrl: string, coHostToken: string) {
-  // Create LiveKit Room instance (not to be confused with Amity.Room)
-  const liveKitRoom = new LiveKitRoom();
-
-  liveKitRoom.on(RoomEvent.Connected, () => {
-    console.log('Connected to LiveKit room successfully');
-  });
-
-  try {
-    await liveKitRoom.connect(coHostUrl, coHostToken);
-    
-    // Start publishing audio/video tracks
-    const localParticipant = liveKitRoom.localParticipant;
-    await localParticipant.setCameraEnabled(true);
-    await localParticipant.setMicrophoneEnabled(true);
-  } catch (error) {
-    console.error('Failed to connect:', error);
+// Create room post
+const post = await postRepository.createPost({
+  dataType: PostContentType.ROOM,
+  targetType: 'community',
+  targetId: 'community-123',
+  data: {
+    text: 'Join us live!',
+    roomId: room.roomId,
+    title: room.title
   }
+});
 
-  return liveKitRoom;
-}
+// Access room from post
+console.log(post.data.room.status); // "live"
+console.log(post.data.room.livePlaybackUrl);
 ```
-
-</CodeGroup>
-
-<Note>
-For detailed LiveKit setup instructions, event handling, and advanced features, refer to the official [LiveKit documentation](https://docs.livekit.io/intro/basics/connect/).
-</Note>
-
-### Room Playback
-
-Retrieve playback URLs based on the room status for live or recorded content.
-
-<CodeGroup>
-
-```swift iOS
-func getRoomPlaybackUrls(room: AmityRoom) -> [String] {
-    var playbackUrls: [String] = []
-    
-    switch room.status {
-    case .live:
-        // Get live playback URL for active broadcast
-        if let liveUrl = room.getLivePlaybackUrl() {
-            playbackUrls.append(liveUrl)
-        }
-    case .recorded:
-        // Get recorded playback URLs after broadcast ends
-        let recordedInfos = room.getRecordedPlaybackInfos()
-        playbackUrls = recordedInfos.compactMap { $0.url }
-    default:
-        // Room is idle or ended, no playback available
-        break
-    }
-    
-    return playbackUrls
-}
-```
-
-```kotlin Android
-fun getRoomPlaybackUrls(room: AmityRoom): List<String> {
-    val liveUrl = room.getLivePlaybackUrl()
-    
-    return if (room.getStatus() != AmityRoomStatus.RECORDED && !liveUrl.isNullOrBlank()) {
-        // Room is live, use live playback URL
-        listOf(liveUrl)
-    } else if (room.getStatus() == AmityRoomStatus.RECORDED) {
-        // Room has ended and recording is available
-        room.getRecordedPlaybackInfos()
-            ?.mapNotNull { it.url }
-            ?: emptyList()
-    } else {
-        // Room is idle or ended without recording
-        emptyList()
-    }
-}
-```
-
-```typescript TypeScript
-import { RoomRepository } from '@amityco/ts-sdk';
-
-async function getRoomPlaybackUrls(room: Amity.Room): Promise<string[]> {
-  let playbackUrls: string[] = [];
-  
-  if (room.status === 'live') {
-    // Get live playback URL for active broadcast
-    const liveUrl = room.livePlaybackUrl;
-    if (liveUrl) {
-      playbackUrls.push(liveUrl);
-    }
-  } else if (room.status === 'recorded') {
-    // Get recorded playback URLs after broadcast ends
-    const recordedInfos = room.recordedPlaybackInfos || [];
-    playbackUrls = recordedInfos
-      .map(info => info.url)
-      .filter((url): url is string => !!url);
-  }
-  
-  return playbackUrls;
-}
-```
-
-</CodeGroup>
 
 ## Best Practices
 
@@ -994,7 +515,7 @@ async function getRoomPlaybackUrls(room: Amity.Room): Promise<string[]> {
     - Configure participant limits
   </Accordion>
   
-  <Accordion title="Co-Host Management" icon="users-gear">
+  <Accordion title="Co-Host Coordination" icon="users-gear">
     Manage co-hosts effectively:
     
     - Invite co-hosts before going live
@@ -1024,63 +545,6 @@ async function getRoomPlaybackUrls(room: Amity.Room): Promise<string[]> {
     - Clean up ended rooms
   </Accordion>
 </AccordionGroup>
-
-## Common Use Cases
-
-### Panel Discussion Room
-
-```typescript
-// Create a room for panel discussion with multiple co-hosts
-const room = await roomRepository.createRoom({
-  title: "Product Roadmap Panel",
-  description: "Q4 roadmap discussion with product team",
-  type: AmityRoomType.CO_HOSTS,
-  targetType: "community",
-  targetId: "community-123",
-  channelEnabled: true,
-  participants: [
-    { type: "user", userId: "host-id" },
-    { type: "user", userId: "panelist-1-id" },
-    { type: "user", userId: "panelist-2-id" }
-  ]
-});
-```
-
-### Event Livestream
-
-```typescript
-// Create a room linked to a scheduled event
-const room = await roomRepository.createRoom({
-  title: event.title,
-  description: event.description,
-  type: AmityRoomType.CO_HOSTS,
-  referenceType: "event",
-  referenceId: event.eventId,
-  targetType: "community",
-  targetId: event.originId,
-  channelEnabled: true,
-  thumbnailFileId: event.coverImageFileId
-});
-```
-
-## Integration with Posts
-
-Rooms are linked to posts for social distribution:
-
-```typescript
-// Create livestream post with room
-const post = await postRepository.createLiveStreamPost({
-  targetType: AmityPostTargetType.COMMUNITY,
-  targetId: "community-123",
-  roomId: room.roomId,
-  text: "Join us live!",
-  title: room.title
-});
-
-// Access room from post
-console.log(post.data.room.status); // "live"
-console.log(post.data.room.livePlaybackUrl);
-```
 
 ## Next Steps
 
