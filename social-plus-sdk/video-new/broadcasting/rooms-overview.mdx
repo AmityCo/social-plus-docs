@@ -1,11 +1,11 @@
 ---
 title: "Rooms Overview"
-description: "Interactive live rooms with co-hosting capabilities for collaborative streaming"
+description: "Interactive live rooms with co-hosting, broadcasting, and playback capabilities"
 ---
 
 # Rooms Overview
 
-Rooms provide an advanced broadcasting infrastructure that enables interactive live streaming with co-hosting capabilities, allowing multiple participants to broadcast together in real-time.
+Rooms provide an advanced broadcasting infrastructure that enables interactive live streaming with co-hosting capabilities. From room creation to live broadcasting and recorded playback, this guide covers the complete streaming lifecycle.
 
 ## Overview
 
@@ -24,7 +24,6 @@ The Room feature extends traditional livestreaming by supporting collaborative b
   <Card title="Room Types" icon="diagram-project">
     **Flexible streaming architectures**
     - Co-Hosts: Multiple broadcasters with LiveKit
-    - Direct Streaming: Single broadcaster RTMP
     - Parent-child room relationships
     - Isolated or linked chat channels
   </Card>
@@ -32,7 +31,7 @@ The Room feature extends traditional livestreaming by supporting collaborative b
     **Complete room state handling**
     - Idle → Live → Ended lifecycle
     - Waiting for reconnection states
-    - Recording and playback
+    - Live viewing and recorded playback
     - Automatic cleanup
   </Card>
   <Card title="Moderation & Safety" icon="shield-halved">
@@ -76,22 +75,6 @@ graph TB
 - Interviews and Q&A sessions
 - Collaborative workshops
 - Multi-host shows
-
-### Direct Streaming Room
-
-Single broadcaster using RTMP streaming:
-
-**Characteristics:**
-- Single broadcaster only
-- RTMP URL for streaming
-- Traditional livestream model
-- Lower latency for single host
-
-**Use Cases:**
-- Solo broadcasts
-- Presentations
-- Tutorials
-- Simple livestreams
 
 ## Room Lifecycle
 
@@ -191,13 +174,13 @@ interface AmityRoomReference {
 
 ## Channel Integration
 
-Rooms can have integrated chat channels for viewer interaction:
+Rooms can have integrated live chat channels for viewer interaction. Channels must be manually created after the livestream post is created.
 
 ```typescript
 {
-  channelEnabled: boolean,
-  channelId: string,
-  channel: AmityChannel // Linked channel object
+  channelEnabled: boolean, // Indicates room supports live chat
+  channelId: string,       // Set after channel is created
+  channel: AmityChannel    // Linked channel object
 }
 ```
 
@@ -207,9 +190,50 @@ Rooms can have integrated chat channels for viewer interaction:
 - Moderation tools
 - Message history
 
-<Info>
-**Automatic Channel Creation**: When `channelEnabled: true`, a chat channel is automatically created and linked to the room.
-</Info>
+### Creating a Live Chat Channel
+
+To enable live chat, create a channel **after** the post is created using both `postId` and `roomId`:
+
+<CodeGroup>
+
+```swift iOS
+let channel = try await AmityChatClient.shared.channelRepository
+    .createChannel(room.title)
+    .live()
+    .postId(postId: post.postId)
+    .roomId(roomId: room.roomId)
+    .build()
+    .create()
+```
+
+```kotlin Android
+AmityChatClient.newChannelRepository()
+    .createChannel(room.title)
+    .live()
+    .postId(postId = post.postId)
+    .roomId(roomId = room.roomId)
+    .build()
+    .create()
+    .doOnSuccess { channel ->
+        // Channel created successfully
+    }
+    .subscribe()
+```
+
+```typescript TypeScript
+const channel = await ChannelRepository.createChannel({
+    displayName: room.title,
+    type: 'live',
+    postId: post.postId,
+    roomId: room.roomId
+});
+```
+
+</CodeGroup>
+
+<Warning>
+**Manual Channel Creation Required**: Channels are **not** automatically created. You must create the channel after the post is created, passing both `postId` and `roomId`. See [Create Room - Room with Live Chat Channel](./create-room#room-with-live-chat-channel) for the complete workflow.
+</Warning>
 
 ## Moderation System
 
@@ -262,7 +286,7 @@ Complete room object structure:
 ```typescript
 interface AmityRoom {
   roomId: string;
-  type: AmityRoomType; // "coHosts" | "directStreaming"
+  type: AmityRoomType; // "coHosts"
   
   // Target
   targetType: string;
@@ -387,17 +411,6 @@ async function inviteCoHost(room: Amity.Room, userId: string) {
 }
 ```
 
-```dart Flutter
-Future<void> inviteCoHost(AmityRoom room, String userId) async {
-  try {
-    await room.createInvitation(userId);
-    print("Co-host invitation sent successfully.");
-  } catch (error) {
-    print("Failed to send co-host invitation: $error");
-  }
-}
-```
-
 </CodeGroup>
 
 #### Get Room Invitations
@@ -451,22 +464,6 @@ function getCoHostInvitations(roomId: string) {
     },
   );
   return unsubscribe;
-}
-```
-
-```dart Flutter
-void getCoHostInvitations(String roomId) {
-  final invitationRepository = AmityInvitationRepository();
-  
-  invitationRepository.getInvitations(
-    targetId: roomId,
-    targetType: AmityInvitationTargetType.room,
-  ).listen((invitations) {
-    // Process the invitations
-    for (final invitation in invitations) {
-      print("Invitation: ${invitation.invitedUserId}");
-    }
-  });
 }
 ```
 
@@ -542,28 +539,6 @@ async function rejectCoHostInvitation(invitation: Amity.Invitation) {
     // Handle successful rejection
   } catch (error) {
     // Handle error
-  }
-}
-```
-
-```dart Flutter
-// Accept invitation
-Future<void> acceptCoHostInvitation(AmityInvitation invitation) async {
-  try {
-    await invitation.accept();
-    print("Co-host invitation accepted.");
-  } catch (error) {
-    print("Failed to accept: $error");
-  }
-}
-
-// Reject invitation
-Future<void> rejectCoHostInvitation(AmityInvitation invitation) async {
-  try {
-    await invitation.reject();
-    print("Co-host invitation rejected.");
-  } catch (error) {
-    print("Failed to reject: $error");
   }
 }
 ```
@@ -739,51 +714,6 @@ function observeCoHostEvents(roomId: string) {
 }
 ```
 
-```dart Flutter
-void observeCoHostEvents(String roomId) {
-  final roomRepository = AmityVideoClient.newRoomRepository();
-  
-  roomRepository.getCoHostEvent(roomId).listen((event) {
-    if (event is AmityCoHostInvited) {
-      // Check if current user was invited
-      if (event.invitation.invitedUserId == AmityCoreClient.userId) {
-        setState(() {
-          invitation = event.invitation;
-        });
-      }
-    } else if (event is AmityCoHostInviteAccepted) {
-      // Invitation was accepted
-      setState(() {
-        coHostUserId = event.invitation.invitedUserId;
-        coHostUser = event.invitation.invitedUser;
-      });
-    } else if (event is AmityCoHostJoined) {
-      // Co-host joined the stream
-      final cohost = event.room.participants.firstWhere(
-        (p) => p.type == ParticipantType.coHost,
-        orElse: () => null,
-      );
-      if (cohost != null) {
-        setState(() {
-          coHostUserId = cohost.userId;
-          coHostUser = cohost.user;
-        });
-      }
-    } else if (event is AmityCoHostLeft ||
-               event is AmityCoHostRemoved ||
-               event is AmityCoHostInviteCancelled ||
-               event is AmityCoHostInviteRejected) {
-      // Clear co-host state
-      setState(() {
-        invitation = null;
-        coHostUserId = null;
-        coHostUser = null;
-      });
-    }
-  });
-}
-```
-
 </CodeGroup>
 
 #### Event Data Structure
@@ -836,12 +766,11 @@ interface CoHostRemoved extends AmityCoHostEvent {
 
 After accepting a co-host invitation, retrieve the broadcaster data to connect to the streaming service.
 
-**Broadcast Data Types**
+**Broadcast Data**
 
 | Type | Description | Properties |
 |------|-------------|------------|
 | `CoHosts` | Multi-host co-streaming | `coHostToken`, `coHostUrl` |
-| `DirectStreaming` | Single-host streaming | `directStreamUrl` |
 
 <CodeGroup>
 
@@ -850,15 +779,11 @@ func getBroadcasterData(roomId: String) async {
     do {
         let broadcastData = try await roomRepository.getBroadcastData(roomId: roomId)
         
-        switch broadcastData {
-        case .coHosts(let data):
+        if case .coHosts(let data) = broadcastData {
             // Use coHostToken and coHostUrl for multi-host streaming
             let token = data.coHostToken
             let url = data.coHostUrl
             // Connect to LiveKit with these credentials
-        case .directStreaming(let data):
-            // Use directStreamUrl for single-host streaming
-            let streamUrl = data.directStreamUrl
         }
     } catch {
         // Handle error
@@ -873,17 +798,11 @@ fun getBroadcasterData(
 ) {
     roomRepository.getBroadcastData(roomId = roomId)
         .doOnSuccess { broadcastData: AmityRoomBroadcastData ->
-            when (broadcastData) {
-                is AmityRoomBroadcastData.CoHosts -> {
-                    // Use coHostToken and coHostUrl for multi-host streaming
-                    val token = broadcastData.getCoHostToken()
-                    val url = broadcastData.getCoHostUrl()
-                    // Connect to LiveKit with these credentials
-                }
-                is AmityRoomBroadcastData.DirectStreaming -> {
-                    // Use directStreamUrl for single-host streaming
-                    val streamUrl = broadcastData.getDirectStreamUrl()
-                }
+            if (broadcastData is AmityRoomBroadcastData.CoHosts) {
+                // Use coHostToken and coHostUrl for multi-host streaming
+                val token = broadcastData.getCoHostToken()
+                val url = broadcastData.getCoHostUrl()
+                // Connect to LiveKit with these credentials
             }
         }
         .subscribe()
@@ -896,39 +815,12 @@ import { RoomRepository } from '@amityco/ts-sdk';
 async function getBroadcasterData(roomId: string) {
   const broadcastData = await RoomRepository.getBroadcastData(roomId);
 
-  if (broadcastData.type === 'coHosts') {
-    // Use coHostToken and coHostUrl for multi-host streaming
-    const token = broadcastData.coHostToken;
-    const url = broadcastData.coHostUrl;
-    // Connect to LiveKit with these credentials
-  } else if (broadcastData.type === 'directStreaming') {
-    // Use directStreamUrl for single-host streaming
-    const streamUrl = broadcastData.directStreamUrl;
-  }
+  // Use coHostToken and coHostUrl for multi-host streaming
+  const token = broadcastData.coHostToken;
+  const url = broadcastData.coHostUrl;
+  // Connect to LiveKit with these credentials
 
   return broadcastData;
-}
-```
-
-```dart Flutter
-Future<void> getBroadcasterData(String roomId) async {
-  try {
-    final broadcastData = await AmityRoomRepository().getBroadcastData(
-      roomId: roomId,
-    );
-    
-    if (broadcastData is AmityCoHostsBroadcastData) {
-      // Use coHostToken and coHostUrl for multi-host streaming
-      final token = broadcastData.coHostToken;
-      final url = broadcastData.coHostUrl;
-      // Connect to LiveKit with these credentials
-    } else if (broadcastData is AmityDirectStreamingBroadcastData) {
-      // Use directStreamUrl for single-host streaming
-      final streamUrl = broadcastData.directStreamUrl;
-    }
-  } catch (error) {
-    print("Failed to get broadcaster data: $error");
-  }
 }
 ```
 
@@ -1009,34 +901,6 @@ async function connectToLiveKit(coHostUrl: string, coHostToken: string) {
 }
 ```
 
-```dart Flutter
-import 'package:livekit_client/livekit_client.dart';
-
-Future<Room> connectToLiveKit(String coHostUrl, String coHostToken) async {
-  // Create LiveKit Room instance (not to be confused with AmityRoom)
-  final liveKitRoom = Room();
-  
-  liveKitRoom.addListener(() {
-    if (liveKitRoom.connectionState == ConnectionState.connected) {
-      print('Connected to LiveKit room successfully');
-    }
-  });
-  
-  try {
-    await liveKitRoom.connect(coHostUrl, coHostToken);
-    
-    // Start publishing audio/video tracks
-    final localParticipant = liveKitRoom.localParticipant;
-    await localParticipant?.setCameraEnabled(true);
-    await localParticipant?.setMicrophoneEnabled(true);
-  } catch (error) {
-    print('Failed to connect: $error');
-  }
-  
-  return liveKitRoom;
-}
-```
-
 </CodeGroup>
 
 <Note>
@@ -1109,35 +973,6 @@ async function getRoomPlaybackUrls(room: Amity.Room): Promise<string[]> {
     playbackUrls = recordedInfos
       .map(info => info.url)
       .filter((url): url is string => !!url);
-  }
-  
-  return playbackUrls;
-}
-```
-
-```dart Flutter
-List<String> getRoomPlaybackUrls(AmityRoom room) {
-  List<String> playbackUrls = [];
-  
-  switch (room.status) {
-    case AmityRoomStatus.live:
-      // Get live playback URL for active broadcast
-      final liveUrl = room.livePlaybackUrl;
-      if (liveUrl != null && liveUrl.isNotEmpty) {
-        playbackUrls.add(liveUrl);
-      }
-      break;
-    case AmityRoomStatus.recorded:
-      // Get recorded playback URLs after broadcast ends
-      final recordedInfos = room.recordedPlaybackInfos ?? [];
-      playbackUrls = recordedInfos
-          .map((info) => info.url)
-          .whereType<String>()
-          .toList();
-      break;
-    default:
-      // Room is idle or ended, no playback available
-      break;
   }
   
   return playbackUrls;
@@ -1228,20 +1063,6 @@ const room = await roomRepository.createRoom({
 });
 ```
 
-### Solo Broadcast
-
-```typescript
-// Simple single-host livestream
-const room = await roomRepository.createRoom({
-  title: "Weekly Update",
-  description: "This week's highlights and announcements",
-  type: AmityRoomType.DIRECT_STREAMING,
-  targetType: "user",
-  targetId: currentUserId,
-  channelEnabled: true
-});
-```
-
 ## Integration with Posts
 
 Rooms are linked to posts for social distribution:
@@ -1263,14 +1084,23 @@ console.log(post.data.room.livePlaybackUrl);
 
 ## Next Steps
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="Create Room" href="./create-room" icon="plus">
-    Set up new rooms and start broadcasting
+    Set up new rooms for broadcasting
+  </Card>
+  <Card title="Start Broadcasting" href="./start-broadcasting" icon="play">
+    Connect to LiveKit and go live
+  </Card>
+  <Card title="Co-Host Management" href="./co-host-management" icon="users">
+    Invite and manage co-hosts
+  </Card>
+  <Card title="Live Viewing" href="./live-viewing" icon="eye">
+    Watch live streams in real-time
+  </Card>
+  <Card title="Recorded Playback" href="./recorded-playback" icon="video">
+    Play back recorded streams
   </Card>
   <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
     Query, update, and control rooms
-  </Card>
-  <Card title="Livestream Posts" href="/social-plus-sdk/social/posts/livestream-posts" icon="video">
-    Create posts with room integration
   </Card>
 </CardGroup>

@@ -1,0 +1,576 @@
+---
+title: "Start Broadcasting"
+description: "Connect to LiveKit and start co-streaming with multiple hosts in a room"
+---
+
+# Start Broadcasting
+
+After creating a room, obtain broadcasting credentials and connect to LiveKit to start streaming. This guide covers getting broadcaster data, connecting to LiveKit, and managing the broadcast session.
+
+## Prerequisites
+
+Before starting a broadcast, ensure you have:
+
+1. **Created a room** - See [Create Room](./create-room) for room creation
+2. **Created a room post** - Link the room to a post for social distribution
+3. **Installed LiveKit SDK** - Required for streaming connection
+
+## Getting Broadcaster Data
+
+Retrieve the streaming credentials needed to connect to LiveKit. The broadcast data contains the connection URL and authentication token.
+
+### Broadcast Data Types
+
+| Type | Description | Properties |
+|------|-------------|------------|
+| `CoHosts` | Multi-host co-streaming session | `coHostToken`, `coHostUrl` |
+
+<CodeGroup>
+```swift iOS
+func getBroadcasterData(roomId: String) async {
+    do {
+        let broadcastData = try await roomRepository.getBroadcastData(roomId: roomId)
+        
+        switch broadcastData {
+        case .coHosts(let data):
+            // Use coHostToken and coHostUrl for multi-host streaming
+            let token = data.coHostToken
+            let url = data.coHostUrl
+            // Connect to LiveKit with these credentials
+        }
+    } catch {
+        // Handle error here
+    }
+}
+```
+
+```kotlin Android
+fun getBroadcasterData(
+    roomRepository: AmityRoomRepository,
+    roomId: String
+) {
+    roomRepository.getBroadcastData(roomId = roomId)
+        .doOnSuccess { broadcastData: AmityRoomBroadcastData ->
+            when (broadcastData) {
+                is AmityRoomBroadcastData.CoHosts -> {
+                    // Use coHostToken and coHostUrl for multi-host streaming
+                    val token = broadcastData.getCoHostToken()
+                    val url = broadcastData.getCoHostUrl()
+                    // Connect to LiveKit with these credentials
+                }
+            }
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { RoomRepository } from '@amityco/ts-sdk';
+
+async function getBroadcasterData(roomId: string) {
+  const broadcastData = await RoomRepository.getBroadcastData(roomId);
+
+  if (broadcastData.type === 'coHosts') {
+    // Use coHostToken and coHostUrl for multi-host streaming
+    const token = broadcastData.coHostToken;
+    const url = broadcastData.coHostUrl;
+    // Connect to LiveKit with these credentials
+  }
+
+  return broadcastData;
+}
+```
+</CodeGroup>
+
+## Installing LiveKit SDK
+
+Before connecting, install the LiveKit SDK for your platform:
+
+<CodeGroup>
+```swift iOS
+// Add via Swift Package Manager:
+// https://github.com/livekit/client-sdk-swift
+
+// Also add camera and microphone permissions to Info.plist:
+// NSCameraUsageDescription
+// NSMicrophoneUsageDescription
+```
+
+```kotlin Android
+// Add to build.gradle
+dependencies {
+    implementation "io.livekit:livekit-android:2.+"
+    implementation "io.livekit:livekit-android-compose-components:1.+"
+}
+
+// Add JitPack to settings.gradle
+dependencyResolutionManagement {
+    repositories {
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+
+```typescript TypeScript
+// Install via npm
+npm install livekit-client --save
+
+// Or using yarn
+yarn add livekit-client
+```
+</CodeGroup>
+
+## Connecting to LiveKit
+
+Use the `coHostUrl` as the WebSocket URL and the `coHostToken` as the access token to establish the streaming connection.
+
+<CodeGroup>
+```swift iOS
+import LiveKit
+
+func connectToLiveKit(coHostUrl: String, coHostToken: String) async {
+    // Create LiveKit Room instance (not to be confused with AmityRoom)
+    let liveKitRoom = Room()
+    
+    do {
+        try await liveKitRoom.connect(url: coHostUrl, token: coHostToken)
+        print("Connected to LiveKit room successfully")
+        
+        // Access local participant after connection
+        let localParticipant = liveKitRoom.localParticipant
+        
+        // Start publishing audio/video tracks
+        try await localParticipant.setCamera(enabled: true)
+        try await localParticipant.setMicrophone(enabled: true)
+    } catch {
+        print("Failed to connect: \(error.localizedDescription)")
+    }
+}
+```
+
+```kotlin Android
+import io.livekit.android.room.Room as LiveKitRoom
+import io.livekit.android.LiveKit
+
+fun connectToLiveKit(
+    broadcastData: AmityRoomBroadcastData.CoHosts
+) {
+    // Create LiveKit Room instance (not to be confused with AmityRoom)
+    val liveKitRoom: LiveKitRoom = LiveKit.create(applicationContext)
+    
+    liveKitRoom.connect(
+        url = broadcastData.getCoHostUrl(),
+        token = broadcastData.getCoHostToken()
+    )
+    
+    // Access local participant after connection
+    val localParticipant = liveKitRoom.localParticipant
+    
+    // Start publishing audio/video tracks
+    localParticipant.setCameraEnabled(true)
+    localParticipant.setMicrophoneEnabled(true)
+}
+```
+
+```typescript TypeScript
+import { Room as LiveKitRoom, RoomEvent } from 'livekit-client';
+
+async function connectToLiveKit(coHostUrl: string, coHostToken: string) {
+  // Create LiveKit Room instance (not to be confused with Amity.Room)
+  const liveKitRoom = new LiveKitRoom();
+
+  // Set up event listeners before connecting
+  liveKitRoom.on(RoomEvent.Connected, () => {
+    console.log('Connected to LiveKit room successfully');
+  });
+
+  liveKitRoom.on(RoomEvent.Disconnected, (reason) => {
+    console.log('Disconnected from room:', reason);
+  });
+
+  liveKitRoom.on(RoomEvent.Reconnecting, () => {
+    console.log('Reconnecting to room...');
+  });
+
+  try {
+    await liveKitRoom.connect(coHostUrl, coHostToken);
+    
+    // Access local participant after connection
+    const localParticipant = liveKitRoom.localParticipant;
+    
+    // Start publishing audio/video tracks
+    await localParticipant.setCameraEnabled(true);
+    await localParticipant.setMicrophoneEnabled(true);
+  } catch (error) {
+    console.error('Failed to connect:', error);
+  }
+
+  return liveKitRoom;
+}
+```
+</CodeGroup>
+
+## Complete Broadcasting Flow
+
+Here's the complete workflow from room creation to starting the broadcast:
+
+<CodeGroup>
+```swift iOS
+import AmitySDK
+import LiveKit
+
+class BroadcastManager {
+    private var liveKitRoom: Room?
+    
+    func startBroadcast(roomId: String) async {
+        do {
+            // 1. Get broadcaster credentials
+            let broadcastData = try await roomRepository.getBroadcastData(roomId: roomId)
+            
+            guard case .coHosts(let data) = broadcastData else {
+                print("Invalid broadcast data type")
+                return
+            }
+            
+            // 2. Create LiveKit room instance
+            liveKitRoom = Room()
+            
+            // 3. Connect to LiveKit
+            try await liveKitRoom?.connect(url: data.coHostUrl, token: data.coHostToken)
+            print("Connected to LiveKit successfully")
+            
+            // 4. Enable camera and microphone
+            try await liveKitRoom?.localParticipant.setCamera(enabled: true)
+            try await liveKitRoom?.localParticipant.setMicrophone(enabled: true)
+            
+            print("Broadcasting started!")
+        } catch {
+            print("Failed to start broadcast: \(error)")
+        }
+    }
+    
+    func stopBroadcast() async {
+        await liveKitRoom?.disconnect()
+        liveKitRoom = nil
+        print("Broadcast stopped")
+    }
+}
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.video.*
+import io.livekit.android.LiveKit
+import io.livekit.android.room.Room as LiveKitRoom
+
+class BroadcastManager(private val context: Context) {
+    private var liveKitRoom: LiveKitRoom? = null
+    
+    fun startBroadcast(roomId: String) {
+        roomRepository.getBroadcastData(roomId = roomId)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({ broadcastData ->
+                when (broadcastData) {
+                    is AmityRoomBroadcastData.CoHosts -> {
+                        // 2. Create LiveKit room instance
+                        liveKitRoom = LiveKit.create(context)
+                        
+                        // 3. Connect to LiveKit
+                        liveKitRoom?.connect(
+                            url = broadcastData.getCoHostUrl(),
+                            token = broadcastData.getCoHostToken()
+                        )
+                        
+                        // 4. Enable camera and microphone
+                        liveKitRoom?.localParticipant?.setCameraEnabled(true)
+                        liveKitRoom?.localParticipant?.setMicrophoneEnabled(true)
+                        
+                        Log.d("Broadcast", "Broadcasting started!")
+                    }
+                }
+            }, { error ->
+                Log.e("Broadcast", "Failed to start: ${error.message}")
+            })
+    }
+    
+    fun stopBroadcast() {
+        liveKitRoom?.disconnect()
+        liveKitRoom = null
+        Log.d("Broadcast", "Broadcast stopped")
+    }
+}
+```
+
+```typescript TypeScript
+import { RoomRepository } from '@amityco/ts-sdk';
+import { Room as LiveKitRoom, RoomEvent } from 'livekit-client';
+
+class BroadcastManager {
+    private liveKitRoom: LiveKitRoom | null = null;
+    
+    async startBroadcast(roomId: string) {
+        try {
+            // 1. Get broadcaster credentials
+            const broadcastData = await RoomRepository.getBroadcastData(roomId);
+            
+            if (broadcastData.type !== 'coHosts') {
+                console.log('Invalid broadcast data type');
+                return;
+            }
+            
+            // 2. Create LiveKit room instance
+            this.liveKitRoom = new LiveKitRoom();
+            
+            // 3. Set up event listeners
+            this.liveKitRoom.on(RoomEvent.Connected, () => {
+                console.log('Connected to LiveKit successfully');
+            });
+            
+            // 4. Connect to LiveKit
+            await this.liveKitRoom.connect(
+                broadcastData.coHostUrl,
+                broadcastData.coHostToken
+            );
+            
+            // 5. Enable camera and microphone
+            await this.liveKitRoom.localParticipant.setCameraEnabled(true);
+            await this.liveKitRoom.localParticipant.setMicrophoneEnabled(true);
+            
+            console.log('Broadcasting started!');
+        } catch (error) {
+            console.error('Failed to start broadcast:', error);
+        }
+    }
+    
+    async stopBroadcast() {
+        await this.liveKitRoom?.disconnect();
+        this.liveKitRoom = null;
+        console.log('Broadcast stopped');
+    }
+}
+```
+</CodeGroup>
+
+## Stopping the Broadcast
+
+To end the broadcast, disconnect from LiveKit and optionally stop the room:
+
+<CodeGroup>
+```swift iOS
+// Disconnect from LiveKit
+await liveKitRoom.disconnect()
+
+// Optionally stop the room to prevent reconnection
+try await roomRepository.stopRoom(roomId: roomId)
+```
+
+```kotlin Android
+// Disconnect from LiveKit
+liveKitRoom.disconnect()
+
+// Optionally stop the room to prevent reconnection
+roomRepository.stopRoom(roomId = roomId)
+    .subscribe()
+```
+
+```typescript TypeScript
+// Disconnect from LiveKit
+await liveKitRoom.disconnect();
+
+// Optionally stop the room to prevent reconnection
+await RoomRepository.stopRoom(roomId);
+```
+</CodeGroup>
+
+## Connection Event Handling
+
+Handle connection events for a robust streaming experience:
+
+<CodeGroup>
+```swift iOS
+import LiveKit
+
+class BroadcastEventHandler: RoomDelegate {
+    
+    func room(_ room: Room, didConnect isReconnect: Bool) {
+        print(isReconnect ? "Reconnected to room" : "Connected to room")
+        updateUI(state: .connected)
+    }
+    
+    func room(_ room: Room, didDisconnect error: Error?) {
+        if let error = error {
+            print("Disconnected with error: \(error.localizedDescription)")
+            handleDisconnectionError(error)
+        } else {
+            print("Disconnected cleanly")
+        }
+        updateUI(state: .disconnected)
+    }
+    
+    func room(_ room: Room, didUpdate connectionState: ConnectionState) {
+        switch connectionState {
+        case .connecting:
+            updateUI(state: .connecting)
+        case .connected:
+            updateUI(state: .connected)
+        case .reconnecting:
+            updateUI(state: .reconnecting)
+        case .disconnected:
+            updateUI(state: .disconnected)
+        }
+    }
+    
+    func room(_ room: Room, participant: LocalParticipant, didPublish publication: LocalTrackPublication) {
+        print("Published track: \(publication.kind)")
+    }
+}
+```
+
+```kotlin Android
+import io.livekit.android.room.Room
+import io.livekit.android.events.RoomEvent
+
+class BroadcastEventHandler {
+    
+    fun setupEventListeners(room: Room) {
+        room.events.collect { event ->
+            when (event) {
+                is RoomEvent.Connected -> {
+                    Log.d("LiveKit", "Connected to room")
+                    updateUI(BroadcastState.CONNECTED)
+                }
+                is RoomEvent.Disconnected -> {
+                    Log.d("LiveKit", "Disconnected: ${event.reason}")
+                    updateUI(BroadcastState.DISCONNECTED)
+                }
+                is RoomEvent.Reconnecting -> {
+                    Log.d("LiveKit", "Reconnecting...")
+                    updateUI(BroadcastState.RECONNECTING)
+                }
+                is RoomEvent.Reconnected -> {
+                    Log.d("LiveKit", "Reconnected")
+                    updateUI(BroadcastState.CONNECTED)
+                }
+                is RoomEvent.TrackPublished -> {
+                    Log.d("LiveKit", "Track published: ${event.publication.kind}")
+                }
+                else -> {}
+            }
+        }
+    }
+}
+```
+
+```typescript TypeScript
+import { Room as LiveKitRoom, RoomEvent, DisconnectReason } from 'livekit-client';
+
+class BroadcastEventHandler {
+    
+    setupEventListeners(room: LiveKitRoom) {
+        room.on(RoomEvent.Connected, () => {
+            console.log('Connected to room');
+            this.updateUI('connected');
+        });
+        
+        room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+            console.log('Disconnected:', reason);
+            this.updateUI('disconnected');
+        });
+        
+        room.on(RoomEvent.Reconnecting, () => {
+            console.log('Reconnecting...');
+            this.updateUI('reconnecting');
+        });
+        
+        room.on(RoomEvent.Reconnected, () => {
+            console.log('Reconnected');
+            this.updateUI('connected');
+        });
+        
+        room.on(RoomEvent.LocalTrackPublished, (publication) => {
+            console.log('Track published:', publication.kind);
+        });
+        
+        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            console.log('Co-host track subscribed:', participant.identity);
+        });
+    }
+}
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Pre-Broadcast Setup">
+    - Test camera and microphone before going live
+    - Verify network connectivity and bandwidth
+    - Check permissions are granted on mobile devices
+    - Preview video before starting the broadcast
+  </Accordion>
+  <Accordion title="During Broadcast">
+    - Monitor connection quality indicators
+    - Handle reconnection events gracefully
+    - Provide visual feedback for connection states
+    - Keep the app in foreground for best performance
+  </Accordion>
+  <Accordion title="Ending Broadcast">
+    - Disconnect from LiveKit cleanly
+    - Call `stopRoom()` to finalize the broadcast
+    - Allow time for recording processing if enabled
+    - Notify viewers that the broadcast has ended
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+For detailed setup instructions, event handling, and advanced features, refer to the official [LiveKit documentation](https://docs.livekit.io/intro/basics/connect/).
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection Failures" icon="triangle-exclamation">
+    **Problem**: Unable to connect to LiveKit
+    
+    **Solutions**:
+    - Verify `coHostToken` hasn't expired
+    - Check network connectivity
+    - Ensure camera/microphone permissions are granted
+    - Validate the `coHostUrl` is correct
+  </Accordion>
+  <Accordion title="Track Publishing Issues" icon="video-slash">
+    **Problem**: Camera or microphone not publishing
+    
+    **Solutions**:
+    - Check device permissions are granted
+    - Verify no other app is using the camera
+    - Try toggling tracks off and on again
+    - Restart the connection
+  </Accordion>
+  <Accordion title="Reconnection Loop" icon="rotate">
+    **Problem**: Constantly reconnecting
+    
+    **Solutions**:
+    - Check network stability
+    - Monitor bandwidth availability
+    - Consider reducing video quality
+    - Check for background app restrictions
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Co-Host Management" href="./co-host-management" icon="users">
+    Invite and manage co-hosts in your broadcast
+  </Card>
+  <Card title="Camera Controls" href="./camera-controls" icon="camera">
+    Control camera, microphone, and video settings
+  </Card>
+  <Card title="Live Viewing" href="./live-viewing" icon="eye">
+    How viewers watch your live broadcast
+  </Card>
+  <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
+    Query, update, and control room lifecycle
+  </Card>
+</CardGroup>
