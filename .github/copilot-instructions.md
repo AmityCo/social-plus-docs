@@ -80,7 +80,7 @@ try {
 }
 ```
 
-```dart Flutter 
+```dart Flutter
 try {
     await AmityCoreClient.login('user-123')
         .displayName('John Doe')
@@ -117,31 +117,31 @@ try {
 ```mdx
 <AccordionGroup>
   <Accordion title="apiKey" icon="key">
-    **Type:** `string`  
-    **Required:** Yes  
+    **Type:** `string`
+    **Required:** Yes
     **Description:** Your social.plus API key from the developer console
-    
+
     **Example:**
     ```javascript
-    const client = new SocialPlusClient({ 
-        apiKey: 'sp_live_abc123...' 
+    const client = new SocialPlusClient({
+        apiKey: 'sp_live_abc123...'
     });
     ```
   </Accordion>
-  
+
   <Accordion title="options" icon="gear">
-    **Type:** `ClientOptions`  
-    **Required:** No  
+    **Type:** `ClientOptions`
+    **Required:** No
     **Description:** Configuration options for the client
-    
+
     **Properties:**
     - `region`: `'us' | 'eu' | 'sg'` - Server region (default: 'us')
     - `timeout`: `number` - Request timeout in milliseconds (default: 30000)
     - `retryAttempts`: `number` - Number of retry attempts (default: 3)
-    
+
     **Example:**
     ```javascript
-    const client = new SocialPlusClient({ 
+    const client = new SocialPlusClient({
         apiKey: 'your-api-key',
         options: {
             region: 'eu',
@@ -162,23 +162,23 @@ graph TB
     B --> C{Authentication}
     C -->|Authenticated| D[Core Services]
     C -->|Failed| E[Error Handler]
-    
+
     D --> F[Social Features]
     D --> G[Chat Features]
     D --> H[Video Features]
-    
+
     F --> I[Posts & Comments]
     F --> J[Communities]
     F --> K[User Management]
-    
+
     G --> L[Messaging]
     G --> M[Channels]
     G --> N[Live Chat]
-    
+
     H --> O[Broadcasting]
     H --> P[Playback]
     H --> Q[Recording]
-    
+
     style A fill:#e1f5fe
     style D fill:#f3e5f5
     style F fill:#e8f5e8
@@ -322,15 +322,15 @@ import SocialPlusSDK
 
 class SocialViewController: UIViewController {
     private let socialClient = SocialPlusClient(apiKey: "your-api-key")
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         Task {
             await loadContent()
         }
     }
-    
+
     private func loadContent() async {
         do {
             let posts = try await socialClient.getPosts()
@@ -364,10 +364,10 @@ import co.amity.socialplus.sdk.SocialPlusClient
 class SocialViewModel(private val client: SocialPlusClient) : ViewModel() {
     private val _posts = MutableStateFlow<List<Post>>(emptyList())
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
-    
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-    
+
     fun loadPosts() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -406,13 +406,13 @@ export const useSocialPosts = (apiKey: string) => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
+
     const client = useMemo(() => new SocialPlusClient({ apiKey }), [apiKey]);
-    
+
     const loadPosts = useCallback(async () => {
         setIsLoading(true);
         setError(null);
-        
+
         try {
             const posts = await client.getPosts();
             setPosts(posts);
@@ -422,11 +422,11 @@ export const useSocialPosts = (apiKey: string) => {
             setIsLoading(false);
         }
     }, [client]);
-    
+
     useEffect(() => {
         loadPosts();
     }, [loadPosts]);
-    
+
     return { posts, isLoading, error, refetch: loadPosts };
 };
 ```
@@ -449,18 +449,18 @@ class SocialProvider extends ChangeNotifier {
     List<Post> _posts = [];
     bool _isLoading = false;
     String? _error;
-    
+
     SocialProvider(this._client);
-    
+
     List<Post> get posts => _posts;
     bool get isLoading => _isLoading;
     String? get error => _error;
-    
+
     Future<void> loadPosts() async {
         _isLoading = true;
         _error = null;
         notifyListeners();
-        
+
         try {
             _posts = await _client.getPosts();
         } catch (e) {
@@ -480,11 +480,11 @@ class PostsWidget extends StatelessWidget {
                 if (provider.isLoading) {
                     return const CircularProgressIndicator();
                 }
-                
+
                 if (provider.error != null) {
                     return Text('Error: ${provider.error}');
                 }
-                
+
                 return ListView.builder(
                     itemCount: provider.posts.length,
                     itemBuilder: (context, index) {
@@ -542,10 +542,10 @@ Brief introduction explaining what the component does and its main benefits.
   <Tab title="React Native">
     ```jsx
     import { ComponentName } from '@amityco/social-plus-uikit-react-native';
-    
+
     export default function MyComponent() {
         return (
-            <ComponentName 
+            <ComponentName
                 // Required props
                 prop1="value"
                 // Optional props
@@ -559,45 +559,45 @@ Brief introduction explaining what the component does and its main benefits.
     }
     ```
   </Tab>
-  
+
   <Tab title="iOS">
     ```swift
     import SocialPlusUIKit
-    
+
     class MyViewController: UIViewController {
         override func viewDidLoad() {
             super.viewDidLoad()
-            
+
             let component = ComponentNameViewController()
             component.delegate = self
-            
+
             // Configure component
             component.configure(with: ComponentConfig(
                 theme: .light,
                 primaryColor: UIColor.systemBlue
             ))
-            
+
             present(component, animated: true)
         }
     }
     ```
   </Tab>
-  
+
   <Tab title="Android">
     ```kotlin
     import co.amity.socialplus.uikit.ComponentNameFragment
-    
+
     class MyActivity : AppCompatActivity() {
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
-            
+
             val fragment = ComponentNameFragment.newInstance(
                 config = ComponentConfig(
                     theme = Theme.LIGHT,
                     primaryColor = Color.parseColor("#1054DE")
                 )
             )
-            
+
             supportFragmentManager.beginTransaction()
                 .replace(R.id.container, fragment)
                 .commit()
@@ -605,11 +605,11 @@ Brief introduction explaining what the component does and its main benefits.
     }
     ```
   </Tab>
-  
+
   <Tab title="Flutter">
     ```dart
     import 'package:amity_uikit/amity_uikit.dart';
-    
+
     class MyWidget extends StatelessWidget {
         @override
         Widget build(BuildContext context) {
@@ -627,11 +627,11 @@ Brief introduction explaining what the component does and its main benefits.
     }
     ```
   </Tab>
-  
+
   <Tab title="Web">
     ```jsx
     import { ComponentName } from '@amityco/social-plus-uikit-web';
-    
+
     function MyComponent() {
         return (
             <ComponentName
@@ -655,29 +655,29 @@ Brief introduction explaining what the component does and its main benefits.
 
 <AccordionGroup>
   <Accordion title="Required Props" icon="star">
-    **prop1** - `string`  
+    **prop1** - `string`
     Description of the required property and its purpose.
-    
-    **prop2** - `boolean`  
+
+    **prop2** - `boolean`
     Description of another required property.
   </Accordion>
-  
+
   <Accordion title="Optional Props" icon="gear">
-    **onAction** - `(action: ActionType) => void`  
+    **onAction** - `(action: ActionType) => void`
     Callback function triggered when user performs an action.
-    
-    **customization** - `CustomizationOptions`  
+
+    **customization** - `CustomizationOptions`
     Theming and styling configuration object.
   </Accordion>
-  
+
   <Accordion title="Customization Options" icon="palette">
-    **theme** - `'light' | 'dark' | 'auto'`  
+    **theme** - `'light' | 'dark' | 'auto'`
     Theme mode for the component (default: 'light').
-    
-    **primaryColor** - `string`  
+
+    **primaryColor** - `string`
     Primary color for the component (default: '#1054DE').
-    
-    **typography** - `TypographyConfig`  
+
+    **typography** - `TypographyConfig`
     Font family, sizes, and weights configuration.
   </Accordion>
 </AccordionGroup>
@@ -732,14 +732,14 @@ Brief introduction explaining what the component does and its main benefits.
     - **Memory Management**: Properly dispose of resources and listeners
     - **Pagination**: Implement pagination for large data sets
   </Accordion>
-  
+
   <Accordion title="User Experience" icon="heart">
     - **Loading States**: Always show loading indicators for async operations
     - **Error Handling**: Provide clear error messages and recovery options
     - **Offline Support**: Cache essential data for offline usage
     - **Accessibility**: Ensure components are accessible to all users
   </Accordion>
-  
+
   <Accordion title="Customization Guidelines" icon="paintbrush">
     - **Brand Consistency**: Maintain consistent branding across all components
     - **Responsive Design**: Ensure components work well on all screen sizes
@@ -753,30 +753,30 @@ Brief introduction explaining what the component does and its main benefits.
 <AccordionGroup>
   <Accordion title="Component Not Rendering" icon="eye-slash">
     **Symptoms**: Component appears blank or doesn't show up
-    
+
     **Solutions**:
     1. Verify you've initialized UIKit with `setup()` method
     2. Check that all required props are provided
     3. Ensure proper authentication is configured
     4. Verify network connectivity for data-dependent components
   </Accordion>
-  
+
   <Accordion title="Styling Issues" icon="palette">
     **Symptoms**: Component doesn't match expected appearance
-    
+
     **Solutions**:
     1. Check customization object structure and property names
     2. Verify color values are in correct format (hex, RGB, etc.)
     3. Ensure custom fonts are properly loaded
     4. Check for conflicting styles from parent components
   </Accordion>
-  
+
   <Accordion title="Performance Issues" icon="gauge">
     **Symptoms**: Slow rendering or app crashes
-    
+
     **Solutions**:
     1. Implement pagination for large data sets
-    2. Optimize image loading with proper sizing 
+    2. Optimize image loading with proper sizing
     3. Use FlatList/RecyclerView for long lists
     4. Monitor memory usage and implement proper cleanup
   </Accordion>
@@ -980,7 +980,7 @@ Clear introduction explaining the API's purpose and server-to-server nature.
     Auth methods, tokens, and security practices
   </Card>
   <Card title="Core Features" icon="feature-icon" href="#core-functionality">
-    Primary API capabilities and use cases  
+    Primary API capabilities and use cases
   </Card>
   <Card title="Real-time Events" icon="webhook" href="webhook-event">
     Webhook integration and event processing
@@ -1024,32 +1024,32 @@ Clear introduction explaining the API's purpose and server-to-server nature.
 <Tabs>
   <Tab title="Admin Access">
     **Admin API Access Token**
-    
+
     For server-to-server operations with full privileges:
-    
+
     ```bash
     curl -X 'GET' \
       'https://apix.<region>.amity.co/api/v3/endpoint' \
       -H 'accept: application/json' \
       -H 'x-admin-token: <your-admin-token>'
     ```
-    
+
     <Warning>
     Admin tokens provide full access. Never expose them in client-side code.
     </Warning>
   </Tab>
-  
+
   <Tab title="User Access">
     **User API Access Token**
-    
+
     For user-context operations:
-    
+
     ```bash
     # Get authentication token
     curl -X 'GET' \
       'https://apix.<region>.amity.co/api/v3/authentication/token?userId=<userId>' \
       -H 'x-server-key: <your-server-key>'
-    
+
     # Create user session
     curl -X 'POST' \
       'https://apix.<region>.amity.co/api/v3/sessions' \
@@ -1147,7 +1147,7 @@ try {
 }
 ```
 
-```dart Flutter 
+```dart Flutter
 try {
     await AmityCoreClient.login('user-123')
         .displayName('John Doe')
@@ -1159,7 +1159,7 @@ try {
 }
 ```
 </CodeGroup>
-  
+
 
 
 ## Use Cases
@@ -1251,7 +1251,7 @@ function verifySignature(payload, signature, secret) {
         .createHmac('sha256', secret)
         .update(payload)
         .digest('hex');
-    
+
     return crypto.timingSafeEqual(
         Buffer.from(signature, 'hex'),
         Buffer.from(expectedSignature, 'hex')
@@ -1261,13 +1261,13 @@ function verifySignature(payload, signature, secret) {
 app.post('/webhook', (req, res) => {
     const signature = req.headers['x-webhook-signature'];
     const payload = JSON.stringify(req.body);
-    
+
     if (!verifySignature(payload, signature, process.env.WEBHOOK_SECRET)) {
         return res.status(401).json({ error: 'Invalid signature' });
     }
-    
+
     const { event, data, timestamp } = req.body;
-    
+
     switch (event) {
         case 'content.created':
             handleContentCreated(data);
@@ -1278,7 +1278,7 @@ app.post('/webhook', (req, res) => {
         default:
             console.log(`Unhandled event: ${event}`);
     }
-    
+
     res.status(200).json({ status: 'received' });
 });
 ```
@@ -1325,11 +1325,11 @@ This section documents the successful modernization process for the Analytics & 
 find analytics-and-moderation -name "*.md" | while read file; do
     # Create backup
     cp "$file" "${file}.backup"
-    
+
     # Convert to .mdx
     mdx_file="${file%%.md}.mdx"
     mv "$file" "$mdx_file"
-    
+
     # Add/update frontmatter if needed
     if ! grep -q "^---" "$mdx_file"; then
         title=$(basename "$file" .md | tr '-' ' ' | sed 's/\b\w/\U&/g')
@@ -1659,7 +1659,7 @@ This comprehensive guide represents the accumulated knowledge and best practices
 
 ### **Key Success Factors**
 - **Systematic Approach**: Following established workflows and patterns
-- **Quality First**: Never compromising on accuracy or user experience  
+- **Quality First**: Never compromising on accuracy or user experience
 - **Developer Focus**: Always prioritizing the developer's journey and needs
 - **Continuous Learning**: Adapting and improving based on experience
 - **Comprehensive Testing**: Validating all aspects before considering complete
