@@ -172,8 +172,8 @@ Every post has a `structureType` field that automatically classifies its content
 | `reactions`          | Object                | Information about the post reactions         |
 | `reactionsCount`     | Integer               | Number of reactions to the post              |
 | `myReactions`        | Array of strings      | Reactions by the current user                |
-| `commentsCount`      | Integer               | Number of comments to the post               |
-| `localCommentCount`  | Integer               | Total number of comments created or deleted locally or received via real-time events (RTE) in the post. This count is overwritten with the server count when synced. |
+| `commentsCount`      | Integer               | Number of comments to the post (server value)               |
+| `localCommentCount`  | Integer               | Locally-computed comment count that updates in real time. See [Live Comment Count](#live-comment-count) below. |
 | `comments`           | Array of AmityComment | The first three comments for previewing      |
 | `childrenPosts`      | Object                | Child posts (e.g., images, videos)           |
 | `isDeleted`          | Boolean               | True if the post is deleted                  |
@@ -181,6 +181,100 @@ Every post has a `structureType` field that automatically classifies its content
 | `hasFlaggedChildren` | Boolean               | True if the post has flagged children        |
 | `tags`               | Array of strings      | Arbitrary tags for querying/filtering posts  |
 | `feedId`             | String                | ID of the post's feed                        |
+
+## Live Comment Count
+
+The `localCommentCount` property provides a real-time comment count on a post. It updates instantly when comments are created or deleted — both from the current user's own actions and from real-time events received from other users — so your UI always reflects the latest activity without refetching the entire post.
+
+To receive these updates, you must observe the post through a **Live Object** (via `getPost()`) or a **Live Collection** (via `queryPosts()`). The SDK delivers `localCommentCount` changes through the same observation callback you already use for other post property updates. See [Live Objects & Collections](/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview) for details.
+
+### How It Works
+
+`localCommentCount` starts with the server's `commentsCount` value when a post is loaded. From that point on, the SDK adjusts the count locally as comment events arrive:
+
+```mermaid
+flowchart LR
+    A["Post loaded from server\ncommentsCount = 12"] --> B["localCommentCount = 12"]
+    B --> C{"Comment events"}
+    C -->|"Comment created"| D["localCommentCount = 13"]
+    C -->|"Comment deleted"| E["localCommentCount = 11"]
+    C -->|"Post re-fetched from server"| F["Re-calibrated to latest\nserver commentsCount"]
+```
+
+- **Local actions**: When the current user creates or deletes a comment, the count updates immediately after the server confirms the action.
+- **Remote events**: When another user creates or deletes a comment, the SDK receives a real-time event and adjusts the count.
+- **Re-calibration**: Every time the post object is refreshed from the server (e.g., via a query or pagination), `localCommentCount` resets to the server's `commentsCount`, ensuring eventual consistency.
+
+<Info>
+`localCommentCount` includes **all comment levels** — both top-level comments and replies. It matches how `commentsCount` works on the server.
+</Info>
+
+### When to Use `localCommentCount` vs `commentsCount`
+
+| Property | Updates from real-time events? | Best for |
+|---|---|---|
+| `commentsCount` | No — reflects the server value at the time the post was last fetched | Static displays or cases where you always re-fetch the post before showing the count |
+| `localCommentCount` | Yes — updates instantly via local actions and real-time events | Displaying live counters in feeds, post detail views, and active discussions |
+
+<Tip>
+For most UI use cases, **prefer `localCommentCount`** to give users an immediate sense of activity. The value will re-calibrate to the server count automatically whenever the post is refreshed.
+</Tip>
+
+### Prerequisites
+
+Two things must be in place for `localCommentCount` to deliver live updates:
+
+<Steps>
+  <Step title="Observe the post via Live Object or Live Collection">
+    You must be observing the post through `getPost()` (Live Object) or `queryPosts()` (Live Collection). The SDK delivers `localCommentCount` changes through the observation callback — if you're not observing, you won't receive updates.
+  </Step>
+  <Step title="Subscribe to real-time events">
+    To receive other users' comment activity, subscribe to the relevant post and comment topic. Without a subscription, `localCommentCount` will only reflect the current user's own actions.
+  </Step>
+</Steps>
+
+Choose the subscription scope that matches your UI:
+
+<Tabs>
+  <Tab title="Community Feed">
+    Subscribe to all post and comment events in a community — ideal for community feeds where you want live counters on every post.
+
+    ```typescript
+    import { getCommunityTopic, SubscriptionLevels } from '@amityco/ts-sdk';
+
+    // Subscribe to all post + comment events in this community
+    const topic = getCommunityTopic(community, SubscriptionLevels.POST_AND_COMMENT);
+    ```
+  </Tab>
+  <Tab title="Single Post">
+    Subscribe to comment events on a specific post — ideal for post detail views or expanded threads.
+
+    ```typescript
+    import { getPostTopic, SubscriptionLevels } from '@amityco/ts-sdk';
+
+    // Subscribe to comment events on this specific post
+    const topic = getPostTopic(post, SubscriptionLevels.COMMENT);
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Real-time events are **not available for global feed queries**. Use community-level or post-level subscriptions instead. See [Social Real-time Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events) for the full list of subscription topics.
+</Note>
+
+### Limitations
+
+<AccordionGroup>
+  <Accordion title="Eventual consistency, not absolute accuracy" icon="clock">
+    Because the count is computed locally from a stream of events, it may temporarily diverge from the true server count in high-traffic scenarios (e.g., hundreds of comments per second). The SDK automatically re-calibrates whenever fresh post data is fetched from the server, so any drift is short-lived.
+  </Accordion>
+  <Accordion title="Requires Live Object/Collection observation and real-time subscription" icon="wifi">
+    Updates are delivered through the Live Object or Live Collection observation callback. If you fetch a post without observing it, you won't receive `localCommentCount` changes. Additionally, without subscribing to the relevant post/comment real-time topic, the count will only reflect the current user's own create/delete actions.
+  </Accordion>
+  <Accordion title="Not supported on global feed" icon="globe">
+    Real-time events are scoped to communities, individual posts, or user feeds. If you display posts from a global feed query, `localCommentCount` will still work for the current user's own actions but won't receive remote events until you subscribe at a tighter scope (community or post level).
+  </Accordion>
+</AccordionGroup>
 
 ## Quick Start Guide
 
