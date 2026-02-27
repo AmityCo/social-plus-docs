@@ -29,7 +29,8 @@ You can only view users you have blocked—not users who have blocked you. Block
 - You cannot see users who have blocked you
 
 ---
-## Get Blocked Users List
+
+## Get Blocked Users List (Paginated)
 
 <Blockquote>
 Retrieve and manage your blocked users list with efficient pagination and real-time updates.
@@ -111,6 +112,123 @@ void getBlockedUsers() {
 }
 ```
 </CodeGroup>
+
+---
+
+## Get All Blocked Users (Non-Paginated)
+
+<Info>
+**Platform Availability**: `getAllBlockedUsers()` is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
+</Info>
+
+Retrieve the complete list of blocked users as a **one-shot async call** (not a live collection). This is optimized for use cases like feed filtering where you need the full block list upfront without live reactivity.
+
+### How It Works
+
+- **One-shot result** — Returns the full blocked users list as a single async response, not a live collection.
+- **Built-in caching** — The SDK caches the result for **5 minutes**. The first call fetches from the server; subsequent calls within the TTL window resolve instantly from the local cache.
+- **Automatic cache refresh** — After 5 minutes, the next call triggers a fresh server fetch.
+- **Reflects local changes** — If you block or unblock a user between calls, the local cache is updated immediately. The next `getAllBlockedUsers()` call reflects the change even without a server fetch.
+- **Session-aware** — The cache resets on logout. After re-login, the next call fetches fresh data.
+
+<Tip>
+**Cache behavior**: Results are cached for **5 minutes**. If the blocked users list appears stale, this is expected — wait for the cache to expire or trigger a new call after 5 minutes. Blocking or unblocking a user locally will update the cached list immediately, but changes made from another device will only appear after the cache refreshes.
+</Tip>
+
+### Usage
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    import AmitySDK
+
+    let userRepository = AmityUserRepository(client: client)
+
+    userRepository.getAllBlockedUsers { result in
+        switch result {
+        case .success(let blockedUsers):
+            print("Blocked users: \(blockedUsers.count)")
+            for user in blockedUsers {
+                print("- \(user.displayName ?? user.userId)")
+            }
+        case .failure(let error):
+            print("Failed to get blocked users: \(error)")
+        }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    import com.amity.socialcloud.sdk.api.core.AmityCoreClient
+
+    val userRepository = AmityCoreClient.newUserRepository()
+
+    userRepository.getAllBlockedUsers()
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { blockedUsers: List<AmityUser> ->
+                println("Blocked users: ${blockedUsers.size}")
+                blockedUsers.forEach { user ->
+                    println("- ${user.getDisplayName()}")
+                }
+            },
+            { error ->
+                println("Failed to get blocked users: ${error.message}")
+            }
+        )
+    ```
+  </Tab>
+</Tabs>
+
+### Use Case: Feed Filtering
+
+A common use case is filtering out blocked users' posts from a feed:
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    // Get all blocked user IDs for local filtering
+    userRepository.getAllBlockedUsers { result in
+        switch result {
+        case .success(let blockedUsers):
+            let blockedUserIds = Set(blockedUsers.map { $0.userId })
+            // Use blockedUserIds to filter feed content locally
+        case .failure(let error):
+            // Handle error — do not assume empty block list
+            print("Error: \(error)")
+        }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    userRepository.getAllBlockedUsers()
+        .subscribe(
+            { blockedUsers ->
+                val blockedUserIds = blockedUsers.map { it.getUserId() }.toSet()
+                // Use blockedUserIds to filter feed content locally
+            },
+            { error ->
+                // Handle error — do not assume empty block list
+            }
+        )
+    ```
+  </Tab>
+</Tabs>
+
+### Limitations
+
+- **Hard limit of 100 users** — Returns a maximum of 100 blocked users. If a user has more than 100 blocked users, only the most recent 100 are returned.
+- **Not a live collection** — The result is a one-shot snapshot. It does not automatically update when block/unblock actions occur. Call the function again to get the latest list.
+- **Deleted users excluded** — Blocked users whose accounts have been deleted are automatically filtered out.
+- **Error propagation** — If the server fetch fails (e.g., network error), the error is propagated to the caller. The SDK does not return a stale cached list on failure.
+
+<Note>
+For real-time, paginated block lists (e.g., a "Manage Blocked Users" screen), use the existing `getBlockedUsers()` live collection API above instead.
+</Note>
 
 ---
 
