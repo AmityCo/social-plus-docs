@@ -41,6 +41,7 @@ graph TD
 | `includeDeleted` | Boolean | Include deleted posts | `true`, `false` (default)                                        |
 | `sortBy`         | String  | Sort order            | `lastCreated` (default), `firstCreated`                          |
 | `feedType`       | String  | Feed type filter      | `published`, `reviewing`, `declined`                             |
+| `untilAt`        | DateTime | Time boundary for pagination (local-only). Stops fetching and collecting posts beyond this datetime. | See [Time-Bounded Pagination](#time-bounded-pagination-with-untilat) |
 
 ## Basic Post Querying
 
@@ -696,6 +697,97 @@ graph TD
     ```
   </Tab>
 </Tabs>
+
+## Time-Bounded Pagination with `untilAt`
+
+<Info>
+**Platform Availability**: The `untilAt` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
+</Info>
+
+The `untilAt` parameter enables time-bounded pagination for post queries. When provided, the SDK stops fetching and collecting posts beyond the specified datetime boundary. This is useful for building "catch-up" feeds, historical views, or snapshotted timelines.
+
+### How It Works
+
+- **Local-only filter** — `untilAt` is never sent to the backend. The SDK enforces the boundary locally.
+- **Exclusive comparison** — A post whose `createdAt` equals exactly `untilAt` is **not** included.
+- **Automatic pagination stop** — Once the boundary is reached, no further pages are fetched and `hasNextPage` becomes `false`.
+- **Real-time filtering** — New posts arriving via real-time events are also checked against the boundary before being added to the live collection.
+
+| Sort Direction | `untilAt` Acts As | Excludes Posts Where |
+|----------------|-------------------|---------------------|
+| `lastCreated` (newest first) | Lower bound | `createdAt < untilAt` (older than boundary) |
+| `firstCreated` (oldest first) | Upper bound | `createdAt > untilAt` (newer than boundary) |
+
+### Usage Example
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    import AmitySDK
+
+    // Query community posts up to a specific point in time
+    let repository = AmityPostRepository(client: client)
+    
+    // Example: Only show posts from the last 7 days
+    let oneWeekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+    
+    let query = AmityPostQuery()
+        .targetId("community-123")
+        .targetType(.community)
+        .sortBy(.lastCreated)
+        .untilAt(oneWeekAgo)
+        .includeDeleted(false)
+    
+    let collection = repository.getPosts(query: query)
+    
+    let token = collection.observe { result in
+        switch result {
+        case .success(let postsInfo):
+            let posts = postsInfo.object
+            // All posts will have createdAt >= oneWeekAgo
+            print("Posts within time window: \(posts.count)")
+            
+        case .failure(let error):
+            print("Query error: \(error)")
+        }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    import co.amity.sdk.*
+    import java.util.Calendar
+
+    // Query community posts up to a specific point in time
+    val repository = AmityPostRepository.Builder().build()
+
+    // Example: Only show posts from the last 7 days
+    val oneWeekAgo = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -7)
+    }.time
+
+    repository.queryPost()
+        .targetId("community-123")
+        .targetType(AmityPostTarget.COMMUNITY)
+        .sortBy(AmityPostQuerySortOption.LAST_CREATED)
+        .untilAt(oneWeekAgo)
+        .includeDeleted(false)
+        .build()
+        .query()
+        .subscribe { pagingData ->
+            // All posts will have createdAt >= oneWeekAgo
+            // Handle pagingData
+        }
+    ```
+  </Tab>
+</Tabs>
+
+### Limitations
+
+- Maximum of 100 posts per page is still enforced by the backend.
+- `untilAt` does not affect posts already persisted in the local database — it only controls what appears in the live collection result.
+- When no `untilAt` is provided, pagination behaves normally with no time boundary.
 
 ## Advanced Query Features
 
