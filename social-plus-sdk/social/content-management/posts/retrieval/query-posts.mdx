@@ -26,6 +26,7 @@ The social.plus SDK provides powerful post querying functionality that enables f
 | `sortBy`                | Enum    | ❌        | Sort order for results. `lastCreated` (default) shows most recently created posts first, `firstCreated` shows earliest created posts first.                                                                                                                                                                                                                                 |
 | `feedType`              | Enum    | ❌        | Type of the feed filter. Possible values: `published`, `reviewing`, `declined`. See [Feed Types](#feed-types) for details.                                                                                                                                                                                                                                                  |
 | `includeMixedStructure` | Boolean | ❌        | Mixed media filter. When `true`, posts with mixed media (combining multiple media types) are included in results when filtering by `types`. When `false` (default), only posts with pure single-type structures are returned. See [Mixed Media Filtering](#mixed-media-filtering) for details.                                                                              |
+| `untilAt`               | DateTime | ❌       | Time boundary for pagination (local-only). Stops fetching and collecting posts beyond this datetime. The comparison is exclusive. Available on **iOS** and **Android** only. See [Time-Bounded Pagination](#time-bounded-pagination-with-untilat).                                                                                                                          |
 
 ### Feed Types
 
@@ -405,6 +406,71 @@ void paginationListener() {
     This query retrieves declined posts including deleted ones, sorted chronologically for audit trail purposes. Only available to moderators and administrators.
   </Accordion>
 </AccordionGroup>
+
+## Time-Bounded Pagination with `untilAt`
+
+<Info>
+**Platform Availability**: The `untilAt` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
+</Info>
+
+The `untilAt` parameter enables time-bounded pagination for post queries (including community feed queries via `targetType: 'community'`). When provided, the SDK stops fetching and collecting posts beyond the specified datetime boundary.
+
+- **Local-only filter** — `untilAt` is never sent to the backend. The SDK enforces the boundary locally.
+- **Exclusive comparison** — A post whose `createdAt` equals exactly `untilAt` is **not** included.
+- **Automatic pagination stop** — Once the boundary is reached, no further pages are fetched and `hasNextPage` becomes `false`.
+- **Real-time filtering** — New posts arriving via real-time events are also checked against the boundary.
+
+| Sort Direction | `untilAt` Acts As | Excludes Posts Where |
+|----------------|-------------------|---------------------|
+| `lastCreated` (newest first) | Lower bound | `createdAt < untilAt` (older than boundary) |
+| `firstCreated` (oldest first) | Upper bound | `createdAt > untilAt` (newer than boundary) |
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    // Query community posts from the last 7 days only
+    let oneWeekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+
+    let options = AmityPostQueryOptions(
+        targetType: .community,
+        targetId: "community-123",
+        sortBy: .lastCreated,
+        deletedOption: .notDeleted,
+        untilAt: oneWeekAgo
+    )
+
+    token = postRepository.getPosts(options).observe { collection, changes, error in
+        // All posts will have createdAt >= oneWeekAgo
+    }
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    // Query community posts from the last 7 days only
+    val oneWeekAgo = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -7)
+    }.time
+
+    postRepository
+        .getPosts()
+        .targetCommunity(communityId = "community-123")
+        .includeDeleted(includeDeleted = false)
+        .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
+        .untilAt(oneWeekAgo)
+        .build()
+        .getPagingData()
+        .doOnNext { pagingData ->
+            // All posts will have createdAt >= oneWeekAgo
+        }
+        .subscribe()
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+**Limitations**: `untilAt` does not affect posts already persisted in the local database — it only controls what appears in the live collection result. When not provided, pagination behaves normally with no time boundary.
+</Note>
 
 ## Common Use Cases
 

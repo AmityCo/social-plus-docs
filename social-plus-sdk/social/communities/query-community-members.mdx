@@ -30,6 +30,7 @@ Configure your member queries with these parameters:
 |-----------|------|-------------|---------|
 | `membershipOptions` | Array | Filter by membership status (`member`, `ban`) | `member` |
 | `roles` | Array | Filter by roles (moderator roles or custom role IDs) | All roles |
+| `excludingRoles` | Array | Exclude members who hold any of the specified roles. Local-only filter — not sent to backend. | None. Available on **iOS** and **Android** only. |
 | `includeDeleted` | Boolean | Include members whose users have been deleted | `false` |
 | `sortBy` | String | Sort method (`displayName`, `firstCreated`, `lastCreated`) | `firstCreated` |
 | `keyword` | String | Search by display name or user ID | None |
@@ -403,6 +404,123 @@ Get a filtered list of community members:
     ```
   </Tab>
 </Tabs>
+
+## Excluding Roles from Results
+
+<Info>
+**Platform Availability**: The `excludingRoles` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
+</Info>
+
+The `excludingRoles` parameter lets you filter out members who hold specific roles from both `getMembers()` and `searchMembers()` results. This is useful for building member lists that exclude staff, bots, or other special-role users.
+
+### How It Works
+
+- **Local-only filter** — `excludingRoles` is never sent to the backend API. All members are still fetched and persisted to the local cache; the exclusion only affects what the live collection emits.
+- **ANY-match semantics** — A member is excluded if they hold **any** role from the exclusion list.
+- **Backward compatible** — When `excludingRoles` is empty or not provided, all members are returned as before.
+- **Combinable with `roles`** — You can use both `roles` (inclusion) and `excludingRoles` (exclusion) together. Inclusion is applied first, then exclusion.
+- **Real-time updates** — If a member gains or loses an excluded role in real-time, the live collection updates automatically.
+
+### Usage Example
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    // Get all community members except moderators
+    let query = AmityCommunityMemberQuery()
+    query.membershipFilter = [.member]
+    query.excludingRoles = ["community-moderator", "channel-moderator"]
+    query.sortBy = .firstCreated
+
+    let collection = communityRepository.getMembers(
+        communityId: "community-123",
+        query: query
+    )
+
+    membersToken = collection.observe { [weak self] result in
+        switch result {
+        case .initial(let members):
+            // Members list will NOT include any moderators
+            print("Non-moderator members: \(members.count)")
+        case .update(let members, _):
+            self?.handleMembers(members)
+        case .error(let error):
+            print("Error: \(error)")
+        }
+    }
+
+    // Search members excluding specific roles
+    let searchQuery = AmityCommunityMemberQuery()
+    searchQuery.keyword = "john"
+    searchQuery.excludingRoles = ["community-moderator"]
+
+    let searchCollection = communityRepository.searchMembers(
+        communityId: "community-123",
+        query: searchQuery
+    )
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    // Get all community members except moderators
+    val query = AmityCommunityMemberQuery.Builder()
+        .membershipFilter(listOf(AmityCommunityMembershipFilter.MEMBER))
+        .excludingRoles(listOf("community-moderator", "channel-moderator"))
+        .sortBy(AmityCommunityMemberSortOption.FIRST_CREATED)
+        .build()
+
+    client.community()
+        .membership("community-123")
+        .getMembers(query)
+        .subscribe { membersList ->
+            // Members list will NOT include any moderators
+            val members = membersList.data
+            println("Non-moderator members: ${members.size}")
+        }
+
+    // Search members excluding specific roles
+    val searchQuery = AmityCommunityMemberSearch.Builder()
+        .keyword("john")
+        .excludingRoles(listOf("community-moderator"))
+        .build()
+
+    client.community()
+        .membership("community-123")
+        .searchMembers(searchQuery)
+        .subscribe { searchResults ->
+            // Search results exclude moderators
+        }
+    ```
+  </Tab>
+</Tabs>
+
+### Combining `roles` and `excludingRoles`
+
+When both parameters are set, `roles` (inclusion) is applied first, then `excludingRoles` (exclusion). For example, to get all premium members who are **not** moderators:
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    let query = AmityCommunityMemberQuery()
+    query.roles = ["premium"]                           // Include only premium members
+    query.excludingRoles = ["community-moderator"]      // Then exclude moderators
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```kotlin
+    val query = AmityCommunityMemberQuery.Builder()
+        .roles(listOf("premium"))                       // Include only premium members
+        .excludingRoles(listOf("community-moderator"))  // Then exclude moderators
+        .build()
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+If a role appears in both `roles` and `excludingRoles`, the exclusion takes precedence — members with that role will not appear in results.
+</Warning>
 
 ## Search Community Members
 
