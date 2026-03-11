@@ -18,13 +18,13 @@ import requests
 # ---------------------------------------------------------------------------
 # Col 0:  Features
 # Col 1:  SDK > Availability
-# Col 2:  SDK > Platform Parity
+# Col 2:  SDK > Platform Parity  (not used in output)
 # Col 3:  SDK > Android
 # Col 4:  SDK > iOS
 # Col 5:  SDK > TS
 # Col 6:  SDK > Flutter
 # Col 7:  UIKit > Availability
-# Col 8:  UIKit > Platform Parity
+# Col 8:  UIKit > Platform Parity  (not used in output)
 # Col 9:  UIKit > Android
 # Col 10: UIKit > iOS
 # Col 11: UIKit > Web
@@ -33,7 +33,6 @@ import requests
 
 SDK_COLS = {
     "Availability": 1,
-    "Platform Parity": 2,
     "Android": 3,
     "iOS": 4,
     "TS": 5,
@@ -42,7 +41,6 @@ SDK_COLS = {
 
 UIKIT_COLS = {
     "Availability": 7,
-    "Platform Parity": 8,
     "Android": 9,
     "iOS": 10,
     "Web": 11,
@@ -188,56 +186,58 @@ def parse_rows(raw_rows: list[list[str]]) -> list[dict]:
 # MDX generation
 # ---------------------------------------------------------------------------
 
-def format_status(value: str) -> str:
-    """Convert status values to readable badges with emoji."""
+def format_availability(value: str) -> str:
+    """Convert availability status values to readable text with emoji."""
     v = value.strip().lower()
     if not v:
         return ""
     if v == "available":
         return "Available"
-    if v == "full":
-        return "🟢 Full"
-    if v == "partial":
-        return "🟡 Partial"
     if v in ("not av", "not av...", "not available"):
-        return "🔴 Not Available"
+        return "Not Available"
     if v == "planned":
-        return "🔵 Planned"
-    if v == "no":
-        return "No"
+        return "Planned"
     return value
 
 
-def format_parity(value: str) -> str:
-    """Format platform parity with color indicators."""
-    return format_status(value)
+def format_platform(value: str) -> str:
+    """
+    Convert platform cell values for display.
+    Blank = available on that platform -> checkmark
+    'No' = not available on that platform -> cross
+    """
+    v = value.strip().lower()
+    if not v:
+        # Blank means available for that platform
+        return "✅"
+    if v == "no":
+        return "—"
+    return value
 
 
 def generate_table(features: list[dict], product: str) -> str:
     """Generate a markdown table for a list of features under one product (sdk or uikit)."""
-    cols_key = product  # "sdk" or "uikit"
-
     if product == "sdk":
         platform_headers = ["Android", "iOS", "TS", "Flutter"]
     else:
         platform_headers = ["Android", "iOS", "Web", "RN", "Flutter"]
 
-    header_row = "| Feature | Availability | Platform Parity | " + " | ".join(platform_headers) + " |"
-    separator = "| :--- | :---: | :---: | " + " | ".join([":---:"] * len(platform_headers)) + " |"
+    header_row = "| Feature | Availability | " + " | ".join(platform_headers) + " |"
+    separator = "| :--- | :---: | " + " | ".join([":---:"] * len(platform_headers)) + " |"
 
     lines = [header_row, separator]
 
     for f in features:
-        data = f[cols_key]
+        data = f[product]
         name = f["name"]
         if f.get("note"):
-            name += f" <br/><small>*{f['note']}*</small>"
+            # Use italic text for notes — no HTML tags (Mintlify doesn't support <small>)
+            name += f" *({f['note']})*"
 
-        availability = format_status(data.get("Availability", ""))
-        parity = format_parity(data.get("Platform Parity", ""))
-        platforms = [format_status(data.get(p, "")) for p in platform_headers]
+        availability = format_availability(data.get("Availability", ""))
+        platforms = [format_platform(data.get(p, "")) for p in platform_headers]
 
-        cells = [name, availability, parity] + platforms
+        cells = [name, availability] + platforms
         lines.append("| " + " | ".join(cells) + " |")
 
     return "\n".join(lines)
@@ -247,23 +247,20 @@ def to_mdx(parsed: list[dict]) -> str:
     """Convert parsed data into a full Mintlify MDX page."""
     lines = [
         "---",
-        'title: "UI Kit Feature Matrix"',
+        'title: "Feature Matrix"',
         'sidebarTitle: "Feature Matrix"',
-        'description: "Feature availability and platform parity across SDK and UIKit (v4)."',
+        'description: "Feature availability and platform support across SDK and UIKit."',
         "---",
         "",
-        "# UI Kit Feature Matrix",
+        "# Feature Matrix",
         "",
-        "This table shows feature availability and platform support across **SDK** and **UIKit (v4)**.",
+        "A comprehensive overview of feature availability and platform support across **SDK** and **UIKit**.",
+        "Use the tabs within each section to compare coverage between the two.",
         "",
         "<Note>",
         "",
-        "**Legend**",
-        "",
-        "- 🟢 **Full** — Available on all platforms",
-        "- 🟡 **Partial** — Available on selected platforms",
-        "- 🔵 **Planned** — On immediate roadmap",
-        "- 🔴 **Not Available** — Not yet available",
+        "**Availability** indicates whether a feature is available, planned, or not yet available.",
+        "For individual platforms, ✅ means supported and **—** means not yet supported.",
         "",
         "</Note>",
         "",
@@ -300,7 +297,7 @@ def to_mdx(parsed: list[dict]) -> str:
         lines.append(generate_table(features, "sdk"))
         lines.append("")
         lines.append("  </Tab>")
-        lines.append('  <Tab title="UIKit (v4)">')
+        lines.append('  <Tab title="UIKit">')
         lines.append("")
         lines.append(generate_table(features, "uikit"))
         lines.append("")
