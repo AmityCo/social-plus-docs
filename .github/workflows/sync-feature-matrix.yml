@@ -1,0 +1,82 @@
+name: Sync Feature Matrix from Google Sheets
+
+on:
+  repository_dispatch:
+    types: [sheet-updated]
+  schedule:
+    - cron: '0 8 * * *'  # daily fallback at 8am UTC in case webhook fails
+  workflow_dispatch: {}   # manual trigger button in GitHub UI
+
+# Cancel redundant runs if multiple triggers fire close together
+concurrency:
+  group: sync-feature-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+          # Uncomment the next line if using a service account (Step 3 Option B):
+          # pip install google-auth google-api-python-client
+
+      - name: Run sync script
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          SHEET_NAME: ${{ secrets.SHEET_NAME }}
+          # Uncomment if using service account:
+          # GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+        run: python scripts/sync-feature-matrix.py
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected — skipping PR."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected:"
+            git diff --stat
+          fi
+
+      - name: Create or update PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/sync-feature-matrix"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -m "docs: sync feature matrix from Google Sheets"
+          git push --force origin "$BRANCH"
+
+          # Open a new PR only if one doesn't already exist for this branch
+          EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --title "docs: update feature matrix" \
+              --body "Auto-synced from Google Sheets. Review the diff and merge when ready."  \
+              --head "$BRANCH"
+            echo "PR created."
+          else
+            echo "PR #$EXISTING already exists — updated with latest changes."
+          fi
