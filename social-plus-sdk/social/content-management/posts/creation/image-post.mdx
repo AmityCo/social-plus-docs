@@ -61,38 +61,86 @@ Images must be uploaded first before creating the post. See [Image Handling](/so
 | `targetId` | String | ❌ | Target ID (`userId` or `communityId`) |
 | `tags` | Array\<String\> | ❌ | Tags for categorization |
 | `metadata` | Object | ❌ | Custom metadata |
+| `attachmentProductTags` | AmityAttachmentProductTags | ❌ | Product tags on images (max 20 per post) |
+
+## Product Tagging
+
+<Info>
+**Product Tagging in Images**: You can tag products directly on images in your post. This enables commerce integration by allowing users to click on tagged products in images and jump to product pages or catalogs.
+
+Tagging products on images makes content more interactive and improves discoverability for commerce-driven platforms.
+</Info>
+
+Product tagging on images supports:
+- Up to 20 product tags per post (combined across all images)
+- Multiple products tagged on a single image
+- Product position mapping on image coordinates
+- Product metadata and catalog links
+- Analytics tracking for tagged product interactions
 
 
 <CodeGroup>
 ```swift iOS
-func createImagePostExample(images: [AmityImageData], text: String) async {
-    // Build your post structure
+func createImagePost(images: [AmityImageData]) async throws {
+    let postRepository = AmityPostRepository(client: amityClient)
+
     let builder = AmityImagePostBuilder()
-    builder.setText(text)
     builder.setImages(images)
-    // Create a post from the builder
-    do {
-        let post = try await postRepository.createImagePost(builder, targetId: nil, targetType: .user, metadata: nil, mentionees: nil)
-    } catch {
-        // Handle error here
-    }
+    builder.setText("Check out these products!")
+
+    // Build attachment product tags: map fileId to media product tags
+    let attachmentProductTags = AmityAttachmentProductTags()
+    attachmentProductTags.add(
+        fileId: "image-file-id",
+        tag: AmityMediaProductTag(productId: "product-1")
+    )
+    attachmentProductTags.add(
+        fileId: "image-file-id-2",
+        tag: AmityMediaProductTag(productId: "product-2")
+    )
+
+    let post = try await postRepository.createImagePost(
+        builder,
+        targetId: "userId1",
+        targetType: .user,
+        metadata: nil,
+        mentionees: nil,
+        attachmentProductTags: attachmentProductTags
+    )
 }
 ```
 
 ```kotlin Android
 fun createImagePost(
     postRepository: AmityPostRepository,
-    uploadedImage1: AmityImage,
-    uploadedImage2: AmityImage
+    images: Set<AmityImage>
 ) {
-    postRepository.createPost()
-        .targetUser(userId = "user1")
-        .image(images = arrayOf(uploadedImage1, uploadedImage2))
-        .text("new image post!")
+    // Build attachment product tags: map each fileId to a list of product tags
+    val attachmentProductTags = AmityAttachmentProductTags.Builder()
+        .apply {
+            set(
+                "image-file-id-1",
+                listOf(AmityProductTag.Media(productId = "product-1"))
+            )
+            set(
+                "image-file-id-2",
+                listOf(AmityProductTag.Media(productId = "product-2"))
+            )
+        }
         .build()
-        .post()
-        .doOnSuccess { amityPost: AmityPost ->
-            //success
+
+    postRepository.createImagePost(
+        targetType = AmityPost.TargetType.USER,
+        targetId = "user1",
+        images = images,
+        text = "Check out these products!",
+        attachmentProductTags = attachmentProductTags
+    )
+        .doOnSuccess { post: AmityPost ->
+            // Image post with product tags created successfully
+        }
+        .doOnError { error ->
+            // Handle error
         }
         .subscribe()
 }
@@ -102,46 +150,53 @@ fun createImagePost(
 import { PostRepository, PostContentType } from '@amityco/ts-sdk';
 
 async function createImagePost(): Promise<Amity.Post> {
+  // Build attachment product tags
+  const attachmentTags = new AmityAttachmentProductTags();
+  attachmentTags.add("image-file-id-1", { productId: "product-1" });
+  attachmentTags.add("image-file-id-2", { productId: "product-2" });
+
   const newPost = {
-    tags: ['a', 'b'], // optional, max no.of tags = 5, max length per tag = 24 chars
+    targetType: "user",
+    targetId: "userId1",
     data: {
-      text: 'hello!',
+      text: "Check out these products!",
     },
     attachments: [
-      { type: PostContentType.IMAGE, fileId: 'imageFileId1' },
-      { type: PostContentType.IMAGE, fileId: 'imageFileId2' },
+      {
+        fileId: "image-file-id-1",
+        type: PostContentType.IMAGE,
+      },
+      {
+        fileId: "image-file-id-2",
+        type: PostContentType.IMAGE,
+      },
     ],
-    targetType: 'user',
-    targetId: 'userId1',
+    attachmentTags,
   };
 
   const { data: post } = await PostRepository.createPost(newPost);
-
   return post;
 }
 ```
 
 ```dart Flutter
-//current post collection from feed repository
 late PagingController<AmityPost> _controller;
 
-void createImagePost(AmityImage uploadedImage) {
+void createImagePost(List<AmityImage> uploadedImages) {
   AmitySocialClient.newPostRepository()
       .createPost()
-      .targetUser('userId') // or targetMe(), targetCommunity(communityId: String)
-      .image([uploadedImage])
-      .text('Hello from flutter with image!')
+      .targetUser('userId')
+      .image(uploadedImages)
+      .text('Check out these products!')
       .post()
-      .then((AmityPost post) => {
-            //handle result
-            //optional: to present the created post in to the current post collection
-            //you will need manually put the newly created post in to the collection
-            //for example :
-            _controller.add(post)
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+      .then((AmityPost post) {
+        // Success - add to feed
+        _controller.add(post);
+        print('Image post created successfully');
+      })
+      .onError((error, stackTrace) {
+        print('Error creating image post: $error');
+      });
 }
 ```
 
