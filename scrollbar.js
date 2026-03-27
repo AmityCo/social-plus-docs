@@ -1,4 +1,55 @@
+// ---------------------------------------------------------------------------
+// Demo iframe theme sync — mirrors Mintlify's dark/light mode into the iframe
+// ---------------------------------------------------------------------------
+(function () {
+  function getIframe() {
+    return document.getElementById('demo-iframe');
+  }
+
+  function getCurrentTheme() {
+    return document.documentElement.classList.contains('dark') ||
+      document.documentElement.getAttribute('data-theme') === 'dark'
+      ? 'dark'
+      : 'light';
+  }
+
+  function syncTheme() {
+    var iframe = getIframe();
+    if (!iframe || !iframe.contentWindow) return;
+    var theme = getCurrentTheme();
+    iframe.contentWindow.postMessage({ type: 'SET_DEMO_THEME', theme: theme }, '*');
+    console.log('[scrollbar.js] Synced theme to iframe:', theme);
+  }
+
+  // Watch for Mintlify theme class changes on <html>
+  var observer = new MutationObserver(function () {
+    syncTheme();
+  });
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class', 'data-theme'],
+  });
+
+  // Also sync when iframe loads or page navigates
+  document.addEventListener('DOMContentLoaded', function () {
+    var iframe = getIframe();
+    if (iframe) {
+      iframe.addEventListener('load', function () {
+        setTimeout(syncTheme, 300);
+      });
+    }
+    setTimeout(syncTheme, 1000);
+  });
+
+  // Sync immediately in case DOMContentLoaded already fired
+  if (document.readyState !== 'loading') {
+    setTimeout(syncTheme, 1000);
+  }
+})();
+
+// ---------------------------------------------------------------------------
 // Auto-show scrollbar functionality
+// ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', function() {
   let scrollTimer = null;
   
