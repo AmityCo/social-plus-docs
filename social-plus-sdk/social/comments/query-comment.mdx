@@ -43,6 +43,7 @@ graph TD
 | `parentId` | String | Filter by parent comment ID | `null` (all levels) |
 | `includeDeleted` | Boolean | Include soft-deleted comments | `false` |
 | `sortBy` | Enum | Sort order (`firstCreated`, `lastCreated`) | `firstCreated` |
+| `pageSize` | Integer | Number of comments to load per page | `20` (iOS), `15` (Android), `10` (Web) |
 
 ### Advanced Filtering
 
@@ -75,14 +76,19 @@ class CommentQueryManager {
     func queryAllComments(
         for referenceId: String,
         referenceType: AmityCommentReferenceType,
+        pageSize: Int = 20,
         completion: @escaping (Result<[AmityComment], Error>) -> Void
     ) {
-        let builder = AmityCommentQuery.Builder()
-        builder.setReferenceId(referenceId)
-        builder.setReferenceType(referenceType)
-        builder.setSortBy(.firstCreated)
+        let options = AmityCommentQueryOptions(
+            referenceId: referenceId,
+            referenceType: referenceType,
+            filterByParentId: false,
+            orderBy: .ascending,
+            includeDeleted: false,
+            pageSize: pageSize
+        )
         
-        commentCollection = commentRepository.getComments(with: builder.build())
+        commentCollection = commentRepository.getComments(with: options)
         
         collectionToken = commentCollection?.observe { [weak self] collection, change, error in
             if let error = error {
@@ -103,15 +109,20 @@ class CommentQueryManager {
     func queryParentComments(
         for referenceId: String,
         referenceType: AmityCommentReferenceType,
+        pageSize: Int = 20,
         completion: @escaping (Result<[AmityComment], Error>) -> Void
     ) {
-        let builder = AmityCommentQuery.Builder()
-        builder.setReferenceId(referenceId)
-        builder.setReferenceType(referenceType)
-        builder.setParentId(nil) // Only parent comments
-        builder.setIncludeDeleted(false)
+        let options = AmityCommentQueryOptions(
+            referenceId: referenceId,
+            referenceType: referenceType,
+            filterByParentId: true,
+            parentId: nil,          // nil = root-level comments only
+            orderBy: .ascending,
+            includeDeleted: false,
+            pageSize: pageSize
+        )
         
-        commentCollection = commentRepository.getComments(with: builder.build())
+        commentCollection = commentRepository.getComments(with: options)
         
         collectionToken = commentCollection?.observe { collection, change, error in
             if let error = error {
@@ -129,15 +140,20 @@ class CommentQueryManager {
         to parentCommentId: String,
         referenceId: String,
         referenceType: AmityCommentReferenceType,
+        pageSize: Int = 5,          // Smaller page size recommended for reply threads
         completion: @escaping (Result<[AmityComment], Error>) -> Void
     ) {
-        let builder = AmityCommentQuery.Builder()
-        builder.setReferenceId(referenceId)
-        builder.setReferenceType(referenceType)
-        builder.setParentId(parentCommentId) // Only replies to this comment
-        builder.setSortBy(.firstCreated)
+        let options = AmityCommentQueryOptions(
+            referenceId: referenceId,
+            referenceType: referenceType,
+            filterByParentId: true,
+            parentId: parentCommentId,
+            orderBy: .ascending,
+            includeDeleted: false,
+            pageSize: pageSize
+        )
         
-        commentCollection = commentRepository.getComments(with: builder.build())
+        commentCollection = commentRepository.getComments(with: options)
         
         collectionToken = commentCollection?.observe { collection, change, error in
             if let error = error {
@@ -154,13 +170,20 @@ class CommentQueryManager {
     func queryCommentsWithPagination(
         for referenceId: String,
         referenceType: AmityCommentReferenceType,
+        pageSize: Int = 20,
         delegate: CommentCollectionDelegate
     ) {
-        let builder = AmityCommentQuery.Builder()
-        builder.setReferenceId(referenceId)
-        builder.setReferenceType(referenceType)
+        let options = AmityCommentQueryOptions(
+            referenceId: referenceId,
+            referenceType: referenceType,
+            filterByParentId: true,
+            parentId: nil,
+            orderBy: .ascending,
+            includeDeleted: false,
+            pageSize: pageSize
+        )
         
-        commentCollection = commentRepository.getComments(with: builder.build())
+        commentCollection = commentRepository.getComments(with: options)
         
         // Set up real-time updates
         collectionToken = commentCollection?.observe { collection, change, error in
@@ -211,6 +234,7 @@ class CommentsViewController: UIViewController {
         commentQueryManager.queryCommentsWithPagination(
             for: postId,
             referenceType: .post,
+            pageSize: 20,
             delegate: self
         )
     }
@@ -242,91 +266,82 @@ extension CommentsViewController: CommentCollectionDelegate {
 
 <Tab title="Android">
 ```kotlin
-import com.amity.socialcloud.sdk.social.comment.*
+import androidx.paging.PagingData
+import com.amity.socialcloud.sdk.api.social.AmityCommentRepository
+import com.amity.socialcloud.sdk.api.social.comment.query.AmityCommentSortOption
+import com.amity.socialcloud.sdk.model.social.comment.AmityComment
+import io.reactivex.rxjava3.disposables.Disposable
 
-class CommentQueryManager(private val client: AmityClient) {
-    private val commentRepository = AmityCommentRepository(client)
+class CommentQueryManager(private val commentRepository: AmityCommentRepository) {
     
-    // Query all comments for a post
+    // Query all comments for a post (15 per page by default)
     fun queryAllComments(
-        referenceId: String,
-        referenceType: AmityCommentReferenceType,
+        postId: String,
+        pageSize: Int = 15,
         callback: (PagingData<AmityComment>) -> Unit
     ): Disposable {
-        val query = AmityCommentQuery.Builder()
-            .setReferenceId(referenceId)
-            .setReferenceType(referenceType)
-            .setSortBy(AmityCommentSortOption.FIRST_CREATED)
+        return commentRepository.getComments()
+            .post(postId = postId)
+            .sortBy(AmityCommentSortOption.FIRST_CREATED)
+            .pageSize(pageSize)
             .build()
-        
-        return commentRepository.getComments(query)
+            .query()
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { pagingData ->
-                callback(pagingData)
-            }
+            .subscribe { pagingData -> callback(pagingData) }
     }
     
     // Query only parent-level comments
     fun queryParentComments(
-        referenceId: String,
-        referenceType: AmityCommentReferenceType,
+        postId: String,
+        pageSize: Int = 15,
         callback: (PagingData<AmityComment>) -> Unit
     ): Disposable {
-        val query = AmityCommentQuery.Builder()
-            .setReferenceId(referenceId)
-            .setReferenceType(referenceType)
-            .setParentId(null) // Only parent comments
-            .setIncludeDeleted(false)
+        return commentRepository.getComments()
+            .post(postId = postId)
+            .parentId(null)             // null = root-level comments only
+            .includeDeleted(false)
+            .pageSize(pageSize)
             .build()
-        
-        return commentRepository.getComments(query)
+            .query()
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { pagingData ->
-                callback(pagingData)
-            }
+            .subscribe { pagingData -> callback(pagingData) }
     }
     
-    // Query replies to specific comment
+    // Query replies to a specific comment
     fun queryReplies(
         parentCommentId: String,
-        referenceId: String,
-        referenceType: AmityCommentReferenceType,
+        postId: String,
+        pageSize: Int = 5,              // Smaller page size recommended for reply threads
         callback: (PagingData<AmityComment>) -> Unit
     ): Disposable {
-        val query = AmityCommentQuery.Builder()
-            .setReferenceId(referenceId)
-            .setReferenceType(referenceType)
-            .setParentId(parentCommentId) // Only replies to this comment
-            .setSortBy(AmityCommentSortOption.FIRST_CREATED)
+        return commentRepository.getComments()
+            .post(postId = postId)
+            .parentId(parentId = parentCommentId)
+            .sortBy(AmityCommentSortOption.FIRST_CREATED)
+            .pageSize(pageSize)
             .build()
-        
-        return commentRepository.getComments(query)
+            .query()
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { pagingData ->
-                callback(pagingData)
-            }
+            .subscribe { pagingData -> callback(pagingData) }
     }
     
-    // Advanced query with custom filters
+    // Advanced query with custom filters and page size
     fun queryCommentsWithFilters(
-        referenceId: String,
-        referenceType: AmityCommentReferenceType,
+        postId: String,
         includeDeleted: Boolean = false,
         sortBy: AmityCommentSortOption = AmityCommentSortOption.FIRST_CREATED,
+        pageSize: Int = 15,
         callback: (PagingData<AmityComment>) -> Unit
     ): Disposable {
-        val query = AmityCommentQuery.Builder()
-            .setReferenceId(referenceId)
-            .setReferenceType(referenceType)
-            .setIncludeDeleted(includeDeleted)
-            .setSortBy(sortBy)
+        return commentRepository.getComments()
+            .post(postId = postId)
+            .includeDeleted(includeDeleted)
+            .sortBy(sortBy)
+            .pageSize(pageSize)
             .build()
-        
-        return commentRepository.getComments(query)
+            .query()
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { pagingData ->
-                callback(pagingData)
-            }
+            .subscribe { pagingData -> callback(pagingData) }
     }
 }
 
@@ -342,7 +357,7 @@ class PostCommentsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_post_comments)
         
         postId = intent.getStringExtra("POST_ID") ?: ""
-        commentQueryManager = CommentQueryManager(AmityClient.getInstance())
+        commentQueryManager = CommentQueryManager(AmitySocialClient.newCommentRepository())
         
         setupRecyclerView()
         loadComments()
@@ -368,8 +383,8 @@ class PostCommentsActivity : AppCompatActivity() {
         commentsDisposable?.dispose()
         
         commentsDisposable = commentQueryManager.queryParentComments(
-            referenceId = postId,
-            referenceType = AmityCommentReferenceType.POST
+            postId = postId,
+            pageSize = 15
         ) { pagingData ->
             commentsAdapter.submitData(lifecycle, pagingData)
         }
@@ -378,8 +393,8 @@ class PostCommentsActivity : AppCompatActivity() {
     private fun loadReplies(parentCommentId: String) {
         commentQueryManager.queryReplies(
             parentCommentId = parentCommentId,
-            referenceId = postId,
-            referenceType = AmityCommentReferenceType.POST
+            postId = postId,
+            pageSize = 5
         ) { pagingData ->
             // Handle replies display in adapter
             commentsAdapter.updateReplies(parentCommentId, pagingData)
@@ -455,6 +470,10 @@ interface CommentQueryOptions {
     parentId?: string | null;
     includeDeleted?: boolean;
     sortBy?: AmityCommentSortOption;
+    /** Number of comments to load per page. Default: 10. Use `5` for reply thread batches. */
+    pageSize?: number;
+    /** @deprecated Use `pageSize` instead. Will be removed in a future major version. */
+    limit?: number;
 }
 
 class CommentQueryManager {
@@ -468,8 +487,8 @@ class CommentQueryManager {
     // Query all comments with real-time updates
     async queryComments(
         options: CommentQueryOptions,
-        onUpdate: (comments: AmityComment[]) -> void,
-        onError?: (error: Error) -> void
+        onUpdate: (comments: AmityComment[]) => void,
+        onError?: (error: Error) => void
     ): Promise<string> {
         const {
             referenceId,
@@ -485,7 +504,8 @@ class CommentQueryManager {
                 referenceType,
                 parentId,
                 includeDeleted,
-                sortBy
+                sortBy,
+                pageSize: options.pageSize ?? 10
             };
             
             const liveCollection = this.commentRepository.getComments(query);
@@ -514,14 +534,16 @@ class CommentQueryManager {
     async queryParentComments(
         referenceId: string,
         referenceType: AmityCommentReferenceType,
-        onUpdate: (comments: AmityComment[]) -> void,
-        onError?: (error: Error) -> void
+        onUpdate: (comments: AmityComment[]) => void,
+        onError?: (error: Error) => void,
+        pageSize: number = 10
     ): Promise<string> {
         return this.queryComments({
             referenceId,
             referenceType,
             parentId: null, // Only parent comments
-            includeDeleted: false
+            includeDeleted: false,
+            pageSize
         }, onUpdate, onError);
     }
     
@@ -530,14 +552,16 @@ class CommentQueryManager {
         parentCommentId: string,
         referenceId: string,
         referenceType: AmityCommentReferenceType,
-        onUpdate: (replies: AmityComment[]) -> void,
-        onError?: (error: Error) -> void
+        onUpdate: (replies: AmityComment[]) => void,
+        onError?: (error: Error) => void,
+        pageSize: number = 5            // Smaller page size recommended for reply threads
     ): Promise<string> {
         return this.queryComments({
             referenceId,
             referenceType,
             parentId: parentCommentId,
-            includeDeleted: false
+            includeDeleted: false,
+            pageSize
         }, onUpdate, onError);
     }
     
@@ -550,7 +574,8 @@ class CommentQueryManager {
             referenceType: options.referenceType,
             parentId: options.parentId,
             includeDeleted: options.includeDeleted || false,
-            sortBy: options.sortBy || AmityCommentSortOption.FIRST_CREATED
+            sortBy: options.sortBy || AmityCommentSortOption.FIRST_CREATED,
+            pageSize: options.pageSize ?? 10
         };
         
         return this.commentRepository.getComments(query);
@@ -656,7 +681,7 @@ const CommentsSection: React.FC<{ postId: string }> = ({ postId }) => {
     const { comments, loading, error, hasMore, loadMore } = useComments(
         postId,
         AmityCommentReferenceType.POST,
-        { parentId: null } // Only parent comments
+        { parentId: null, pageSize: 10 } // Only parent comments; 10 per page
     );
     
     const [repliesMap, setRepliesMap] = React.useState<Map<string, AmityComment[]>>(new Map());
@@ -673,7 +698,8 @@ const CommentsSection: React.FC<{ postId: string }> = ({ postId }) => {
             },
             (error) => {
                 console.error('Failed to load replies:', error);
-            }
+            },
+            5   // Load 5 replies per page
         );
         
         // Store subscription for cleanup
@@ -1332,7 +1358,7 @@ Efficient pagination is crucial for handling large comment threads without perfo
 
 | Parameter | Description | Default | Best Practice |
 |-----------|-------------|---------|---------------|
-| **Page Size** | Comments per page | 20 | 10-50 depending on content |
+| **Page Size** (`pageSize`) | Comments loaded per page — set via the `pageSize` parameter | `20` iOS · `15` Android · `10` Web | Use `5` for reply thread batches; `10–20` for main feeds |
 | **Load Strategy** | When to load more | Manual | Automatic near scroll end |
 | **Cache Size** | Comments kept in memory | Unlimited | Limit to 200-500 comments |
 
