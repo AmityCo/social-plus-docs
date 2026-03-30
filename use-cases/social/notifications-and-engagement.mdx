@@ -26,6 +26,10 @@ Client.onNotification((event) => {
 Full walkthrough below ↓
 </Accordion>
 
+<Tip>
+**Platform note** — code samples below use TypeScript. Every method has an equivalent in the iOS (Swift), Android (Kotlin), and Flutter (Dart) SDKs — see the linked SDK reference in each step.
+</Tip>
+
 Notifications are your primary re-engagement tool. This guide covers building an in-app notification tray with seen/unseen tracking, setting up push notifications across all platforms, and subscribing to real-time social events.
 
 ```mermaid
@@ -139,6 +143,29 @@ import GetNotificationTrayItems from '/snippets/social/notifications/get-notific
 
 ## Part 2: Push Notifications
 
+```mermaid
+sequenceDiagram
+    participant Device as User's Device
+    participant SDK
+    participant Server as social.plus Server
+    participant APNs as APNs / FCM
+
+    Device->>SDK: registerPushNotification(token)
+    SDK->>Server: Register device token
+    Server-->>SDK: Registered
+
+    Note over Server: Another user comments on the post
+    Server->>Server: Generate notification
+    alt App in foreground
+        Server->>SDK: Real-time event
+        SDK->>Device: In-app notification tray item
+    else App in background
+        Server->>APNs: Push payload
+        APNs->>Device: System push notification
+        Device->>SDK: User taps → deep link to content
+    end
+```
+
 <Steps>
   <Step title="Configure push credentials in Admin Console">
     Before registering devices, add your push credentials in **Admin Console → Settings → Push Notifications**:
@@ -151,74 +178,22 @@ import GetNotificationTrayItems from '/snippets/social/notifications/get-notific
   <Step title="Register the device for push">
     After the user logs in, retrieve the device token and register it with the SDK. This associates the device with the authenticated user so the backend can route pushes correctly.
 
-    <CodeGroup>
-    ```swift iOS
-    // Call after login completes, passing the APNs device token
-    do {
-        try await client.registerPushNotification(withDeviceToken: deviceToken)
-    } catch {
-        print("Push registration failed: \(error)")
-    }
-    ```
+    ```typescript
+    import { Client } from '@amityco/ts-sdk';
 
-    ```kotlin Android
-    // Call after login completes, using the FCM token
-    AmityCoreClient.registerPushNotification()
-        .doOnComplete {
-            // Registration successful
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
+    // Register a device token (web push or React Native FCM token)
+    await client.registerPushNotification({ token: deviceToken });
     ```
-
-    ```dart Flutter
-    // Pass the FCM token obtained from FirebaseMessaging.instance.getToken()
-    AmityCoreClient.registerDeviceNotification(fcmToken)
-        .then((_) {
-            // Registration successful
-        })
-        .onError((error, _) {
-            // Handle error
-        });
-    ```
-    </CodeGroup>
 
     Full reference → [Register Push Notifications](/social-plus-sdk/core-concepts/realtime-communication/push-notifications/register-and-unregister-push-notifications-on-a-device)
   </Step>
   <Step title="Unregister on logout">
     Always unregister the device token when the user logs out to prevent push notifications being sent to the wrong user's device.
 
-    <CodeGroup>
-    ```swift iOS
-    // Pass the userId to unregister only this user from this device
-    client.unregisterDeviceForPushNotification(forUserId: userId) { _, success, error in
-        // Handle response
-    }
+    ```typescript
+    // Unregister on logout — stops push notifications to this device
+    await client.unregisterPushNotification({ token: deviceToken });
     ```
-
-    ```kotlin Android
-    AmityCoreClient.unregisterPushNotification()
-        .doOnComplete {
-            // Unregistration successful
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-    ```
-
-    ```dart Flutter
-    AmityCoreClient.unregisterDeviceNotification()
-        .then((_) {
-            // Unregistration successful
-        })
-        .onError((error, _) {
-            // Handle error
-        });
-    ```
-    </CodeGroup>
 
     Full reference → [Register Push Notifications](/social-plus-sdk/core-concepts/realtime-communication/push-notifications/register-and-unregister-push-notifications-on-a-device)
   </Step>
@@ -234,80 +209,31 @@ Let users control what they're notified about at a granular level. Settings are 
   <Step title="Get current notification settings">
     Read the user's current preferences to populate a settings screen.
 
-    <CodeGroup>
-    ```swift iOS
-    let userNotificationManager = client.notificationManager
+    ```typescript
+    import { UserRepository } from '@amityco/ts-sdk';
 
-    do {
-        let notification = try await userNotificationManager.getSettings()
-        print("Notifications enabled: \(notification.isEnabled)")
-
-        for module in notification.modules {
-            switch module.moduleType {
-            case .social: print("Social: \(module.isEnabled)")
-            case .chat:   print("Chat: \(module.isEnabled)")
-            case .videoStreaming: print("Live stream: \(module.isEnabled)")
-            @unknown default: break
-            }
-        }
-    } catch {
-        print("Failed to get settings: \(error)")
-    }
+    const settings = await UserRepository.getNotificationSettings();
+    console.log('Notifications enabled:', settings.isEnabled);
+    settings.modules.forEach(m => console.log(m.moduleType, m.isEnabled));
     ```
-
-    ```kotlin Android
-    AmityCoreClient.notifications().user()
-        .getSettings()
-        .doOnSuccess { settings ->
-            val isEnabled = settings.isEnabled()
-            settings.getModules()?.forEach { module ->
-                when (module) {
-                    is AmityUserNotificationModule.SOCIAL ->
-                        println("Social: ${module.isEnabled()}")
-                    is AmityUserNotificationModule.CHAT ->
-                        println("Chat: ${module.isEnabled()}")
-                    is AmityUserNotificationModule.VIDEO_STREAMING ->
-                        println("Live stream: ${module.isEnabled()}")
-                    else -> {}
-                }
-            }
-        }
-        .doOnError { /* Handle error */ }
-        .subscribe()
-    ```
-    </CodeGroup>
   </Step>
   <Step title="Update notification module settings">
     Enable or disable individual modules, or turn off all notifications at once.
 
-    <CodeGroup>
-    ```swift iOS
-    // Disable social notifications, keep chat enabled
-    do {
-        try await userNotificationManager.enable(for: [
-            AmityUserNotificationModule(moduleType: .social, isEnabled: false, roleFilter: nil),
-            AmityUserNotificationModule(moduleType: .chat,   isEnabled: true,  roleFilter: nil)
-        ])
-    } catch {
-        print("Update failed: \(error)")
-    }
+    ```typescript
+    import { UserRepository } from '@amityco/ts-sdk';
 
-    // Or disable everything at once
-    try await userNotificationManager.disableAllNotifications()
+    // Disable social, keep chat enabled
+    await UserRepository.updateNotificationSettings({
+      modules: [
+        { moduleType: 'social', isEnabled: false },
+        { moduleType: 'chat',   isEnabled: true },
+      ],
+    });
+
+    // Or disable all notifications at once
+    await UserRepository.updateNotificationSettings({ isEnabled: false });
     ```
-
-    ```kotlin Android
-    val socialModule = AmityUserNotificationModule.SOCIAL.disable()
-    val chatModule   = AmityUserNotificationModule.CHAT.enable()
-
-    AmityCoreClient.notifications()
-        .user()
-        .enable(moduleModifiers = listOf(socialModule, chatModule))
-        .doOnComplete { /* Updated */ }
-        .doOnError    { /* Handle error */ }
-        .subscribe()
-    ```
-    </CodeGroup>
 
     Full reference → [User Notification Settings](/social-plus-sdk/core-concepts/realtime-communication/push-notifications/settings/user-settings)
   </Step>
@@ -320,7 +246,11 @@ Let users control what they're notified about at a granular level. Settings are 
 
 ---
 
-## 🔗 Connect to Moderation & Analytics
+## Connect to Moderation & Analytics
+
+<Frame caption="Admin Console — Push notification settings for community and chat events">
+  <img src="/images/console-push-notifications-overview.png" alt="Admin Console — Push notification settings" />
+</Frame>
 
 <AccordionGroup>
   <Accordion title="Webhook: trigger notifications for moderation actions" icon="webhook">

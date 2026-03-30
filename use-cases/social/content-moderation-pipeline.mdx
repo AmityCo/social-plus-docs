@@ -22,6 +22,10 @@ await UserRepository.flagUser('userId', 'impersonation');
 Full walkthrough below ↓
 </Accordion>
 
+<Tip>
+**Platform note** — code samples below use TypeScript. Every method has an equivalent in the iOS (Swift), Android (Kotlin), and Flutter (Dart) SDKs — see the linked SDK reference in each step.
+</Tip>
+
 At scale, manual moderation doesn't work. This guide shows how all the moderation pieces connect — from users flagging content in the SDK, to AI auto-screening, to moderators reviewing in the Admin Console, to webhooks triggering automated responses.
 
 ```mermaid
@@ -148,7 +152,7 @@ Configure automatic content screening in the Admin Console. AI moderation runs b
 
 Flagged content and AI-held content lands in the Admin Console review queues. The **Posts and comments management** page shows every post with its AI moderation status inline — making it fast to spot, review, and action flagged content.
 
-<Frame>
+<Frame caption="Admin Console — Posts & comments management page with inline AI moderation status badges">
   <img src="/images/analytics-and-moderation/console/posts-page-overview.png" alt="Admin Console — Posts and comments management with AI Mod status badges" />
 </Frame>
 
@@ -182,6 +186,35 @@ Flagged content and AI-held content lands in the Admin Console review queues. Th
 ## Layer 4: Webhooks — Automation
 
 Receive real-time events when content is actioned to trigger downstream workflows.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SDK
+    participant Server as social.plus Server
+    participant PreHook as Your Pre-Hook
+    participant Webhook as Your Webhook
+
+    User->>SDK: createPost(text, images)
+    SDK->>Server: POST /posts
+    Server->>PreHook: pre-hook: post.didCreate
+    PreHook-->>Server: { allow: true } or { allow: false }
+    alt Allowed
+        Server-->>SDK: 201 Post created
+        SDK-->>User: Post appears in feed
+        Note over Server: AI moderation runs async
+        Server->>Webhook: post.created event
+        Webhook-->>Webhook: Log & index
+    else Rejected by pre-hook
+        Server-->>SDK: 403 Rejected
+        SDK-->>User: "Post could not be published"
+    end
+    Note over User: Later — another user flags the post
+    User->>SDK: flagPost(postId)
+    SDK->>Server: POST /posts/{id}/flag
+    Server->>Webhook: post.flagged event
+    Webhook-->>Webhook: Notify moderator
+```
 
 <Steps>
   <Step title="Register your webhook endpoint">
