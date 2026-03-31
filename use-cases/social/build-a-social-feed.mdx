@@ -10,6 +10,7 @@ import GetUserFeed from '/snippets/social/feeds/get-user-feed.mdx';
 <Accordion title="Speed run — just the code" icon="forward">
 ```typescript
 // 1. Query a user feed
+const repository = new AmityFeedRepository();
 const posts = await repository.getUserFeed(
   'user-123',
   ['user', 'community'],
@@ -19,13 +20,21 @@ const posts = await repository.getUserFeed(
   true
 );
 
-// 2. Query a community feed
-const communityPosts = await repository.getCommunityFeed('community-123');
+// 2. Query a community feed with live updates
+import { PostRepository, subscribeTopic, getCommunityTopic, SubscriptionLevels } from '@amityco/ts-sdk';
 
-// 3. Subscribe to real-time updates via Live Collections
-const unsubscribe = FeedRepository.observeUserFeed('user-123', ({ data }) => {
-  renderFeed(data); // auto-updates on new posts or deletions
-});
+const unsubscribe = PostRepository.getPosts(
+  { targetId: 'communityId', targetType: 'community', sortBy: 'lastCreated' },
+  ({ data: posts }) => {
+    if (posts) { /* render posts */ }
+  },
+);
+
+// 3. Subscribe to real-time events (required for server-side updates)
+subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST));
+
+// 4. Unsubscribe when done
+unsubscribe();
 ```
 Full walkthrough below ↓
 </Accordion>
@@ -60,23 +69,6 @@ graph TD
     class C,D,E,F process
     class G,I outcome
 ```
-
-## What You'll Build
-
-<CardGroup cols={4}>
-  <Card title="User Feed" icon="user">
-    A personalized timeline of the current user's posts and community posts they authored
-  </Card>
-  <Card title="Community Feed" icon="users">
-    All posts within a specific community, filtered by type and sorted by recency
-  </Card>
-  <Card title="Global Feed" icon="globe">
-    An aggregated feed across all communities and users with configurable ranking
-  </Card>
-  <Card title="Real-time Updates" icon="bolt">
-    Live Collections that automatically push new posts and deletions to your UI
-  </Card>
-</CardGroup>
 
 <Info>
 **Prerequisites**: SDK installed and authenticated → [SDK Setup](/social-plus-sdk/getting-started/overview). You'll need a valid `userId` for the current user and optionally a `communityId` for community-scoped feeds.
@@ -136,17 +128,25 @@ Full reference → [Get User Feed](/social-plus-sdk/social/feed/get-user-feed)
 
     Full reference → [Query Global Feed](/social-plus-sdk/social/feed/query-global-feed)
   </Step>
-  <Step title="Subscribe to real-time updates">
-    All feed queries return **Live Collections** that automatically push new posts and deletions to your UI. The `unsubscribe` function returned by each query controls the subscription lifecycle — call it when the view unmounts.
+  <Step title="Subscribe to real-time events">
+    Live Collections auto-update from **local cache** changes (e.g., the current user creates a post). To also receive **server-side** updates (new posts from other users, moderator deletions), you must explicitly subscribe to the relevant topic.
 
     ```typescript TypeScript
-    // Live Collection is already active from the getPosts() call above.
-    // New posts and deletions push to your callback automatically.
-    // Unsubscribe when the screen unmounts:
-    unsubscribe();
+    import { subscribeTopic, getCommunityTopic, getUserTopic, SubscriptionLevels } from '@amityco/ts-sdk';
+
+    // For a community feed — receive new/edited/deleted post events
+    const disposers: (() => void)[] = [];
+    disposers.push(subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST)));
+
+    // For a user feed — receive events for that user's posts
+    disposers.push(subscribeTopic(getUserTopic(user, SubscriptionLevels.POST)));
+
+    // Clean up when the view unmounts
+    disposers.forEach(fn => fn());
+    unsubscribe(); // also stop the Live Collection query
     ```
 
-    Full reference → [Live Objects & Collections](/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview)
+    Full reference → [Social Real-time Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events)
   </Step>
   <Step title="Implement pagination">
     Live Collections provide `onNextPage` and `hasNextPage` in the callback. Trigger load-more when the user scrolls near the bottom.
@@ -206,16 +206,30 @@ Full reference → [Get User Feed](/social-plus-sdk/social/feed/get-user-feed)
 **Fetching the entire feed at once** — Loading all posts without pagination causes memory spikes and slow initial renders. Always use `limit` and paginate with cursors.
 
 ```typescript
-// ❌ Bad — fetches everything
-const posts = await FeedRepository.getUserFeed('user-123');
+// ❌ Bad — fetches everything at once
+const allPosts = await repository.getUserFeed('user-123', ['user', 'community']);
 
-// ✅ Good — paginate
-const posts = await FeedRepository.getUserFeed('user-123', { limit: 20 });
+// ✅ Good — use Live Collection with pagination
+const unsubscribe = PostRepository.getPosts(
+  { targetId: 'communityId', targetType: 'community', sortBy: 'lastCreated' },
+  ({ data: posts, onNextPage, hasNextPage }) => {
+    renderPosts(posts);
+    // Load more only when the user scrolls down
+  },
+);
 ```
 </Warning>
 
 <Warning>
-**Ignoring real-time updates** — If you only fetch on mount, users miss new posts and deletions. Subscribe to Live Collections so the feed stays current without manual refreshes.
+**Skipping topic subscription** — Live Collections auto-update from local cache, but **not** from server-side events (other users' posts, moderator actions) unless you call `subscribeTopic()`. Without it your feed goes stale.
+
+```typescript
+// ❌ Bad — no topic subscription, misses server events
+const unsubscribe = PostRepository.getPosts(params, callback);
+
+// ✅ Good — subscribe to the community topic for real-time post events
+subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST));
+```
 </Warning>
 
 <Warning>
