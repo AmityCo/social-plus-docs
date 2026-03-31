@@ -1,0 +1,270 @@
+---
+title: "Stories & Ephemeral Content"
+description: "Add image and video stories with story rings, view counts, impression analytics, and per-user or per-community targeting."
+---
+
+<Info>**SDK v7.x** · Last verified March 2026 · iOS · Android · Web · Flutter</Info>
+
+<Accordion title="Speed run — just the code" icon="forward">
+```typescript
+// 1. Create an image story
+await StoryRepository.createImageStory({
+  targetType: 'community', targetId: 'communityId',
+  imageFileId: 'uploaded-image-id',
+});
+
+// 2. Create a video story
+await StoryRepository.createVideoStory({
+  targetType: 'community', targetId: 'communityId',
+  videoFileId: 'uploaded-video-id',
+});
+
+// 3. Query active stories
+StoryRepository.getActiveStories('communityId',
+  ({ data }) => { /* render story ring */ }
+);
+
+// 4. Mark as seen
+await StoryRepository.markStorySeen('storyId');
+```
+Full walkthrough below ↓
+</Accordion>
+
+<Tip>
+**Platform note** — code samples below use TypeScript. Every method has an equivalent in the iOS (Swift), Android (Kotlin), and Flutter (Dart) SDKs — see the linked SDK reference in each step.
+</Tip>
+
+Stories are 24-hour ephemeral content units that drive daily active usage. This guide covers creating image and video stories, rendering story rings, tracking views and impressions, and targeting stories to users or communities.
+
+```mermaid
+graph TD
+    A[User creates story] --> B{Story type}
+    B -->|Image| C[Upload image]
+    B -->|Video| D[Upload video]
+    C & D --> E[Story published]
+    E --> F{Target}
+    F -->|User profile| G[User story ring]
+    F -->|Community| H[Community story ring]
+    G & H --> I[Other users view story]
+    I --> J[Impression tracked]
+    J --> K[Story expires in 24h]
+
+    classDef action fill:#e1f5fe,stroke:#0288d1,color:#01579b
+    classDef decision fill:#fff8e1,stroke:#f9a825,color:#f57f17
+    classDef process fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c
+    classDef outcome fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+
+    class A action
+    class B,F decision
+    class C,D,E,G,H,I,J process
+    class K outcome
+```
+
+<Info>
+**Prerequisites**: SDK installed and authenticated. For video stories: video upload configured → [Video Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling). You'll need a `targetType` (`user` or `community`) and `targetId`.
+
+**Also recommended:** Complete [User Profiles & Social Graph](/use-cases/social/user-profiles-and-social-graph) — stories target user profiles and communities.
+</Info>
+
+<Note>
+**After completing this guide you'll have:**
+- Image and video story creation targeting communities and user profiles
+- Story ring display with viewed/unviewed state on avatars
+- Per-story view count and impression data accessible
+</Note>
+
+## Limits at a Glance
+
+| Property | Limit |
+|---|---|
+| Story lifespan | 24 hours (auto-deleted) |
+| Max image size | 1 GB |
+| Max video size | 1 GB |
+| Max video duration | 2 minutes |
+| Target types | `user` or `community` |
+| Hyperlinks per story | 1 |
+| Story types | `image` or `video` |
+
+import CreateImageStory from '/snippets/social/stories/create-image-story.mdx';
+
+---
+
+## Quick Start: Create an Image Story
+
+<CreateImageStory />
+
+---
+
+## Step-by-Step Implementation
+
+<Steps>
+  <Step title="Get story targets (story rings)">
+    Story targets are the entities (users or communities) that have active stories. Each target has a `hasUnseenStory` flag you can use to highlight the ring.
+
+    ```typescript TypeScript
+    import { StoryRepository } from '@amityco/ts-sdk';
+
+    const unsubscribe = StoryRepository.getStoriesByTargetIds(
+      {
+        targets: [
+          { targetType: 'community', targetId: 'communityId_1' },
+          { targetType: 'community', targetId: 'communityId_2' },
+        ],
+        options: { orderBy: 'asc' },
+      },
+      ({ data: storiesData, loading }) => {
+        if (storiesData) { /* render story rings */ }
+      },
+    );
+    ```
+
+    Full reference → [Get Story Targets](/social-plus-sdk/social/content-management/stories/retrieval/get-story-targets)
+  </Step>
+  <Step title="Get global story targets (explore/discover)">
+    For an explore page, query all communities with active stories.
+
+    ```typescript TypeScript
+    import { StoryRepository } from '@amityco/ts-sdk';
+
+    const unsubscribe = StoryRepository.getGlobalStoryTargets(
+      { seenState: Amity.StorySeenQuery.SMART, limit: 10 },
+      ({ data, onNextPage, hasNextPage }) => {
+        /* render explore story bar */
+      },
+    );
+    ```
+
+    Full reference → [Get Global Story Targets](/social-plus-sdk/social/content-management/stories/retrieval/get-global-story-targets)
+  </Step>
+  <Step title="Get stories for a target">
+    Query individual stories for a specific user or community to display in the full-screen viewer.
+
+    ```typescript TypeScript
+    const unsubscribe = StoryRepository.getActiveStoriesByTarget(
+      { targetType: 'community', targetId: 'communityId' },
+      ({ data: stories, loading }) => {
+        if (stories) { /* open full-screen story viewer */ }
+      },
+    );
+    ```
+
+    Full reference → [Get Stories](/social-plus-sdk/social/content-management/stories/retrieval/get-stories)
+  </Step>
+  <Step title="Track story impressions">
+    When a story is shown full-screen, call `markAsSeen()` to record the view impression. View analytics in **Admin Console → Social Management → Stories**.
+
+    ```typescript TypeScript
+    // Inside the story viewer callback:
+    storiesData.forEach(storyItem => {
+      if (storyItem) storyItem.analytics.markAsSeen();
+    });
+    ```
+
+    Full reference → [Story Impressions](/social-plus-sdk/social/content-management/stories/analytics/story-impressions)
+  </Step>
+  <Step title="Add reactions to stories">
+    Stories support the same reaction system as posts. Use `ReactionRepository` with `referenceType: 'story'` and the story ID.
+
+    ```typescript TypeScript
+    import { ReactionRepository } from '@amityco/ts-sdk';
+
+    // Add a reaction to a story
+    await ReactionRepository.addReaction('story', 'storyId', 'like');
+
+    // Remove a reaction
+    await ReactionRepository.removeReaction('story', 'storyId', 'like');
+    ```
+
+    Full reference → [Reactions](/social-plus-sdk/core-concepts/content-handling/reactions)
+  </Step>
+</Steps>
+
+---
+
+## Connect to Moderation & Analytics
+
+<AccordionGroup>
+  <Accordion title="Story impressions & reach" icon="chart-bar">
+    View total views, unique viewers, and per-story impression data in **Admin Console → Social Management → Stories**. Programmatic access via `story.impressions` in the SDK.
+
+    → [Story Impressions](/social-plus-sdk/social/content-management/stories/analytics/story-impressions)
+  </Accordion>
+  <Accordion title="Moderation: flagging stories" icon="flag">
+    Users can flag inappropriate stories. Flagged stories appear in the Admin Console for moderator action.
+
+    → [Content Flagging](/social-plus-sdk/social/content-management/moderation/content-flagging)
+  </Accordion>
+  <Accordion title="Community story settings" icon="gear">
+    Per-community story settings control whether comments are allowed on community stories. Configure in the Admin Console or via the SDK when creating/updating a community.
+
+    → [Create Community](/social-plus-sdk/social/communities-spaces/community-lifecycle/create-community)
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common Mistakes
+
+<Warning>
+**Uploading full-resolution images without compression** — Stories are short-lived content. Uploading 4K images wastes bandwidth and slows story rings. Compress to ~1080p before uploading.
+</Warning>
+
+<Warning>
+**Not checking story expiration client-side** — The API returns active stories, but network delays can cause a story to expire between fetch and render. Always check `story.expiresAt` before displaying.
+</Warning>
+
+<Warning>
+**Polling for new stories instead of subscribing** — Stories update frequently. Use Live Collections to observe story changes instead of polling on a timer, which wastes battery and bandwidth.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Story rings UX" icon="circle">
+    - Use a colored ring for unseen stories, a grey/transparent ring for fully seen stories
+    - Order story rings: currently-active user's story → friends → communities
+    - Show a "+" button on the current user's ring to open the creation flow
+    - Animate the ring on tap to give tactile feedback before opening the viewer
+  </Accordion>
+  <Accordion title="Story viewer" icon="eye">
+    - Auto-advance to the next story after ~5-7 seconds for images, or at video end
+    - Allow tap-left / tap-right to navigate between stories
+    - Show a progress bar across the top of the viewer for each story segment
+    - Pause auto-advance when the user long-presses (hold to read)
+  </Accordion>
+  <Accordion title="Performance" icon="gauge">
+    - Pre-fetch stories for the first 3 targets in the story ring so they open instantly
+    - Compress images to ≤1MB before upload — story images are full-screen and load time matters
+    - For video stories, start downloading the next story's video while the current one plays
+  </Accordion>
+</AccordionGroup>
+
+---
+
+<Tip>
+**Dive deeper**: [Stories API Reference](/social-plus-sdk/social/content-management/stories/overview) has full parameter tables, method signatures, and platform-specific details for every API used in this guide.
+</Tip>
+
+## Next Steps
+
+<Card
+  title="Your next step → Notifications & Engagement"
+  icon="arrow-right"
+  href="/use-cases/social/notifications-and-engagement"
+>
+  Stories are live — now set up push notifications so followers know when new stories are posted.
+</Card>
+
+Or explore related guides:
+
+<CardGroup cols={3}>
+  <Card title="Rich Content Creation" href="/use-cases/social/rich-content-creation" icon="pen-to-square">
+    Create posts alongside stories for a complete content loop
+  </Card>
+  <Card title="Notifications & Engagement" href="/use-cases/social/notifications-and-engagement" icon="bell">
+    Notify users when someone reacts to their story
+  </Card>
+  <Card title="Build a Social Feed" href="/use-cases/social/build-a-social-feed" icon="rectangle-list">
+    Combine a story bar at the top of the feed
+  </Card>
+</CardGroup>
