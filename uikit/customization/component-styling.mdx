@@ -492,6 +492,163 @@ Group related overrides together to prevent accidental shadowing by later blocks
 </Tip>
 
 
+## Custom Config File (iOS)
+
+<Info>
+<strong>iOS only.</strong> On Android, Flutter, and React Native, the config JSON is loaded differently per platform. On iOS, use <code>setConfigFile</code> to load a local JSON file from your app bundle at initialisation time.
+</Info>
+
+By default UIKit reads its bundled `config.json`. `setConfigFile` lets you supply a replacement from your own app bundle — useful for per-environment configs, white-label builds, or shipping your own defaults without modifying UIKit source.
+
+### Implementation
+
+<CodeGroup>
+```swift iOS
+import AmityUIKit4
+
+func setupUIKit() {
+    AmityUIKit4Manager.setup(client: AmityUIKitManager.client)
+
+    // Load a custom config.json from the app bundle
+    if let filePath = Bundle.main.path(forResource: "AmityUIKitConfig", ofType: "json") {
+        AmityUIKit4Manager.setConfigFile(filePath)
+    }
+}
+```
+</CodeGroup>
+
+<Tip>
+Call <code>setConfigFile</code> before presenting any UIKit view. Config values are read at render time — calling it after the first render may leave some components using the default config.
+</Tip>
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `filePath` | `String` | Absolute path to your `config.json` file. Use `Bundle.path(forResource:ofType:)` to resolve it safely. |
+
+<Warning>
+If the file path is invalid or the JSON is malformed, UIKit silently falls back to its bundled defaults. Validate your JSON locally before shipping.
+</Warning>
+
+## Custom Asset Bundle (iOS)
+
+<Info>
+<strong>iOS only.</strong> On Android, Flutter, and React Native, image overrides are handled through the <code>config.json</code> element keys (e.g. <code>"close_icon": "close.png"</code>).
+</Info>
+
+In addition to `config.json`, iOS lets you supply a custom `Bundle` containing your own images. UIKit uses it as a fallback — your assets are loaded only for image names that do **not** exist in UIKit's own bundle.
+
+<Warning>
+If you provide an image with the same name as a UIKit default asset, UIKit's copy wins. To replace an exposed icon, point its <code>config.json</code> key to a uniquely named file and provide that file in your custom bundle.
+</Warning>
+
+### How It Works
+
+<Steps>
+  <Step title="UIKit bundle checked first">
+    If the image name exists in UIKit's own bundle, that version is always used.
+  </Step>
+  <Step title="Custom bundle as fallback">
+    Only when the name is **not** found in UIKit's bundle does it fall through to your registered custom bundle.
+  </Step>
+  <Step title="Not found anywhere">
+    If the image is absent from both bundles, UIKit renders a placeholder rather than crashing.
+  </Step>
+</Steps>
+
+### Implementation
+
+<Tabs>
+  <Tab title="Basic Setup">
+    Call `setCustomAssetBundle` once during app initialisation, after `AmityUIKit4Manager.setup(client:)`.
+
+    <CodeGroup>
+    ```swift iOS
+    import AmityUIKit4
+
+    func setupUIKit() {
+        AmityUIKit4Manager.setup(client: AmityUIKitManager.client)
+
+        // Register your app's main bundle as the custom asset source
+        AmityUIKit4Manager.setCustomAssetBundle(bundle: .main)
+    }
+    ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="With Config File">
+    Combine bundle registration with a custom `config.json` so UIKit resolves icon keys to your asset names.
+
+    <CodeGroup>
+    ```swift iOS
+    func setupUIKit() {
+        AmityUIKit4Manager.setup(client: AmityUIKitManager.client)
+
+        if let filePath = Bundle.main.path(forResource: "AmityUIKitConfig", ofType: "json") {
+            AmityUIKit4Manager.setConfigFile(filePath)
+        }
+
+        AmityUIKit4Manager.setCustomAssetBundle(bundle: .main)
+    }
+    ```
+
+    ```json config.json
+    {
+      "customizations": {
+        "story_page/*/close_button": {
+          "close_icon": "my_close_icon.png"
+        }
+      }
+    }
+    ```
+    </CodeGroup>
+
+    <Note>
+    UIKit looks for <code>my_close_icon.png</code> in its own bundle first. Since that name does not exist there, it falls back to your custom bundle where the file is found.
+    </Note>
+  </Tab>
+  <Tab title="Dedicated Bundle">
+    For modular apps where assets live in a Swift Package or framework bundle, pass that bundle instead of `Bundle.main`.
+
+    <CodeGroup>
+    ```swift Swift Package
+    // Bundle.module is generated automatically by SwiftPM
+    AmityUIKit4Manager.setCustomAssetBundle(bundle: .module)
+    ```
+
+    ```swift Framework
+    // Assets are inside a custom framework
+    let assetBundle = Bundle(for: MyAssetProvider.self)
+    AmityUIKit4Manager.setCustomAssetBundle(bundle: assetBundle)
+    ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+<Tip>
+Register the bundle before any UIKit view is presented. Images are resolved at render time — late registration may cause some views to display the wrong asset.
+</Tip>
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Image is not showing">
+    Verify the asset is included in the bundle you registered:
+
+    ```swift
+    let url = AmityUIKit4Manager.customAssetBundle?
+        .url(forResource: "my_icon", withExtension: "png")
+    print(url ?? "not found in custom bundle")
+    ```
+
+    Check that the file name, extension, and capitalisation match exactly what is referenced in `config.json`.
+  </Accordion>
+  <Accordion title="UIKit is displaying its default icon instead of mine">
+    An asset with the same name in UIKit's bundle always wins. Rename your asset uniquely and update the matching `config.json` icon key to point to the new name.
+  </Accordion>
+  <Accordion title="Works in Debug but missing in Release">
+    Ensure the image file appears under **Copy Bundle Resources** in Build Phases. Loose PNG/PDF files (not inside an `.xcassets` catalog) must be added manually.
+  </Accordion>
+</AccordionGroup>
+
 ## Best Practices
 
 <CardGroup cols={2}>
