@@ -1,0 +1,374 @@
+---
+title: "iOS SDK v7 → v8 Migration Guide"
+description: "A complete guide to all breaking changes, renamed APIs, and new features when upgrading the iOS SDK from v7 to v8."
+---
+
+<Info>
+  **Xcode 26 compatibility is fully restored in v8.** The cache layer has been migrated from Realm to Core Data, eliminating all Realm dependencies and removing the need for per-Xcode-version SDK variants.
+</Info>
+
+## What Changed in v8
+
+SDK v8 is a major release focused on three goals:
+
+1. **Remove Realm** — the cache layer is now powered by Core Data, restoring Xcode forward compatibility and removing a heavyweight dependency from your project.
+2. **Modernise the API surface** — constructors, async methods, and model objects follow consistent, Swift-idiomatic patterns.
+3. **Expand product tagging and room capabilities** — new APIs for product tags, room management, and co-host permissions.
+
+---
+
+## Installation
+
+### SDK
+
+Realm and RealmSwift are no longer required as of v8.
+
+| Method | Steps |
+| :----- | :---- |
+| **Swift Package Manager** | No changes needed. Install using the v8 release tag. Realm is not installed by default. |
+| **Manual (xcframework)** | Remove `Realm.xcframework` and `RealmSwift.xcframework` from your project. Embed the new `AmitySDK.xcframework` as usual. |
+
+**Minimum iOS target:** 14.0
+
+### UIKit
+
+| Method | Steps |
+| :----- | :---- |
+| **Swift Package Manager** | No changes needed. Install using the v8 UIKit release tag. |
+| **Manual (xcframework)** | Remove `Realm.xcframework` and `RealmSwift.xcframework`. Embed the new `AmitySDK.xcframework` as usual. |
+| **Open Source** | `Realm.xcframework` and `RealmSwift.xcframework` are no longer installed through the `SharedFrameworks` Package.swift file. |
+
+**Minimum iOS target:** 14.0
+
+---
+
+## Global Breaking Changes
+
+These patterns apply across the **entire SDK**. Per-class sections below only document changes beyond these rules.
+
+### 1. Client removed from constructors
+
+All repositories and managers no longer accept an `AmityClient` parameter. The SDK manages the client internally.
+
+```swift
+// v7
+let repo = AmityMessageRepository(client: client)
+let mod  = AmityCommunityModeration(client: client, andCommunity: communityId)
+
+// v8
+let repo = AmityMessageRepository()
+let mod  = AmityCommunityModeration(communityId: communityId)
+```
+
+### 2. Mutating methods return `Void`
+
+Methods that previously returned `Bool` to indicate success now return `Void`. A successful call means success; any failure throws an error.
+
+```swift
+// v7
+let success = try await repo.softDeleteMessage(withId: id) // Bool
+
+// v8
+try await repo.softDeleteMessage(withId: id) // Void — throws on failure
+```
+
+### 3. Completion handlers replaced with async/await
+
+```swift
+// v7
+manager.enable(completion: { error in ... })
+let _ = manager.getSettings(completion: { settings in ... })
+
+// v8
+try await manager.enable()
+let settings = try await manager.getSettings()
+```
+
+### 4. Model objects are immutable value snapshots
+
+- `model` and `client` properties removed from all model classes.
+- All properties changed from `var` to `let`. Exceptions are noted per class.
+- Timestamp properties (`createdAt`, `updatedAt`, `editedAt`, etc.) changed from `Date` to `Date?`.
+
+### 5. `AmityCollection` observe callback signature changed
+
+`AmityCollectionChange` has been removed. The callback no longer delivers per-change index information.
+
+```swift
+// v7
+collection.observe { collection, change, error in ... }
+
+// v8
+collection.observe { collection, error in ... }
+```
+
+---
+
+## Renamed Classes
+
+| v7 | v8 |
+| :- | :- |
+| `AmityChannelQuery` | `AmityChannelQueryOptions` |
+| `AmityChannelUpdateBuilder` | `AmityChannelUpdateOptions` |
+| `AmityCommunityChannelBuilder` | `AmityCommunityChannelCreateOptions` |
+| `AmityConversationChannelBuilder` | `AmityConversationChannelCreateOptions` |
+| `AmityDefaultChannelBuilder` | `AmityDefaultChannelCreateOptions` |
+| `AmityLiveChannelBuilder` | `AmityLiveChannelCreateOptions` |
+| `AmityRawFile` | `AmityFile` |
+| `AmityUserUpdateBuilder` | `AmityUserUpdateOptions` |
+
+---
+
+## New Classes
+
+| Class | Description |
+| :---- | :---------- |
+| `AmityFile` | Replaces `AmityRawFile`. Adds `fileUrl`, `altText`, `feedType`, `status`, `videoUrl`, `attributes`. |
+| `AmityMetadataMapper` | Replaces the deprecated `AmityMentionMapper`. Supports both mentions and hashtags. |
+| `AmityTextProductTag` | A product tag embedded in post text: `productId`, `product`, `index`, `length`. |
+| `AmityMediaProductTag` | A product tag attached to a media item: `productId`, `product`. |
+| `AmityAttachmentProductTags` | Container for per-attachment product tags when creating or editing posts. |
+| `AmityProduct` | New product model: `productId`, `productName`, `productUrl`, `status`, `price`, `currency`, `thumbnailUrl`, etc. |
+| `AmityProductCatalogueSetting` | Product catalogue setting from the server: `enabled: Bool`. |
+| `AmityRoomResolution` | Stream resolution info for a room: `aspectRatio`, `width`, `height`. |
+
+---
+
+## Removed APIs
+
+| Class | Removed | Replacement |
+| :---- | :------ | :---------- |
+| `AmityCollection` | `count()` | `snapshots.count` |
+| `AmityCollection` | `object(at:)` | `snapshots[index]` |
+| `AmityCollection` | `allObjects()` | `snapshots` |
+| `AmityChannel` | `getPreviewMembers()` | `previewMembers` property |
+| `AmityCollectionChange` | Entire class | — |
+| `AmityAdImage` | Entire class | — |
+| `AmityUserRepository` | `userRelationship` property | Instantiate `AmityUserRelationship()` directly |
+
+---
+
+## Per-Class Changes
+
+Only changes **beyond** the global breaking changes are listed here.
+
+<AccordionGroup>
+
+  <Accordion title="AmityChannel">
+    | Change | Details |
+    | :----- | :------ |
+    | `currentMembership` renamed | → `currentMember: AmityChannelMember?` |
+    | `previewMembers` added | `[AmityChannelMember]` — replaces the removed `getPreviewMembers()` method |
+    | `attachedToPost`, `attachedToStream` removed | No replacement |
+    | `attachedToRoom` | Now externally read-only (`public private(set) var`) |
+  </Accordion>
+
+  <Accordion title="AmityChannelMembership">
+    Init signature changed: `init(channelId: String)` — no client parameter.
+  </Accordion>
+
+  <Accordion title="AmityChannelModeration">
+    Init signature changed: `init(channelId: String)` — no client parameter.
+  </Accordion>
+
+  <Accordion title="AmityChannelNotificationsManager">
+    - Init signature changed: `init(channelId: String)`
+    - `getSettings()` return type is now `AmityChannelNotificationSettings`
+  </Accordion>
+
+  <Accordion title="AmityChannelQueryOptions (was AmityChannelQuery)">
+    All options must now be provided at initialisation rather than mutated after the fact.
+
+    ```swift
+    // v7 — mutate after init
+    let query = AmityChannelQuery()
+    query.types = [...]
+
+    // v8 — configure at init
+    let options = AmityChannelQueryOptions(
+        types: [...],
+        filter: .all,
+        includingTags: [],
+        excludingTags: [],
+        includeDeleted: false
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="AmityChannelRepository">
+    | Method | Change |
+    | :----- | :----- |
+    | `getChannels(with:)` | Parameter type: `AmityChannelQuery` → `AmityChannelQueryOptions` |
+    | `createChannel(with:)` | Parameter type: `AmityChannelBuilder` → `AmityChannelCreateOptions` |
+    | `editChannel(with:)` | Parameter type: `AmityChannelUpdateBuilder` → `AmityChannelUpdateOptions` |
+  </Accordion>
+
+  <Accordion title="AmityClient">
+    `editUser(_:)` parameter type changed: `AmityUserUpdateBuilder` → `AmityUserUpdateOptions`
+  </Accordion>
+
+  <Accordion title="AmityComment">
+    - `links: [AmityLink]` added
+    - `isInvalidated` removed
+  </Accordion>
+
+  <Accordion title="AmityCommentCreateOptions">
+    `links: [AmityLink]?` added.
+  </Accordion>
+
+  <Accordion title="AmityCommentQueryOptions">
+    `pageSize: Int = 20` added.
+  </Accordion>
+
+  <Accordion title="AmityCommentUpdateOptions">
+    `links: [AmityLink]?` added.
+  </Accordion>
+
+  <Accordion title="AmityCommunity">
+    - `user: AmityUser?` added (the community creator/owner)
+    - `event` property removed
+  </Accordion>
+
+  <Accordion title="AmityCommunityMembership">
+    - Init signature changed: `init(communityId: String)`
+    - `getMembers(...)` and `searchMembers(...)` gain `excludingRoles: [String] = []`
+  </Accordion>
+
+  <Accordion title="AmityCommunityModeration">
+    Init signature changed: `init(communityId: String)` — no client parameter.
+  </Accordion>
+
+  <Accordion title="AmityCommunityNotificationsManager">
+    Init signature changed: `init(communityId: String)`
+
+    | v7 | v8 |
+    | :- | :- |
+    | `enable(for events:completion:)` | `enable(events:) async throws` |
+    | `disable(completion:)` | `disable() async throws` |
+    | `getSettingsWithCompletion(_:)` | `getSettings() async throws -> AmityCommunityNotificationSettings` |
+  </Accordion>
+
+  <Accordion title="AmityCommunityRepository">
+    | v7 | v8 |
+    | :- | :- |
+    | `deleteCommunity(withId:completion:)` | `deleteCommunity(withId:) async throws` |
+    | `joinCommunity(withId:) async throws -> Bool` | No longer deprecated. Returns `Void`. |
+    | `leaveCommunity(withId:) async throws -> Bool` | Returns `Void`. |
+  </Accordion>
+
+  <Accordion title="AmityFeedRepository">
+    | v7 | v8 | Notes |
+    | :- | :- | :---- |
+    | `getMyFeedSorted(feedSources:dataTypes:by sortBy:...)` | `getMyFeed(feedSources:dataTypes:sortBy:...)` | Renamed; `by sortBy:` label removed |
+    | `getUserFeed(...)` | `getUserFeed(...)` | Added `untilAt: Date?` |
+    | `getCommunityFeed(...)` | `getCommunityFeed(...)` | Added `untilAt: Date?` |
+  </Accordion>
+
+  <Accordion title="AmityFileRepository">
+    `getFile(fileId:)` return type changed: `AmityRawFile` → `AmityFile`
+  </Accordion>
+
+  <Accordion title="AmityImageStoryCreateOptions">
+    **Typo fixed:** `tartgetId` → `targetId`. Update all call sites.
+  </Accordion>
+
+  <Accordion title="AmityLiveChannelCreateOptions (was AmityLiveChannelBuilder)">
+    `setVideoStreamId(_:)` is deprecated. Use `setRoomId(_:)` instead.
+  </Accordion>
+
+  <Accordion title="AmityMentionMapper (deprecated)">
+    Still available but deprecated. Migrate to `AmityMetadataMapper`.
+
+    | Deprecated | Replacement |
+    | :--------- | :---------- |
+    | `AmityMentionMapper.mentions(fromMetadata:)` | `AmityMetadataMapper.mentions(fromMetadata:)` |
+    | `AmityMentionMapper.metadata(from:)` | `AmityMetadataMapper.metadata(mentions:hashtags:)` |
+
+    `AmityMetadataMapper` also adds `hashtags(fromMetadata:) -> [AmityHashtag]`.
+  </Accordion>
+
+  <Accordion title="AmityMessageRepository">
+    | v7 | v8 |
+    | :- | :- |
+    | `deleteFailedMessages(completion:)` | `deleteFailedMessages() async throws` |
+    | `setTags(messageId:tags:completion:)` | `setTags(messageId:tags:) async throws` |
+    | `flagMessage(withId:) async throws -> Bool` | No longer deprecated. Returns `Void`. |
+  </Accordion>
+
+  <Accordion title="AmityPost">
+    - `postData` type renamed: `AmityPost.Data` → `AmityPost.PostData`
+    - `pinnedProductId: String?` added
+    - `eventId: String?` added
+    - `isInvalidated` removed
+    - Remaining mutable properties: `postData`, `analytics`, `syncState`, `mentionees`, `links`
+  </Accordion>
+
+  <Accordion title="AmityPostQueryOptions">
+    `untilAt: Date?` added.
+  </Accordion>
+
+  <Accordion title="AmityPostRepository">
+    All `createXxxPost(...)` and `editPost(...)` methods gain:
+    - `productTags: [AmityTextProductTag]?`
+    - `attachmentProductTags: AmityAttachmentProductTags?` (where applicable)
+
+    Additional changes:
+
+    | Change | Details |
+    | :----- | :------ |
+    | `flagPost(withId:)` deprecated variant removed | Use `flagPost(withId:reason:) async throws` |
+    | `createRoomPost(...)` added | Dedicated method for room/co-host posts using `AmityRoomPostBuilder` |
+    | `pinProduct(postId:productId:) async throws -> AmityPost` added | Pin a product to a post |
+    | `unpinProduct(postId:) async throws -> AmityPost` added | Remove the pinned product from a post |
+    | `updateProductTags(postId:productTags:) async throws -> AmityPost` added | Update media product tags on a post |
+  </Accordion>
+
+  <Accordion title="AmityRoom">
+    - `thumbnail: AmityImageData?` added
+    - `liveThumbnailUrl: String?` added
+    - `liveResolution: AmityRoomResolution?` added
+    - `recordedResolution: AmityRoomResolution?` added
+    - `isInvalidated` removed
+    - `channel` and `post` are now externally read-only (`public private(set) var`)
+  </Accordion>
+
+  <Accordion title="AmityRoomParticipant">
+    `canManageProductTags: Bool` added.
+  </Accordion>
+
+  <Accordion title="AmityRoomPresenceRepository">
+    Init signature changed: `init(roomId: String)` — no client parameter.
+  </Accordion>
+
+  <Accordion title="AmityRoomRepository">
+    New method: `updateCohostPermissions(roomId:cohostId:canManageProductTags:) async throws -> AmityRoom`
+  </Accordion>
+
+  <Accordion title="AmityStreamRepository">
+    `disposeStream(withId:completion:)` → `disposeStream(withId:) async throws -> AmityStream`
+  </Accordion>
+
+  <Accordion title="AmitySubChannelQueryOptions">
+    Init gains new parameters: `init(channelId:isDeleted:excludeDefaultSubChannel:)` — both new parameters default to `false`.
+  </Accordion>
+
+  <Accordion title="AmityUser">
+    - `isBanned` removed
+    - Added: `internalId: String`, `permissions: [String]`, `path: String`, `blockedAt: Date?`, `avatar: AmityImageData?`
+  </Accordion>
+
+  <Accordion title="AmityUserNotificationsManager">
+    - `enable(for modules:)` returns `Void`
+    - `disableAllNotifications()` returns `Void`
+  </Accordion>
+
+  <Accordion title="AmityUserRelationship">
+    - `follow(withUserId:)`, `unfollow(withUserId:)`, `acceptMyFollower(withUserId:)`, `declineMyFollower(withUserId:)` — return type changed from `(Bool, AmityFollowResponse)` to `AmityFollowResponse`
+    - `blockUser(userId:)` and `unblockUser(userId:)` are now `@MainActor`
+  </Accordion>
+
+  <Accordion title="AmityVideoStoryCreateOptions">
+    **Typo fixed:** `tartgetId` → `targetId`. Update all call sites.
+  </Accordion>
+
+</AccordionGroup>
