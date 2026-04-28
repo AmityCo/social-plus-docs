@@ -1,10 +1,11 @@
 ---
-name: social.plus Chat
+name: chat
 description: Use when building chat features — channels, direct messages, group conversations, real-time messaging, unread counts, read receipts, or moderation in chat contexts.
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Chat
 ---
 
 # social.plus Chat Skill

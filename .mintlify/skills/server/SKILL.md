@@ -1,10 +1,11 @@
 ---
-name: social.plus Server APIs
+name: server
 description: Use when calling social.plus REST APIs from a backend, generating user auth tokens, setting up webhook endpoints to receive events, or implementing pre-hook handlers to intercept and validate operations before they complete.
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Server APIs
 ---
 
 # social.plus Server APIs Skill

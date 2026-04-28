@@ -1,10 +1,11 @@
 ---
-name: social.plus Video
+name: video
 description: Use when building live video features — room creation, broadcasting, co-hosting, viewer chat, recorded playback, or video analytics.
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Video
 ---
 
 # social.plus Video Skill

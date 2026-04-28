@@ -1,11 +1,12 @@
 ---
-name: social.plus UIKit
+name: uikit
 description: Use when integrating pre-built social.plus UI components — chat lists, message composers, post feeds, user profiles — or customizing their appearance and behavior.
 license: MIT
 compatibility: iOS (Swift/SwiftUI), Android (Jetpack Compose), React Native, Flutter
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus UIKit
 ---
 
 # social.plus UIKit Skill

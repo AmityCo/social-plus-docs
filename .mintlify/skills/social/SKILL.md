@@ -1,10 +1,11 @@
 ---
-name: social.plus Social
+name: social
 description: Use when building social features — user profiles, communities, posts, comments, reactions, feeds, stories, follow/unfollow, or content moderation.
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Social
 ---
 
 # social.plus Social Skill
