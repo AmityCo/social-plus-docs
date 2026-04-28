@@ -32,7 +32,7 @@ Reach for this skill when implementing:
 
 **Feed** — an ordered, paginated collection of posts. Types: global feed, community feed, user feed. All support Live Collections for real-time updates.
 
-**Story** — ephemeral content that expires after 24 hours. Supports reactions and impression tracking. Not part of the post feed.
+**Story** — ephemeral content with a configurable expiry timestamp (`expiresAt`). Supports reactions and impression tracking. Not part of the post feed.
 
 **Reaction** — a named emoji-like response (e.g., `"like"`, `"love"`). Can be added to posts, comments, or stories. Reaction names are configurable in the Admin Console.
 
