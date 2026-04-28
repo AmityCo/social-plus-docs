@@ -1,10 +1,11 @@
 ---
-name: social.plus Admin Console & Portal
+name: admin
 description: Use when configuring a social.plus application — setting up moderation rules, managing users and communities, reading analytics, configuring webhooks, or administering the platform through the Admin Console or Portal dashboard (no code required).
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Admin Console & Portal
 ---
 
 # social.plus Admin Console & Portal Skill

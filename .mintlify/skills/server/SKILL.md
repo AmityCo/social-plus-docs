@@ -1,10 +1,11 @@
 ---
-name: social.plus Server APIs
+name: server
 description: Use when calling social.plus REST APIs from a backend, generating user auth tokens, setting up webhook endpoints to receive events, or implementing pre-hook handlers to intercept and validate operations before they complete.
 license: MIT
 metadata:
   author: social.plus
   version: "1.0"
+  display-name: social.plus Server APIs
 ---
 
 # social.plus Server APIs Skill
@@ -26,9 +27,9 @@ Reach for this skill when implementing:
 
 **Auth Token** — a short-lived JWT your backend generates to authenticate SDK users with social.plus. Required in production (development mode with API key only is not production-safe). Your backend calls the social.plus auth token endpoint with the user's ID; the JWT goes to the client app for SDK login.
 
-**Webhook** — an HTTP POST social.plus sends to your endpoint after an operation completes (e.g., message sent, post created, user flagged). Your endpoint must respond within **3 seconds** or the delivery is marked failed. Always verify the signature header to prevent spoofing.
+**Webhook** — an HTTP POST social.plus sends to your endpoint after an operation completes (e.g., message sent, post created, user flagged). Your endpoint must respond within **1.5 seconds** or the delivery is marked failed. Always verify the signature header to prevent spoofing.
 
-**Pre-hook** — like a webhook but synchronous and blocking. social.plus calls your endpoint *before* the operation completes and waits for your response. Return `{"action": "allow"}` to proceed or `{"action": "deny", "reason": "..."}` to block. Use for custom moderation, business rules enforcement, or compliance checks. Test thoroughly — a slow or broken pre-hook blocks real user operations.
+**Pre-hook** — like a webhook but synchronous and blocking. social.plus calls your endpoint *before* the operation completes and waits for your response. Return `{"action": "allow"}` to proceed or `{"action": "deny", "message": "..."}` to block. Use for custom moderation, business rules enforcement, or compliance checks. Test thoroughly — a slow or broken pre-hook blocks real user operations.
 
 **Signature verification** — webhooks include an `x-amity-signature` header (HMAC-SHA256). Always verify it against your webhook secret before processing the payload.
 
