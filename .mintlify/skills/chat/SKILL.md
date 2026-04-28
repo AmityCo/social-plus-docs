@@ -23,9 +23,9 @@ Reach for this skill when implementing:
 ## Core Concepts
 
 **Channel** — the container for messages. Three types:
-- `community` — tied to a Community; members follow community membership
-- `live` — tied to a broadcast Room; auto-created with the Room
-- `conversation` — direct message or group chat; created explicitly with member list
+- `community` — open group channel for discussions, team collaboration, and public forums; discoverable by all users
+- `live` — event-focused channel for special events and temporary discussions; exclusive membership
+- `conversation` — direct message or group chat; created explicitly with member list; SDK deduplicates by membership
 
 **Message** — content inside a channel. Built-in types: text, image, file, audio, video, custom. Custom type lets you define any schema.
 
