@@ -26,7 +26,7 @@ Reach for this skill when:
 
 **UIKit vs SDK** — UIKit wraps the SDK into ready-made UI components. You style and configure them; the SDK handles all the data fetching, real-time updates, and business logic. Use UIKit for faster integration; use the SDK directly when you need full UI control.
 
-**ThemeConfig** — the global theme object. Set colors, typography, icons, and spacing once and all components inherit the values. Platform-specific: `AmityUIKitManagerOptions` (iOS/Android), `AmityUIKitConfig` (React Native), `AmityCoreClientOption` (Flutter).
+**Theme & Config** — component appearance and behavior is customized via `AmityUIKitConfig.json` (a JSON file loaded at startup on all platforms). This controls which features/actions are enabled or disabled per component. For color tokens and brand theming, use Dynamic UI. Flutter additionally uses `AmityCoreClientOption` for SDK init options.
 
 **Component override** — inject your own widget at specific slots inside a UIKit component (e.g., replace the default message bubble with your own). Each platform uses a different override mechanism — search docs for your platform.
 
@@ -44,7 +44,7 @@ Use the `search_social_plus` MCP tool with these queries:
 | Wire authentication | `"UIKit authentication setup"` |
 | Chat components | `"UIKit chat components MessageListComponent"` |
 | Social/post components | `"UIKit social components PostListComponent"` |
-| Theming | `"UIKit theme customization ThemeConfig"` |
+| Theming | `"UIKit theme customization AmityUIKitConfig"` |
 | Override a component | `"UIKit component override custom"` |
 | Dynamic UI | `"UIKit dynamic UI server-driven"` |
 | iOS-specific | `"UIKit iOS Swift SwiftUI"` |
