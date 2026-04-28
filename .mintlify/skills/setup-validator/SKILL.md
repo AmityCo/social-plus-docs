@@ -44,14 +44,14 @@ Fetch the canonical initialization code for the developer's platform:
 | Auth (all platforms) | `https://learn.social.plus/social-plus-sdk/getting-started/authentication` |
 
 **Shared checklist:**
-- API key and App ID are both present and sourced from the social.plus console (not placeholder values)
+- API key is present and sourced from the social.plus console (not placeholder values)
 - Region/endpoint is set explicitly — US, EU, or SG. Default is US; wrong region = silent auth failure
 - `setup()` is called before any other SDK method
-- `register()` / auth is called after user login, not at app start
+- `login()` / auth is called after user login, not at app start
 
 **Common mistakes not documented — check these explicitly:**
 - `setup()` called inside a component that can remount → duplicate init + session conflict
-- `register()` not awaited before subscribing to live collections → race condition
+- `login()` not awaited before subscribing to live collections → race condition
 - API key used in the App ID field or vice versa (they are two separate values)
 - Android: `setup()` in `Activity.onCreate()` instead of `Application.onCreate()` → re-inits on every screen rotation
 

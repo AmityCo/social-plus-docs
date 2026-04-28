@@ -72,3 +72,5 @@ Reach for this skill when a developer:
 - Android quick start: https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/android-quick-start
 - iOS quick start: https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/ios-quick-start
 - UIKit getting started: https://learn.social.plus/uikit/getting-started/overview
+- Logging / debug output: https://learn.social.plus/social-plus-sdk/core-concepts/foundation/logging
+- Technical FAQ: https://learn.social.plus/social-plus-sdk/technical-faq
