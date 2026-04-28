@@ -21,31 +21,78 @@ This is Phase 1 of a hybrid design:
 **Persona served:** First-time integrator, any SDK/platform, asking "is my setup correct?" or "why isn't the SDK initializing?"
 
 **Workflow the AI executes:**
-1. Ask which SDK (chat, social, video, UIKit) and which platform (iOS, Android, Web, Flutter, React Native, TypeScript)
-2. Ask for the initialization code snippet
-3. Validate against correct patterns retrieved via `search_social_plus`
-4. Run the following checklist:
-   - API key format (must start with correct prefix, not a test/development key in production)
-   - App ID source (must come from social.plus console, not hardcoded placeholder)
-   - Region/endpoint (US vs EU — wrong region = silent auth failure)
-   - SDK initialization lifecycle placement (platform-specific correct positions listed below)
-   - Required platform permissions present (Android network permission, iOS App Transport Security)
-5. Flag common mistakes per platform
-6. If `validate_api_key` MCP tool is available, call it to confirm credentials are live
+1. Ask which product: **SDK** (chat, social, video — building your own UI) or **UIKit** (pre-built UI components)
+2. Ask which platform (iOS, Android, Web, Flutter, React Native, TypeScript)
+3. Ask for the initialization code snippet
+4. Branch into the correct validation path (see below)
+5. Run the shared checklist items (credentials, region, lifecycle)
+6. Flag common mistakes specific to the chosen product
+7. If `validate_api_key` MCP tool is available, call it to confirm credentials are live
 
-**Platform-specific initialization placement:**
-- **iOS** — `AppDelegate.application(_:didFinishLaunchingWithOptions:)`
-- **Android** — `Application.onCreate()` (not `Activity.onCreate()`)
-- **Web/TypeScript** — after DOM ready, before any component mounts
-- **Flutter** — after `WidgetsFlutterBinding.ensureInitialized()` in `main()`
-- **React Native** — root index file, before navigation stack renders
+---
 
-**Common mistakes covered:**
-- Using development API key in production (or vice versa)
-- Initializing inside a component that remounts (causes duplicate initialization)
-- Missing App ID / wrong App ID (copy-paste error from docs example)
-- Wrong region endpoint (EU developers using default US endpoint)
-- Not awaiting async initialization before calling SDK methods
+#### SDK Setup Path (Chat / Social / Video — custom UI)
+
+**Entry point class:** `AmityClient` (or platform-equivalent)
+**Key calls:** `AmityClient.setup(apiKey:, endpoint:)` then `AmityClient.shared.register(userId:, displayName:, authToken:)`
+
+**Checklist:**
+- API key format and source (from social.plus console, not a placeholder)
+- App ID is separate from API key — verify both are present
+- Endpoint/region matches the console (US, EU, SG — wrong region = silent auth failure)
+- `setup()` is called before any other SDK method
+- `register()` completes before accessing user-specific features (it is async)
+- Live collections (message lists, channel lists) have `.dispose()` called on unmount
+
+**Platform-specific placement for `setup()` + `register()`:**
+- **iOS** — `AppDelegate.application(_:didFinishLaunchingWithOptions:)`, then register after login
+- **Android** — `Application.onCreate()` for `setup()`, NOT `Activity.onCreate()` (causes re-init on rotation)
+- **Web/TypeScript** — before any component that calls SDK methods mounts; await `register()`
+- **Flutter** — after `WidgetsFlutterBinding.ensureInitialized()` in `main()`; `setup()` then `register()` in app init
+- **React Native** — root `index.js` or app entry; not inside a component lifecycle method
+
+**Common SDK mistakes:**
+- Calling `setup()` inside a component that remounts (causes duplicate initialization + session conflict)
+- Not awaiting `register()` before subscribing to live collections (race condition)
+- Missing App ID — using API key in the App ID field or vice versa
+- Wrong region endpoint (EU developers default-routing to US endpoint silently)
+
+---
+
+#### UIKit Setup Path (pre-built components)
+
+**Entry point class:** `AmityUIKitManager` — **NOT** `AmityClient` directly
+**Key calls:** `AmityUIKitManager.setup(apiKey:, endpoint:)` then `AmityUIKitManager.registerDevice(withUserId:, displayName:)`
+
+**Critical difference from SDK path:** UIKit manages the underlying `AmityClient` internally. You must NOT call both `AmityUIKitManager.setup()` AND `AmityClient.setup()` — double initialization causes a conflict. If the developer's code shows both, flag this immediately.
+
+**Checklist:**
+- Only `AmityUIKitManager` is used — no direct `AmityClient.setup()` call
+- API key and endpoint/region are passed to `AmityUIKitManager.setup()`
+- `registerDevice()` is called after login, not at app start (device binds permanently to userId until explicitly unregistered)
+- `unregisterDevice()` is called on logout — skipping this leaves the device bound to the old user
+- User switching: must call `unregisterDevice()` first, then `registerDevice()` with the new user
+- Theme/appearance config is separate from auth init and can be called any time before presenting UI
+
+**Platform-specific UIKit placement:**
+- **iOS** — `AppDelegate`/`SceneDelegate`; `setup()` at app start, `registerDevice()` at login
+- **Android** — `Application.onCreate()` for `setup()`; `registerDevice()` in login flow
+- **Web** — wrap app with UIKit provider at root; `setup()` before provider mounts
+- **Flutter** — `setup()` in `main()` after `ensureInitialized()`; `registerDevice()` in auth state change
+- **React Native** — root entry for `setup()`; `registerDevice()` in auth flow
+
+**Common UIKit mistakes:**
+- Calling both `AmityUIKitManager.setup()` AND `AmityClient.setup()` (double init = conflict)
+- Not calling `unregisterDevice()` on logout (old user session persists on device)
+- Switching users without unregistering first (new user gets old user's notifications)
+- Placing `setup()` inside a component render cycle (reinitializes on every render)
+- Forgetting `WidgetsFlutterBinding.ensureInitialized()` before `setup()` in Flutter
+
+---
+
+**MCP search guidance for setup-validator:**
+- SDK path: `search_social_plus("AmityClient setup initialization")`, `search_social_plus("register user authentication")`
+- UIKit path: `search_social_plus("AmityUIKitManager setup")`, `search_social_plus("UIKit registerDevice authentication")`, `search_social_plus("UIKit installation <platform>")`
 
 ---
 
