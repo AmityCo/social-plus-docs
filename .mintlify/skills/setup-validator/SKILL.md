@@ -8,7 +8,7 @@ metadata:
   display-name: social.plus Setup Validator
 ---
 
-# social.plus Setup Validator
+# social.plus Setup Validator Skill
 
 ## When to Use
 
@@ -40,6 +40,7 @@ Fetch the canonical initialization code for the developer's platform:
 | Android | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/android-quick-start` |
 | Flutter | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/flutter-quick-start` |
 | Web / TypeScript | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/web/web-quick-start` |
+| React Native | uses TypeScript SDK — see Web / TypeScript quick start above |
 | Auth (all platforms) | `https://learn.social.plus/social-plus-sdk/getting-started/authentication` |
 
 **Shared checklist:**
@@ -77,3 +78,11 @@ Fetch the canonical setup pages:
 - User switching without `unregisterDevice()` first → new user inherits old user's notifications
 - `setup()` placed inside a component render cycle → reinitializes on every render
 - Flutter: missing `WidgetsFlutterBinding.ensureInitialized()` before `setup()`
+
+## Key Documentation
+
+- Full page index: https://learn.social.plus/llms.txt
+- SDK getting started overview: https://learn.social.plus/social-plus-sdk/getting-started/overview
+- Authentication (all platforms): https://learn.social.plus/social-plus-sdk/getting-started/authentication
+- UIKit getting started: https://learn.social.plus/uikit/getting-started/overview
+- UIKit installation: https://learn.social.plus/uikit/getting-started/installation

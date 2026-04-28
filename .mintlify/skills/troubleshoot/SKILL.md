@@ -8,7 +8,7 @@ metadata:
   display-name: social.plus Troubleshooter
 ---
 
-# social.plus Troubleshooter
+# social.plus Troubleshooter Skill
 
 ## When to Use
 
@@ -55,11 +55,20 @@ Reach for this skill when a developer:
 - SDK method called before `setup()` completed → check initialization order; `setup()` must finish before any API call
 - SDK version incompatibility with the platform or OS version → check compatibility matrix
 - Threading violation: SDK callbacks may be on a background thread; UI updates must run on the main thread
-- Search: `search_social_plus("compatibility requirements <platform>")`, `search_social_plus("initialization order")`
+- Search: `search_social_plus("compatibility requirements iOS")` (substitute the developer's actual platform)
+- Search: `search_social_plus("initialization order")`
 
 ## Branch: Unexpected Behavior (wrong data, missing events, feature not responding)
 
 - Live collection disposed too early → real-time updates silently stop; verify `.dispose()` timing in lifecycle
 - Query filters excluding expected data by default (e.g., soft-deleted content is hidden unless filter removed)
 - Operation requires moderator or admin role — verify the current user's role in the social.plus console
-- Search: `search_social_plus("<feature name> not working")`, `search_social_plus("live collection dispose")`
+- Search: `search_social_plus("live collection dispose")` (substitute the actual feature name when searching for unexpected behavior)
+
+## Key Documentation
+
+- Full page index: https://learn.social.plus/llms.txt
+- Authentication: https://learn.social.plus/social-plus-sdk/getting-started/authentication
+- Android quick start: https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/android-quick-start
+- iOS quick start: https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/ios-quick-start
+- UIKit getting started: https://learn.social.plus/uikit/getting-started/overview
