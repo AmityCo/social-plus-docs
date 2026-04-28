@@ -64,3 +64,40 @@ Then run `go run ./cmd/main.go` to regenerate.
 1. Reads `llmstxt/llms-config.yml` for the curated page list
 2. Parses each `.mdx` file — strips JSX components, imports, and frontmatter
 3. Assembles `llms.txt` (index) and `llms-full.txt` (full content) per the llmstxt.org spec
+## AI Skills (MCP)
+
+social.plus exposes a [Mintlify MCP server](https://mintlify.com/docs/ai/model-context-protocol) at `https://learn.social.plus/mcp`, giving AI coding tools (Claude Code, Cursor, Windsurf, VS Code + Continue) direct access to the documentation.
+
+### Per-Product Skill Files
+
+Four lightweight skill files live under `.mintlify/skills/`. Each one orients an AI agent to a specific product area, then hands off to the MCP search tool and `llms.txt` for deep content:
+
+| Skill | Path | Purpose |
+|-------|------|---------|
+| Chat | `.mintlify/skills/chat/SKILL.md` | Channels, messages, real-time, unread |
+| Social | `.mintlify/skills/social/SKILL.md` | Users, communities, posts, feeds, stories |
+| Video | `.mintlify/skills/video/SKILL.md` | Rooms, broadcasting, co-hosting, playback |
+| UIKit | `.mintlify/skills/uikit/SKILL.md` | Pre-built components, theming, customization |
+
+Mintlify exposes these via the discovery endpoint at `/.well-known/agent-skills/index.json`.
+
+### Design Principle
+
+The skill files intentionally contain **no API signatures** — those change and live in the docs. Skills describe *what the product does and when to use which API*, then direct the AI to the MCP search tool for current code examples. This keeps skill files durable and low-maintenance.
+
+### Using the MCP Server
+
+Add to your AI tool's config:
+
+```json
+{
+  "mcpServers": {
+    "social-plus": {
+      "url": "https://learn.social.plus/mcp"
+    }
+  }
+}
+```
+
+Claude Code: `~/.claude/claude_desktop_config.json`
+Cursor: Settings → MCP Servers
