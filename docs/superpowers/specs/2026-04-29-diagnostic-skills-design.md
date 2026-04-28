@@ -20,79 +20,73 @@ This is Phase 1 of a hybrid design:
 **name:** `setup-validator`
 **Persona served:** First-time integrator, any SDK/platform, asking "is my setup correct?" or "why isn't the SDK initializing?"
 
+**Design principle:** The skill holds structural knowledge (branching logic, what to check, common mistakes that aren't documented). Code patterns live in the doc pages — the AI fetches them via `get_page_social_plus` rather than the skill maintaining inline code that can go stale.
+
 **Workflow the AI executes:**
 1. Ask which product: **SDK** (chat, social, video — building your own UI) or **UIKit** (pre-built UI components)
 2. Ask which platform (iOS, Android, Web, Flutter, React Native, TypeScript)
-3. Ask for the initialization code snippet
-4. Branch into the correct validation path (see below)
-5. Run the shared checklist items (credentials, region, lifecycle)
-6. Flag common mistakes specific to the chosen product
+3. Ask for the developer's initialization code snippet
+4. Fetch the canonical setup page for that product+platform using `get_page_social_plus` (URLs below)
+5. Compare the developer's code against the canonical pattern from the fetched page
+6. Flag deviations using the common-mistakes checklist (in the skill — not in the docs)
 7. If `validate_api_key` MCP tool is available, call it to confirm credentials are live
 
 ---
 
 #### SDK Setup Path (Chat / Social / Video — custom UI)
 
-**Entry point class:** `AmityClient` (or platform-equivalent)
-**Key calls:** `AmityClient.setup(apiKey:, endpoint:)` then `AmityClient.shared.register(userId:, displayName:, authToken:)`
+**Canonical doc pages — fetch via `get_page_social_plus`:**
 
-**Checklist:**
-- API key format and source (from social.plus console, not a placeholder)
-- App ID is separate from API key — verify both are present
-- Endpoint/region matches the console (US, EU, SG — wrong region = silent auth failure)
-- `setup()` is called before any other SDK method
-- `register()` completes before accessing user-specific features (it is async)
-- Live collections (message lists, channel lists) have `.dispose()` called on unmount
+| Platform | URL |
+|----------|-----|
+| iOS | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/ios-quick-start` |
+| Android | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/android-quick-start` |
+| Flutter | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/flutter-quick-start` |
+| Web/TypeScript | `https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/web/web-quick-start` |
+| Authentication (all platforms) | `https://learn.social.plus/social-plus-sdk/getting-started/authentication` |
 
-**Platform-specific placement for `setup()` + `register()`:**
-- **iOS** — `AppDelegate.application(_:didFinishLaunchingWithOptions:)`, then register after login
-- **Android** — `Application.onCreate()` for `setup()`, NOT `Activity.onCreate()` (causes re-init on rotation)
-- **Web/TypeScript** — before any component that calls SDK methods mounts; await `register()`
-- **Flutter** — after `WidgetsFlutterBinding.ensureInitialized()` in `main()`; `setup()` then `register()` in app init
-- **React Native** — root `index.js` or app entry; not inside a component lifecycle method
-
-**Common SDK mistakes:**
-- Calling `setup()` inside a component that remounts (causes duplicate initialization + session conflict)
-- Not awaiting `register()` before subscribing to live collections (race condition)
-- Missing App ID — using API key in the App ID field or vice versa
-- Wrong region endpoint (EU developers default-routing to US endpoint silently)
+**Common SDK mistakes (skill-maintained — not in docs):**
+- Calling `setup()` inside a component that remounts → duplicate initialization + session conflict
+- Not awaiting `register()` before subscribing to live collections → race condition
+- Using API key in the App ID field or vice versa (they are two different values)
+- Wrong region endpoint — EU developers silently defaulting to US endpoint
+- Using `Activity.onCreate()` instead of `Application.onCreate()` on Android → re-inits on rotation
 
 ---
 
 #### UIKit Setup Path (pre-built components)
 
-**Entry point class:** `AmityUIKitManager` — **NOT** `AmityClient` directly
-**Key calls:** `AmityUIKitManager.setup(apiKey:, endpoint:)` then `AmityUIKitManager.registerDevice(withUserId:, displayName:)`
+**Canonical doc pages — fetch via `get_page_social_plus`:**
 
-**Critical difference from SDK path:** UIKit manages the underlying `AmityClient` internally. You must NOT call both `AmityUIKitManager.setup()` AND `AmityClient.setup()` — double initialization causes a conflict. If the developer's code shows both, flag this immediately.
+| Page | URL |
+|------|-----|
+| Installation | `https://learn.social.plus/uikit/getting-started/installation` |
+| Authentication | `https://learn.social.plus/uikit/getting-started/authentication` |
+| Quick Start | `https://learn.social.plus/uikit/getting-started/quick-start` |
 
-**Checklist:**
-- Only `AmityUIKitManager` is used — no direct `AmityClient.setup()` call
-- API key and endpoint/region are passed to `AmityUIKitManager.setup()`
-- `registerDevice()` is called after login, not at app start (device binds permanently to userId until explicitly unregistered)
-- `unregisterDevice()` is called on logout — skipping this leaves the device bound to the old user
-- User switching: must call `unregisterDevice()` first, then `registerDevice()` with the new user
-- Theme/appearance config is separate from auth init and can be called any time before presenting UI
+**Critical difference from SDK path (skill-maintained — not explicitly in docs):**
+UIKit manages the underlying SDK client internally. The AI must check: does the developer's code call both `AmityUIKitManager.setup()` AND `AmityClient.setup()`? If yes, flag the double-initialization conflict immediately — UIKit owns the SDK init, the developer must not also do it.
 
-**Platform-specific UIKit placement:**
-- **iOS** — `AppDelegate`/`SceneDelegate`; `setup()` at app start, `registerDevice()` at login
-- **Android** — `Application.onCreate()` for `setup()`; `registerDevice()` in login flow
-- **Web** — wrap app with UIKit provider at root; `setup()` before provider mounts
-- **Flutter** — `setup()` in `main()` after `ensureInitialized()`; `registerDevice()` in auth state change
-- **React Native** — root entry for `setup()`; `registerDevice()` in auth flow
-
-**Common UIKit mistakes:**
-- Calling both `AmityUIKitManager.setup()` AND `AmityClient.setup()` (double init = conflict)
-- Not calling `unregisterDevice()` on logout (old user session persists on device)
-- Switching users without unregistering first (new user gets old user's notifications)
-- Placing `setup()` inside a component render cycle (reinitializes on every render)
-- Forgetting `WidgetsFlutterBinding.ensureInitialized()` before `setup()` in Flutter
+**Common UIKit mistakes (skill-maintained):**
+- Double init: calling `AmityClient.setup()` alongside `AmityUIKitManager.setup()` → conflict
+- Not calling `unregisterDevice()` on logout → old user session persists on device
+- Switching users without unregistering first → new user inherits old user's notifications
+- Placing `setup()` inside a component render cycle → reinitializes on every render
+- Flutter only: missing `WidgetsFlutterBinding.ensureInitialized()` before `setup()`
 
 ---
 
-**MCP search guidance for setup-validator:**
-- SDK path: `search_social_plus("AmityClient setup initialization")`, `search_social_plus("register user authentication")`
-- UIKit path: `search_social_plus("AmityUIKitManager setup")`, `search_social_plus("UIKit registerDevice authentication")`, `search_social_plus("UIKit installation <platform>")`
+**Shared checklist (both paths):**
+- API key and App ID sourced from social.plus console (not placeholder values)
+- Region/endpoint set explicitly (US, EU, or SG — default is US; wrong region = silent auth failure)
+- `setup()` called before any other SDK or UIKit method
+- Auth (`register` / `registerDevice`) called after user login, not at app start
+
+**MCP fetch instructions for the skill:**
+```
+Use get_page_social_plus with the URL for the developer's platform to retrieve
+the canonical initialization code. Compare it against what the developer has shown.
+```
 
 ---
 
