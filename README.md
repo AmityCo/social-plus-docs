@@ -68,22 +68,44 @@ Then run `go run ./cmd/main.go` to regenerate.
 
 social.plus exposes a [Mintlify MCP server](https://mintlify.com/docs/ai/model-context-protocol) at `https://learn.social.plus/mcp`, giving AI coding tools (Claude Code, Cursor, Windsurf, VS Code + Continue) direct access to the documentation.
 
-### Per-Product Skill Files
+### Skill Files
 
-Four lightweight skill files live under `.mintlify/skills/`. Each one orients an AI agent to a specific product area, then hands off to the MCP search tool and `llms.txt` for deep content:
+Eight lightweight skill files live under `.mintlify/skills/`. Each one orients an AI agent to a specific product area, then hands off to the MCP search tool and `llms.txt` for deep content.
 
-| Skill | Path | Purpose |
-|-------|------|---------|
-| Chat | `.mintlify/skills/chat/SKILL.md` | Channels, messages, real-time, unread |
+**Product skills** — one per product area:
+
+| Skill | Path | When it activates |
+|-------|------|-------------------|
+| Chat | `.mintlify/skills/chat/SKILL.md` | Channels, messages, real-time, unread counts |
 | Social | `.mintlify/skills/social/SKILL.md` | Users, communities, posts, feeds, stories |
 | Video | `.mintlify/skills/video/SKILL.md` | Rooms, broadcasting, co-hosting, playback |
 | UIKit | `.mintlify/skills/uikit/SKILL.md` | Pre-built components, theming, customization |
+| Server | `.mintlify/skills/server/SKILL.md` | REST APIs, auth tokens, webhooks, pre-hooks |
+| Admin | `.mintlify/skills/admin/SKILL.md` | Console/Portal: moderation, analytics, settings |
+
+**Diagnostic skills** — activated by developer pain, not product area:
+
+| Skill | Path | When it activates |
+|-------|------|-------------------|
+| Setup Validator | `.mintlify/skills/setup-validator/SKILL.md` | "Is my setup correct?" / SDK or UIKit init problems |
+| Troubleshooter | `.mintlify/skills/troubleshoot/SKILL.md` | Integration broken, error code, unexpected behavior |
 
 Mintlify exposes these via the discovery endpoint at `/.well-known/agent-skills/index.json`.
 
 ### Design Principle
 
-The skill files intentionally contain **no API signatures** — those change and live in the docs. Skills describe *what the product does and when to use which API*, then direct the AI to the MCP search tool for current code examples. This keeps skill files durable and low-maintenance.
+Skill files intentionally contain **no API signatures or code samples** — those live in the docs and are fetched on demand via `get_page_social_plus`. Skills describe *what the product does, when to use which API, and undocumented gotchas* that aren't in the docs. This keeps skill files durable and low-maintenance as the API evolves.
+
+### MCP Tools
+
+The MCP server exposes two tools to AI agents:
+
+| Tool | Purpose |
+|------|---------|
+| `search_social_plus` | Full-text search across all documentation pages |
+| `get_page_social_plus` | Fetch the full content of a specific page by path |
+
+Skills use these tools to pull live documentation on demand — the skills themselves stay thin.
 
 ### Using the MCP Server
 
@@ -99,5 +121,11 @@ Add to your AI tool's config:
 }
 ```
 
-Claude Code: `~/.claude/claude_desktop_config.json`
-Cursor: Settings → MCP Servers
+| AI Tool | Config location |
+|---------|----------------|
+| Claude Code | `~/.claude/claude_desktop_config.json` |
+| Cursor | Settings → MCP Servers |
+| Windsurf | Settings → MCP |
+| VS Code + Continue | `.continuerc.json` |
+
+Once connected, skills are discovered automatically — no extra installation needed.
