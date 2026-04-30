@@ -72,6 +72,22 @@ func TestVerifyValidFile(t *testing.T) {
 	assert.Empty(t, reason)
 }
 
+func TestVerifyArtifactPathMismatch(t *testing.T) {
+	dir := t.TempDir()
+	artifact := filepath.Join(dir, "snippet.kt")
+	other := filepath.Join(dir, "other.kt")
+	require.NoError(t, os.WriteFile(artifact, []byte("fun deleteMessage() {}"), 0644))
+	require.NoError(t, os.WriteFile(other, []byte("fun deleteMessage() {}"), 0644))
+
+	finding := report.Finding{ID: "test-1", Status: report.StatusOpen}
+	sealed, err := verifier.Seal(finding, artifact, "PASS", "sha256:fakehash")
+	require.NoError(t, err)
+
+	ok, reason := verifier.Verify(sealed, other)
+	assert.False(t, ok)
+	assert.Contains(t, reason, "artifact path mismatch")
+}
+
 func TestVerifyNoEvidence(t *testing.T) {
 	finding := report.Finding{ID: "test-1", Status: report.StatusOpen}
 	ok, reason := verifier.Verify(finding, "/any/path")

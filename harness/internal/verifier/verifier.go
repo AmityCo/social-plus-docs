@@ -58,6 +58,9 @@ func Verify(f report.Finding, artifactPath string) (bool, string) {
 	if f.Evidence == nil {
 		return false, "no evidence bundle"
 	}
+	if f.Evidence.Artifact != "" && f.Evidence.Artifact != artifactPath {
+		return false, fmt.Sprintf("artifact path mismatch: expected %s, got %s", f.Evidence.Artifact, artifactPath)
+	}
 
 	currentHash, err := HashFile(artifactPath)
 	if err != nil {
