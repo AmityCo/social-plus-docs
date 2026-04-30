@@ -41,7 +41,7 @@ func TestRunFixEmptyReport(t *testing.T) {
 		"-config", cfgPath,
 		"-report", reportPath,
 		"-issues", issuesPath,
-		"-api-key", "test-key",
+		// No api-key flag — Copilot CLI handles AI tasks via 'harness prompt'.
 	})
 
 	// Verify the report was written back.

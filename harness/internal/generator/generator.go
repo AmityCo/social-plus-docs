@@ -2,33 +2,27 @@ package generator
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-const defaultMaxTokens = 2048
+// ErrUseCopilotCLI is returned when Generate is called directly.
+// AI snippet generation is handled by Copilot CLI via 'harness prompt'.
+var ErrUseCopilotCLI = errors.New("AI generation is delegated to Copilot CLI — run 'harness prompt' to get tasks")
 
-type messageClient interface {
-	New(ctx context.Context, body anthropic.MessageNewParams, opts ...option.RequestOption) (*anthropic.Message, error)
-}
-
+// Generator holds configuration for snippet generation prompts.
 type Generator struct {
-	model  string
-	client messageClient
+	model string
 }
 
-func New(model, apiKey string) *Generator {
-	client := anthropic.NewClient(option.WithAPIKey(apiKey))
-	return &Generator{
-		model:  model,
-		client: &client.Messages,
-	}
+// New creates a Generator. The apiKey parameter is kept for API compatibility
+// but is ignored — generation is handled by Copilot CLI.
+func New(model, _ string) *Generator {
+	return &Generator{model: model}
 }
 
 // BuildPrompt constructs the AI prompt for snippet generation.
+// This is used by 'harness prompt' to generate task files for Copilot CLI.
 func (g *Generator) BuildPrompt(platform, functionID, signature, sourceFile string) string {
 	return fmt.Sprintf(`You are generating a code snippet for the social.plus SDK documentation harness.
 
@@ -57,33 +51,8 @@ Rules:
 - Include proper imports for the platform`, platform, functionID, signature, sourceFile)
 }
 
-// Generate calls the AI to produce a snippet for a missing function.
-func (g *Generator) Generate(ctx context.Context, platform, functionID, signature, sourceFile string) (string, error) {
-	prompt := g.BuildPrompt(platform, functionID, signature, sourceFile)
-
-	msg, err := g.client.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(g.model),
-		MaxTokens: defaultMaxTokens,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("ai generate: %w", err)
-	}
-	if msg.StopReason == anthropic.StopReasonMaxTokens {
-		return "", fmt.Errorf("ai generate: truncated response for %s/%s", platform, functionID)
-	}
-
-	var result strings.Builder
-	for _, block := range msg.Content {
-		if block.Type == "text" {
-			result.WriteString(block.Text)
-		}
-	}
-	if result.Len() == 0 {
-		return "", fmt.Errorf("ai generate: empty response for %s/%s", platform, functionID)
-	}
-
-	return result.String(), nil
+// Generate always returns ErrUseCopilotCLI.
+// Use 'harness prompt' to generate a task file for Copilot CLI instead.
+func (g *Generator) Generate(_ context.Context, _, _, _, _ string) (string, error) {
+	return "", ErrUseCopilotCLI
 }

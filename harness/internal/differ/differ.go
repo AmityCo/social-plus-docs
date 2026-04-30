@@ -20,6 +20,7 @@ func Diff(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *pages.Re
 func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *pages.Registry, platform string, mdxContent map[string]string) []report.Finding {
 	var findings []report.Finding
 
+	// Primary: content-based matching (method calls found in snippet code).
 	coveredMethods := make(map[string]bool)
 	for _, s := range snips {
 		for _, call := range extractMethodCalls(s.Content) {
@@ -27,10 +28,21 @@ func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *p
 		}
 	}
 
+	// Secondary: filename-based matching.
+	// Agents create files named Amity<PascalCaseFunctionID>.<ext> — this is more
+	// reliable than content matching for compound/short IDs (e.g. channel.get →
+	// AmityChannelGet.kt, channel.moderation.add_roles → AmityChannelModerationAddRoles.kt).
+	coveredByFile := make(map[string]bool)
+	for _, s := range snips {
+		base := strings.TrimSuffix(filepath.Base(s.File), filepath.Ext(s.File))
+		coveredByFile[strings.ToLower(base)] = true
+	}
+
 	for _, fn := range fns {
 		for _, id := range fn.IDs {
 			method := methodName(id)
-			if coveredMethods[strings.ToLower(method)] {
+			expectedClass := strings.ToLower(fnIDToClassName(id)) // e.g. "amitychannelget"
+			if coveredMethods[strings.ToLower(method)] || coveredByFile[expectedClass] {
 				continue
 			}
 
@@ -160,4 +172,20 @@ func firstNonEmptyLine(content string) string {
 		}
 	}
 	return ""
+}
+
+// fnIDToClassName converts a function ID like "channel.moderation.add_roles"
+// to its expected class name "AmityChannelModerationAddRoles".
+// This matches the naming convention used when generating snippet files.
+func fnIDToClassName(id string) string {
+	parts := strings.FieldsFunc(id, func(r rune) bool {
+		return r == '.' || r == '_' || r == ' '
+	})
+	result := "Amity"
+	for _, p := range parts {
+		if len(p) > 0 {
+			result += strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return result
 }

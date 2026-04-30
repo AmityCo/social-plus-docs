@@ -1,17 +1,14 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"social-plus/harness/internal/compiler"
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/fixer"
-	"social-plus/harness/internal/generator"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/verifier"
@@ -22,7 +19,6 @@ func runFix(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	reportPath := fs.String("report", "harness-report.json", "report path")
 	issuesPath := fs.String("issues", "harness-issues.md", "issues output path")
-	apiKey := fs.String("api-key", os.Getenv("ANTHROPIC_API_KEY"), "Anthropic API key")
 	_ = fs.Parse(args)
 
 	cfg, err := config.Load(*cfgPath)
@@ -45,22 +41,21 @@ func runFix(args []string) {
 		os.Exit(1)
 	}
 
-	gen := generator.New(cfg.LLM.Model, *apiKey)
-	surfaceFixer := fixer.NewSurfaceDriftFixer(cfg.LLM.Model, *apiKey)
-	ctx := context.Background()
-
 	fixedCount := 0
+	aiCount := 0
 	for i, f := range r.Findings {
 		if f.Status != report.StatusOpen {
 			continue
 		}
 
-		sdkCfg, ok := cfg.SDKs[f.Platform]
+		_, ok := cfg.SDKs[f.Platform]
 		if !ok {
 			fmt.Printf("  [skip] unknown platform %s\n", f.Platform)
 			continue
 		}
+		sdkCfg := cfg.SDKs[f.Platform]
 		sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
+		_ = sdkPath
 
 		switch f.Type {
 		case report.TypeAscPageInvalid:
@@ -132,67 +127,14 @@ func runFix(args []string) {
 			}
 
 		case report.TypeMissingSnippet:
-			fmt.Printf("[fix] MISSING_SNIPPET %s/%s\n", f.Platform, f.FunctionID)
-			// Fix 4: guard against empty function_id field.
-			if f.FunctionID == "" {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | missing function_id field"
-				continue
-			}
-			snippet, genErr := gen.Generate(ctx, f.Platform, f.FunctionID, "", "")
-			if genErr != nil {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | AI failed: " + genErr.Error()
-				continue
-			}
-			filename := fmt.Sprintf("Amity%s.%s", sanitizeName(f.FunctionID), platformExt(f.Platform))
-			destPath := filepath.Join(sdkPath, sdkCfg.SnippetDir, filename)
-			if writeErr := os.WriteFile(destPath, []byte(snippet), 0o644); writeErr != nil {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | write failed: " + writeErr.Error()
-				continue
-			}
-			// Fix 3: log compiler exec setup errors.
-			result, outHash, compileErr := compiler.Run(sdkPath, sdkCfg)
-			if compileErr != nil {
-				fmt.Printf("  compiler exec error: %v\n", compileErr)
-			}
-			sealed, sealErr := verifier.Seal(f, destPath, result, outHash)
-			if sealErr != nil {
-				fmt.Printf("  compile FAIL — needs human review\n")
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | compile failed"
-			} else {
-				r.Findings[i] = sealed
-				fixedCount++
-			}
+			// AI-required: delegate to Copilot CLI via 'harness prompt'.
+			aiCount++
+			fmt.Printf("[ai-needed] MISSING_SNIPPET %s/%s — run 'harness prompt'\n", f.Platform, f.FunctionID)
 
 		case report.TypeDocSurfaceDrift:
-			fmt.Printf("[fix] DOC_SURFACE_DRIFT %s\n", f.DocPage)
-			// Fix 4: guard against empty doc_page field.
-			if f.DocPage == "" {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | missing doc_page field"
-				continue
-			}
-			mdxAbs := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, f.DocPage+".mdx")
-			surfaceErr := surfaceFixer.FixSurfaceDrift(ctx, mdxAbs, f.Detail, "")
-			if surfaceErr != nil {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | " + surfaceErr.Error()
-			} else {
-				// Fix 1: handle sealErr instead of discarding it.
-				sealed, sealErr := verifier.Seal(f, mdxAbs, "PASS", "n/a")
-				if sealErr != nil {
-					fmt.Printf("  FAILED to seal: %v\n", sealErr)
-					r.Findings[i].Status = report.StatusNeedsHuman
-					r.Findings[i].Detail += " | seal failed: " + sealErr.Error()
-				} else {
-					r.Findings[i] = sealed
-					fmt.Printf("  → fixed\n")
-					fixedCount++
-				}
-			}
+			// AI-required: delegate to Copilot CLI via 'harness prompt'.
+			aiCount++
+			fmt.Printf("[ai-needed] DOC_SURFACE_DRIFT %s — run 'harness prompt'\n", f.DocPage)
 
 		default:
 			r.Findings[i].Status = report.StatusNeedsHuman
@@ -208,7 +150,7 @@ func runFix(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("\nFixed %d findings. Run 'audit' to verify.\n", fixedCount)
+	fmt.Printf("\nFixed %d findings deterministically. %d findings need Copilot CLI (run 'harness prompt').\n", fixedCount, aiCount)
 }
 
 // extractAscPageFromSnippet reads a snippet file and returns the value of the

@@ -2,99 +2,33 @@ package fixer
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type stubSurfaceDriftClient struct {
-	response *anthropic.Message
-	err      error
+func TestBuildPrompt_ContainsMissingCall(t *testing.T) {
+	f := NewSurfaceDriftFixer("claude-sonnet-4-6", "")
+	prompt := f.BuildPrompt("# existing", "communityType", "snippet code")
+	assert.Contains(t, prompt, "communityType")
+	assert.Contains(t, prompt, "# existing")
 }
 
-func (s stubSurfaceDriftClient) New(_ context.Context, _ anthropic.MessageNewParams, _ ...option.RequestOption) (*anthropic.Message, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.response, nil
-}
-
-func TestFixSurfaceDrift_WritesUpdatedMDX(t *testing.T) {
-	dir := t.TempDir()
-	mdxFile := filepath.Join(dir, "page.mdx")
-	require.NoError(t, os.WriteFile(mdxFile, []byte("old"), 0o644))
-
-	f := &SurfaceDriftFixer{
-		model: "claude-sonnet-4-6",
-		client: stubSurfaceDriftClient{
-			response: &anthropic.Message{
-				Content: []anthropic.ContentBlockUnion{
-					{Type: "text", Text: "# new mdx"},
-				},
-				StopReason: anthropic.StopReasonEndTurn,
-			},
-		},
-	}
-
-	err := f.FixSurfaceDrift(context.Background(), mdxFile, "communityType", "snippet")
-	require.NoError(t, err)
-
-	content, err := os.ReadFile(mdxFile)
-	require.NoError(t, err)
-	assert.Equal(t, "# new mdx", string(content))
-}
-
-func TestFixSurfaceDrift_RejectsTruncatedResponse(t *testing.T) {
-	dir := t.TempDir()
-	mdxFile := filepath.Join(dir, "page.mdx")
-	require.NoError(t, os.WriteFile(mdxFile, []byte("original"), 0o644))
-
-	f := &SurfaceDriftFixer{
-		model: "claude-sonnet-4-6",
-		client: stubSurfaceDriftClient{
-			response: &anthropic.Message{
-				Content: []anthropic.ContentBlockUnion{
-					{Type: "text", Text: "partial"},
-				},
-				StopReason: anthropic.StopReasonMaxTokens,
-			},
-		},
-	}
-
-	err := f.FixSurfaceDrift(context.Background(), mdxFile, "communityType", "snippet")
+func TestFixSurfaceDrift_ReturnsCopilotCLIError(t *testing.T) {
+	f := NewSurfaceDriftFixer("claude-sonnet-4-6", "")
+	err := f.FixSurfaceDrift(context.Background(), "page.mdx", "communityType", "snippet")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "truncated")
-
-	content, readErr := os.ReadFile(mdxFile)
-	require.NoError(t, readErr)
-	assert.Equal(t, "original", string(content))
+	assert.ErrorIs(t, err, ErrUseCopilotCLI)
 }
 
-func TestFixSurfaceDrift_RejectsEmptyResponse(t *testing.T) {
-	dir := t.TempDir()
-	mdxFile := filepath.Join(dir, "page.mdx")
-	require.NoError(t, os.WriteFile(mdxFile, []byte("original"), 0o644))
+func TestSanitizeAIResponse_StripsLLMPreamble(t *testing.T) {
+	got, err := sanitizeAIResponse("Here is the updated MDX:\n\n# Title\nContent")
+	require.NoError(t, err)
+	assert.Equal(t, "# Title\nContent", got)
+}
 
-	f := &SurfaceDriftFixer{
-		model: "claude-sonnet-4-6",
-		client: stubSurfaceDriftClient{
-			response: &anthropic.Message{
-				Content:    []anthropic.ContentBlockUnion{},
-				StopReason: anthropic.StopReasonEndTurn,
-			},
-		},
-	}
-
-	err := f.FixSurfaceDrift(context.Background(), mdxFile, "communityType", "snippet")
+func TestSanitizeAIResponse_ReturnsErrorWhenNoMDX(t *testing.T) {
+	_, err := sanitizeAIResponse("no mdx here at all")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty response")
-
-	content, readErr := os.ReadFile(mdxFile)
-	require.NoError(t, readErr)
-	assert.Equal(t, "original", string(content))
 }
