@@ -7,7 +7,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: harness <audit|fix> [--config path]\n")
+		fmt.Fprintf(os.Stderr, "usage: harness <audit|fix|prompt|gendocs> [--config path]\n")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -15,6 +15,10 @@ func main() {
 		runAudit(os.Args[2:])
 	case "fix":
 		runFix(os.Args[2:])
+	case "prompt":
+		runPrompt(os.Args[2:])
+	case "gendocs":
+		runGendocs(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)
