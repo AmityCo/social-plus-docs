@@ -110,11 +110,11 @@ func runPrompt(args []string) {
 	sb.WriteString("```\n")
 	sb.WriteString("Then run `./harness-bin prompt` again if there are still open findings.\n\n")
 	sb.WriteString("**Snippet format (MUST match exactly):**\n")
-	sb.WriteString("```\n/* begin_sample_code\n   gist_id: PLACEHOLDER\n   filename: <filename>\n   asc_page: <path from docs.json, e.g. social-plus-sdk/chat/overview>\n   description: <one line>\n   */\n<working code>\n/* end_sample_code */\n```\n\n")
+	sb.WriteString("```\n/* begin_sample_code\n   filename: <filename>\n   sp_docs_page: <path from docs.json, e.g. social-plus-sdk/chat/overview>\n   description: <one line>\n   */\n<working code>\n/* end_sample_code */\n```\n\n")
 	sb.WriteString("**Rules:**\n")
 	sb.WriteString("- Use real Amity SDK class names (look them up in the SDK source)\n")
 	sb.WriteString("- Keep it minimal — just enough to demonstrate the function\n")
-	sb.WriteString("- `asc_page` must be a relative path (not a full URL)\n")
+	sb.WriteString("- `sp_docs_page` must be a relative path (not a full URL)\n")
 	sb.WriteString("- Do not ask for confirmation between tasks — work through all of them\n\n")
 	sb.WriteString("---\n\n")
 

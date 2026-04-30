@@ -36,9 +36,8 @@ Generate a minimal, working code snippet that demonstrates this function.
 The snippet MUST use the exact begin_sample_code / end_sample_code format:
 
 /* begin_sample_code
-   gist_id: PLACEHOLDER
    filename: <appropriate filename for platform>
-   asc_page: <docs.json relative path, e.g. social-plus-sdk/chat/messaging-features/messages>
+   sp_docs_page: <docs.json relative path, e.g. social-plus-sdk/chat/messaging-features/messages>
    description: <one line description>
    */
 <working code example>
@@ -47,7 +46,7 @@ The snippet MUST use the exact begin_sample_code / end_sample_code format:
 Rules:
 - Use real Amity SDK class names from the signature
 - Keep it minimal — demonstrate the function, nothing else
-- The asc_page must be a relative path matching the docs structure (no full URLs)
+- The sp_docs_page must be a relative path matching the docs structure (no full URLs)
 - Include proper imports for the platform`, platform, functionID, signature, sourceFile)
 }
 

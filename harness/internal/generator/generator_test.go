@@ -17,7 +17,7 @@ public fun deleteMessage(messageId: String): Completable
 	assert.Contains(t, prompt, "message.delete")
 	assert.Contains(t, prompt, "deleteMessage")
 	assert.Contains(t, prompt, "begin_sample_code")
-	assert.Contains(t, prompt, "asc_page")
+	assert.Contains(t, prompt, "sp_docs_page")
 	assert.Contains(t, prompt, "android")
 }
 
