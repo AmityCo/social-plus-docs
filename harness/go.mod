@@ -1,6 +1,6 @@
 module social-plus/harness
 
-go 1.26.2
+go 1.22
 
 require (
 	github.com/stretchr/testify v1.11.1

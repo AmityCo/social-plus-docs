@@ -8,8 +8,9 @@ import (
 )
 
 func Write(r *Report, path string) error {
-	r.Recount()
-	b, err := json.MarshalIndent(r, "", "  ")
+	snapshot := *r
+	snapshot.Recount()
+	b, err := json.MarshalIndent(&snapshot, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
 	}
@@ -30,11 +31,12 @@ func Read(path string) (*Report, error) {
 
 func WriteIssues(findings []Finding, path string) error {
 	var sb strings.Builder
-	sb.WriteString("# Items Needing Human Review\n\n")
+	count := 0
 	for _, f := range findings {
 		if f.Status != StatusNeedsHuman {
 			continue
 		}
+		count++
 		sb.WriteString(fmt.Sprintf("### [%s] %s · %s\n", f.Type, f.Platform, f.FunctionID))
 		if f.Detail != "" {
 			sb.WriteString(f.Detail + "\n")
@@ -47,5 +49,9 @@ func WriteIssues(findings []Finding, path string) error {
 		}
 		sb.WriteString("\n---\n\n")
 	}
-	return os.WriteFile(path, []byte(sb.String()), 0o644)
+	if count == 0 {
+		return nil
+	}
+	header := "# Items Needing Human Review\n\n"
+	return os.WriteFile(path, []byte(header+sb.String()), 0o644)
 }
