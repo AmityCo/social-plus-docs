@@ -2,10 +2,13 @@ package differ
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
+	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
@@ -188,4 +191,45 @@ func fnIDToClassName(id string) string {
 		}
 	}
 	return result
+}
+
+// DiffDocPages checks a single doc page for DOC_PAGE_STALE_IMPORT findings.
+// docPagePath is the page's docs.json-relative path (e.g. "social-plus-sdk/social/...").
+// docPageFile is the absolute path to the MDX file on disk.
+// snippetsDir is the relative prefix used in import paths (e.g. "snippets").
+func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
+	groups := m.Lookup(docPagePath)
+	if len(groups) == 0 {
+		return nil
+	}
+
+	content, err := os.ReadFile(docPageFile)
+	if err != nil {
+		return nil // unreadable file: skip
+	}
+	contentStr := string(content)
+
+	var findings []report.Finding
+	for _, g := range groups {
+		gendocsPath := docgen.DeriveMDXPath(g.SpDocsPage, g.Key)
+		importPath := "/" + snippetsDir + "/" + gendocsPath
+
+		// Already imported → no finding
+		if strings.Contains(contentStr, importPath) {
+			continue
+		}
+
+		findings = append(findings, report.Finding{
+			ID:                    fmt.Sprintf("doc-stale-%s-%s", docPagePath, g.Key),
+			Type:                  report.TypeDocPageStaleImport,
+			DocPage:               docPagePath,
+			DocPageFile:           docPageFile,
+			GendocsKey:            g.Key,
+			GendocsPath:           gendocsPath,
+			HasHardcodedCodeGroup: strings.Contains(contentStr, "<CodeGroup>"),
+			Detail:                fmt.Sprintf("doc page %q has gendocs snippet %q but does not import it", docPagePath, gendocsPath),
+			Status:                report.StatusOpen,
+		})
+	}
+	return findings
 }

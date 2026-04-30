@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/differ"
+	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
+	"social-plus/harness/internal/fixer"
+	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
@@ -84,6 +88,57 @@ func runAudit(args []string) {
 
 		fmt.Printf("[%s] %d public functions, %d snippets, %d new findings\n",
 			platform, len(fns), len(snips), newCount)
+	}
+
+	// Audit doc pages for stale imports (DOC_PAGE_STALE_IMPORT)
+	{
+		var allSnips []scanner.Snippet
+		for platform, sdkCfg := range cfg.SDKs {
+			sdkBase := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
+			snippetDir := filepath.Join(sdkBase, sdkCfg.SnippetDir)
+			snips, scanErr := scanner.Scan(snippetDir, platform)
+			if scanErr != nil {
+				continue
+			}
+			allSnips = append(allSnips, snips...)
+		}
+		docsJSONPath := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
+		pagesReg, _ := pages.Load(docsJSONPath)
+		for i, s := range allSnips {
+			if strings.Contains(s.SpDocsPage, "://") && pagesReg != nil {
+				if norm := fixer.NormalizeAscPage(s.SpDocsPage, pagesReg); norm != "" {
+					allSnips[i].SpDocsPage = norm
+				}
+			}
+		}
+		allGroups := docgen.GroupSnippets(allSnips)
+		m := matcher.New(allGroups)
+		snippetsDir := "snippets"
+		docsBase := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
+
+		_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() || !strings.HasSuffix(path, ".mdx") {
+				return walkErr
+			}
+			rel, relErr := filepath.Rel(docsBase, path)
+			if relErr != nil {
+				return nil
+			}
+			docPagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".mdx"))
+			docFindings := differ.DiffDocPages(docPagePath, path, m, snippetsDir)
+			allFindings = append(allFindings, docFindings...)
+			return nil
+		})
+
+		staleCount := 0
+		for _, f := range allFindings {
+			if f.Type == report.TypeDocPageStaleImport && f.Status == report.StatusOpen {
+				staleCount++
+			}
+		}
+		if staleCount > 0 {
+			fmt.Printf("[audit] %d DOC_PAGE_STALE_IMPORT findings\n", staleCount)
+		}
 	}
 
 	r := &report.Report{

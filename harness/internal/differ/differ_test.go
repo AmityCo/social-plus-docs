@@ -1,11 +1,16 @@
 package differ_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"social-plus/harness/internal/differ"
+	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
+	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
@@ -125,14 +130,69 @@ func TestNoFindingsWhenClean(t *testing.T) {
 	}
 	snips := []scanner.Snippet{
 		{
-			SpDocsPage:  "social-plus-sdk/chat/channels/create",
-			Content:  "AmityChatClient.newChannelRepository().create()",
-			Platform: "flutter",
-			File:     "snippet.dart",
+			SpDocsPage: "social-plus-sdk/chat/channels/create",
+			Content:    "AmityChatClient.newChannelRepository().create()",
+			Platform:   "flutter",
+			File:       "snippet.dart",
 		},
 	}
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
 
 	findings := differ.Diff(fns, snips, reg, "flutter")
+	assert.Empty(t, findings)
+}
+
+func TestDiffDocPages_StaleImport(t *testing.T) {
+	dir := t.TempDir()
+	// Doc page has a hardcoded CodeGroup but no gendocs import
+	docContent := "<CodeGroup>\n```kotlin Android\nfoo()\n```\n</CodeGroup>\n"
+	docFile := filepath.Join(dir, "create-community.mdx")
+	require.NoError(t, os.WriteFile(docFile, []byte(docContent), 0o644))
+
+	groups := map[string]docgen.SnippetGroup{
+		"community-create": {
+			Key:        "community-create",
+			SpDocsPage: "social-plus-sdk/social/create-community",
+			Snippets:   map[string]scanner.Snippet{"android": {}},
+		},
+	}
+	m := matcher.New(groups)
+
+	findings := differ.DiffDocPages("social-plus-sdk/social/create-community", docFile, m, "snippets")
+	require.Len(t, findings, 1)
+	assert.Equal(t, report.TypeDocPageStaleImport, findings[0].Type)
+	assert.Equal(t, "community-create", findings[0].GendocsKey)
+	assert.True(t, findings[0].HasHardcodedCodeGroup)
+}
+
+func TestDiffDocPages_AlreadyImported(t *testing.T) {
+	dir := t.TempDir()
+	// Derive the import path: DeriveMDXPath("social-plus-sdk/social/create-community", "community-create")
+	// = "social-plus-sdk/social/community-create.mdx"
+	docContent := "import CommunityCreate from '/snippets/social-plus-sdk/social/community-create.mdx';\n<CommunityCreate />\n"
+	docFile := filepath.Join(dir, "create-community.mdx")
+	require.NoError(t, os.WriteFile(docFile, []byte(docContent), 0o644))
+
+	groups := map[string]docgen.SnippetGroup{
+		"community-create": {
+			Key:        "community-create",
+			SpDocsPage: "social-plus-sdk/social/create-community",
+			Snippets:   map[string]scanner.Snippet{"android": {}},
+		},
+	}
+	m := matcher.New(groups)
+
+	findings := differ.DiffDocPages("social-plus-sdk/social/create-community", docFile, m, "snippets")
+	assert.Empty(t, findings)
+}
+
+func TestDiffDocPages_NoGendocsCoverage(t *testing.T) {
+	dir := t.TempDir()
+	docFile := filepath.Join(dir, "overview.mdx")
+	require.NoError(t, os.WriteFile(docFile, []byte("# Overview\n"), 0o644))
+
+	m := matcher.New(map[string]docgen.SnippetGroup{})
+
+	findings := differ.DiffDocPages("social-plus-sdk/chat/overview", docFile, m, "snippets")
 	assert.Empty(t, findings)
 }
