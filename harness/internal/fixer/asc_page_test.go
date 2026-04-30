@@ -113,3 +113,52 @@ void doThing() {}
 	_, err := fixer.FixAscPage(f, "https://docs.amity.co/completely/unknown/page", reg)
 	assert.Error(t, err)
 }
+
+func TestNormalizeAscPage_AbsoluteURL(t *testing.T) {
+	reg := pages.NewFromPaths([]string{
+		"social-plus-sdk/chat/messaging-features/messages/edit-and-delete-messages",
+		"social-plus-sdk/social/content-management/posts/creation/text-post",
+	})
+
+	// 2+ matching segments: "chat" + "edit-and-delete-messages" → confident match
+	result := fixer.NormalizeAscPage("https://docs.amity.co/chat/messaging/edit-and-delete-messages", reg)
+	assert.Equal(t, "social-plus-sdk/chat/messaging-features/messages/edit-and-delete-messages", result)
+}
+
+func TestNormalizeAscPage_SingleSegmentURLNoMatch(t *testing.T) {
+	reg := pages.NewFromPaths([]string{
+		"social-plus-sdk/getting-started/authentication",
+		"analytics-and-moderation/console/getting-started/overview",
+	})
+
+	// "social/getting-started" → after stop words: ["social", "getting-started"]
+	// "getting-started" matches both paths (score=1 each) but strictRequiredScore=2 → no match
+	result := fixer.NormalizeAscPage("https://docs.amity.co/social/ios/getting-started", reg)
+	assert.Equal(t, "", result)
+}
+
+func TestNormalizeAscPage_DocsocialPlus(t *testing.T) {
+	reg := pages.NewFromPaths([]string{
+		"social-plus-sdk/chat/engagement-features/unread-status/channel-unread-count",
+	})
+
+	// docs.social.plus URL with 2+ matching segments
+	result := fixer.NormalizeAscPage("https://docs.social.plus/social-plus-sdk/chat/channels/unread-count/channel-unread-count", reg)
+	assert.Equal(t, "social-plus-sdk/chat/engagement-features/unread-status/channel-unread-count", result)
+}
+
+func TestNormalizeAscPage_RelativePassthrough(t *testing.T) {
+	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/overview"})
+
+	// Already a relative path — should be returned as-is (no fuzzy match needed)
+	result := fixer.NormalizeAscPage("social-plus-sdk/chat/conversation-management/channels/create-channel", reg)
+	assert.Equal(t, "social-plus-sdk/chat/conversation-management/channels/create-channel", result)
+}
+
+func TestNormalizeAscPage_UnmatchableURL(t *testing.T) {
+	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/overview"})
+
+	// URL with no matchable segments returns ""
+	result := fixer.NormalizeAscPage("https://docs.amity.co/completely/unknown/xyzzy", reg)
+	assert.Equal(t, "", result)
+}

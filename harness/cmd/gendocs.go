@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/docgen"
+	"social-plus/harness/internal/fixer"
+	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/scanner"
 )
 
@@ -16,10 +19,7 @@ func runGendocs(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	dryRun := fs.Bool("dry-run", false, "print planned writes without touching files")
 	outOverride := fs.String("out", "", "override output directory (default: <docs_path>/snippets)")
-	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
-		os.Exit(1)
-	}
+	_ = fs.Parse(args)
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
@@ -33,10 +33,34 @@ func runGendocs(args []string) {
 		snippetDir := filepath.Join(sdkBase, sdkCfg.SnippetDir)
 		snips, scanErr := scanner.Scan(snippetDir, platform)
 		if scanErr != nil {
-			fmt.Fprintf(os.Stderr, "[%s] scan error: %v\n", platform, scanErr)
-			os.Exit(1)
+			fmt.Fprintf(os.Stderr, "[%s] scan error (skipping): %v\n", platform, scanErr)
+			continue
 		}
 		allSnips = append(allSnips, snips...)
+	}
+
+	// Normalize absolute URL asc_pages to docs.json relative paths.
+	docsJSONPath := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
+	reg, regErr := pages.Load(docsJSONPath)
+	if regErr != nil {
+		fmt.Fprintf(os.Stderr, "load pages registry: %v\n", regErr)
+		os.Exit(1)
+	}
+	normalizedCount := 0
+	skippedURLCount := 0
+	for i, s := range allSnips {
+		if strings.Contains(s.AscPage, "://") {
+			newPage := fixer.NormalizeAscPage(s.AscPage, reg)
+			if newPage != "" {
+				allSnips[i].AscPage = newPage
+				normalizedCount++
+			} else {
+				skippedURLCount++
+			}
+		}
+	}
+	if normalizedCount > 0 || skippedURLCount > 0 {
+		fmt.Printf("[gendocs] URL asc_pages: %d normalized, %d unmappable (skipped)\n", normalizedCount, skippedURLCount)
 	}
 
 	groups := docgen.GroupSnippets(allSnips)

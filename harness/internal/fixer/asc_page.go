@@ -62,6 +62,12 @@ var platformStopWords = map[string]bool{
 
 // fuzzyMatchWithDiag returns (matched path, best candidate even if below threshold).
 func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) {
+	return fuzzyMatchWithMinScore(legacyURL, reg, requiredScore)
+}
+
+// fuzzyMatchWithMinScore is the core fuzzy match implementation with a configurable
+// minimum-score function, enabling different strictness levels for different callers.
+func fuzzyMatchWithMinScore(legacyURL string, reg *pages.Registry, minScoreFn func([]string) int) (string, string) {
 	clean := strings.TrimSpace(strings.ToLower(legacyURL))
 	for _, prefix := range []string{"https://", "http://"} {
 		if strings.HasPrefix(clean, prefix) {
@@ -93,7 +99,7 @@ func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) 
 
 	bestScore := 0
 	bestPath := ""
-	minScore := requiredScore(segments)
+	minScore := minScoreFn(segments)
 	for _, path := range paths {
 		score := matchScore(strings.ToLower(path), segments)
 		if score > bestScore {
@@ -110,6 +116,27 @@ func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) 
 // fuzzyMatch is a simple wrapper kept for backward compatibility.
 func fuzzyMatch(legacyURL string, reg *pages.Registry) string {
 	p, _ := fuzzyMatchWithDiag(legacyURL, reg)
+	return p
+}
+
+// strictRequiredScore requires at least 2 matching segments (for automated, unreviewed normalization).
+// This prevents spurious single-segment matches (e.g. "social" matching any social-plus-sdk page).
+func strictRequiredScore(segments []string) int {
+	if len(segments) <= 1 {
+		return 1
+	}
+	return 2
+}
+
+// NormalizeAscPage normalizes an asc_page value to a docs.json relative path.
+// If rawPage is already a relative path (no "://"), it is returned as-is.
+// If rawPage is an absolute URL, strict fuzzy matching (min 2 segments) is used.
+// Returns "" if the URL cannot be matched confidently to any known docs.json path.
+func NormalizeAscPage(rawPage string, reg *pages.Registry) string {
+	if !strings.Contains(rawPage, "://") {
+		return rawPage
+	}
+	p, _ := fuzzyMatchWithMinScore(rawPage, reg, strictRequiredScore)
 	return p
 }
 
