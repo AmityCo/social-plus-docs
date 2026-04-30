@@ -2,6 +2,7 @@ package docgen_test
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ func TestDeriveKey(t *testing.T) {
 		{"AmityChannelGet.dart", "channel-get"},
 		{"AmityUserGetByIds.ts", "user-get-by-ids"},
 		{"AmityStoryGetActiveStories.dart", "story-get-active-stories"},
+		{"PostCreate.kt", "post-create"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.filename, func(t *testing.T) {
@@ -143,7 +145,7 @@ func TestWrite(t *testing.T) {
 		},
 	}
 
-	written, skipped, err := docgen.Write(outDir, groups, false)
+	written, skipped, err := docgen.Write(outDir, groups, false, io.Discard)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, written)
 	assert.Equal(t, 0, skipped)
@@ -171,7 +173,7 @@ func TestWriteSkipsHumanEdited(t *testing.T) {
 		},
 	}
 
-	written, skipped, err := docgen.Write(outDir, groups, false)
+	written, skipped, err := docgen.Write(outDir, groups, false, io.Discard)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, written)
 	assert.Equal(t, 1, skipped)
@@ -192,7 +194,7 @@ func TestWriteDryRun(t *testing.T) {
 		},
 	}
 
-	written, _, err := docgen.Write(outDir, groups, true)
+	written, _, err := docgen.Write(outDir, groups, true, io.Discard)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, written)
 
@@ -208,7 +210,7 @@ func TestWriteManifest(t *testing.T) {
 		"post-create":      {Key: "post-create", AscPage: "social-plus-sdk/social/posts/create"},
 	}
 
-	err := docgen.WriteManifest(outDir, groups, false)
+	err := docgen.WriteManifest(outDir, groups, false, io.Discard)
 	assert.NoError(t, err)
 
 	b, err := os.ReadFile(filepath.Join(outDir, "manifest.json"))
@@ -218,4 +220,15 @@ func TestWriteManifest(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(b, &m))
 	assert.Equal(t, "social-plus-sdk/social/community-create.mdx", m["community-create"])
 	assert.Equal(t, "social-plus-sdk/social/post-create.mdx", m["post-create"])
+}
+
+func TestWriteManifestDryRun(t *testing.T) {
+	outDir := t.TempDir()
+	groups := map[string]docgen.SnippetGroup{
+		"community-create": {Key: "community-create", AscPage: "social-plus-sdk/social/communities/create"},
+	}
+	err := docgen.WriteManifest(outDir, groups, true, io.Discard)
+	assert.NoError(t, err)
+	_, statErr := os.Stat(filepath.Join(outDir, "manifest.json"))
+	assert.True(t, os.IsNotExist(statErr), "dry-run must not write manifest.json")
 }
