@@ -383,22 +383,25 @@ snippets are complete.
 | Snippet markers in 4 SDK repos | ✅ | ~1,714 snippets use `sp_docs_page:` |
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
 | `gendocs --clean` | ✅ | 962 snippet MDX files generated |
-| `audit` command | ✅ | Finds all 4 finding types + manifest coverage |
+| `audit` command | ✅ | Finds all 4 finding types + manifest coverage + DOC_BROKEN_IMPORT |
 | `fix` command | ✅ | 48 URLs auto-fixed, 21 need human |
 | `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
-| `prompt` command | ✅ | Generates `harness-tasks.md` with section context |
+| `prompt` command | ✅ | Generates `harness-tasks.md` with MANIFEST_FILL tasks + section context |
 | `compiler` + `verifier` packages | ✅ | Compile checking + hash-based change detection |
 | `internal/manifest` package | ✅ | Parse `*.manifest.yml`; `LoadForPage`, `SectionForSnippet` |
 | `internal/mdxparse` package | ✅ | Extract `###` headings with `<CodeGroup>` from MDX |
 | `genmanifests` command | ✅ | Bootstraps 123 skeleton manifests across doc pages |
 | `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
-| **Page manifest `snippets:` fill-in** | 🤖 Next — inferential | AI fills `snippets: []` with GendocsKeys per section |
-| **Section-level migrate (filled manifests)** | 🔄 Blocked on manifest fill-in | Ready once snippets are mapped |
-| **Mintlify build validation** | 🔜 Future | Verify no broken imports after migrate |
+| `fillmanifests` command | ✅ | Keyword-match auto-assigns 386 keys in 44 manifests |
+| `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
+| **Page manifest `snippets:` fill-in** | 🔄 Partial | 386 keys computationally assigned; 258 sections need AI inferential fill |
+| **DOC_PAGE_STALE_IMPORT migration** | ✅ | 949 doc pages migrated — CodeGroups now import generated snippets |
+| **Mintlify build validation** | ✅ | 0 broken imports after migration |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
 **Current open findings:**
-- `DOC_PAGE_STALE_IMPORT` / open: **949** — doc pages with hardcoded CodeGroups ready for migration
+- `DOC_PAGE_STALE_IMPORT` / open: **0** — all 949 migrations complete ✅
+- `MANIFEST_FILL` / open: **258** — sections needing AI inferential assignment of GendocsKeys
 - `ASC_PAGE_INVALID` / needs_human: **21** — snippets with unresolvable URLs (manual fix needed)
 
 ---
