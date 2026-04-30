@@ -25,17 +25,26 @@ The four SDKs (Android/Kotlin, iOS/Swift, Flutter/Dart, TypeScript) all contain 
 /* begin_sample_code
    gist_id: 8d0f4f0da7500573cd67be5fe3d1bd2c
    filename: play_a_livestream.swift
-   asc_page: https://docs.amity.co/amity-sdk/video/ios/view-play
+   asc_page: social-plus-sdk/video/broadcasting/overview
    description: Play a livestream
 */
 ```
 
+**`asc_page` is a relative path, not a URL.** It maps directly to a page entry in `docs.json` (Mintlify's navigation file). The full URL is always derived as `https://learn.social.plus/` + path — never hardcoded in snippets. This makes snippets platform-agnostic: a future doc platform migration only changes the base URL, not every snippet.
+
+> **One-time migration:** Existing snippets use legacy `docs.amity.co` full URLs (GitBook era). These must be migrated to short `docs.json` paths before the harness can fully operate. The harness migration helper fuzzy-matches old URL segments against current `docs.json` entries to generate the corrected paths.
+
 These snippets:
 - Compile against the real SDK (ground truth for API surface)
-- Have `asc_page` links to the exact doc page they correspond to
+- Have `asc_page` paths validated against `docs.json` on every audit run
 - Are organized by feature area matching the doc structure
 
-The snippets are used as the source of truth — not raw SDK internals, which are complex and language-specific. A snippet that compiles is proof the API call is valid. A snippet with an `asc_page` link is a direct mapping to the doc page that must describe it.
+The snippets are used as the **source of truth for code** — not raw SDK internals, which are complex and language-specific. Doc MDX files contain the prose explanation; the harness keeps the code blocks in MDX in sync with the SDK snippet files. This eliminates the dual-maintenance problem of having two copies of every snippet.
+
+```
+SDK snippet file  ──► harness fix ──► MDX code block
+(source of truth)     (sync engine)   (display layer)
+```
 
 ---
 
@@ -85,10 +94,12 @@ go run ./harness/cmd/main.go fix
 
 1. Runs public API extractor per platform → function manifest
 2. Scans existing snippets → snippet manifest (method calls + `asc_page` links)
-3. Diffs the two → three finding categories:
+3. Diffs the two → four finding categories:
    - `MISSING_SNIPPET` — public function exists, no snippet covers it
-   - `DOC_MISSING` — snippet has `asc_page` but that doc page doesn't exist
+   - `DOC_MISSING` — snippet has `asc_page` but that path doesn't exist in `docs.json`
+   - `ASC_PAGE_INVALID` — `asc_page` value is a legacy full URL or path not found in `docs.json` navigation
    - `DOC_SURFACE_DRIFT` — snippet method name doesn't appear in the linked doc page
+   - `SNIPPET_CONTENT_DRIFT` — code block in MDX file differs from the SDK snippet file
 4. For findings with `status: fixed` — re-verifies evidence chain (see Evidence Chain section)
 5. Writes `harness-report.json`
 6. Exits non-zero if any `open` findings exist (CI/CD extension point)
@@ -97,20 +108,31 @@ go run ./harness/cmd/main.go fix
 
 1. Reads `harness-report.json`, processes `open` findings
 2. For `MISSING_SNIPPET`: AI generates snippet → compile check validates → writes to SDK snippet dir → seals evidence
-3. For `DOC_SURFACE_DRIFT`: AI rewrites affected MDX section → MDX structural check → seals evidence
-4. For `DOC_MISSING` and behavioral issues: writes to `harness-issues.md` with `status: needs_human`
-5. Updates `harness-report.json` with new statuses and evidence bundles
+3. For `SNIPPET_CONTENT_DRIFT`: copies SDK snippet content into MDX code block → MDX structural check → seals evidence (no AI needed — deterministic sync)
+4. For `ASC_PAGE_INVALID`: harness fuzzy-matches old URL segments against `docs.json` entries → rewrites `asc_page` in snippet file → seals evidence
+5. For `DOC_SURFACE_DRIFT`: AI rewrites affected MDX section → MDX structural check → seals evidence
+6. For `DOC_MISSING` and behavioral issues: writes to `harness-issues.md` with `status: needs_human`
+7. Updates `harness-report.json` with new statuses and evidence bundles
 
 ---
 
 ## Finding Lifecycle
 
 ```
-open → (fix runs) → fixed    (evidence sealed, re-verified by next audit)
+open → (fix runs) → fixed       (evidence sealed, re-verified by next audit)
                  → needs_human  (written to harness-issues.md, excluded from loop)
 ```
 
-`needs_human` findings do not block loop termination. They are the intentional human review gate.
+**Finding resolution strategy:**
+
+| Finding | Fix strategy | AI needed? |
+|---------|-------------|-----------|
+| `MISSING_SNIPPET` | AI generates snippet → compile validates | Yes (inferential) |
+| `SNIPPET_CONTENT_DRIFT` | Copy SDK snippet → MDX code block | No (deterministic) |
+| `ASC_PAGE_INVALID` | Fuzzy-match against docs.json → rewrite asc_page | No (deterministic) |
+| `DOC_SURFACE_DRIFT` | AI rewrites MDX section | Yes (inferential) |
+| `DOC_MISSING` | → needs_human | Human |
+| Behavioral issues | → needs_human | Human |
 
 ---
 
@@ -209,6 +231,8 @@ harness/
       typescript.go    # Parse index.ts export* statements
     scanner/       # Scan begin_sample_code blocks → snippet manifest
       scanner.go
+    pages/         # Parse docs.json → valid page path registry
+      pages.go
     differ/        # API surface vs snippet manifest → findings
       differ.go
     verifier/      # Evidence chain: Seal + Verify
