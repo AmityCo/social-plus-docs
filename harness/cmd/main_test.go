@@ -16,7 +16,7 @@ func TestSingleFileGoRunCompiles(t *testing.T) {
 	}
 
 	output := string(out)
-	if !strings.Contains(output, "usage: harness <audit|fix|prompt|gendocs> [--config path]") {
+	if !strings.Contains(output, "usage: harness <audit|fix|prompt|gendocs|migrate> [--config path]") {
 		t.Fatalf("expected usage output, got: %s", output)
 	}
 }
