@@ -1,5 +1,6 @@
 package migrator_test
 
+
 import (
 	"os"
 	"path/filepath"
@@ -54,6 +55,50 @@ func TestRunMigrate_WritesFile(t *testing.T) {
 	assert.Contains(t, string(updated), "import CommunityCreate from")
 	assert.Contains(t, string(updated), "<CommunityCreate />")
 	assert.NotContains(t, string(updated), "<CodeGroup>")
+}
+
+func TestReplaceCodeGroupAfterHeading_found(t *testing.T) {
+	content := "### Step 1: Init\n\n<CodeGroup>\n```kotlin\nfun init() {}\n```\n</CodeGroup>\n\n### Step 2: Login\n\n<CodeGroup>\n```kotlin\nfun login() {}\n```\n</CodeGroup>\n"
+	result, ok := migrator.ReplaceCodeGroupAfterHeading(content, "### Step 2: Login", "LoginUser")
+	if !ok {
+		t.Fatalf("expected ok true, got false")
+	}
+	if !strings.Contains(result, "<LoginUser />") {
+		t.Errorf("expected result to contain <LoginUser />")
+	}
+	if strings.Contains(result, "fun login()") {
+		t.Errorf("should not contain fun login()")
+	}
+	if !strings.Contains(result, "fun init()") {
+		t.Errorf("should still contain fun init()")
+	}
+}
+
+func TestReplaceCodeGroupAfterHeading_headingNotFound(t *testing.T) {
+	content := "### Step 1: Init\n\n<CodeGroup>\n```kotlin\nfun init() {}\n```\n</CodeGroup>\n"
+	_, ok := migrator.ReplaceCodeGroupAfterHeading(content, "### Step 99: Missing", "Something")
+	if ok {
+		t.Errorf("expected ok false for missing heading")
+	}
+}
+
+func TestReplaceCodeGroupAfterHeading_noCodeGroupBeforeNextHeading(t *testing.T) {
+	content := "### Step 1: Just Prose\n\nSome text here.\n\n### Step 2: Login\n\n<CodeGroup>\n```kotlin\nfun login() {}\n```\n</CodeGroup>\n"
+	_, ok := migrator.ReplaceCodeGroupAfterHeading(content, "### Step 1: Just Prose", "Prose")
+	if ok {
+		t.Errorf("expected ok false when no CodeGroup before next heading")
+	}
+}
+
+func TestReplaceCodeGroupAfterHeading_withProseBeforeCodeGroup(t *testing.T) {
+	content := "### Step 1: Init\n\nSome description.\n\nMore prose.\n\n<CodeGroup>\n```kotlin\nfun init() {}\n```\n</CodeGroup>\n"
+	result, ok := migrator.ReplaceCodeGroupAfterHeading(content, "### Step 1: Init", "InitSDK")
+	if !ok {
+		t.Fatalf("expected ok true, got false")
+	}
+	if !strings.Contains(result, "<InitSDK />") {
+		t.Errorf("expected result to contain <InitSDK />")
+	}
 }
 
 func TestRunMigrate_DryRunDoesNotWrite(t *testing.T) {
