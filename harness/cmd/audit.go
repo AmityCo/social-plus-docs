@@ -17,6 +17,7 @@ import (
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
+	"social-plus/harness/internal/manifest"
 )
 
 func runAudit(args []string) {
@@ -133,6 +134,42 @@ func runAudit(args []string) {
 		}
 		if staleCount > 0 {
 			fmt.Printf("[audit] %d DOC_PAGE_STALE_IMPORT findings\n", staleCount)
+		}
+	}
+
+	// Manifest coverage block
+	{
+		docsBase := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
+		snippetsAbsDir := filepath.Join(docsBase, "snippets")
+		manifestCount := 0
+		addedCount := 0
+		_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() || !strings.HasSuffix(path, ".manifest.yml") {
+				return walkErr
+			}
+			rel, relErr := filepath.Rel(docsBase, path)
+			if relErr != nil {
+				return nil
+			}
+			pagePath := strings.TrimSuffix(rel, ".manifest.yml")
+			pagePath = filepath.ToSlash(pagePath)
+			m, _, err := manifest.LoadForPage(docsBase, pagePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "manifest load error: %v\n", err)
+				return nil
+			}
+			findings := differ.DiffManifestCoverage(pagePath, m, snippetsAbsDir)
+			for _, f := range findings {
+				if !isAlreadyInReport(allFindings, f.ID) {
+					allFindings = append(allFindings, f)
+					addedCount++
+				}
+			}
+			manifestCount++
+			return nil
+		})
+		if addedCount > 0 {
+			fmt.Printf("[audit] %d manifest coverage findings from %d manifests\n", addedCount, manifestCount)
 		}
 	}
 

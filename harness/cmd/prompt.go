@@ -41,6 +41,7 @@ func runPrompt(args []string) {
 
 	// Collect AI-required findings (open or needs_human for AI types) grouped by type and platform.
 	type task struct {
+	section    string
 		platform   string
 		functionID string
 		snippetDir string
@@ -81,6 +82,15 @@ func runPrompt(args []string) {
 
 		switch f.Type {
 		case report.TypeMissingSnippet:
+			sectionHeading := ""
+			if strings.HasPrefix(f.Detail, "manifest section") {
+				if start := strings.Index(f.Detail, `(heading: "`); start != -1 {
+					rest := f.Detail[start+len(`(heading: "`):]
+					if end := strings.Index(rest, `")`); end != -1 {
+						sectionHeading = rest[:end]
+					}
+				}
+			}
 			missing = append(missing, task{
 				platform:   f.Platform,
 				functionID: f.FunctionID,
@@ -88,6 +98,7 @@ func runPrompt(args []string) {
 				lang:       platformLang(f.Platform),
 				ext:        platformExt(f.Platform),
 				detail:     f.Detail,
+				section:    sectionHeading,
 			})
 		case report.TypeDocSurfaceDrift:
 			driftTasks = append(driftTasks, task{
