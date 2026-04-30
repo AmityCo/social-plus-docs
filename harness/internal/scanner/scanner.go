@@ -42,6 +42,7 @@ func scanFile(path, platform string) ([]Snippet, error) {
 
 	var results []Snippet
 	var inBlock bool
+	var inMeta bool
 	var current Snippet
 	var contentLines []string
 
@@ -52,6 +53,7 @@ func scanFile(path, platform string) ([]Snippet, error) {
 
 		if strings.Contains(trimmed, "begin_sample_code") {
 			inBlock = true
+			inMeta = true
 			current = Snippet{File: path, Platform: platform}
 			contentLines = nil
 			continue
@@ -60,13 +62,21 @@ func scanFile(path, platform string) ([]Snippet, error) {
 			current.Content = strings.TrimSpace(strings.Join(contentLines, "\n"))
 			results = append(results, current)
 			inBlock = false
+			inMeta = false
 			continue
 		}
 		if inBlock {
-			if parseMetaField(trimmed, "gist_id:", &current.GistID) ||
-				parseMetaField(trimmed, "filename:", &current.Filename) ||
-				parseMetaField(trimmed, "asc_page:", &current.AscPage) ||
-				parseMetaField(trimmed, "description:", &current.Description) {
+			if inMeta {
+				if parseMetaField(trimmed, "gist_id:", &current.GistID) ||
+					parseMetaField(trimmed, "filename:", &current.Filename) ||
+					parseMetaField(trimmed, "asc_page:", &current.AscPage) ||
+					parseMetaField(trimmed, "description:", &current.Description) {
+					continue
+				}
+				if strings.HasSuffix(trimmed, "*/") {
+					inMeta = false
+					continue
+				}
 				continue
 			}
 			contentLines = append(contentLines, line)

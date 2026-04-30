@@ -18,6 +18,7 @@ func TestScan(t *testing.T) {
 	assert.Equal(t, "social-plus-sdk/chat/conversation-management/channels/create-channel", s.AscPage)
 	assert.Equal(t, "flutter", s.Platform)
 	assert.Contains(t, s.Content, "communityType()")
+	assert.NotContains(t, s.Content, "*/")
 }
 
 func TestScanLegacyURL(t *testing.T) {
