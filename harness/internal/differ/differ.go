@@ -5,14 +5,127 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
+	"social-plus/harness/internal/manifest"
+	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
-	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
 )
+
+// DiffManifestCoverage checks that every snippet GendocsKey declared in the manifest
+// has a corresponding *.mdx file under snippetsAbsDir.
+// snippetsAbsDir is the absolute path to the snippets/ directory.
+// docPage is the relative page path (e.g. "social-plus-sdk/getting-started/authentication").
+//
+// The expected snippet file path is:
+//   snippetsAbsDir / <seg0> / <seg1> / <gendocsKey>.mdx
+// where seg0 and seg1 are the first two "/" segments of docPage.
+//
+// Returns MISSING_SNIPPET findings (platform="", status=open) for any key with no file.
+// Detail includes the section key, heading, and expected file path.
+func DiffManifestCoverage(docPage string, m *manifest.Manifest, snippetsAbsDir string) []report.Finding {
+	var findings []report.Finding
+	if m == nil || len(m.Sections) == 0 {
+		return nil
+	}
+	// Split docPage into segments
+	parts := strings.Split(docPage, "/")
+	for sectionKey, section := range m.Sections {
+		for _, gendocsKey := range section.Snippets {
+			// Build expected snippet path
+			snippetPath := filepath.Join(snippetsAbsDir)
+			if len(parts) >= 2 {
+				snippetPath = filepath.Join(snippetPath, parts[0], parts[1], gendocsKey+".mdx")
+			} else if len(parts) == 1 {
+				snippetPath = filepath.Join(snippetPath, parts[0], gendocsKey+".mdx")
+			} else {
+				snippetPath = filepath.Join(snippetPath, gendocsKey+".mdx")
+			}
+			if _, err := os.Stat(snippetPath); os.IsNotExist(err) {
+				findings = append(findings, report.Finding{
+					ID:       fmt.Sprintf("manifest-missing:%s:%s:%s", docPage, sectionKey, gendocsKey),
+					Type:     report.TypeMissingSnippet,
+					Platform: "",
+					DocPage:  docPage,
+					GendocsKey: gendocsKey,
+					Detail:   fmt.Sprintf("Section %q (%s): missing snippet file %s", sectionKey, section.Heading, snippetPath),
+					Status:   report.StatusOpen,
+				})
+			}
+		}
+	}
+	return findings
+}
+
+func splitFirstTwo(docPage string) []string {
+	parts := []string{}
+	for _, seg := range filepath.SplitList(filepath.FromSlash(docPage)) {
+		if seg != "" {
+			parts = append(parts, seg)
+		}
+	}
+	if len(parts) == 0 {
+		parts = append(parts, docPage)
+	}
+	// If still not enough, try splitting by "/"
+	if len(parts) < 2 {
+		parts = []string{}
+		for _, seg := range splitBySlash(docPage) {
+			if seg != "" {
+				parts = append(parts, seg)
+			}
+		}
+	}
+	return parts
+}
+
+func splitBySlash(s string) []string {
+	var out []string
+	for _, seg := range filepath.SplitList(filepath.FromSlash(s)) {
+		if seg != "" {
+			out = append(out, seg)
+		}
+	}
+	if len(out) == 0 {
+		for _, seg := range splitRaw(s) {
+			if seg != "" {
+				out = append(out, seg)
+			}
+		}
+	}
+	return out
+}
+
+func splitRaw(s string) []string {
+	var out []string
+	for _, seg := range splitOnRune(s, '/') {
+		if seg != "" {
+			out = append(out, seg)
+		}
+	}
+	return out
+}
+
+func splitOnRune(s string, r rune) []string {
+	var out []string
+	curr := ""
+	for _, c := range s {
+		if c == r {
+			if curr != "" {
+				out = append(out, curr)
+				curr = ""
+			}
+		} else {
+			curr += string(c)
+		}
+	}
+	if curr != "" {
+		out = append(out, curr)
+	}
+	return out
+}
 
 // Diff runs all finding checks except DOC_SURFACE_DRIFT (needs MDX content).
 func Diff(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *pages.Registry, platform string) []report.Finding {

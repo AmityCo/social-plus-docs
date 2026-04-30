@@ -13,6 +13,7 @@ import (
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
+	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/scanner"
 )
 
@@ -186,13 +187,46 @@ func TestDiffDocPages_AlreadyImported(t *testing.T) {
 	assert.Empty(t, findings)
 }
 
-func TestDiffDocPages_NoGendocsCoverage(t *testing.T) {
+func TestDiffManifestCoverage_missingSnippet(t *testing.T) {
 	dir := t.TempDir()
-	docFile := filepath.Join(dir, "overview.mdx")
-	require.NoError(t, os.WriteFile(docFile, []byte("# Overview\n"), 0o644))
+	snippetsDir := filepath.Join(dir, "snippets")
+	docPage := "social-plus-sdk/getting-started/authentication"
+	// Only client-login.mdx exists
+	os.MkdirAll(filepath.Join(snippetsDir, "social-plus-sdk", "getting-started"), 0o755)
+	os.WriteFile(filepath.Join(snippetsDir, "social-plus-sdk", "getting-started", "client-login.mdx"), []byte("dummy"), 0o644)
+	m := &manifest.Manifest{Sections: map[string]manifest.Section{
+		"step-1": {Heading: "Step 1", Snippets: []string{"client-setup"}},
+		"step-2": {Heading: "Step 2", Snippets: []string{"client-login"}},
+	}}
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
+	assert.Len(t, findings, 1)
+	f := findings[0]
+	assert.Equal(t, report.TypeMissingSnippet, f.Type)
+	assert.Equal(t, "client-setup", f.GendocsKey)
+	assert.Equal(t, docPage, f.DocPage)
+	assert.Contains(t, f.Detail, "Step 1")
+}
 
-	m := matcher.New(map[string]docgen.SnippetGroup{})
+func TestDiffManifestCoverage_allPresent(t *testing.T) {
+	dir := t.TempDir()
+	snippetsDir := filepath.Join(dir, "snippets")
+	docPage := "social-plus-sdk/getting-started/authentication"
+	os.MkdirAll(filepath.Join(snippetsDir, "social-plus-sdk", "getting-started"), 0o755)
+	os.WriteFile(filepath.Join(snippetsDir, "social-plus-sdk", "getting-started", "client-login.mdx"), []byte("dummy"), 0o644)
+	os.WriteFile(filepath.Join(snippetsDir, "social-plus-sdk", "getting-started", "client-setup.mdx"), []byte("dummy"), 0o644)
+	m := &manifest.Manifest{Sections: map[string]manifest.Section{
+		"step-1": {Heading: "Step 1", Snippets: []string{"client-setup"}},
+		"step-2": {Heading: "Step 2", Snippets: []string{"client-login"}},
+	}}
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
+	assert.Empty(t, findings)
+}
 
-	findings := differ.DiffDocPages("social-plus-sdk/chat/overview", docFile, m, "snippets")
+func TestDiffManifestCoverage_emptyManifest(t *testing.T) {
+	dir := t.TempDir()
+	snippetsDir := filepath.Join(dir, "snippets")
+	docPage := "social-plus-sdk/getting-started/authentication"
+	m := &manifest.Manifest{Sections: map[string]manifest.Section{}}
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
 	assert.Empty(t, findings)
 }
