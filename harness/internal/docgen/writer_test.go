@@ -54,6 +54,7 @@ func TestDeriveMDXPath(t *testing.T) {
 			"post-create-text-post",
 			"uikit/components/post-create-text-post.mdx",
 		},
+		{"", "some-key", "unknown/some-key.mdx"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.key, func(t *testing.T) {
@@ -231,4 +232,23 @@ func TestWriteManifestDryRun(t *testing.T) {
 	assert.NoError(t, err)
 	_, statErr := os.Stat(filepath.Join(outDir, "manifest.json"))
 	assert.True(t, os.IsNotExist(statErr), "dry-run must not write manifest.json")
+}
+
+func TestGroupSnippetsFiltersInvalid(t *testing.T) {
+	snips := []scanner.Snippet{
+		// valid
+		{Filename: "AmityCommunityCreate.kt", AscPage: "social-plus-sdk/social/communities/create", Content: "valid", Platform: "android"},
+		// invalid: absolute URL asc_page
+		{Filename: "AmityStreamCreate.kt", AscPage: "https://docs.amity.co/amity-sdk/video/", Content: "bad", Platform: "android"},
+		// invalid: empty asc_page
+		{Filename: "AmityAdsSample.swift", AscPage: "", Content: "bad", Platform: "ios"},
+		// invalid: empty filename
+		{Filename: "", AscPage: "social-plus-sdk/social/foo", Content: "bad", Platform: "flutter"},
+	}
+
+	groups := docgen.GroupSnippets(snips)
+
+	assert.Len(t, groups, 1, "only the valid snippet should produce a group")
+	_, ok := groups["community-create"]
+	assert.True(t, ok)
 }
