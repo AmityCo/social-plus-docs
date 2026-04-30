@@ -59,6 +59,22 @@ func TestGenerate_ReturnsErrorWhenResponseTruncated(t *testing.T) {
 	assert.Contains(t, err.Error(), "truncated")
 }
 
+func TestGenerate_ReturnsErrorOnEmptyResponse(t *testing.T) {
+	g := &Generator{
+		model: "claude-sonnet-4-6",
+		client: stubMessageClient{
+			response: &anthropic.Message{
+				Content:    []anthropic.ContentBlockUnion{},
+				StopReason: anthropic.StopReasonEndTurn,
+			},
+		},
+	}
+
+	_, err := g.Generate(context.Background(), "android", "message.delete", "sig", "file.kt")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty response")
+}
+
 func TestGenerate_WrapsClientError(t *testing.T) {
 	g := &Generator{
 		model:  "claude-sonnet-4-6",

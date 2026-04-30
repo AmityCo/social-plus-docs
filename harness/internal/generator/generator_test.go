@@ -7,7 +7,7 @@ import (
 	"social-plus/harness/internal/generator"
 )
 
-func TestGenerate_PromptStructure(t *testing.T) {
+func TestGenerate_Structure(t *testing.T) {
 	g := generator.New("claude-sonnet-4-6", "test-api-key")
 
 	prompt := g.BuildPrompt("android", "message.delete", `

@@ -9,6 +9,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
+const defaultMaxTokens = 2048
+
 type messageClient interface {
 	New(ctx context.Context, body anthropic.MessageNewParams, opts ...option.RequestOption) (*anthropic.Message, error)
 }
@@ -61,7 +63,7 @@ func (g *Generator) Generate(ctx context.Context, platform, functionID, signatur
 
 	msg, err := g.client.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(g.model),
-		MaxTokens: 2048,
+		MaxTokens: defaultMaxTokens,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 		},
@@ -78,6 +80,9 @@ func (g *Generator) Generate(ctx context.Context, platform, functionID, signatur
 		if block.Type == "text" {
 			result.WriteString(block.Text)
 		}
+	}
+	if result.Len() == 0 {
+		return "", fmt.Errorf("ai generate: empty response for %s/%s", platform, functionID)
 	}
 
 	return result.String(), nil

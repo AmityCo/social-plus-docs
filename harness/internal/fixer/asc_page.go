@@ -3,6 +3,7 @@ package fixer
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"social-plus/harness/internal/pages"
@@ -11,8 +12,11 @@ import (
 // FixAscPage rewrites the asc_page field in snippetFile from a legacy URL
 // to a docs.json relative path using fuzzy matching.
 func FixAscPage(snippetFile, currentAscPage string, reg *pages.Registry) (string, error) {
-	newPath := fuzzyMatch(currentAscPage, reg)
+	newPath, bestCandidate := fuzzyMatchWithDiag(currentAscPage, reg)
 	if newPath == "" {
+		if bestCandidate != "" {
+			return "", fmt.Errorf("no fuzzy match found for %q in docs.json (best candidate: %q)", currentAscPage, bestCandidate)
+		}
 		return "", fmt.Errorf("no fuzzy match found for %q in docs.json", currentAscPage)
 	}
 
@@ -21,7 +25,7 @@ func FixAscPage(snippetFile, currentAscPage string, reg *pages.Registry) (string
 		return "", fmt.Errorf("read snippet: %w", err)
 	}
 
-	updated := strings.ReplaceAll(string(content), "asc_page: "+currentAscPage, "asc_page: "+newPath)
+	updated := strings.Replace(string(content), "asc_page: "+currentAscPage, "asc_page: "+newPath, 1)
 	if updated == string(content) {
 		return "", fmt.Errorf("asc_page %q not found in snippet %q", currentAscPage, snippetFile)
 	}
@@ -32,7 +36,8 @@ func FixAscPage(snippetFile, currentAscPage string, reg *pages.Registry) (string
 	return newPath, nil
 }
 
-func fuzzyMatch(legacyURL string, reg *pages.Registry) string {
+// fuzzyMatchWithDiag returns (matched path, best candidate even if below threshold).
+func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) {
 	clean := strings.TrimSpace(strings.ToLower(legacyURL))
 	for _, prefix := range []string{"https://", "http://"} {
 		if strings.HasPrefix(clean, prefix) {
@@ -45,10 +50,14 @@ func fuzzyMatch(legacyURL string, reg *pages.Registry) string {
 	}
 
 	segments := strings.Split(clean, "/")
+
+	paths := reg.All()
+	sort.Strings(paths) // deterministic tie-breaking: alphabetically first wins
+
 	bestScore := 0
 	bestPath := ""
 	minScore := requiredScore(segments)
-	for _, path := range reg.All() {
+	for _, path := range paths {
 		score := matchScore(strings.ToLower(path), segments)
 		if score > bestScore {
 			bestScore = score
@@ -56,10 +65,15 @@ func fuzzyMatch(legacyURL string, reg *pages.Registry) string {
 		}
 	}
 	if bestScore < minScore {
-		return ""
+		return "", bestPath // bestPath is best candidate even if no match
 	}
+	return bestPath, ""
+}
 
-	return bestPath
+// fuzzyMatch is a simple wrapper kept for backward compatibility.
+func fuzzyMatch(legacyURL string, reg *pages.Registry) string {
+	p, _ := fuzzyMatchWithDiag(legacyURL, reg)
+	return p
 }
 
 func matchScore(path string, segments []string) int {

@@ -28,7 +28,7 @@ func NewSurfaceDriftFixer(model, apiKey string) *SurfaceDriftFixer {
 }
 
 // BuildPrompt constructs the AI prompt for surface drift fixing.
-func (f *SurfaceDriftFixer) BuildPrompt(missingCall, currentContent, snippetContent string) string {
+func (f *SurfaceDriftFixer) BuildPrompt(currentContent, missingCall, snippetContent string) string {
 	return fmt.Sprintf(`You are fixing a documentation page that is missing a method reference.
 
 Current MDX content:
@@ -51,7 +51,7 @@ func (f *SurfaceDriftFixer) FixSurfaceDrift(ctx context.Context, mdxFile, missin
 		return fmt.Errorf("read mdx: %w", err)
 	}
 
-	prompt := f.BuildPrompt(missingCall, string(current), snippetContent)
+	prompt := f.BuildPrompt(string(current), missingCall, snippetContent)
 
 	msg, err := f.client.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(f.model),
@@ -77,5 +77,20 @@ func (f *SurfaceDriftFixer) FixSurfaceDrift(ctx context.Context, mdxFile, missin
 		return fmt.Errorf("ai fix: empty response for %s", mdxFile)
 	}
 
-	return os.WriteFile(mdxFile, []byte(result.String()), 0o644)
+	sanitized, err := sanitizeAIResponse(result.String())
+	if err != nil {
+		return fmt.Errorf("ai fix: %w", err)
+	}
+	return os.WriteFile(mdxFile, []byte(sanitized), 0o644)
+}
+
+// sanitizeAIResponse strips common LLM preamble (e.g. "Here's the updated MDX:\n\n")
+// before the first MDX element (# heading or < tag).
+func sanitizeAIResponse(s string) (string, error) {
+	for i, ch := range s {
+		if ch == '#' || ch == '<' {
+			return strings.TrimSpace(s[i:]), nil
+		}
+	}
+	return "", fmt.Errorf("ai response does not contain MDX content (no '#' or '<' found)")
 }

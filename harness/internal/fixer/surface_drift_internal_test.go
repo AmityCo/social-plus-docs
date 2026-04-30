@@ -34,7 +34,7 @@ func TestFixSurfaceDrift_WritesUpdatedMDX(t *testing.T) {
 		client: stubSurfaceDriftClient{
 			response: &anthropic.Message{
 				Content: []anthropic.ContentBlockUnion{
-					{Type: "text", Text: "new mdx"},
+					{Type: "text", Text: "# new mdx"},
 				},
 				StopReason: anthropic.StopReasonEndTurn,
 			},
@@ -46,7 +46,7 @@ func TestFixSurfaceDrift_WritesUpdatedMDX(t *testing.T) {
 
 	content, err := os.ReadFile(mdxFile)
 	require.NoError(t, err)
-	assert.Equal(t, "new mdx", string(content))
+	assert.Equal(t, "# new mdx", string(content))
 }
 
 func TestFixSurfaceDrift_RejectsTruncatedResponse(t *testing.T) {

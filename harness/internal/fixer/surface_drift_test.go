@@ -14,7 +14,7 @@ func TestNewSurfaceDriftFixer(t *testing.T) {
 
 func TestSurfaceDriftFixer_BuildPrompt(t *testing.T) {
 	f := fixer.NewSurfaceDriftFixer("claude-sonnet-4-6", "test-api-key")
-	prompt := f.BuildPrompt("communityType", "existing MDX content here", "snippetCode here")
+	prompt := f.BuildPrompt("existing MDX content here", "communityType", "snippetCode here")
 	assert.Contains(t, prompt, "communityType")
 	assert.Contains(t, prompt, "existing MDX content here")
 	assert.Contains(t, prompt, "snippetCode here")

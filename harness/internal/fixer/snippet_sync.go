@@ -27,8 +27,12 @@ func SyncSnippetToMDX(mdxFile, platform, lang, newCode string) error {
 }
 
 func replaceCodeBlock(content, platform, lang, newCode string) (string, error) {
+	// Group 3 uses greedy ([\s\S]*) so backtracking finds the LAST closing fence
+	// before </Tab>, preventing false matches on standalone ``` lines inside code.
+	// The closing fence (group 4) requires a trailing newline, which distinguishes
+	// it from an opening fence that is immediately followed by a language identifier.
 	pattern := fmt.Sprintf(
-		`(?i)(<Tab[^>]+title="%s"[^>]*>)([\s\S]*?)(`+"```"+`%s\n)([\s\S]*?)(\n`+"```"+`)([\s\S]*?)(</Tab>)`,
+		`(?i)(<Tab[^>]+title="%s"[^>]*>)([\s\S]*?)`+"```"+`%s\n([\s\S]*)(\n`+"```"+`[ \t]*\n)([\s\S]*?)(</Tab>)`,
 		regexp.QuoteMeta(platform),
 		regexp.QuoteMeta(lang),
 	)
@@ -38,21 +42,15 @@ func replaceCodeBlock(content, platform, lang, newCode string) (string, error) {
 		return content, fmt.Errorf("compile pattern: %w", err)
 	}
 
-	matched := false
-	replaced := re.ReplaceAllStringFunc(content, func(match string) string {
-		matched = true
-		parts := re.FindStringSubmatch(match)
-		if len(parts) < 8 {
-			return match
-		}
-		return parts[1] + parts[2] + parts[3] + newCode + parts[5] + parts[6] + parts[7]
-	})
-
-	if !matched {
+	loc := re.FindStringSubmatchIndex(content)
+	if loc == nil {
 		return content, fmt.Errorf("no code block found for platform=%q lang=%q", platform, lang)
 	}
 
-	return replaced, nil
+	parts := re.FindStringSubmatch(content)
+	// parts indices: [0]=full, [1]=<Tab>, [2]=before-fence, [3]=code-body, [4]=closing-fence, [5]=after-fence, [6]=</Tab>
+	result := content[:loc[0]] + parts[1] + parts[2] + "```" + lang + "\n" + newCode + parts[4] + parts[5] + parts[6] + content[loc[1]:]
+	return result, nil
 }
 
 // ExtractSnippetContent returns the code content from a SDK snippet file.
@@ -70,7 +68,7 @@ func ExtractSnippetContent(snippetFile string) (string, error) {
 
 	commentEnd := strings.Index(body[start:], "*/")
 	if commentEnd == -1 {
-		return strings.TrimSpace(body), nil
+		return "", fmt.Errorf("malformed snippet: no closing */ found in %q", snippetFile)
 	}
 
 	code := strings.TrimSpace(body[start+commentEnd+2:])
