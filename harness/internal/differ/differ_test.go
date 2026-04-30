@@ -222,6 +222,41 @@ func TestDiffManifestCoverage_allPresent(t *testing.T) {
 	assert.Empty(t, findings)
 }
 
+func TestDiffDocImports_NoImports(t *testing.T) {
+    dir := t.TempDir()
+    mdxFile := filepath.Join(dir, "page.mdx")
+    os.WriteFile(mdxFile, []byte("# Hello\n\nsome prose\n"), 0644)
+    findings := differ.DiffDocImports(mdxFile, dir)
+    if len(findings) != 0 {
+        t.Fatalf("want 0 findings, got %d", len(findings))
+    }
+}
+
+func TestDiffDocImports_GoodImport(t *testing.T) {
+    dir := t.TempDir()
+    os.MkdirAll(filepath.Join(dir, "snippets", "sdk", "auth"), 0755)
+    os.WriteFile(filepath.Join(dir, "snippets", "sdk", "auth", "client-login.mdx"), []byte("content"), 0644)
+    mdxFile := filepath.Join(dir, "page.mdx")
+    os.WriteFile(mdxFile, []byte("import ClientLogin from '/snippets/sdk/auth/client-login.mdx'\n"), 0644)
+    findings := differ.DiffDocImports(mdxFile, dir)
+    if len(findings) != 0 {
+        t.Fatalf("want 0 findings for valid import, got %d", len(findings))
+    }
+}
+
+func TestDiffDocImports_BrokenImport(t *testing.T) {
+    dir := t.TempDir()
+    mdxFile := filepath.Join(dir, "page.mdx")
+    os.WriteFile(mdxFile, []byte("import Missing from '/snippets/does/not/exist.mdx'\n"), 0644)
+    findings := differ.DiffDocImports(mdxFile, dir)
+    if len(findings) != 1 {
+        t.Fatalf("want 1 finding for broken import, got %d", len(findings))
+    }
+    if findings[0].Type != report.TypeDocBrokenImport {
+        t.Errorf("wrong finding type: %s", findings[0].Type)
+    }
+}
+
 func TestDiffManifestCoverage_emptyManifest(t *testing.T) {
 	dir := t.TempDir()
 	snippetsDir := filepath.Join(dir, "snippets")

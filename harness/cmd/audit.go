@@ -183,6 +183,40 @@ func runAudit(args []string) {
 		}
 	}
 
+	// Check for broken import paths in MDX files (post-migration validation).
+	{
+		docsBase := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
+		importErrCount := 0
+		_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				rel, _ := filepath.Rel(docsBase, path)
+				relSlash := filepath.ToSlash(rel)
+				// Skip harness/ (testdata) and essentials/ (Mintlify starter tutorials with placeholder imports)
+				if rel == "harness" || strings.HasPrefix(relSlash+"/", "harness/") ||
+					rel == "essentials" || strings.HasPrefix(relSlash+"/", "essentials/") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".mdx") {
+				return nil
+			}
+			for _, f := range differ.DiffDocImports(path, docsBase) {
+				if !isAlreadyInReport(allFindings, f.ID) {
+					allFindings = append(allFindings, f)
+					importErrCount++
+				}
+			}
+			return nil
+		})
+		if importErrCount > 0 {
+			fmt.Printf("[audit] %d broken import findings\n", importErrCount)
+		}
+	}
+
 	r := &report.Report{
 		GeneratedAt: time.Now().Format(time.RFC3339),
 		Findings:    allFindings,

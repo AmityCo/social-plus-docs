@@ -10,6 +10,7 @@ import (
 
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/report"
+	"social-plus/harness/internal/manifest"
 )
 
 // capitalise returns s with the first character uppercased.
@@ -32,6 +33,69 @@ func runPrompt(args []string) {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+
+	docsBaseForManifest := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
+	snippetsDir := filepath.Join(docsBaseForManifest, "snippets")
+
+	type manifestFillTask struct {
+		pagePath    string
+		sectionSlug string
+		heading     string
+		candidates  []string
+	}
+	var manifestFillTasks []manifestFillTask
+
+	_ = filepath.WalkDir(docsBaseForManifest, func(mpath string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			rel, _ := filepath.Rel(docsBaseForManifest, mpath)
+			if rel == "harness" || strings.HasPrefix(filepath.ToSlash(rel)+"/", "harness/") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(mpath, ".manifest.yml") {
+			return nil
+		}
+		rel, _ := filepath.Rel(docsBaseForManifest, mpath)
+		pagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".manifest.yml"))
+		m, found, err := manifest.LoadForPage(docsBaseForManifest, pagePath)
+		if !found || err != nil {
+			return nil
+		}
+		for slug, sec := range m.Sections {
+			if len(sec.Snippets) > 0 {
+				continue
+			}
+			// Derive snippet dir from first 2 segments of page path
+			segs := strings.SplitN(pagePath, "/", 3)
+			dir1, dir2 := "unknown", "unknown"
+			if len(segs) > 0 {
+				dir1 = segs[0]
+			}
+			if len(segs) > 1 {
+				dir2 = segs[1]
+			}
+			snipDir := filepath.Join(snippetsDir, dir1, dir2)
+			var candidates []string
+			if entries, readErr := os.ReadDir(snipDir); readErr == nil {
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".mdx") {
+						candidates = append(candidates, strings.TrimSuffix(e.Name(), ".mdx"))
+					}
+				}
+			}
+			manifestFillTasks = append(manifestFillTasks, manifestFillTask{
+				pagePath:    pagePath,
+				sectionSlug: slug,
+				heading:     sec.Heading,
+				candidates:  candidates,
+			})
+		}
+		return nil
+	})
 
 	r, err := report.Read(*reportPath)
 	if err != nil {
@@ -109,7 +173,7 @@ func runPrompt(args []string) {
 		}
 	}
 
-	if len(missing) == 0 && len(driftTasks) == 0 && staleImportCount == 0 {
+	if len(missing) == 0 && len(driftTasks) == 0 && staleImportCount == 0 && len(manifestFillTasks) == 0 {
 		fmt.Println("No AI-required open findings. Run 'audit' first.")
 		return
 	}
@@ -188,7 +252,28 @@ func runPrompt(args []string) {
 		sb.WriteString("\n")
 	}
 
-	if staleImportCount > 0 {
+	if len(manifestFillTasks) > 0 {
+	sb.WriteString(fmt.Sprintf("\n---\n\n## MANIFEST_FILL (%d sections need assignment)\n\n", len(manifestFillTasks)))
+	sb.WriteString("For each section below, edit the manifest file and add the GendocsKeys\n")
+	sb.WriteString("that belong in that section to the `snippets:` array.\n\n")
+	for _, mt := range manifestFillTasks {
+		sb.WriteString(fmt.Sprintf("### %s → %s\n\n", mt.pagePath, mt.sectionSlug))
+		sb.WriteString(fmt.Sprintf("**Manifest:** `%s.manifest.yml`\n", mt.pagePath))
+		sb.WriteString(fmt.Sprintf("**Section:** `%s`\n", mt.heading))
+		if len(mt.candidates) > 0 {
+			sb.WriteString("**Available keys:**\n")
+			for _, k := range mt.candidates {
+				sb.WriteString(fmt.Sprintf("- `%s`\n", k))
+			}
+		} else {
+			sb.WriteString("**Available keys:** _(none yet — write snippets first)_\n")
+		}
+		sb.WriteString("\n")
+	}
+}
+
+if staleImportCount > 0 {
+
 		sb.WriteString(fmt.Sprintf("## DOC_PAGE_STALE_IMPORT (%d)\n\n", staleImportCount))
 		sb.WriteString("These doc pages reference gendocs snippet files that are not yet imported.\n")
 		sb.WriteString("Run the migrate command to automatically add the missing imports:\n\n")
@@ -221,6 +306,6 @@ func runPrompt(args []string) {
 		fmt.Fprintf(os.Stderr, "write tasks: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports)\n", *outPath, len(missing), len(driftTasks), staleImportCount)
+	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports, %d manifest fills)\n", *outPath, len(missing), len(driftTasks), staleImportCount, len(manifestFillTasks))
 	fmt.Printf("\nTell Copilot CLI:\n  \"Fix the tasks in %s\"\n", *outPath)
 }

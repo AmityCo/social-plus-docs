@@ -310,6 +310,45 @@ func fnIDToClassName(id string) string {
 // docPagePath is the page's docs.json-relative path (e.g. "social-plus-sdk/social/...").
 // docPageFile is the absolute path to the MDX file on disk.
 // snippetsDir is the relative prefix used in import paths (e.g. "snippets").
+// DiffDocImports scans an MDX file for `import X from '/snippets/...'` lines
+// and returns a DOC_BROKEN_IMPORT finding for each import whose target file
+// does not exist under docsBase.
+func DiffDocImports(mdxPath, docsBase string) []report.Finding {
+    data, err := os.ReadFile(mdxPath)
+    if err != nil {
+        return nil
+    }
+    var findings []report.Finding
+    for i, line := range strings.Split(string(data), "\n") {
+        trimmed := strings.TrimSpace(line)
+        if !strings.HasPrefix(trimmed, "import ") || !strings.Contains(trimmed, "'/snippets/") {
+            continue
+        }
+        start := strings.Index(trimmed, "'/snippets/")
+        if start == -1 {
+            continue
+        }
+        rest := trimmed[start+1:]
+        end := strings.Index(rest, "'")
+        if end == -1 {
+            continue
+        }
+        importPath := rest[:end] // e.g. /snippets/social-plus-sdk/getting-started/client-login.mdx
+        absTarget := filepath.Join(docsBase, filepath.FromSlash(strings.TrimPrefix(importPath, "/")))
+        if _, statErr := os.Stat(absTarget); os.IsNotExist(statErr) {
+            rel, _ := filepath.Rel(docsBase, mdxPath)
+            findings = append(findings, report.Finding{
+                ID:      fmt.Sprintf("broken-import:%s:%d", filepath.ToSlash(rel), i+1),
+                Type:    report.TypeDocBrokenImport,
+                DocPage: filepath.ToSlash(strings.TrimSuffix(rel, ".mdx")),
+                Detail:  fmt.Sprintf("import %q not found (line %d)", importPath, i+1),
+                Status:  report.StatusOpen,
+            })
+        }
+    }
+    return findings
+}
+
 func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
 	groups := m.Lookup(docPagePath)
 	if len(groups) == 0 {
