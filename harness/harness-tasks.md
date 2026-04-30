@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-04-30 17:51 — 1 findings requiring AI_
+_Generated 2026-04-30 20:35 — 949 findings requiring AI_
 
 ## Agent Instructions
 
@@ -21,9 +21,8 @@ Then run `./harness-bin prompt` again if there are still open findings.
 **Snippet format (MUST match exactly):**
 ```
 /* begin_sample_code
-   gist_id: PLACEHOLDER
    filename: <filename>
-   asc_page: <path from docs.json, e.g. social-plus-sdk/chat/overview>
+   sp_docs_page: <path from docs.json, e.g. social-plus-sdk/chat/overview>
    description: <one line>
    */
 <working code>
@@ -33,39 +32,26 @@ Then run `./harness-bin prompt` again if there are still open findings.
 **Rules:**
 - Use real Amity SDK class names (look them up in the SDK source)
 - Keep it minimal — just enough to demonstrate the function
-- `asc_page` must be a relative path (not a full URL)
+- `sp_docs_page` must be a relative path (not a full URL)
 - Do not ask for confirmation between tasks — work through all of them
 
 ---
 
-## MISSING_SNIPPET (1)
+## DOC_PAGE_STALE_IMPORT (949)
 
-For each entry below, create a SDK code snippet file at the given path.
-The snippet **must** use this exact format:
+These doc pages reference gendocs snippet files that are not yet imported.
+Run the migrate command to automatically add the missing imports:
 
-```
-/* begin_sample_code
-   gist_id: PLACEHOLDER
-   filename: <filename>
-   asc_page: <docs.json relative path, e.g. social-plus-sdk/chat/overview>
-   description: <one line>
-   */
-<working code>
-/* end_sample_code */
+```bash
+cd social-plus-docs/harness
+./harness-bin migrate --config harness-config.yml
 ```
 
-Rules:
-- Use real Amity/social.plus SDK class names from the platform source
-- Keep it minimal — just enough to demonstrate the function
-- `asc_page` must be a path from `docs.json` (not a full URL)
+Or preview changes first with `--dry-run`:
 
-### Flutter (Dart) — 1 functions
-
-Snippet directory: `../../Amity-Social-Cloud-SDK-Flutter-Internal/code_snippet`
-
-| Function ID | Write to filename |
-|-------------|-------------------|
-| `story.getTargetsbyTargets request` | `AmityStoryGetTargetsbyTargets request.dart` |
+```bash
+./harness-bin migrate --config harness-config.yml --dry-run
+```
 
 ---
 

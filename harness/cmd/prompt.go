@@ -52,6 +52,7 @@ func runPrompt(args []string) {
 
 	var missing []task
 	var driftTasks []task
+	staleImportCount := 0
 
 	for _, f := range r.Findings {
 		// Include open findings and needs_human AI-type findings (failed API attempt from old harness version).
@@ -62,6 +63,15 @@ func runPrompt(args []string) {
 		if f.Status == report.StatusNeedsHuman && !isAIType {
 			continue
 		}
+
+		switch f.Type {
+		case report.TypeDocPageStaleImport:
+			if f.Status == report.StatusOpen {
+				staleImportCount++
+			}
+			continue
+		}
+
 		sdkCfg, ok := cfg.SDKs[f.Platform]
 		if !ok {
 			continue
@@ -88,7 +98,7 @@ func runPrompt(args []string) {
 		}
 	}
 
-	if len(missing) == 0 && len(driftTasks) == 0 {
+	if len(missing) == 0 && len(driftTasks) == 0 && staleImportCount == 0 {
 		fmt.Println("No AI-required open findings. Run 'audit' first.")
 		return
 	}
@@ -96,7 +106,7 @@ func runPrompt(args []string) {
 	var sb strings.Builder
 
 	sb.WriteString("# SDK Harness — Agent Runbook\n\n")
-	sb.WriteString(fmt.Sprintf("_Generated %s — %d findings requiring AI_\n\n", time.Now().Format("2006-01-02 15:04"), len(missing)+len(driftTasks)))
+	sb.WriteString(fmt.Sprintf("_Generated %s — %d findings requiring AI_\n\n", time.Now().Format("2006-01-02 15:04"), len(missing)+len(driftTasks)+staleImportCount))
 	sb.WriteString("## Agent Instructions\n\n")
 	sb.WriteString("You are an autonomous agent. Execute ALL tasks in this file without stopping for confirmation.\n\n")
 	sb.WriteString("**For each MISSING_SNIPPET task:**\n")
@@ -122,11 +132,11 @@ func runPrompt(args []string) {
 		sb.WriteString(fmt.Sprintf("## MISSING_SNIPPET (%d)\n\n", len(missing)))
 		sb.WriteString("For each entry below, create a SDK code snippet file at the given path.\n")
 		sb.WriteString("The snippet **must** use this exact format:\n\n")
-		sb.WriteString("```\n/* begin_sample_code\n   gist_id: PLACEHOLDER\n   filename: <filename>\n   asc_page: <docs.json relative path, e.g. social-plus-sdk/chat/overview>\n   description: <one line>\n   */\n<working code>\n/* end_sample_code */\n```\n\n")
+		sb.WriteString("```\n/* begin_sample_code\n   filename: <filename>\n   sp_docs_page: <docs.json relative path, e.g. social-plus-sdk/chat/overview>\n   description: <one line>\n   */\n<working code>\n/* end_sample_code */\n```\n\n")
 		sb.WriteString("Rules:\n")
 		sb.WriteString("- Use real Amity/social.plus SDK class names from the platform source\n")
 		sb.WriteString("- Keep it minimal — just enough to demonstrate the function\n")
-		sb.WriteString("- `asc_page` must be a path from `docs.json` (not a full URL)\n\n")
+		sb.WriteString("- `sp_docs_page` must be a path from `docs.json` (not a full URL)\n\n")
 
 		// Group by platform
 		platforms := []string{"android", "ios", "flutter", "typescript"}
@@ -167,6 +177,20 @@ func runPrompt(args []string) {
 		sb.WriteString("\n")
 	}
 
+	if staleImportCount > 0 {
+		sb.WriteString(fmt.Sprintf("## DOC_PAGE_STALE_IMPORT (%d)\n\n", staleImportCount))
+		sb.WriteString("These doc pages reference gendocs snippet files that are not yet imported.\n")
+		sb.WriteString("Run the migrate command to automatically add the missing imports:\n\n")
+		sb.WriteString("```bash\n")
+		sb.WriteString("cd social-plus-docs/harness\n")
+		sb.WriteString("./harness-bin migrate --config harness-config.yml\n")
+		sb.WriteString("```\n\n")
+		sb.WriteString("Or preview changes first with `--dry-run`:\n\n")
+		sb.WriteString("```bash\n")
+		sb.WriteString("./harness-bin migrate --config harness-config.yml --dry-run\n")
+		sb.WriteString("```\n\n")
+	}
+
 	sb.WriteString("---\n\n")
 	sb.WriteString("## After completion\n\n")
 	sb.WriteString("```bash\n")
@@ -186,6 +210,6 @@ func runPrompt(args []string) {
 		fmt.Fprintf(os.Stderr, "write tasks: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes)\n", *outPath, len(missing), len(driftTasks))
+	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports)\n", *outPath, len(missing), len(driftTasks), staleImportCount)
 	fmt.Printf("\nTell Copilot CLI:\n  \"Fix the tasks in %s\"\n", *outPath)
 }
