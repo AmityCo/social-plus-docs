@@ -7,7 +7,7 @@ import (
 )
 
 func TestSingleFileGoRunCompiles(t *testing.T) {
-	cmd := exec.Command("go", "run", "./main.go")
+	cmd := exec.Command("go", "run", ".")
 	cmd.Dir = "."
 
 	out, err := cmd.CombinedOutput()
