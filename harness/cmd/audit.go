@@ -56,6 +56,7 @@ func runAudit(args []string) {
 		}
 	}
 
+	var allSnips []scanner.Snippet
 	for platform, sdkCfg := range cfg.SDKs {
 		sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
 		snippetPath := filepath.Join(sdkPath, sdkCfg.SnippetDir)
@@ -71,6 +72,7 @@ func runAudit(args []string) {
 			fmt.Fprintf(os.Stderr, "scan snippets %s: %v\n", platform, err)
 			continue
 		}
+		allSnips = append(allSnips, snips...) // collect for DOC_PAGE_STALE_IMPORT below
 
 		// TODO: Load MDX content for each snippet's asc_page and call differ.DiffWithMDX
 		// to enable DOC_SURFACE_DRIFT and SNIPPET_CONTENT_DRIFT detection.
@@ -92,21 +94,10 @@ func runAudit(args []string) {
 
 	// Audit doc pages for stale imports (DOC_PAGE_STALE_IMPORT)
 	{
-		var allSnips []scanner.Snippet
-		for platform, sdkCfg := range cfg.SDKs {
-			sdkBase := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
-			snippetDir := filepath.Join(sdkBase, sdkCfg.SnippetDir)
-			snips, scanErr := scanner.Scan(snippetDir, platform)
-			if scanErr != nil {
-				continue
-			}
-			allSnips = append(allSnips, snips...)
-		}
-		docsJSONPath := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
-		pagesReg, _ := pages.Load(docsJSONPath)
+		// Normalize absolute URL sp_docs_pages before grouping
 		for i, s := range allSnips {
-			if strings.Contains(s.SpDocsPage, "://") && pagesReg != nil {
-				if norm := fixer.NormalizeAscPage(s.SpDocsPage, pagesReg); norm != "" {
+			if strings.Contains(s.SpDocsPage, "://") {
+				if norm := fixer.NormalizeAscPage(s.SpDocsPage, reg); norm != "" {
 					allSnips[i].SpDocsPage = norm
 				}
 			}
@@ -126,7 +117,11 @@ func runAudit(args []string) {
 			}
 			docPagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".mdx"))
 			docFindings := differ.DiffDocPages(docPagePath, path, m, snippetsDir)
-			allFindings = append(allFindings, docFindings...)
+			for _, f := range docFindings {
+				if !isAlreadyInReport(allFindings, f.ID) {
+					allFindings = append(allFindings, f)
+				}
+			}
 			return nil
 		})
 

@@ -63,7 +63,7 @@ type SnippetGroup struct {
 }
 
 // GroupSnippets groups a flat list of snippets by their derived key.
-// Snippets with a blank Filename, blank AscPage, or an absolute URL AscPage are skipped.
+// Snippets with a blank Filename, blank SpDocsPage, or an absolute URL SpDocsPage are skipped.
 func GroupSnippets(snips []scanner.Snippet) map[string]SnippetGroup {
 	groups := make(map[string]SnippetGroup)
 	for _, s := range snips {
