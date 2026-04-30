@@ -1,5 +1,7 @@
 package main
 
+import "social-plus/harness/internal/cli"
+
 func runFix(args []string) {
-	// implemented in Task 10
+	cli.RunFix(args)
 }

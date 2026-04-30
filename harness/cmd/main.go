@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"social-plus/harness/internal/cli"
 )
 
 func main() {
@@ -12,9 +14,9 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "audit":
-		runAudit(os.Args[2:])
+		cli.RunAudit(os.Args[2:])
 	case "fix":
-		runFix(os.Args[2:])
+		cli.RunFix(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		os.Exit(1)

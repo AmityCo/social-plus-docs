@@ -1,5 +1,7 @@
 package main
 
+import "social-plus/harness/internal/cli"
+
 func runAudit(args []string) {
-	// implemented in Task 5
+	cli.RunAudit(args)
 }
