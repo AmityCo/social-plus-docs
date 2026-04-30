@@ -7,7 +7,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: harness <audit|fix|prompt|gendocs|migrate> [--config path]\n")
+		fmt.Fprintf(os.Stderr, "usage: harness <audit|fix|genmanifests|gendocs|migrate|prompt> [--config path]\n")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -19,6 +19,8 @@ func main() {
 		runPrompt(os.Args[2:])
 	case "gendocs":
 		runGendocs(os.Args[2:])
+	case "genmanifests":
+		runGenManifests(os.Args[2:])
 	case "migrate":
 		runMigrate(os.Args[2:])
 	default:
