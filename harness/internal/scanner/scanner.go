@@ -8,9 +8,8 @@ import (
 )
 
 type Snippet struct {
-	GistID      string
 	Filename    string
-	AscPage     string
+	SpDocsPage  string
 	Description string
 	File        string
 	Content     string
@@ -87,9 +86,9 @@ func scanFile(path, platform string) ([]Snippet, error) {
 		}
 		if inBlock {
 			if inMeta {
-				if parseMetaField(trimmed, "gist_id:", &current.GistID) ||
+				if parseMetaField(trimmed, "sp_docs_page:", &current.SpDocsPage) ||
+					parseMetaField(trimmed, "asc_page:", &current.SpDocsPage) || // backward compat
 					parseMetaField(trimmed, "filename:", &current.Filename) ||
-					parseMetaField(trimmed, "asc_page:", &current.AscPage) ||
 					parseMetaField(trimmed, "description:", &current.Description) {
 					continue
 				}
