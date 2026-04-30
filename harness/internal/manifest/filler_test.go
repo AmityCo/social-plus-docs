@@ -84,6 +84,66 @@ func TestFillFromSnippets_TieBreak(t *testing.T) {
 	}
 }
 
+func TestFillFromSnippets_PageHintFallback(t *testing.T) {
+	// Generic section names → phase-1 scores 0. Page hints should drive assignment.
+	m := &Manifest{Sections: map[string]Section{
+		"implementation-example":  {Heading: "### Implementation Example", Snippets: []string{}},
+		"implementation-examples": {Heading: "### Implementation Examples", Snippets: []string{}},
+	}}
+	candidates := []string{
+		"create_audio_message", // matches hint "audio"
+		"message-audio-creation", // matches hint "audio"
+		"channel-create",          // no hint match → excluded
+	}
+	hints := PageHintsFromPath("social-plus-sdk/chat/message-creation/audio-message")
+	n := FillFromSnippets(m, candidates, hints...)
+	if n != 2 {
+		t.Fatalf("want 2 assigned via hint fallback, got %d", n)
+	}
+	// Both audio-matching candidates get assigned: first to "implementation-example",
+	// second to "implementation-examples" (since the first section is no longer empty).
+	if m.Sections["implementation-example"].Snippets[0] != "create_audio_message" {
+		t.Errorf("implementation-example: want [create_audio_message], got %v",
+			m.Sections["implementation-example"].Snippets)
+	}
+	if m.Sections["implementation-examples"].Snippets[0] != "message-audio-creation" {
+		t.Errorf("implementation-examples: want [message-audio-creation], got %v",
+			m.Sections["implementation-examples"].Snippets)
+	}
+	// channel-create should not appear anywhere
+	for _, sec := range m.Sections {
+		for _, s := range sec.Snippets {
+			if s == "channel-create" {
+				t.Errorf("channel-create should not be assigned (no hint match)")
+			}
+		}
+	}
+}
+
+func TestPageHintsFromPath(t *testing.T) {
+	tests := []struct {
+		path  string
+		want  []string
+	}{
+		{"social-plus-sdk/chat/message-creation/audio-message", []string{"message", "creation", "audio"}},
+		{"social-plus-sdk/getting-started/authentication", []string{"getting", "started", "authentication"}},
+		{"uikit/components/social/communities", []string{"social", "communities"}},
+		{"single", []string{"single"}},
+	}
+	for _, tt := range tests {
+		got := PageHintsFromPath(tt.path)
+		if len(got) != len(tt.want) {
+			t.Errorf("PageHintsFromPath(%q): want %v, got %v", tt.path, tt.want, got)
+			continue
+		}
+		for i, w := range tt.want {
+			if got[i] != w {
+				t.Errorf("PageHintsFromPath(%q)[%d]: want %q, got %q", tt.path, i, w, got[i])
+			}
+		}
+	}
+}
+
 func TestSaveManifest_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	m := &Manifest{Sections: map[string]Section{

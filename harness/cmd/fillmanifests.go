@@ -74,7 +74,8 @@ func runFillManifests(args []string) {
 		}
 
 		candidates := pageKeys[pagePath]
-		filled := manifest.FillFromSnippets(m, candidates)
+		hints := manifest.PageHintsFromPath(pagePath)
+		filled := manifest.FillFromSnippets(m, candidates, hints...)
 
 		if len(candidates) > 0 {
 			for _, sec := range m.Sections {

@@ -14,10 +14,13 @@ import (
 //   - If manifest has exactly 1 section: assign to it.
 //   - Otherwise: score each section slug by counting key-words (len>2) found in the slug;
 //     assign to highest-scoring section if score > 0.
-//   - If no section scores > 0: leave unassigned (needs AI).
+//   - If no section scores > 0 and pageHints are provided: fall back to scoring the candidate
+//     against the page-path hint tokens; if score > 0, assign to the first alphabetically-sorted
+//     empty section (generic-name fallback for sections like "implementation-example").
 //
+// pageHints should be the pre-extracted tokens from the page path — use PageHintsFromPath.
 // Returns the count of newly assigned keys.
-func FillFromSnippets(m *Manifest, candidates []string) int {
+func FillFromSnippets(m *Manifest, candidates []string, pageHints ...string) int {
 	sectionKeys := make([]string, 0, len(m.Sections))
 	for k := range m.Sections {
 		sectionKeys = append(sectionKeys, k)
@@ -44,9 +47,69 @@ func FillFromSnippets(m *Manifest, candidates []string) int {
 			sec.Snippets = append(sec.Snippets, key)
 			m.Sections[best] = sec
 			assigned++
+			continue
+		}
+		// Phase 2: page-path hint fallback for generic section names.
+		if len(pageHints) > 0 && scoreKeyAgainstHints(key, pageHints) > 0 {
+			target := firstEmptySection(sectionKeys, m)
+			if target != "" {
+				sec := m.Sections[target]
+				sec.Snippets = append(sec.Snippets, key)
+				m.Sections[target] = sec
+				assigned++
+			}
 		}
 	}
 	return assigned
+}
+
+// PageHintsFromPath extracts meaningful tokens from the last two segments of a page path.
+// Tokens are split by "-" and "_", and filtered to len > 2.
+// Example: "social-plus-sdk/chat/message-creation/audio-message" → ["message", "creation", "audio"]
+func PageHintsFromPath(pagePath string) []string {
+	segs := strings.Split(filepath.ToSlash(pagePath), "/")
+	// Take last 2 segments.
+	start := len(segs) - 2
+	if start < 0 {
+		start = 0
+	}
+	seen := map[string]bool{}
+	var hints []string
+	for _, seg := range segs[start:] {
+		for _, tok := range strings.FieldsFunc(seg, func(r rune) bool { return r == '-' || r == '_' }) {
+			tok = strings.ToLower(tok)
+			if len(tok) > 2 && !seen[tok] {
+				seen[tok] = true
+				hints = append(hints, tok)
+			}
+		}
+	}
+	return hints
+}
+
+// scoreKeyAgainstHints counts how many hint tokens appear as words in key (split by "-" and "_").
+func scoreKeyAgainstHints(key string, hints []string) int {
+	words := strings.FieldsFunc(key, func(r rune) bool { return r == '-' || r == '_' })
+	score := 0
+	for _, h := range hints {
+		for _, w := range words {
+			if strings.ToLower(w) == h {
+				score++
+				break
+			}
+		}
+	}
+	return score
+}
+
+// firstEmptySection returns the alphabetically first section slug with no snippets assigned.
+func firstEmptySection(sectionKeys []string, m *Manifest) string {
+	for _, sk := range sectionKeys {
+		if len(m.Sections[sk].Snippets) == 0 {
+			return sk
+		}
+	}
+	return ""
 }
 
 // Header is the comment block prepended to every AUTO-GENERATED manifest file.

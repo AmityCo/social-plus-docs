@@ -392,7 +392,7 @@ snippets are complete.
 | `internal/mdxparse` package | ✅ | Extract `###` headings with `<CodeGroup>` from MDX |
 | `genmanifests` command | ✅ | Bootstraps 123 skeleton manifests across doc pages |
 | `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
-| `fillmanifests` command | ✅ | Keyword-match auto-assigns 386 keys in 44 manifests |
+| `fillmanifests` command | ✅ | Keyword-match + page-path-hint fallback assigns keys; 231 sections still need AI |
 | `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
 | **Page manifest `snippets:` fill-in** | 🔄 Partial | 386 keys computationally assigned; 258 sections need AI inferential fill |
 | **DOC_PAGE_STALE_IMPORT migration** | ✅ | 949 doc pages migrated — CodeGroups now import generated snippets |
@@ -401,7 +401,8 @@ snippets are complete.
 
 **Current open findings:**
 - `DOC_PAGE_STALE_IMPORT` / open: **0** — all 949 migrations complete ✅
-- `MANIFEST_FILL` / open: **258** — sections needing AI inferential assignment of GendocsKeys
+- `MANIFEST_FILL` / open: **231** — sections needing AI inferential assignment of GendocsKeys
+- `MISSING_SNIPPET` (manifest-driven) / open: **27** — snippet MDX files referenced in manifests but not yet generated (run `gendocs` after SDK markers are added)
 - `ASC_PAGE_INVALID` / needs_human: **21** — snippets with unresolvable URLs (manual fix needed)
 
 ---
