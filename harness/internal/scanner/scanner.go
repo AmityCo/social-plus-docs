@@ -17,11 +17,31 @@ type Snippet struct {
 	Platform    string
 }
 
+// matchesPlatform returns true if the file extension matches the expected platform.
+func matchesPlatform(path, platform string) bool {
+	lower := strings.ToLower(path)
+	switch platform {
+	case "android":
+		return strings.HasSuffix(lower, ".kt") || strings.HasSuffix(lower, ".java")
+	case "ios":
+		return strings.HasSuffix(lower, ".swift")
+	case "flutter":
+		return strings.HasSuffix(lower, ".dart")
+	case "typescript":
+		return strings.HasSuffix(lower, ".ts") || strings.HasSuffix(lower, ".tsx")
+	default:
+		return true
+	}
+}
+
 func Scan(dir, platform string) ([]Snippet, error) {
 	var results []Snippet
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		if !matchesPlatform(path, platform) {
+			return nil
 		}
 		snips, err := scanFile(path, platform)
 		if err != nil {

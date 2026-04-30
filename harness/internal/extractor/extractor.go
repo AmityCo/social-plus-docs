@@ -37,7 +37,8 @@ func Scan(dir, platform string) ([]PublicFunction, error) {
 func matchesPlatform(path, platform string) bool {
 	switch strings.ToLower(platform) {
 	case "android":
-		return filepath.Ext(path) == ".kt"
+		ext := filepath.Ext(path)
+		return ext == ".kt" || ext == ".java"
 	case "ios":
 		return filepath.Ext(path) == ".swift"
 	case "flutter":

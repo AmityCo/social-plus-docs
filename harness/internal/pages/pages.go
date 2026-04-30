@@ -47,15 +47,34 @@ func NewFromPaths(paths []string) *Registry {
 
 func extract(v interface{}, reg *Registry) {
 	switch val := v.(type) {
-	case string:
-		reg.paths[val] = true
 	case map[string]interface{}:
+		if pages, ok := val["pages"]; ok {
+			extractPages(pages, reg)
+		}
 		for _, child := range val {
 			extract(child, reg)
 		}
 	case []interface{}:
 		for _, item := range val {
 			extract(item, reg)
+		}
+	}
+}
+
+func extractPages(v interface{}, reg *Registry) {
+	switch val := v.(type) {
+	case string:
+		reg.paths[val] = true
+	case []interface{}:
+		for _, item := range val {
+			switch p := item.(type) {
+			case string:
+				reg.paths[p] = true
+			case map[string]interface{}:
+				if nested, ok := p["pages"]; ok {
+					extractPages(nested, reg)
+				}
+			}
 		}
 	}
 }

@@ -22,10 +22,9 @@ func TestScan(t *testing.T) {
 }
 
 func TestScanLegacyURL(t *testing.T) {
-	// snippets with full URLs should be scannable but flagged by differ
-	snippets, _ := scanner.Scan("testdata", "android")
-	for _, s := range snippets {
-		// asc_page is stored as-is; differ decides if it's valid
-		_ = s.AscPage
-	}
+	snippets, err := scanner.Scan("testdata", "android")
+	require.NoError(t, err)
+	require.Len(t, snippets, 1)
+	// asc_page stored verbatim — differ will flag it as ASC_PAGE_INVALID
+	assert.Equal(t, "https://docs.amity.co/social/android", snippets[0].AscPage)
 }
