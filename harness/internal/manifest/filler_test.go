@@ -2,6 +2,8 @@ package manifest
 
 import (
 	"testing"
+	"os"
+	"strings"
 )
 
 func TestFillFromSnippets_SingleSection(t *testing.T) {
@@ -61,5 +63,44 @@ func TestFillFromSnippets_EmptyManifest(t *testing.T) {
 	n := FillFromSnippets(m, []string{"client-login"})
 	if n != 0 {
 		t.Fatalf("want 0 (no sections), got %d", n)
+	}
+}
+
+func TestFillFromSnippets_TieBreak(t *testing.T) {
+	// Both "login-admin" and "login-user" score 1 for "client-login" (word "login")
+	// Sort makes "login-admin" win (lexicographically first)
+	m := &Manifest{Sections: map[string]Section{
+		"login-admin": {Heading: "### Login Admin", Snippets: []string{}},
+		"login-user":  {Heading: "### Login User", Snippets: []string{}},
+	}}
+	n := FillFromSnippets(m, []string{"client-login"})
+	if n != 1 {
+		t.Fatalf("want 1 assigned, got %d", n)
+	}
+	// "login-admin" < "login-user" lexicographically — must win the tie
+	if got := m.Sections["login-admin"].Snippets; len(got) != 1 || got[0] != "client-login" {
+		t.Errorf("expected tie broken to login-admin, got login-admin=%v login-user=%v",
+			m.Sections["login-admin"].Snippets, m.Sections["login-user"].Snippets)
+	}
+}
+
+func TestSaveManifest_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	m := &Manifest{Sections: map[string]Section{
+		"setup": {Heading: "### Setup", Snippets: []string{"client-login"}},
+	}}
+	if err := SaveManifest(dir, "sdk/auth", m); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := LoadForPage(dir, "sdk/auth")
+	if err != nil || !found {
+		t.Fatalf("LoadForPage: err=%v found=%v", err, found)
+	}
+	if sec := got.Sections["setup"]; len(sec.Snippets) != 1 || sec.Snippets[0] != "client-login" {
+		t.Errorf("unexpected section: %+v", sec)
+	}
+	raw, _ := os.ReadFile(PathForPage(dir, "sdk/auth"))
+	if !strings.HasPrefix(string(raw), "# AUTO-GENERATED") {
+		t.Error("missing AUTO-GENERATED header")
 	}
 }
