@@ -77,29 +77,41 @@ func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *p
 			continue
 		}
 
-		if mdxContent == nil {
-			continue
-		}
+		if mdxContent != nil {
+			mdx, ok := mdxContent[s.AscPage]
+			if ok {
+				for _, call := range extractMethodCalls(s.Content) {
+					if strings.Contains(mdx, call) {
+						continue
+					}
 
-		mdx, ok := mdxContent[s.AscPage]
-		if !ok {
-			continue
-		}
+					findings = append(findings, report.Finding{
+						ID:          fmt.Sprintf("%s-surface-drift-%s-%s", platform, base, call),
+						Type:        report.TypeDocSurfaceDrift,
+						Platform:    platform,
+						SnippetFile: s.File,
+						DocPage:     s.AscPage,
+						Detail:      fmt.Sprintf("snippet calls %q but not found in doc page content", call),
+						Status:      report.StatusOpen,
+					})
+				}
 
-		for _, call := range extractMethodCalls(s.Content) {
-			if strings.Contains(mdx, call) {
-				continue
+				// SNIPPET_CONTENT_DRIFT: MDX code block has drifted from SDK snippet content
+				if s.Content != "" {
+					firstLine := firstNonEmptyLine(s.Content)
+					if firstLine != "" && !strings.Contains(mdx, firstLine) {
+						findings = append(findings, report.Finding{
+							ID:          fmt.Sprintf("%s-snippet-drift-%s", platform, base),
+							Type:        report.TypeSnippetContentDrift,
+							Platform:    platform,
+							SnippetFile: s.File,
+							DocPage:     s.AscPage,
+							Detail:      fmt.Sprintf("snippet content not found in MDX page %q", s.AscPage),
+							Status:      report.StatusOpen,
+						})
+					}
+				}
 			}
-
-			findings = append(findings, report.Finding{
-				ID:          fmt.Sprintf("%s-surface-drift-%s-%s", platform, base, call),
-				Type:        report.TypeDocSurfaceDrift,
-				Platform:    platform,
-				SnippetFile: s.File,
-				DocPage:     s.AscPage,
-				Detail:      fmt.Sprintf("snippet calls %q but not found in doc page content", call),
-				Status:      report.StatusOpen,
-			})
 		}
 	}
 
@@ -137,4 +149,15 @@ func extractMethodCalls(content string) []string {
 	}
 
 	return calls
+}
+
+// firstNonEmptyLine returns the first non-empty, non-comment line from content.
+func firstNonEmptyLine(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "//") && !strings.HasPrefix(trimmed, "/*") && !strings.HasPrefix(trimmed, "*") {
+			return trimmed
+		}
+	}
+	return ""
 }

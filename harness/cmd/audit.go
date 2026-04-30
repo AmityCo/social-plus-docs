@@ -68,11 +68,14 @@ func runAudit(args []string) {
 			continue
 		}
 
+		// TODO: Load MDX content for each snippet's asc_page and call differ.DiffWithMDX
+		// to enable DOC_SURFACE_DRIFT and SNIPPET_CONTENT_DRIFT detection.
+		// For now, only MISSING_SNIPPET, ASC_PAGE_INVALID, and DOC_MISSING are active.
 		findings := differ.Diff(fns, snips, reg, platform)
 
 		newCount := 0
 		for _, f := range findings {
-			if alreadyResolved(allFindings, f.ID) {
+			if isAlreadyInReport(allFindings, f.ID) {
 				continue
 			}
 			allFindings = append(allFindings, f)
@@ -102,7 +105,7 @@ func runAudit(args []string) {
 	}
 }
 
-func alreadyResolved(findings []report.Finding, id string) bool {
+func isAlreadyInReport(findings []report.Finding, id string) bool {
 	for _, f := range findings {
 		if f.ID == id {
 			return true

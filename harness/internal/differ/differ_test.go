@@ -73,6 +73,52 @@ func TestDocSurfaceDrift(t *testing.T) {
 	assert.True(t, hasDrift)
 }
 
+func TestSnippetContentDrift(t *testing.T) {
+	fns := []extractor.PublicFunction{}
+	snips := []scanner.Snippet{
+		{
+			AscPage:  "social-plus-sdk/chat/channels/create",
+			Content:  "AmityChatClient.newChannelRepository().communityType().create()",
+			Platform: "flutter",
+			File:     "snippet.dart",
+		},
+	}
+	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
+	mdx := map[string]string{
+		"social-plus-sdk/chat/channels/create": "# Create Channel\n\nSome outdated code here.",
+	}
+
+	findings := differ.DiffWithMDX(fns, snips, reg, "flutter", mdx)
+	hasDrift := false
+	for _, f := range findings {
+		if f.Type == report.TypeSnippetContentDrift {
+			hasDrift = true
+		}
+	}
+	assert.True(t, hasDrift, "expected SNIPPET_CONTENT_DRIFT when snippet content not in MDX")
+}
+
+func TestSnippetContentDrift_NoFalsePositive(t *testing.T) {
+	snips := []scanner.Snippet{
+		{
+			AscPage:  "social-plus-sdk/chat/channels/create",
+			Content:  "AmityChatClient.newChannelRepository().create()",
+			Platform: "flutter",
+			File:     "snippet.dart",
+		},
+	}
+	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
+	mdx := map[string]string{
+		"social-plus-sdk/chat/channels/create": "AmityChatClient.newChannelRepository().create()",
+	}
+
+	findings := differ.DiffWithMDX(nil, snips, reg, "flutter", mdx)
+	for _, f := range findings {
+		assert.NotEqual(t, report.TypeSnippetContentDrift, f.Type,
+			"SNIPPET_CONTENT_DRIFT should not fire when first line is present in MDX")
+	}
+}
+
 func TestNoFindingsWhenClean(t *testing.T) {
 	fns := []extractor.PublicFunction{
 		{IDs: []string{"channel.create"}, Platform: "flutter", File: "AmityChannel.dart"},
