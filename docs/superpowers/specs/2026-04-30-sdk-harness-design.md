@@ -224,11 +224,8 @@ harness/
   harness-config.yml
   internal/
     config/        # Parse harness-config.yml
-    extractor/     # Per-platform public API surface extraction
-      android.go       # Regex: public fun in Amity*Repository classes
-      ios.go           # Regex: public func in AmitySDK classes  
-      flutter.go       # Regex: non-_ methods in Amity* public classes
-      typescript.go    # Parse index.ts export* statements
+    extractor/     # Scan begin_public_function blocks → public function manifest
+      extractor.go     # Cross-platform: same pattern works for all 4 SDKs
     scanner/       # Scan begin_sample_code blocks → snippet manifest
       scanner.go
     pages/         # Parse docs.json → valid page path registry
@@ -278,7 +275,18 @@ llm:
 
 ### Extractor design
 
-Extractors are regex-based, not full AST parsers. All 4 SDKs follow consistent naming conventions (`Amity*Repository`, `Amity*Client`). Regex is fast, zero dependencies, and handles the public API surface reliably. Any missed function will surface on the next audit cycle.
+**All 4 SDKs use `begin_public_function` / `end_public_function` markers** — the same cross-platform pattern as `begin_sample_code`. No regex needed; the extractor is a single scanner that works identically on all platforms.
+
+```
+/* begin_public_function
+   id: client.login
+   api_style: async
+*/
+public func login(userId: String) { ... }
+/* end_public_function */
+```
+
+The `id` field (e.g., `client.login`, `user.check_flag_by_me`) is the canonical function identifier. The differ matches these IDs against snippet method calls to detect `MISSING_SNIPPET`.
 
 ---
 
