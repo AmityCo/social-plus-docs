@@ -28,7 +28,6 @@ outHash := hashBytes(out.Bytes())
 
 if err != nil {
 if _, ok := err.(*exec.ExitError); ok {
-fmt.Printf("  compile output:\n%s\n", out.String())
 return "FAIL", outHash, nil
 }
 return "FAIL", outHash, fmt.Errorf("exec: %w", err)
