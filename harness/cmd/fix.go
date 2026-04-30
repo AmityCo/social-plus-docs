@@ -57,6 +57,12 @@ func runFix(args []string) {
 		switch f.Type {
 		case report.TypeAscPageInvalid:
 			fmt.Printf("[fix] ASC_PAGE_INVALID %s\n", f.SnippetFile)
+			// Fix 4: guard against empty snippet_file field.
+			if f.SnippetFile == "" {
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | missing snippet_file field"
+				continue
+			}
 			snippetAbs := filepath.Join(sdkPath, sdkCfg.SnippetDir, filepath.Base(f.SnippetFile))
 			docsJSON := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
 			reg, regErr := pages.Load(docsJSON)
@@ -65,12 +71,11 @@ func runFix(args []string) {
 				r.Findings[i].Detail += " | load registry failed: " + regErr.Error()
 				continue
 			}
-			// Read the actual asc_page value from the snippet file rather than
-			// parsing it from the formatted Detail message.
-			currentAscPage := extractAscPageFromSnippet(snippetAbs)
-			if currentAscPage == "" {
+			// Fix 6: extractAscPageFromSnippet now returns (string, error).
+			currentAscPage, extractErr := extractAscPageFromSnippet(snippetAbs)
+			if extractErr != nil {
 				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | could not extract asc_page from snippet"
+				r.Findings[i].Detail += " | " + extractErr.Error()
 				continue
 			}
 			newPath, fixErr := fixer.FixAscPage(snippetAbs, currentAscPage, reg)
@@ -79,31 +84,58 @@ func runFix(args []string) {
 				r.Findings[i].Status = report.StatusNeedsHuman
 				r.Findings[i].Detail += " | auto-fix failed: " + fixErr.Error()
 			} else {
-				sealed, _ := verifier.Seal(f, snippetAbs, "PASS", "n/a")
-				r.Findings[i] = sealed
-				fmt.Printf("  → %s\n", newPath)
-				fixedCount++
+				// Fix 1: handle sealErr instead of discarding it.
+				sealed, sealErr := verifier.Seal(f, snippetAbs, "PASS", "n/a")
+				if sealErr != nil {
+					fmt.Printf("  FAILED to seal: %v\n", sealErr)
+					r.Findings[i].Status = report.StatusNeedsHuman
+					r.Findings[i].Detail += " | seal failed: " + sealErr.Error()
+				} else {
+					r.Findings[i] = sealed
+					fmt.Printf("  → %s\n", newPath)
+					fixedCount++
+				}
 			}
 
 		case report.TypeSnippetContentDrift:
 			fmt.Printf("[fix] SNIPPET_CONTENT_DRIFT %s\n", f.SnippetFile)
+			// Fix 4: guard against empty snippet_file or doc_page fields.
+			if f.SnippetFile == "" || f.DocPage == "" {
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | missing snippet_file or doc_page field"
+				continue
+			}
 			snippetAbs := filepath.Join(sdkPath, sdkCfg.SnippetDir, filepath.Base(f.SnippetFile))
 			mdxAbs := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, f.DocPage+".mdx")
-			code, extractErr := fixer.ExtractSnippetContent(snippetAbs)
-			if extractErr == nil {
-				extractErr = fixer.SyncSnippetToMDX(mdxAbs, f.Platform, platformLang(f.Platform), code)
+			code, syncErr := fixer.ExtractSnippetContent(snippetAbs)
+			if syncErr == nil {
+				syncErr = fixer.SyncSnippetToMDX(mdxAbs, f.Platform, platformLang(f.Platform), code)
 			}
-			if extractErr != nil {
+			if syncErr != nil {
 				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | " + extractErr.Error()
+				r.Findings[i].Detail += " | " + syncErr.Error()
 			} else {
-				sealed, _ := verifier.Seal(f, mdxAbs, "PASS", "n/a")
-				r.Findings[i] = sealed
-				fixedCount++
+				// Fix 1: handle sealErr instead of discarding it.
+				sealed, sealErr := verifier.Seal(f, mdxAbs, "PASS", "n/a")
+				if sealErr != nil {
+					fmt.Printf("  FAILED to seal: %v\n", sealErr)
+					r.Findings[i].Status = report.StatusNeedsHuman
+					r.Findings[i].Detail += " | seal failed: " + sealErr.Error()
+				} else {
+					r.Findings[i] = sealed
+					fmt.Printf("  → fixed\n")
+					fixedCount++
+				}
 			}
 
 		case report.TypeMissingSnippet:
 			fmt.Printf("[fix] MISSING_SNIPPET %s/%s\n", f.Platform, f.FunctionID)
+			// Fix 4: guard against empty function_id field.
+			if f.FunctionID == "" {
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | missing function_id field"
+				continue
+			}
 			snippet, genErr := gen.Generate(ctx, f.Platform, f.FunctionID, "", "")
 			if genErr != nil {
 				r.Findings[i].Status = report.StatusNeedsHuman
@@ -117,7 +149,11 @@ func runFix(args []string) {
 				r.Findings[i].Detail += " | write failed: " + writeErr.Error()
 				continue
 			}
-			result, outHash, _ := compiler.Run(sdkPath, sdkCfg)
+			// Fix 3: log compiler exec setup errors.
+			result, outHash, compileErr := compiler.Run(sdkPath, sdkCfg)
+			if compileErr != nil {
+				fmt.Printf("  compiler exec error: %v\n", compileErr)
+			}
 			sealed, sealErr := verifier.Seal(f, destPath, result, outHash)
 			if sealErr != nil {
 				fmt.Printf("  compile FAIL — needs human review\n")
@@ -130,15 +166,29 @@ func runFix(args []string) {
 
 		case report.TypeDocSurfaceDrift:
 			fmt.Printf("[fix] DOC_SURFACE_DRIFT %s\n", f.DocPage)
+			// Fix 4: guard against empty doc_page field.
+			if f.DocPage == "" {
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | missing doc_page field"
+				continue
+			}
 			mdxAbs := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, f.DocPage+".mdx")
 			surfaceErr := surfaceFixer.FixSurfaceDrift(ctx, mdxAbs, f.Detail, "")
 			if surfaceErr != nil {
 				r.Findings[i].Status = report.StatusNeedsHuman
 				r.Findings[i].Detail += " | " + surfaceErr.Error()
 			} else {
-				sealed, _ := verifier.Seal(f, mdxAbs, "PASS", "n/a")
-				r.Findings[i] = sealed
-				fixedCount++
+				// Fix 1: handle sealErr instead of discarding it.
+				sealed, sealErr := verifier.Seal(f, mdxAbs, "PASS", "n/a")
+				if sealErr != nil {
+					fmt.Printf("  FAILED to seal: %v\n", sealErr)
+					r.Findings[i].Status = report.StatusNeedsHuman
+					r.Findings[i].Detail += " | seal failed: " + sealErr.Error()
+				} else {
+					r.Findings[i] = sealed
+					fmt.Printf("  → fixed\n")
+					fixedCount++
+				}
 			}
 
 		default:
@@ -148,28 +198,31 @@ func runFix(args []string) {
 
 	if writeErr := report.Write(r, *reportPath); writeErr != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", writeErr)
+		os.Exit(1)
 	}
 	if writeErr := report.WriteIssues(r.Findings, *issuesPath); writeErr != nil {
 		fmt.Fprintf(os.Stderr, "write issues: %v\n", writeErr)
+		os.Exit(1)
 	}
 
 	fmt.Printf("\nFixed %d findings. Run 'audit' to verify.\n", fixedCount)
 }
 
 // extractAscPageFromSnippet reads a snippet file and returns the value of the
-// asc_page metadata field, or empty string if not found.
-func extractAscPageFromSnippet(path string) string {
+// asc_page metadata field, or an error if the file cannot be read or the field
+// is absent.
+func extractAscPageFromSnippet(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("read snippet file: %w", err)
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "asc_page:") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "asc_page:"))
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "asc_page:")), nil
 		}
 	}
-	return ""
+	return "", fmt.Errorf("asc_page field not found in snippet")
 }
 
 func platformLang(platform string) string {

@@ -25,14 +25,29 @@ func FixAscPage(snippetFile, currentAscPage string, reg *pages.Registry) (string
 		return "", fmt.Errorf("read snippet: %w", err)
 	}
 
-	updated := strings.Replace(string(content), "asc_page: "+currentAscPage, "asc_page: "+newPath, 1)
-	if updated == string(content) {
+	lines := strings.Split(string(content), "\n")
+	found := false
+	for j, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmedLine, "asc_page:") {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmedLine, "asc_page:"))
+			if val == currentAscPage {
+				// Preserve leading whitespace (indentation)
+				indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+				lines[j] = indent + "asc_page: " + newPath
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
 		return "", fmt.Errorf("asc_page %q not found in snippet %q", currentAscPage, snippetFile)
 	}
+
+	updated := strings.Join(lines, "\n")
 	if err := os.WriteFile(snippetFile, []byte(updated), 0o644); err != nil {
 		return "", fmt.Errorf("write snippet: %w", err)
 	}
-
 	return newPath, nil
 }
 

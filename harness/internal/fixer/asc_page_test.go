@@ -55,7 +55,8 @@ void doThing() {}
 	assert.Error(t, err)
 }
 
-func TestFixAscPage_LineNotFound(t *testing.T) {
+func TestFixAscPage_DoubleSpace(t *testing.T) {
+	// Fix 5: whitespace-tolerant replacement means double-space is now handled.
 	dir := t.TempDir()
 	content := `/* begin_sample_code
     asc_page:  https://docs.amity.co/social/flutter
@@ -67,12 +68,14 @@ void doThing() {}
 
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/social/flutter"})
 
-	_, err := fixer.FixAscPage(f, "https://docs.amity.co/social/flutter", reg)
-	require.Error(t, err)
+	newPath, err := fixer.FixAscPage(f, "https://docs.amity.co/social/flutter", reg)
+	require.NoError(t, err)
+	assert.Equal(t, "social-plus-sdk/social/flutter", newPath)
 
 	updated, readErr := os.ReadFile(f)
 	require.NoError(t, readErr)
-	assert.Contains(t, string(updated), "asc_page:  https://docs.amity.co/social/flutter")
+	assert.Contains(t, string(updated), "asc_page: social-plus-sdk/social/flutter")
+	assert.NotContains(t, string(updated), "https://docs.amity.co")
 }
 
 func TestFixAscPage_PartialOverlapDoesNotMatch(t *testing.T) {
