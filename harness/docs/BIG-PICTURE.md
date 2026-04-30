@@ -383,13 +383,17 @@ snippets are complete.
 | Snippet markers in 4 SDK repos | ✅ | ~1,714 snippets use `sp_docs_page:` |
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
 | `gendocs --clean` | ✅ | 962 snippet MDX files generated |
-| `audit` command | ✅ | Finds all 4 finding types |
+| `audit` command | ✅ | Finds all 4 finding types + manifest coverage |
 | `fix` command | ✅ | 48 URLs auto-fixed, 21 need human |
-| `migrate` command | ✅ | Page-level CodeGroup replacement |
-| `prompt` command | ✅ | Generates `harness-tasks.md` |
+| `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
+| `prompt` command | ✅ | Generates `harness-tasks.md` with section context |
 | `compiler` + `verifier` packages | ✅ | Compile checking + hash-based change detection |
-| **Page manifests** | 🔄 Next phase | Source of truth per page — not yet created |
-| **Section-level migration** | 🔄 Blocked on manifests | Migrate will use manifest for targeting |
+| `internal/manifest` package | ✅ | Parse `*.manifest.yml`; `LoadForPage`, `SectionForSnippet` |
+| `internal/mdxparse` package | ✅ | Extract `###` headings with `<CodeGroup>` from MDX |
+| `genmanifests` command | ✅ | Bootstraps 123 skeleton manifests across doc pages |
+| `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
+| **Page manifest `snippets:` fill-in** | 🤖 Next — inferential | AI fills `snippets: []` with GendocsKeys per section |
+| **Section-level migrate (filled manifests)** | 🔄 Blocked on manifest fill-in | Ready once snippets are mapped |
 | **Mintlify build validation** | 🔜 Future | Verify no broken imports after migrate |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 

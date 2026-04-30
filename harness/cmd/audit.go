@@ -144,8 +144,18 @@ func runAudit(args []string) {
 		manifestCount := 0
 		addedCount := 0
 		_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil || d.IsDir() || !strings.HasSuffix(path, ".manifest.yml") {
+			if walkErr != nil {
 				return walkErr
+			}
+			if d.IsDir() {
+				rel, _ := filepath.Rel(docsBase, path)
+				if rel == "harness" || strings.HasPrefix(filepath.ToSlash(rel)+"/", "harness/") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".manifest.yml") {
+				return nil
 			}
 			rel, relErr := filepath.Rel(docsBase, path)
 			if relErr != nil {
