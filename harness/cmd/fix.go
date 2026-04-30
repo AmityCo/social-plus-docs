@@ -37,6 +37,14 @@ func runFix(args []string) {
 		os.Exit(1)
 	}
 
+	// Load pages registry once — used by all ASC_PAGE_INVALID fixes.
+	docsJSON := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
+	reg, err := pages.Load(docsJSON)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load pages registry: %v\n", err)
+		os.Exit(1)
+	}
+
 	gen := generator.New(cfg.LLM.Model, *apiKey)
 	surfaceFixer := fixer.NewSurfaceDriftFixer(cfg.LLM.Model, *apiKey)
 	ctx := context.Background()
@@ -63,14 +71,8 @@ func runFix(args []string) {
 				r.Findings[i].Detail += " | missing snippet_file field"
 				continue
 			}
-			snippetAbs := filepath.Join(sdkPath, sdkCfg.SnippetDir, filepath.Base(f.SnippetFile))
-			docsJSON := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
-			reg, regErr := pages.Load(docsJSON)
-			if regErr != nil {
-				r.Findings[i].Status = report.StatusNeedsHuman
-				r.Findings[i].Detail += " | load registry failed: " + regErr.Error()
-				continue
-			}
+			// Resolve snippet path relative to the config dir (SnippetFile is already relative).
+			snippetAbs := filepath.Clean(filepath.Join(filepath.Dir(*cfgPath), f.SnippetFile))
 			// Fix 6: extractAscPageFromSnippet now returns (string, error).
 			currentAscPage, extractErr := extractAscPageFromSnippet(snippetAbs)
 			if extractErr != nil {
@@ -105,7 +107,8 @@ func runFix(args []string) {
 				r.Findings[i].Detail += " | missing snippet_file or doc_page field"
 				continue
 			}
-			snippetAbs := filepath.Join(sdkPath, sdkCfg.SnippetDir, filepath.Base(f.SnippetFile))
+			// Resolve snippet path relative to the config dir (SnippetFile is already relative).
+			snippetAbs := filepath.Clean(filepath.Join(filepath.Dir(*cfgPath), f.SnippetFile))
 			mdxAbs := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, f.DocPage+".mdx")
 			code, syncErr := fixer.ExtractSnippetContent(snippetAbs)
 			if syncErr == nil {

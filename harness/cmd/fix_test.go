@@ -18,6 +18,12 @@ func TestRunFixEmptyReport(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// pages.Load requires docs.json at docs.path/docs.json
+	docsJSON := `{"navigation": {"tabs": [{"pages": ["social-plus-sdk/overview"]}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "docs.json"), []byte(docsJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	r := report.Report{GeneratedAt: "2024-01-01T00:00:00Z", Findings: []report.Finding{}}
 	b, err := json.Marshal(r)
 	if err != nil {

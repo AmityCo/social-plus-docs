@@ -78,7 +78,9 @@ void doThing() {}
 	assert.NotContains(t, string(updated), "https://docs.amity.co")
 }
 
-func TestFixAscPage_PartialOverlapDoesNotMatch(t *testing.T) {
+func TestFixAscPage_PartialOverlapMatches(t *testing.T) {
+	// With lenient scoring (ceil(n/2)), a URL like chat/overview should match
+	// any docs path that contains "chat" — even if "overview" isn't in the path.
 	dir := t.TempDir()
 	content := `/* begin_sample_code
     asc_page: https://docs.amity.co/chat/overview
@@ -90,6 +92,24 @@ void doThing() {}
 
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create-channel"})
 
-	_, err := fixer.FixAscPage(f, "https://docs.amity.co/chat/overview", reg)
+	newPath, err := fixer.FixAscPage(f, "https://docs.amity.co/chat/overview", reg)
+	require.NoError(t, err)
+	assert.Equal(t, "social-plus-sdk/chat/channels/create-channel", newPath)
+}
+
+func TestFixAscPage_ZeroOverlapNoMatch(t *testing.T) {
+	// A URL with segments that don't appear in any registry path should still fail.
+	dir := t.TempDir()
+	content := `/* begin_sample_code
+    asc_page: https://docs.amity.co/completely/unknown/page
+    */
+void doThing() {}
+/* end_sample_code */`
+	f := filepath.Join(dir, "test.dart")
+	require.NoError(t, os.WriteFile(f, []byte(content), 0o644))
+
+	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create-channel"})
+
+	_, err := fixer.FixAscPage(f, "https://docs.amity.co/completely/unknown/page", reg)
 	assert.Error(t, err)
 }

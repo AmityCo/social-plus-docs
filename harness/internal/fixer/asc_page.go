@@ -51,6 +51,15 @@ func FixAscPage(snippetFile, currentAscPage string, reg *pages.Registry) (string
 	return newPath, nil
 }
 
+// platformStopWords are URL segments that identify SDK platforms but never
+// appear in docs.json paths (which are cross-platform). Skipped during scoring.
+var platformStopWords = map[string]bool{
+	"ios": true, "android": true, "flutter": true,
+	"typescript": true, "web": true, "javascript": true,
+	"kotlin": true, "swift": true, "dart": true,
+	"amity": true, "docs": true, "co": true,
+}
+
 // fuzzyMatchWithDiag returns (matched path, best candidate even if below threshold).
 func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) {
 	clean := strings.TrimSpace(strings.ToLower(legacyURL))
@@ -64,7 +73,20 @@ func fuzzyMatchWithDiag(legacyURL string, reg *pages.Registry) (string, string) 
 		}
 	}
 
-	segments := strings.Split(clean, "/")
+	// Filter out platform stop-words and URL fragments — they don't appear in docs.json paths.
+	var segments []string
+	for _, s := range strings.Split(clean, "/") {
+		// Strip URL fragments (e.g. "channel-management#metadata" → "channel-management")
+		if idx := strings.Index(s, "#"); idx >= 0 {
+			s = s[:idx]
+		}
+		if s != "" && !platformStopWords[s] {
+			segments = append(segments, s)
+		}
+	}
+	if len(segments) == 0 {
+		return "", ""
+	}
 
 	paths := reg.All()
 	sort.Strings(paths) // deterministic tie-breaking: alphabetically first wins
@@ -111,14 +133,7 @@ func matchScore(path string, segments []string) int {
 }
 
 func requiredScore(segments []string) int {
-	meaningful := 0
-	for _, segment := range segments {
-		if segment != "" {
-			meaningful++
-		}
-	}
-	if meaningful == 0 {
-		return 1
-	}
-	return meaningful
+	// With only ~81 pages in docs.json vs. highly specific legacy URLs,
+	// require just 1 matching segment — best match wins.
+	return 1
 }
