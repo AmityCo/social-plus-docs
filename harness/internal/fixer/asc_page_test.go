@@ -35,7 +35,7 @@ void doThing() {}
 
 	updated, err := os.ReadFile(f)
 	require.NoError(t, err)
-	assert.Contains(t, string(updated), "asc_page: social-plus-sdk/social/flutter")
+	assert.Contains(t, string(updated), "sp_docs_page: social-plus-sdk/social/flutter")
 	assert.NotContains(t, string(updated), "https://docs.amity.co")
 }
 
@@ -74,7 +74,7 @@ void doThing() {}
 
 	updated, readErr := os.ReadFile(f)
 	require.NoError(t, readErr)
-	assert.Contains(t, string(updated), "asc_page: social-plus-sdk/social/flutter")
+	assert.Contains(t, string(updated), "sp_docs_page: social-plus-sdk/social/flutter")
 	assert.NotContains(t, string(updated), "https://docs.amity.co")
 }
 

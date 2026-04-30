@@ -27,7 +27,7 @@ func TestMissingSnippet(t *testing.T) {
 func TestAscPageInvalid_LegacyURL(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
-		{AscPage: "https://docs.amity.co/social/flutter", Platform: "flutter", File: "snippet.dart"},
+		{SpDocsPage: "https://docs.amity.co/social/flutter", Platform: "flutter", File: "snippet.dart"},
 	}
 	reg := pages.NewFromPaths(nil)
 
@@ -39,7 +39,7 @@ func TestAscPageInvalid_LegacyURL(t *testing.T) {
 func TestDocMissing(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
-		{AscPage: "social-plus-sdk/chat/nonexistent", Platform: "flutter", File: "snippet.dart"},
+		{SpDocsPage: "social-plus-sdk/chat/nonexistent", Platform: "flutter", File: "snippet.dart"},
 	}
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/overview"})
 
@@ -52,7 +52,7 @@ func TestDocSurfaceDrift(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
 		{
-			AscPage:  "social-plus-sdk/chat/channels/create",
+			SpDocsPage:  "social-plus-sdk/chat/channels/create",
 			Content:  "AmityChatClient.newChannelRepository().communityType().create()",
 			Platform: "flutter",
 			File:     "snippet.dart",
@@ -77,7 +77,7 @@ func TestSnippetContentDrift(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
 		{
-			AscPage:  "social-plus-sdk/chat/channels/create",
+			SpDocsPage:  "social-plus-sdk/chat/channels/create",
 			Content:  "AmityChatClient.newChannelRepository().communityType().create()",
 			Platform: "flutter",
 			File:     "snippet.dart",
@@ -101,7 +101,7 @@ func TestSnippetContentDrift(t *testing.T) {
 func TestSnippetContentDrift_NoFalsePositive(t *testing.T) {
 	snips := []scanner.Snippet{
 		{
-			AscPage:  "social-plus-sdk/chat/channels/create",
+			SpDocsPage:  "social-plus-sdk/chat/channels/create",
 			Content:  "AmityChatClient.newChannelRepository().create()",
 			Platform: "flutter",
 			File:     "snippet.dart",
@@ -125,7 +125,7 @@ func TestNoFindingsWhenClean(t *testing.T) {
 	}
 	snips := []scanner.Snippet{
 		{
-			AscPage:  "social-plus-sdk/chat/channels/create",
+			SpDocsPage:  "social-plus-sdk/chat/channels/create",
 			Content:  "AmityChatClient.newChannelRepository().create()",
 			Platform: "flutter",
 			File:     "snippet.dart",

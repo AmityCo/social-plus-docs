@@ -60,37 +60,37 @@ func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *p
 	for _, s := range snips {
 		base := filepath.Base(s.File)
 
-		if strings.HasPrefix(s.AscPage, "http") {
+		if strings.HasPrefix(s.SpDocsPage, "http") {
 			findings = append(findings, report.Finding{
 				ID:          fmt.Sprintf("%s-asc-invalid-%s", platform, base),
 				Type:        report.TypeAscPageInvalid,
 				Platform:    platform,
 				SnippetFile: s.File,
-				Detail:      fmt.Sprintf("asc_page %q is a legacy URL, not a docs.json relative path", s.AscPage),
+				Detail:      fmt.Sprintf("sp_docs_page %q is a legacy URL, not a docs.json relative path", s.SpDocsPage),
 				Status:      report.StatusOpen,
 			})
 			continue
 		}
 
-		if s.AscPage == "" {
+		if s.SpDocsPage == "" {
 			continue
 		}
 
-		if !reg.Contains(s.AscPage) {
+		if !reg.Contains(s.SpDocsPage) {
 			findings = append(findings, report.Finding{
 				ID:          fmt.Sprintf("%s-doc-missing-%s", platform, base),
 				Type:        report.TypeDocMissing,
 				Platform:    platform,
 				SnippetFile: s.File,
-				DocPage:     s.AscPage,
-				Detail:      fmt.Sprintf("asc_page %q not found in docs.json", s.AscPage),
+				DocPage:     s.SpDocsPage,
+				Detail:      fmt.Sprintf("sp_docs_page %q not found in docs.json", s.SpDocsPage),
 				Status:      report.StatusOpen,
 			})
 			continue
 		}
 
 		if mdxContent != nil {
-			mdx, ok := mdxContent[s.AscPage]
+			mdx, ok := mdxContent[s.SpDocsPage]
 			if ok {
 				for _, call := range extractMethodCalls(s.Content) {
 					if strings.Contains(mdx, call) {
@@ -102,7 +102,7 @@ func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *p
 						Type:        report.TypeDocSurfaceDrift,
 						Platform:    platform,
 						SnippetFile: s.File,
-						DocPage:     s.AscPage,
+						DocPage:     s.SpDocsPage,
 						Detail:      fmt.Sprintf("snippet calls %q but not found in doc page content", call),
 						Status:      report.StatusOpen,
 					})
@@ -117,8 +117,8 @@ func DiffWithMDX(fns []extractor.PublicFunction, snips []scanner.Snippet, reg *p
 							Type:        report.TypeSnippetContentDrift,
 							Platform:    platform,
 							SnippetFile: s.File,
-							DocPage:     s.AscPage,
-							Detail:      fmt.Sprintf("snippet content not found in MDX page %q", s.AscPage),
+							DocPage:     s.SpDocsPage,
+							Detail:      fmt.Sprintf("snippet content not found in MDX page %q", s.SpDocsPage),
 							Status:      report.StatusOpen,
 						})
 					}

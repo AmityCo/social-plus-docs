@@ -65,10 +65,10 @@ func TestDeriveMDXPath(t *testing.T) {
 
 func TestGroupSnippets(t *testing.T) {
 	snips := []scanner.Snippet{
-		{Filename: "AmityCommunityCreate.kt", AscPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "android code", Platform: "android"},
-		{Filename: "AmityCommunityCreate.swift", AscPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "ios code", Platform: "ios"},
-		{Filename: "AmityCommunityCreate.dart", AscPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "flutter code", Platform: "flutter"},
-		{Filename: "AmityPostCreateTextPost.kt", AscPage: "social-plus-sdk/social/posts/create-post", Description: "Create text post", Content: "android post", Platform: "android"},
+		{Filename: "AmityCommunityCreate.kt", SpDocsPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "android code", Platform: "android"},
+		{Filename: "AmityCommunityCreate.swift", SpDocsPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "ios code", Platform: "ios"},
+		{Filename: "AmityCommunityCreate.dart", SpDocsPage: "social-plus-sdk/social/communities/create", Description: "Create a community", Content: "flutter code", Platform: "flutter"},
+		{Filename: "AmityPostCreateTextPost.kt", SpDocsPage: "social-plus-sdk/social/posts/create-post", Description: "Create text post", Content: "android post", Platform: "android"},
 	}
 
 	groups := docgen.GroupSnippets(snips)
@@ -77,7 +77,7 @@ func TestGroupSnippets(t *testing.T) {
 
 	communityGroup, ok := groups["community-create"]
 	assert.True(t, ok, "community-create group should exist")
-	assert.Equal(t, "social-plus-sdk/social/communities/create", communityGroup.AscPage)
+	assert.Equal(t, "social-plus-sdk/social/communities/create", communityGroup.SpDocsPage)
 	assert.Equal(t, "Create a community", communityGroup.Description)
 	assert.Equal(t, "android code", communityGroup.Snippets["android"].Content)
 	assert.Equal(t, "ios code", communityGroup.Snippets["ios"].Content)
@@ -91,7 +91,7 @@ func TestGroupSnippets(t *testing.T) {
 func TestRenderMDX(t *testing.T) {
 	group := docgen.SnippetGroup{
 		Key:         "community-create",
-		AscPage:     "social-plus-sdk/social/communities/create",
+		SpDocsPage:     "social-plus-sdk/social/communities/create",
 		Description: "Create a community",
 		Snippets: map[string]scanner.Snippet{
 			"android": {Content: "android code here", Platform: "android"},
@@ -139,7 +139,7 @@ func TestWrite(t *testing.T) {
 	groups := map[string]docgen.SnippetGroup{
 		"community-create": {
 			Key:     "community-create",
-			AscPage: "social-plus-sdk/social/communities/create",
+			SpDocsPage: "social-plus-sdk/social/communities/create",
 			Snippets: map[string]scanner.Snippet{
 				"android": {Content: "android code", Platform: "android"},
 			},
@@ -167,7 +167,7 @@ func TestWriteSkipsHumanEdited(t *testing.T) {
 	groups := map[string]docgen.SnippetGroup{
 		"community-create": {
 			Key:     "community-create",
-			AscPage: "social-plus-sdk/social/communities/create",
+			SpDocsPage: "social-plus-sdk/social/communities/create",
 			Snippets: map[string]scanner.Snippet{
 				"android": {Content: "android code", Platform: "android"},
 			},
@@ -188,7 +188,7 @@ func TestWriteDryRun(t *testing.T) {
 	groups := map[string]docgen.SnippetGroup{
 		"community-create": {
 			Key:     "community-create",
-			AscPage: "social-plus-sdk/social/communities/create",
+			SpDocsPage: "social-plus-sdk/social/communities/create",
 			Snippets: map[string]scanner.Snippet{
 				"android": {Content: "android code", Platform: "android"},
 			},
@@ -207,8 +207,8 @@ func TestWriteDryRun(t *testing.T) {
 func TestWriteManifest(t *testing.T) {
 	outDir := t.TempDir()
 	groups := map[string]docgen.SnippetGroup{
-		"community-create": {Key: "community-create", AscPage: "social-plus-sdk/social/communities/create"},
-		"post-create":      {Key: "post-create", AscPage: "social-plus-sdk/social/posts/create"},
+		"community-create": {Key: "community-create", SpDocsPage: "social-plus-sdk/social/communities/create"},
+		"post-create":      {Key: "post-create", SpDocsPage: "social-plus-sdk/social/posts/create"},
 	}
 
 	err := docgen.WriteManifest(outDir, groups, false, io.Discard)
@@ -226,7 +226,7 @@ func TestWriteManifest(t *testing.T) {
 func TestWriteManifestDryRun(t *testing.T) {
 	outDir := t.TempDir()
 	groups := map[string]docgen.SnippetGroup{
-		"community-create": {Key: "community-create", AscPage: "social-plus-sdk/social/communities/create"},
+		"community-create": {Key: "community-create", SpDocsPage: "social-plus-sdk/social/communities/create"},
 	}
 	err := docgen.WriteManifest(outDir, groups, true, io.Discard)
 	assert.NoError(t, err)
@@ -237,13 +237,13 @@ func TestWriteManifestDryRun(t *testing.T) {
 func TestGroupSnippetsFiltersInvalid(t *testing.T) {
 	snips := []scanner.Snippet{
 		// valid
-		{Filename: "AmityCommunityCreate.kt", AscPage: "social-plus-sdk/social/communities/create", Content: "valid", Platform: "android"},
+		{Filename: "AmityCommunityCreate.kt", SpDocsPage: "social-plus-sdk/social/communities/create", Content: "valid", Platform: "android"},
 		// invalid: absolute URL asc_page
-		{Filename: "AmityStreamCreate.kt", AscPage: "https://docs.amity.co/amity-sdk/video/", Content: "bad", Platform: "android"},
+		{Filename: "AmityStreamCreate.kt", SpDocsPage: "https://docs.amity.co/amity-sdk/video/", Content: "bad", Platform: "android"},
 		// invalid: empty asc_page
-		{Filename: "AmityAdsSample.swift", AscPage: "", Content: "bad", Platform: "ios"},
+		{Filename: "AmityAdsSample.swift", SpDocsPage: "", Content: "bad", Platform: "ios"},
 		// invalid: empty filename
-		{Filename: "", AscPage: "social-plus-sdk/social/foo", Content: "bad", Platform: "flutter"},
+		{Filename: "", SpDocsPage: "social-plus-sdk/social/foo", Content: "bad", Platform: "flutter"},
 	}
 
 	groups := docgen.GroupSnippets(snips)

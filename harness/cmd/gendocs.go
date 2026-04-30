@@ -49,10 +49,10 @@ func runGendocs(args []string) {
 	normalizedCount := 0
 	skippedURLCount := 0
 	for i, s := range allSnips {
-		if strings.Contains(s.AscPage, "://") {
-			newPage := fixer.NormalizeAscPage(s.AscPage, reg)
+		if strings.Contains(s.SpDocsPage, "://") {
+			newPage := fixer.NormalizeAscPage(s.SpDocsPage, reg)
 			if newPage != "" {
-				allSnips[i].AscPage = newPage
+				allSnips[i].SpDocsPage = newPage
 				normalizedCount++
 			} else {
 				skippedURLCount++
@@ -60,7 +60,7 @@ func runGendocs(args []string) {
 		}
 	}
 	if normalizedCount > 0 || skippedURLCount > 0 {
-		fmt.Printf("[gendocs] URL asc_pages: %d normalized, %d unmappable (skipped)\n", normalizedCount, skippedURLCount)
+		fmt.Printf("[gendocs] URL sp_docs_pages: %d normalized, %d unmappable (skipped)\n", normalizedCount, skippedURLCount)
 	}
 
 	groups := docgen.GroupSnippets(allSnips)
