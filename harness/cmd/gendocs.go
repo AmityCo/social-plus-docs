@@ -19,6 +19,7 @@ func runGendocs(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	dryRun := fs.Bool("dry-run", false, "print planned writes without touching files")
 	outOverride := fs.String("out", "", "override output directory (default: <docs_path>/snippets)")
+	clean := fs.Bool("clean", false, "remove all AUTO-GENERATED files in outDir before writing")
 	_ = fs.Parse(args)
 
 	cfg, err := config.Load(*cfgPath)
@@ -72,6 +73,15 @@ func runGendocs(args []string) {
 	}
 	if *dryRun {
 		fmt.Println("[gendocs] DRY RUN — no files will be written")
+	}
+
+	if *clean {
+		removed, cleanErr := docgen.CleanDir(outDir)
+		if cleanErr != nil {
+			fmt.Fprintf(os.Stderr, "clean error: %v\n", cleanErr)
+			os.Exit(1)
+		}
+		fmt.Printf("[gendocs] --clean: removed %d stale AUTO-GENERATED files\n", removed)
 	}
 
 	written, skipped, err := docgen.Write(outDir, groups, *dryRun, os.Stdout)
