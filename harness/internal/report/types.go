@@ -8,6 +8,7 @@ const (
 	TypeAscPageInvalid      FindingType = "ASC_PAGE_INVALID"
 	TypeDocSurfaceDrift     FindingType = "DOC_SURFACE_DRIFT"
 	TypeSnippetContentDrift FindingType = "SNIPPET_CONTENT_DRIFT"
+	TypeDocPageStaleImport  FindingType = "DOC_PAGE_STALE_IMPORT"
 )
 
 type FindingStatus string
@@ -27,15 +28,19 @@ type Evidence struct {
 }
 
 type Finding struct {
-	ID          string        `json:"id"`
-	Type        FindingType   `json:"type"`
-	Platform    string        `json:"platform"`
-	FunctionID  string        `json:"function_id,omitempty"`
-	SnippetFile string        `json:"snippet_file,omitempty"`
-	DocPage     string        `json:"doc_page,omitempty"`
-	Detail      string        `json:"detail,omitempty"`
-	Status      FindingStatus `json:"status"`
-	Evidence    *Evidence     `json:"evidence,omitempty"`
+	ID                   string        `json:"id"`
+	Type                 FindingType   `json:"type"`
+	Platform             string        `json:"platform"`
+	FunctionID           string        `json:"function_id,omitempty"`
+	SnippetFile          string        `json:"snippet_file,omitempty"`
+	DocPage              string        `json:"doc_page,omitempty"`
+	DocPageFile          string        `json:"doc_page_file,omitempty"`
+	GendocsKey           string        `json:"gendocs_key,omitempty"`
+	GendocsPath          string        `json:"gendocs_path,omitempty"`
+	HasHardcodedCodeGroup bool         `json:"has_hardcoded_code_group,omitempty"`
+	Detail               string        `json:"detail,omitempty"`
+	Status               FindingStatus `json:"status"`
+	Evidence             *Evidence     `json:"evidence,omitempty"`
 }
 
 type Summary struct {
