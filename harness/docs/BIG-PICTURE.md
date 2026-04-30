@@ -162,25 +162,39 @@ sections:
 
 ---
 
+## Computational vs Inferential Harness
+
+This is the core design principle. Every step in the pipeline is classified as one or the other:
+
+| Type | Who runs it | Characteristics |
+|---|---|---|
+| **Computational** | Machine / CI | Deterministic, rule-based, fast, repeatable — pure Go code |
+| **Inferential** | AI agent / human | Requires understanding, judgment, or code generation |
+
+The harness CLI handles all computational steps. The AI agent (reading `harness-tasks.md`)
+handles all inferential steps. They hand off to each other between phases.
+
+---
+
 ## The Harness CLI (`harness-bin`)
 
 The harness is a Go CLI with 5 commands:
 
-### `audit` — Find problems
+### `audit` — Find problems ⚙️ Computational
 Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
 
-| Finding Type | Meaning |
-|---|---|
-| `MISSING_SNIPPET` | A manifest function has no matching snippet in any SDK repo |
-| `ASC_PAGE_INVALID` | Snippet's `sp_docs_page` doesn't match any page in docs.json |
-| `DOC_MISSING` | Doc page referenced by a snippet doesn't exist |
-| `DOC_PAGE_STALE_IMPORT` | Doc page still has a hardcoded `<CodeGroup>` instead of a generated import |
+| Finding Type | Meaning | Resolution |
+|---|---|---|
+| `MISSING_SNIPPET` | A manifest function has no snippet in any SDK repo | 🤖 Inferential — AI writes the snippet |
+| `ASC_PAGE_INVALID` | Snippet's `sp_docs_page` doesn't match any page in docs.json | ⚙️ Computational (auto-fix) or 🤖 Inferential (needs_human) |
+| `DOC_MISSING` | Doc page referenced by a snippet doesn't exist | 🤖 Inferential — human or AI creates the page |
+| `DOC_PAGE_STALE_IMPORT` | Doc page still uses hardcoded `<CodeGroup>` instead of a generated import | ⚙️ Computational — `migrate` handles this |
 
-### `fix` — Auto-repair what can be fixed
-Normalizes broken `sp_docs_page` URLs (e.g. `https://docs.amity.co/...` → relative path).
-Flags findings that need human review.
+### `fix` — Auto-repair broken URLs ⚙️ Computational
+Normalizes `sp_docs_page` URLs (e.g. `https://docs.amity.co/...` → relative path).
+Findings it cannot resolve algorithmically are marked `needs_human` → 🤖 Inferential step.
 
-### `gendocs` — Generate snippet MDX files
+### `gendocs` — Generate snippet MDX files ⚙️ Computational
 Reads `begin_sample_code` markers from all 4 SDK repos → writes `snippets/*.mdx` files.
 One MDX file per function, containing all available platform tabs.
 
@@ -189,15 +203,19 @@ One MDX file per function, containing all available platform tabs.
 # --clean removes stale AUTO-GENERATED files before regeneration
 ```
 
-### `migrate` — Wire doc pages to generated snippets
+### `migrate` — Wire doc pages to generated snippets ⚙️ Computational
 Reads `harness-report.json` → for each `DOC_PAGE_STALE_IMPORT` finding:
 - Adds `import LoginUser from '/snippets/.../login-user.mdx';` at the top of the MDX
 - Replaces the matching `<CodeGroup>` block with `<LoginUser />`
 - Uses the page manifest for section-level targeting (which CodeGroup to replace)
 
-### `prompt` — Generate the AI agent runbook
+> When no manifest exists yet, section targeting requires judgment → 🤖 Inferential:
+> the AI reads the page and decides which heading a snippet belongs under.
+
+### `prompt` — Generate the AI agent runbook ⚙️ Computational (output triggers 🤖 Inferential)
 Reads unresolved findings → writes `harness-tasks.md` with one AI-ready task per
 missing snippet (platform, function, page context, manifest section).
+The harness builds the runbook computationally; an AI agent executes it inferentially.
 
 ---
 
@@ -267,56 +285,72 @@ import LoginUser from '/snippets/social-plus-sdk/getting-started/login-user.mdx'
 The harness is designed so an AI agent can run the entire workflow autonomously,
 with no human intervention between phases. `harness-tasks.md` is the AI's runbook.
 
+```
+Computational steps ──→ produce findings / artifacts
+                                  ↓
+Inferential steps ──→ AI agent reads harness-tasks.md, fills gaps
+                                  ↓
+Computational steps ──→ verify, regenerate, advance to next phase
+```
+
 ### Phase 1 — Migration (one-time, in progress)
 *Convert all existing hardcoded `<CodeGroup>` blocks to generated imports.*
 
-```
-audit → fix → gendocs --clean → audit → migrate → verify Mintlify builds
-```
-
-AI agent reads `harness-tasks.md` and:
-1. Runs `migrate` for all `DOC_PAGE_STALE_IMPORT` findings
-2. If a `<CodeGroup>` can't be auto-migrated (no manifest yet) → flags for human
-3. Runs `gendocs` → verifies no broken imports in Mintlify build
+| Step | Type | Who |
+|---|---|---|
+| `audit` → find `DOC_PAGE_STALE_IMPORT` | ⚙️ Computational | harness |
+| `gendocs --clean` → generate snippet MDX files | ⚙️ Computational | harness |
+| `migrate` → replace CodeGroups with imports | ⚙️ Computational | harness |
+| Create page manifests (read each MDX, infer sections + functions) | 🤖 Inferential | AI agent |
+| Section-targeted `migrate` using manifests | ⚙️ Computational | harness |
+| Verify Mintlify build passes | ⚙️ Computational | CI |
 
 **Exit criteria:** 0 `DOC_PAGE_STALE_IMPORT` findings with status `open`
 
 ### Phase 2 — Coverage (ongoing)
 *Ensure every manifest function has a snippet in every platform SDK.*
 
-```
-audit → prompt → [AI writes missing snippets] → compile → gendocs → audit
-```
+| Step | Type | Who |
+|---|---|---|
+| `audit` → find `MISSING_SNIPPET` per manifest | ⚙️ Computational | harness |
+| `prompt` → generate `harness-tasks.md` | ⚙️ Computational | harness |
+| Find function in SDK source or determine it doesn't exist | 🤖 Inferential | AI agent |
+| Write `begin_sample_code` snippet wrapping real SDK function | 🤖 Inferential | AI agent |
+| Mark as `DOES_NOT_EXIST` if function not available on platform | 🤖 Inferential | AI agent |
+| `audit` → verify 0 new MISSING_SNIPPET findings | ⚙️ Computational | harness |
+| Compile snippets (verify they build) | ⚙️ Computational | harness |
+| `gendocs` → regenerate snippet MDX | ⚙️ Computational | harness |
 
-AI agent reads `harness-tasks.md` and for each `MISSING_SNIPPET` task:
-1. Looks up the function in the SDK source by filename/ID
-2. If found: writes a `begin_sample_code` snippet wrapping the real function
-3. If not found: marks as `DOES_NOT_EXIST` in `harness-report.json` (skip)
-4. After all snippets written: runs `./harness-bin audit` to verify 0 new findings
-
-**Exit criteria:** Every manifest function either has snippets or is marked `DOES_NOT_EXIST`
+**Exit criteria:** Every manifest function has snippets or is marked `DOES_NOT_EXIST`
 
 ### Phase 3 — Steady State (CI, future)
 *Keep docs in sync automatically on every SDK change.*
 
-```
-SDK PR merged → CI: audit + gendocs → if diff: open docs PR → Mintlify preview build
-```
+| Step | Type | Who |
+|---|---|---|
+| SDK PR merged → trigger harness | ⚙️ Computational | CI |
+| `audit` → detect changes | ⚙️ Computational | harness |
+| `gendocs` → regenerate changed snippets | ⚙️ Computational | harness |
+| Open docs PR if diff exists | ⚙️ Computational | CI |
+| Mintlify preview build validates | ⚙️ Computational | CI |
 
-No AI agent needed — pure automation. SDK developer updates code; docs update automatically.
+**No inferential steps in steady state** — the system is fully automated once manifests and
+snippets are complete.
 
 ---
 
 ## Full Pipeline Commands
 
 ```bash
+# ⚙️ COMPUTATIONAL — run these with the harness binary
+
 # 1. Find all problems
 ./harness-bin audit --config harness-config.yml
 
-# 2. Auto-fix broken sp_docs_page URLs
+# 2. Auto-fix broken sp_docs_page URLs (computational; remaining go to needs_human)
 ./harness-bin fix --config harness-config.yml
 
-# 3. Regenerate all snippet MDX files (clean slate)
+# 3. Regenerate all snippet MDX files
 ./harness-bin gendocs --config harness-config.yml --clean
 
 # 4. Re-audit to get fresh DOC_PAGE_STALE_IMPORT list
@@ -325,9 +359,19 @@ No AI agent needed — pure automation. SDK developer updates code; docs update 
 # 5. Migrate doc pages to use generated snippets
 ./harness-bin migrate --config harness-config.yml
 
-# 6. Generate AI agent runbook for missing snippets
+# 6. Generate AI agent runbook (computational output → triggers inferential work)
 ./harness-bin prompt --config harness-config.yml
-# → produces harness-tasks.md (AI reads this and works through it autonomously)
+# → produces harness-tasks.md
+
+# 🤖 INFERENTIAL — AI agent reads harness-tasks.md and:
+#   - Creates page manifests (read each MDX, infer sections + function keys)
+#   - Writes missing snippets (look up SDK source, wrap in begin_sample_code)
+#   - Marks DOES_NOT_EXIST for functions unavailable on a platform
+#   - Resolves needs_human ASC_PAGE_INVALID findings
+
+# ⚙️ COMPUTATIONAL — back to harness after inferential work:
+./harness-bin audit --config harness-config.yml  # verify 0 open findings
+./harness-bin gendocs --config harness-config.yml --clean  # regenerate with new snippets
 ```
 
 ---
