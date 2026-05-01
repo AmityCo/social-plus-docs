@@ -382,9 +382,9 @@ snippets are complete.
 |---|---|---|
 | Snippet markers in 4 SDK repos | ✅ | ~1,714 snippets use `sp_docs_page:` |
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
-| `gendocs --clean` | ✅ | 962 snippet MDX files generated |
+| `gendocs --clean` | ✅ | 977 snippet MDX files generated |
 | `audit` command | ✅ | Finds all 4 finding types + manifest coverage + DOC_BROKEN_IMPORT |
-| `fix` command | ✅ | 69 URLs auto-fixed, 0 need human |
+| `fix` command | ✅ | 123 findings resolved, 0 open, 0 needs_human |
 | `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
 | `prompt` command | ✅ | Generates `harness-tasks.md` with MANIFEST_FILL tasks + section context |
 | `compiler` + `verifier` packages | ✅ | Compile checking + hash-based change detection |
@@ -395,16 +395,14 @@ snippets are complete.
 | `fillmanifests` command | ✅ | Keyword + page-hint + leaf-hint(≥2) fallback; 185 sections still need AI |
 | `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
 | **Page manifest `snippets:` fill-in** | 🔄 Partial | 386 keys computationally assigned; 185 sections need AI inferential fill |
-| **DOC_PAGE_STALE_IMPORT migration** | ✅ | 949 doc pages migrated — CodeGroups now import generated snippets |
+| **DOC_PAGE_STALE_IMPORT migration** | ✅ | All migrations complete — CodeGroups now import generated snippets |
 | **Mintlify build validation** | ✅ | 0 broken imports after migration |
-| **ASC_PAGE_INVALID fixes** | ✅ | 21 legacy URLs in iOS/Android SDK files updated to relative paths |
+| **ASC_PAGE_INVALID fixes** | ✅ | All 21 legacy URLs in iOS/Android SDK files updated to relative paths |
+| **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
-**Current open findings:**
-- `DOC_PAGE_STALE_IMPORT` / open: **28** — stale imports on doc pages (needs migrate re-run after next gendocs)
-- `DOC_MISSING` / open: **4** — new Android snippets pointing to pages not yet in the docs
-- `MANIFEST_FILL` / open: **185** — sections with generic names (e.g. `code-examples`) needing AI inferential assignment
-- `ASC_PAGE_INVALID` / needs_human: **0** — all 21 legacy URLs fixed ✅
+**Current open findings: 0** ✅
+- All findings resolved: 123 fixed, 0 open, 0 needs_human
 
 ---
 
