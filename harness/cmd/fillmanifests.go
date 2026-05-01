@@ -77,6 +77,43 @@ func runFillManifests(args []string) {
 		hints := manifest.PageHintsFromPath(pagePath)
 		filled := manifest.FillFromSnippets(m, candidates, hints...)
 
+		// If sections are still empty, supplement with hint-matched snippet directory candidates.
+		// Uses leaf (last-segment) tokens with score ≥ 2 to avoid false positives from
+		// generic tokens like "message" that appear in hundreds of snippet names.
+		if hasSectionWithNoSnippets(m) {
+			leafHints := pageLeafHints(pagePath)
+			threshold := 2
+			if len(leafHints) < 2 {
+				threshold = 1
+			}
+			if len(leafHints) > 0 {
+				segs := strings.SplitN(pagePath, "/", 3)
+				dir1, dir2 := "", ""
+				if len(segs) > 0 {
+					dir1 = segs[0]
+				}
+				if len(segs) > 1 {
+					dir2 = segs[1]
+				}
+				snipDir := filepath.Join(docsBase, "snippets", dir1, dir2)
+				var dirCandidates []string
+				if entries, readErr := os.ReadDir(snipDir); readErr == nil {
+					for _, e := range entries {
+						if !strings.HasSuffix(e.Name(), ".mdx") {
+							continue
+						}
+						key := strings.TrimSuffix(e.Name(), ".mdx")
+						if manifest.ScoreKeyAgainstHints(key, leafHints) >= threshold {
+							dirCandidates = appendUnique(dirCandidates, key)
+						}
+					}
+				}
+				if len(dirCandidates) > 0 {
+					filled += manifest.FillFromSnippets(m, dirCandidates, hints...)
+				}
+			}
+		}
+
 		if len(candidates) > 0 {
 			for _, sec := range m.Sections {
 				if len(sec.Snippets) == 0 {
@@ -113,4 +150,28 @@ func appendUnique(slice []string, item string) []string {
 		}
 	}
 	return append(slice, item)
+}
+
+func hasSectionWithNoSnippets(m *manifest.Manifest) bool {
+	for _, sec := range m.Sections {
+		if len(sec.Snippets) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// pageLeafHints returns meaningful tokens from the last path segment only.
+// Using only the leaf avoids false positives from generic ancestor-path tokens.
+func pageLeafHints(pagePath string) []string {
+	segs := strings.Split(filepath.ToSlash(pagePath), "/")
+	leaf := segs[len(segs)-1]
+	var hints []string
+	for _, tok := range strings.FieldsFunc(leaf, func(r rune) bool { return r == '-' || r == '_' }) {
+		tok = strings.ToLower(tok)
+		if len(tok) > 2 {
+			hints = append(hints, tok)
+		}
+	}
+	return hints
 }

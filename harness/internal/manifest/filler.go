@@ -50,7 +50,7 @@ func FillFromSnippets(m *Manifest, candidates []string, pageHints ...string) int
 			continue
 		}
 		// Phase 2: page-path hint fallback for generic section names.
-		if len(pageHints) > 0 && scoreKeyAgainstHints(key, pageHints) > 0 {
+		if len(pageHints) > 0 && ScoreKeyAgainstHints(key, pageHints) > 0 {
 			target := firstEmptySection(sectionKeys, m)
 			if target != "" {
 				sec := m.Sections[target]
@@ -87,8 +87,8 @@ func PageHintsFromPath(pagePath string) []string {
 	return hints
 }
 
-// scoreKeyAgainstHints counts how many hint tokens appear as words in key (split by "-" and "_").
-func scoreKeyAgainstHints(key string, hints []string) int {
+// ScoreKeyAgainstHints counts how many hint tokens appear as words in key (split by "-" and "_").
+func ScoreKeyAgainstHints(key string, hints []string) int {
 	words := strings.FieldsFunc(key, func(r rune) bool { return r == '-' || r == '_' })
 	score := 0
 	for _, h := range hints {
