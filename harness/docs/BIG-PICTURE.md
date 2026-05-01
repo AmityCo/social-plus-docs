@@ -384,7 +384,7 @@ snippets are complete.
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
 | `gendocs --clean` | ✅ | 977 snippet MDX files generated |
 | `audit` command | ✅ | Finds all 4 finding types + manifest coverage + DOC_BROKEN_IMPORT |
-| `fix` command | ✅ | 123 findings resolved, 0 open, 0 needs_human |
+| `fix` command | ✅ | 170 findings resolved, 0 open, 0 needs_human |
 | `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
 | `prompt` command | ✅ | Generates `harness-tasks.md` with MANIFEST_FILL tasks + section context |
 | `compiler` + `verifier` packages | ✅ | Compile checking + hash-based change detection |
@@ -392,17 +392,19 @@ snippets are complete.
 | `internal/mdxparse` package | ✅ | Extract `###` headings with `<CodeGroup>` from MDX |
 | `genmanifests` command | ✅ | Bootstraps 123 skeleton manifests across doc pages |
 | `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
-| `fillmanifests` command | ✅ | Keyword + page-hint + leaf-hint(≥2) fallback; 185 sections still need AI |
+| `fillmanifests` command | ✅ | Keyword + page-hint + leaf-hint(≥2) fallback |
 | `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
-| **Page manifest `snippets:` fill-in** | 🔄 Partial | 386 keys computationally assigned; 185 sections need AI inferential fill |
+| **Page manifest `snippets:` fill-in** | 🔄 Partial | 433 keys assigned; 59 UIKit generic sections with no matching SDK keys |
 | **DOC_PAGE_STALE_IMPORT migration** | ✅ | All migrations complete — CodeGroups now import generated snippets |
 | **Mintlify build validation** | ✅ | 0 broken imports after migration |
-| **ASC_PAGE_INVALID fixes** | ✅ | All 21 legacy URLs in iOS/Android SDK files updated to relative paths |
+| **ASC_PAGE_INVALID fixes** | ✅ | All legacy URLs in iOS/Android SDK files updated to relative paths |
 | **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
+| **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections) |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
 **Current open findings: 0** ✅
-- All findings resolved: 123 fixed, 0 open, 0 needs_human
+- All findings resolved: 170 fixed, 0 open, 0 needs_human
+- 59 MANIFEST_FILL sections remain with generic names (e.g. `code-examples`) — UIKit sections where available SDK keys don't map to component rendering calls
 
 ---
 
