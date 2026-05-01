@@ -11,6 +11,7 @@ const (
 	TypeDocPageStaleImport    FindingType = "DOC_PAGE_STALE_IMPORT"
 	TypeDocBrokenImport       FindingType = "DOC_BROKEN_IMPORT"
 	TypePublicFuncUnannotated FindingType = "PUBLIC_FUNC_UNANNOTATED"
+	TypeSnippetKeyPlatformConflict FindingType = "SNIPPET_KEY_PLATFORM_CONFLICT"
 )
 
 type FindingStatus string
