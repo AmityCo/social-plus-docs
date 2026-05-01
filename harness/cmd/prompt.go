@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"social-plus/harness/internal/config"
-	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/manifest"
+	"social-plus/harness/internal/report"
+	"social-plus/harness/internal/runstate"
 )
 
 // capitalise returns s with the first character uppercased.
@@ -33,6 +34,9 @@ func runPrompt(args []string) {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "prompt", "script", "")
 
 	docsBaseForManifest := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
 	snippetsDir := filepath.Join(docsBaseForManifest, "snippets")
@@ -221,6 +225,7 @@ func runPrompt(args []string) {
 
 	if len(missing) == 0 && len(driftTasks) == 0 && staleImportCount == 0 && len(manifestFillTasks) == 0 {
 		fmt.Println("No AI-required open findings. Run 'audit' first.")
+		_ = runstate.Finish(cfgDir, "prompt", "no findings")
 		return
 	}
 
@@ -375,13 +380,18 @@ if staleImportCount > 0 {
 
 	if *outPath == "-" {
 		fmt.Print(content)
+		_ = runstate.Finish(cfgDir, "prompt", "written to stdout")
 		return
 	}
 
 	if err := os.WriteFile(*outPath, []byte(content), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write tasks: %v\n", err)
+		_ = runstate.Fail(cfgDir, "prompt", "write failed")
 		os.Exit(1)
 	}
+	summary := fmt.Sprintf("%d missing, %d drift, %d stale, %d manifest, %d unannotated",
+		len(missing), len(driftTasks), staleImportCount, len(manifestFillTasks), len(unannotatedFuncs))
+	_ = runstate.Finish(cfgDir, "prompt", summary)
 	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports, %d manifest fills, %d unannotated funcs)\n",
 		*outPath, len(missing), len(driftTasks), staleImportCount, len(manifestFillTasks), len(unannotatedFuncs))
 	fmt.Printf("\nTell Copilot CLI:\n  \"Fix the tasks in %s\"\n", *outPath)

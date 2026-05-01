@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-05-01 14:17 — 162 findings requiring AI_
+_Generated 2026-05-01 14:24 — 151 findings requiring AI_
 
 ## Step 0 — Start Dashboard (optional but recommended)
 
@@ -242,22 +242,6 @@ Snippet directory: `../../Amity-Social-Cloud-SDK-Flutter-Internal/code_snippet`
 | `user_relationships.unblock_user` | `AmityUserRelationshipsUnblockUser.dart` |
 | `user.get_blocked` | `AmityUserGetBlocked.dart` |
 | `user.get_viewed` | `AmityUserGetViewed.dart` |
-
-## DOC_PAGE_STALE_IMPORT (11)
-
-These doc pages reference gendocs snippet files that are not yet imported.
-Run the migrate command to automatically add the missing imports:
-
-```bash
-cd social-plus-docs/harness
-./harness-bin migrate --config harness-config.yml
-```
-
-Or preview changes first with `--dry-run`:
-
-```bash
-./harness-bin migrate --config harness-config.yml --dry-run
-```
 
 
 ---
