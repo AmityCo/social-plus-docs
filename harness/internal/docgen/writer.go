@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -64,9 +65,23 @@ type SnippetGroup struct {
 
 // GroupSnippets groups a flat list of snippets by their derived key.
 // Snippets with a blank Filename, blank SpDocsPage, or an absolute URL SpDocsPage are skipped.
+// Input is sorted deterministically (platform priority: android → ios → flutter → typescript)
+// so that the first platform processed always wins for SpDocsPage — making output stable.
 func GroupSnippets(snips []scanner.Snippet) map[string]SnippetGroup {
+	platformPriority := map[string]int{"android": 0, "ios": 1, "flutter": 2, "typescript": 3}
+	sorted := make([]scanner.Snippet, len(snips))
+	copy(sorted, snips)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		pi := platformPriority[sorted[i].Platform]
+		pj := platformPriority[sorted[j].Platform]
+		if pi != pj {
+			return pi < pj
+		}
+		return sorted[i].Filename < sorted[j].Filename
+	})
+
 	groups := make(map[string]SnippetGroup)
-	for _, s := range snips {
+	for _, s := range sorted {
 		if s.Filename == "" || s.SpDocsPage == "" || strings.Contains(s.SpDocsPage, "://") {
 			continue
 		}
