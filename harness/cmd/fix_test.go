@@ -108,6 +108,50 @@ func TestPlatformExt(t *testing.T) {
 	}
 }
 
+// ---
+
+// TestExtractAscPageFromSnippet_SpDocsPage tests sp_docs_page: field
+func TestExtractAscPageFromSnippet_SpDocsPage(t *testing.T) {
+	dir := t.TempDir()
+	snippetPath := filepath.Join(dir, "AmityTest.kt")
+	content := `package com.example
+
+class AmityTest {
+    /* begin_sample_code
+       filename: AmityTest.kt
+       sp_docs_page: social-plus-sdk/chat/channels
+       description: Test snippet
+       */
+    fun test() {}
+    /* end_sample_code */
+}
+`
+	if err := os.WriteFile(snippetPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := extractAscPageFromSnippet(snippetPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "social-plus-sdk/chat/channels" {
+		t.Errorf("got %q, want %q", got, "social-plus-sdk/chat/channels")
+	}
+}
+
+func TestExtractAscPageFromSnippet_Missing(t *testing.T) {
+	dir := t.TempDir()
+	snippetPath := filepath.Join(dir, "AmityNoPage.kt")
+	content := `package com.example
+class AmityNoPage {}`
+	if err := os.WriteFile(snippetPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := extractAscPageFromSnippet(snippetPath)
+	if err == nil {
+		t.Fatal("expected error for missing sp_docs_page, got nil")
+	}
+}
+
 func TestExtractAscPageFromSnippet(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		dir := t.TempDir()

@@ -162,8 +162,7 @@ func runFix(args []string) {
 }
 
 // extractAscPageFromSnippet reads a snippet file and returns the value of the
-// asc_page metadata field, or an error if the file cannot be read or the field
-// is absent.
+// sp_docs_page (or legacy asc_page) metadata field.
 func extractAscPageFromSnippet(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -171,11 +170,13 @@ func extractAscPageFromSnippet(path string) (string, error) {
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "asc_page:") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "asc_page:")), nil
+		for _, key := range []string{"sp_docs_page:", "asc_page:"} {
+			if strings.HasPrefix(trimmed, key) {
+				return strings.TrimSpace(strings.TrimPrefix(trimmed, key)), nil
+			}
 		}
 	}
-	return "", fmt.Errorf("asc_page field not found in snippet")
+	return "", fmt.Errorf("sp_docs_page field not found in snippet %q", path)
 }
 
 func platformLang(platform string) string {
