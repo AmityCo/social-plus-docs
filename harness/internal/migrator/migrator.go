@@ -7,8 +7,14 @@ import (
 )
 
 // KebabToPascal converts "community-create" → "CommunityCreate".
+// Also strips file extensions and replaces non-identifier characters.
 func KebabToPascal(key string) string {
-	parts := strings.Split(key, "-")
+	// Strip file extension (e.g. "_poll_live_object.dart" → "_poll_live_object")
+	if dot := strings.LastIndex(key, "."); dot >= 0 {
+		key = key[:dot]
+	}
+	// Split on hyphens and underscores
+	parts := strings.FieldsFunc(key, func(r rune) bool { return r == '-' || r == '_' })
 	var b strings.Builder
 	for _, p := range parts {
 		if p == "" {
@@ -16,16 +22,45 @@ func KebabToPascal(key string) string {
 		}
 		b.WriteString(strings.ToUpper(p[:1]) + p[1:])
 	}
-	return b.String()
+	result := b.String()
+	if result == "" {
+		return "Snippet"
+	}
+	// Ensure starts with a letter (prefix X if starts with digit)
+	if result[0] >= '0' && result[0] <= '9' {
+		result = "X" + result
+	}
+	return result
 }
 
 // AddImport inserts an import statement at the top of content if not already present.
+// Ensures a blank line separates the last import from any following frontmatter (---).
 func AddImport(content, componentName, importPath string) string {
 	importLine := fmt.Sprintf("import %s from '%s';", componentName, importPath)
 	if strings.Contains(content, importLine) {
 		return content // idempotent
 	}
-	return importLine + "\n" + content
+	updated := importLine + "\n" + content
+	// Ensure blank line before frontmatter if imports immediately precede ---
+	updated = ensureBlankBeforeFrontmatter(updated)
+	return updated
+}
+
+// ensureBlankBeforeFrontmatter inserts a blank line between the last import
+// statement and a following --- frontmatter block if none exists.
+func ensureBlankBeforeFrontmatter(content string) string {
+	lines := strings.Split(content, "\n")
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" && strings.HasPrefix(lines[i-1], "import ") {
+			// Insert blank line
+			newLines := make([]string, 0, len(lines)+1)
+			newLines = append(newLines, lines[:i]...)
+			newLines = append(newLines, "")
+			newLines = append(newLines, lines[i:]...)
+			return strings.Join(newLines, "\n")
+		}
+	}
+	return content
 }
 
 // ReplaceCodeGroup replaces the first <CodeGroup>...</CodeGroup> block in content
