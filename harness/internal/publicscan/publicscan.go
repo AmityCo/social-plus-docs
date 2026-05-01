@@ -38,10 +38,25 @@ func classNameFromFile(path string) string {
 func Scan(sdkDir, platform string) ([]PublicFunc, error) {
 	var results []PublicFunc
 	err := filepath.WalkDir(sdkDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
 		}
+		if d.IsDir() {
+			// Skip test directories
+			dir := strings.ToLower(d.Name())
+			if dir == "test" || dir == "tests" || dir == "__tests__" || dir == "spec" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if !matchesPlatform(path, platform) {
+			return nil
+		}
+		// Skip test files
+		base := strings.ToLower(filepath.Base(path))
+		if strings.Contains(base, "_test.") || strings.Contains(base, ".test.") ||
+			strings.Contains(base, ".spec.") || strings.HasSuffix(base, "_test.kt") ||
+			strings.HasSuffix(base, "_test.dart") || strings.HasSuffix(base, "tests.swift") {
 			return nil
 		}
 		if !isRepositoryOrClientFile(path) {

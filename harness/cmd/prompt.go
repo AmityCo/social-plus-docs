@@ -122,9 +122,20 @@ func runPrompt(args []string) {
 	var driftTasks []task
 	staleImportCount := 0
 
+	// Collect PUBLIC_FUNC_UNANNOTATED findings grouped by platform→class
+	type unannotatedFunc struct {
+		platform  string
+		className string
+		funcName  string
+		file      string
+		id        string
+	}
+	var unannotatedFuncs []unannotatedFunc
+
 	for _, f := range r.Findings {
-		// Include open findings and needs_human AI-type findings (failed API attempt from old harness version).
-		isAIType := f.Type == report.TypeMissingSnippet || f.Type == report.TypeDocSurfaceDrift
+		// Include open findings and needs_human AI-type findings.
+		isAIType := f.Type == report.TypeMissingSnippet || f.Type == report.TypeDocSurfaceDrift ||
+			f.Type == report.TypePublicFuncUnannotated
 		if f.Status == report.StatusFixed {
 			continue
 		}
@@ -137,6 +148,38 @@ func runPrompt(args []string) {
 			if f.Status == report.StatusOpen {
 				staleImportCount++
 			}
+			continue
+		case report.TypePublicFuncUnannotated:
+			// Extract className and funcName from detail
+			// Format: "Public function 'funcName' in ClassName (file)"
+			className, funcName, file := "", "", ""
+			if d := f.Detail; d != "" {
+				if i := strings.Index(d, "'"); i >= 0 {
+					if j := strings.Index(d[i+1:], "'"); j >= 0 {
+						funcName = d[i+1 : i+1+j]
+					}
+				}
+				if i := strings.Index(d, " in "); i >= 0 {
+					rest := d[i+4:]
+					if j := strings.Index(rest, " ("); j >= 0 {
+						className = rest[:j]
+						afterParen := rest[j+2:]
+						// File path is everything up to the closing ')'
+						if k := strings.Index(afterParen, ")"); k >= 0 {
+							file = afterParen[:k]
+						} else {
+							file = afterParen
+						}
+					}
+				}
+			}
+			unannotatedFuncs = append(unannotatedFuncs, unannotatedFunc{
+				platform:  f.Platform,
+				className: className,
+				funcName:  funcName,
+				file:      file,
+				id:        f.ID,
+			})
 			continue
 		}
 
@@ -290,6 +333,45 @@ if staleImportCount > 0 {
 		sb.WriteString("```\n\n")
 	}
 
+	// PUBLIC_FUNC_UNANNOTATED section
+	if len(unannotatedFuncs) > 0 {
+		type classGroup struct {
+			funcs []unannotatedFunc
+			file  string
+		}
+		byPlatformClass := map[string]map[string]*classGroup{}
+		for _, u := range unannotatedFuncs {
+			if byPlatformClass[u.platform] == nil {
+				byPlatformClass[u.platform] = map[string]*classGroup{}
+			}
+			if byPlatformClass[u.platform][u.className] == nil {
+				byPlatformClass[u.platform][u.className] = &classGroup{file: u.file}
+			}
+			byPlatformClass[u.platform][u.className].funcs = append(byPlatformClass[u.platform][u.className].funcs, u)
+		}
+		sb.WriteString(fmt.Sprintf("\n---\n\n## PUBLIC_FUNC_UNANNOTATED (%d functions need sp_docs_page: annotation)\n\n", len(unannotatedFuncs)))
+		sb.WriteString("These public functions in `*Repository` / `*Client` classes have no `sp_docs_page:` annotation.\n")
+		sb.WriteString("Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or skip if internal.\n\n")
+		for _, platform := range []string{"android", "ios", "flutter", "typescript"} {
+			classes, ok := byPlatformClass[platform]
+			if !ok {
+				continue
+			}
+			total := 0
+			for _, cg := range classes {
+				total += len(cg.funcs)
+			}
+			sb.WriteString(fmt.Sprintf("### %s (%d functions)\n\n", strings.ToUpper(platform), total))
+			for className, cg := range classes {
+				sb.WriteString(fmt.Sprintf("**`%s`** (`%s`) — %d functions:\n", className, cg.file, len(cg.funcs)))
+				for _, u := range cg.funcs {
+					sb.WriteString(fmt.Sprintf("- `%s`\n", u.funcName))
+				}
+				sb.WriteString("\n")
+			}
+		}
+	}
+
 	sb.WriteString("---\n\n")
 	sb.WriteString("## After completion\n\n")
 	sb.WriteString("```bash\n")
@@ -309,6 +391,7 @@ if staleImportCount > 0 {
 		fmt.Fprintf(os.Stderr, "write tasks: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports, %d manifest fills)\n", *outPath, len(missing), len(driftTasks), staleImportCount, len(manifestFillTasks))
+	fmt.Printf("Tasks written to %s (%d missing snippets, %d drift fixes, %d stale imports, %d manifest fills, %d unannotated funcs)\n",
+		*outPath, len(missing), len(driftTasks), staleImportCount, len(manifestFillTasks), len(unannotatedFuncs))
 	fmt.Printf("\nTell Copilot CLI:\n  \"Fix the tasks in %s\"\n", *outPath)
 }
