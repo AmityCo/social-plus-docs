@@ -60,12 +60,12 @@ func TestScanTypeScript(t *testing.T) {
 	require.NoError(t, err)
 
 	names := funcNames(fns)
+	// Public API functions from api/ and observers/ subdirs
 	assert.Contains(t, names, "createPost")
-	assert.Contains(t, names, "getPosts")
+	assert.Contains(t, names, "observePosts")
 
-	// private/protected must be excluded
-	assert.NotContains(t, names, "deletePost")
-	assert.NotContains(t, names, "internalAction")
+	// internalApi/ functions must be excluded
+	assert.NotContains(t, names, "internalFetch")
 }
 
 func TestIsRepositoryOrClientFile(t *testing.T) {

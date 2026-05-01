@@ -1,6 +1,6 @@
 # Unannotated Public Functions Report
 
-**Total:** 607 functions need `sp_docs_page:` annotation
+**Total:** 805 functions need `sp_docs_page:` annotation
 
 ## Android (203 functions across 31 classes)
 
@@ -1072,6 +1072,332 @@
 
 ### `AmityAdRepository` (1 functions)
 > `EkoChat/Features/Ads/Public/AmityAdRepository.swift`
+
+| Function | Status |
+|----------|--------|
+| `getNetworkAds` | ⬜ needs annotation |
+
+## Typescript (198 functions across 21 classes)
+
+### `PostRepository` (30 functions)
+> `packages/sdk/src/postRepository/api/approvePost.ts`
+
+| Function | Status |
+|----------|--------|
+| `approvePost` | ⬜ needs annotation |
+| `createAudioPost` | ⬜ needs annotation |
+| `createClipPost` | ⬜ needs annotation |
+| `createMixedMediaPost` | ⬜ needs annotation |
+| `createPost` | ⬜ needs annotation |
+| `createRoomPost` | ⬜ needs annotation |
+| `declinePost` | ⬜ needs annotation |
+| `deletePost` | ⬜ needs annotation |
+| `editPost` | ⬜ needs annotation |
+| `flagPost` | ⬜ needs annotation |
+| `generateCommentSubscriptions` | ⬜ needs annotation |
+| `getCommunityLiveRoomPosts` | ⬜ needs annotation |
+| `getGlobalPinnedPosts` | ⬜ needs annotation |
+| `getLiveRoomPosts` | ⬜ needs annotation |
+| `getPinnedPosts` | ⬜ needs annotation |
+| `getPost` | ⬜ needs annotation |
+| `getPost` | ⬜ needs annotation |
+| `getPostByIds` | ⬜ needs annotation |
+| `getPosts` | ⬜ needs annotation |
+| `hardDeletePost` | ⬜ needs annotation |
+| `isPostFlaggedByMe` | ⬜ needs annotation |
+| `pinProduct` | ⬜ needs annotation |
+| `preparePostResponse` | ⬜ needs annotation |
+| `queryPosts` | ⬜ needs annotation |
+| `searchPostsByHashtag` | ⬜ needs annotation |
+| `semanticSearchPosts` | ⬜ needs annotation |
+| `softDeletePost` | ⬜ needs annotation |
+| `unflagPost` | ⬜ needs annotation |
+| `unpinProduct` | ⬜ needs annotation |
+| `updateProductTags` | ⬜ needs annotation |
+
+### `CommunityRepository` (19 functions)
+> `packages/sdk/src/communityRepository/api/createCommunity.ts`
+
+| Function | Status |
+|----------|--------|
+| `createCommunity` | ⬜ needs annotation |
+| `deleteCommunity` | ⬜ needs annotation |
+| `getCommunities` | ⬜ needs annotation |
+| `getCommunities` | ⬜ needs annotation |
+| `getCommunity` | ⬜ needs annotation |
+| `getCommunity` | ⬜ needs annotation |
+| `getJoinRequestList` | ⬜ needs annotation |
+| `getJoinRequests` | ⬜ needs annotation |
+| `getRecommendedCommunities` | ⬜ needs annotation |
+| `getRecommendedCommunities` | ⬜ needs annotation |
+| `getTrendingCommunities` | ⬜ needs annotation |
+| `getTrendingCommunities` | ⬜ needs annotation |
+| `joinCommunity` | ⬜ needs annotation |
+| `leaveCommunity` | ⬜ needs annotation |
+| `prepareSemanticCommunitiesReferenceId` | ⬜ needs annotation |
+| `queryCommunities` | ⬜ needs annotation |
+| `searchCommunities` | ⬜ needs annotation |
+| `semanticSearchCommunities` | ⬜ needs annotation |
+| `updateCommunity` | ⬜ needs annotation |
+
+### `ChannelRepository` (14 functions)
+> `packages/sdk/src/channelRepository/api/createChannel.ts`
+
+| Function | Status |
+|----------|--------|
+| `createChannel` | ⬜ needs annotation |
+| `deleteChannel` | ⬜ needs annotation |
+| `getChannel` | ⬜ needs annotation |
+| `getChannelByIds` | ⬜ needs annotation |
+| `getChannels` | ⬜ needs annotation |
+| `getMyMembership` | ⬜ needs annotation |
+| `getTotalChannelsUnread` | ⬜ needs annotation |
+| `joinChannel` | ⬜ needs annotation |
+| `leaveChannel` | ⬜ needs annotation |
+| `markChannelsAsReadBySegment` | ⬜ needs annotation |
+| `muteChannel` | ⬜ needs annotation |
+| `queryChannels` | ⬜ needs annotation |
+| `unmuteChannel` | ⬜ needs annotation |
+| `updateChannel` | ⬜ needs annotation |
+
+### `MessageRepository` (14 functions)
+> `packages/sdk/src/messageRepository/api/createMessage.ts`
+
+| Function | Status |
+|----------|--------|
+| `createMessage` | ⬜ needs annotation |
+| `deleteMessage` | ⬜ needs annotation |
+| `editMessage` | ⬜ needs annotation |
+| `flagMessage` | ⬜ needs annotation |
+| `getDeliveredUsers` | ⬜ needs annotation |
+| `getMessage` | ⬜ needs annotation |
+| `getMessages` | ⬜ needs annotation |
+| `getReadUsers` | ⬜ needs annotation |
+| `isMessageFlaggedByMe` | ⬜ needs annotation |
+| `markAsDelivered` | ⬜ needs annotation |
+| `queryMessages` | ⬜ needs annotation |
+| `softDeleteMessage` | ⬜ needs annotation |
+| `unflagMessage` | ⬜ needs annotation |
+| `updateMessage` | ⬜ needs annotation |
+
+### `RoomRepository` (14 functions)
+> `packages/sdk/src/roomRepository/api/analytics/WatchSessionStorage.ts`
+
+| Function | Status |
+|----------|--------|
+| `convertToRoomEventPayload` | ⬜ needs annotation |
+| `createRoom` | ⬜ needs annotation |
+| `deleteRoom` | ⬜ needs annotation |
+| `getBroadcasterData` | ⬜ needs annotation |
+| `getRecordedUrl` | ⬜ needs annotation |
+| `getRoom` | ⬜ needs annotation |
+| `getRooms` | ⬜ needs annotation |
+| `getWatchSessionStorage` | ⬜ needs annotation |
+| `leaveRoom` | ⬜ needs annotation |
+| `removeParticipant` | ⬜ needs annotation |
+| `stopRoom` | ⬜ needs annotation |
+| `syncWatchSessions` | ⬜ needs annotation |
+| `updateCohostPermission` | ⬜ needs annotation |
+| `updateRoom` | ⬜ needs annotation |
+
+### `SubChannelRepository` (14 functions)
+> `packages/sdk/src/subChannelRepository/api/createSubChannel.ts`
+
+| Function | Status |
+|----------|--------|
+| `createSubChannel` | ⬜ needs annotation |
+| `deleteSubChannel` | ⬜ needs annotation |
+| `getSubChannel` | ⬜ needs annotation |
+| `getSubChannel` | ⬜ needs annotation |
+| `getSubChannels` | ⬜ needs annotation |
+| `getSubChannels` | ⬜ needs annotation |
+| `hardDeleteSubChannel` | ⬜ needs annotation |
+| `markAsReadBySegment` | ⬜ needs annotation |
+| `querySubChannels` | ⬜ needs annotation |
+| `readingAPI` | ⬜ needs annotation |
+| `softDeleteSubChannel` | ⬜ needs annotation |
+| `startReadingAPI` | ⬜ needs annotation |
+| `stopReadingAPI` | ⬜ needs annotation |
+| `updateSubChannel` | ⬜ needs annotation |
+
+### `UserRepository` (14 functions)
+> `packages/sdk/src/userRepository/api/flagUser.ts`
+
+| Function | Status |
+|----------|--------|
+| `flagUser` | ⬜ needs annotation |
+| `getAllBlockedUsers` | ⬜ needs annotation |
+| `getBlockedUsers` | ⬜ needs annotation |
+| `getReachedUsers` | ⬜ needs annotation |
+| `getUser` | ⬜ needs annotation |
+| `getUser` | ⬜ needs annotation |
+| `getUserByIds` | ⬜ needs annotation |
+| `getUsers` | ⬜ needs annotation |
+| `isUserFlaggedByMe` | ⬜ needs annotation |
+| `queryBlockedUsers` | ⬜ needs annotation |
+| `queryUsers` | ⬜ needs annotation |
+| `searchUserByDisplayName` | ⬜ needs annotation |
+| `unflagUser` | ⬜ needs annotation |
+| `updateUser` | ⬜ needs annotation |
+
+### `CommentRepository` (13 functions)
+> `packages/sdk/src/commentRepository/api/createComment.ts`
+
+| Function | Status |
+|----------|--------|
+| `createComment` | ⬜ needs annotation |
+| `deleteComment` | ⬜ needs annotation |
+| `flagComment` | ⬜ needs annotation |
+| `getComment` | ⬜ needs annotation |
+| `getComment` | ⬜ needs annotation |
+| `getCommentByIds` | ⬜ needs annotation |
+| `getComments` | ⬜ needs annotation |
+| `hardDeleteComment` | ⬜ needs annotation |
+| `isCommentFlaggedByMe` | ⬜ needs annotation |
+| `queryComments` | ⬜ needs annotation |
+| `softDeleteComment` | ⬜ needs annotation |
+| `unflagComment` | ⬜ needs annotation |
+| `updateComment` | ⬜ needs annotation |
+
+### `StoryRepository` (10 functions)
+> `packages/sdk/src/storyRepository/api/createImageStory.ts`
+
+| Function | Status |
+|----------|--------|
+| `createImageStory` | ⬜ needs annotation |
+| `createVideoStory` | ⬜ needs annotation |
+| `getActiveStoriesByTarget` | ⬜ needs annotation |
+| `getGlobalStoryTargets` | ⬜ needs annotation |
+| `getStoriesByTargetIds` | ⬜ needs annotation |
+| `getStoryByStoryId` | ⬜ needs annotation |
+| `getTargetById` | ⬜ needs annotation |
+| `getTargetsByTargetIds` | ⬜ needs annotation |
+| `hardDeleteStory` | ⬜ needs annotation |
+| `softDeleteStory` | ⬜ needs annotation |
+
+### `FileRepository` (9 functions)
+> `packages/sdk/src/fileRepository/api/deleteFile.ts`
+
+| Function | Status |
+|----------|--------|
+| `deleteFile` | ⬜ needs annotation |
+| `fileUrlWithSize` | ⬜ needs annotation |
+| `getFile` | ⬜ needs annotation |
+| `updateAltText` | ⬜ needs annotation |
+| `uploadAudio` | ⬜ needs annotation |
+| `uploadClip` | ⬜ needs annotation |
+| `uploadFile` | ⬜ needs annotation |
+| `uploadImage` | ⬜ needs annotation |
+| `uploadVideo` | ⬜ needs annotation |
+
+### `EventRepository` (7 functions)
+> `packages/sdk/src/eventRepository/api/createEvent.ts`
+
+| Function | Status |
+|----------|--------|
+| `createEvent` | ⬜ needs annotation |
+| `deleteEvent` | ⬜ needs annotation |
+| `getEvent` | ⬜ needs annotation |
+| `getEvents` | ⬜ needs annotation |
+| `getMyEvents` | ⬜ needs annotation |
+| `getRSVPs` | ⬜ needs annotation |
+| `updateEvent` | ⬜ needs annotation |
+
+### `PollRepository` (7 functions)
+> `packages/sdk/src/pollRepository/api/closePoll.ts`
+
+| Function | Status |
+|----------|--------|
+| `closePoll` | ⬜ needs annotation |
+| `createPoll` | ⬜ needs annotation |
+| `deletePoll` | ⬜ needs annotation |
+| `getPoll` | ⬜ needs annotation |
+| `getPoll` | ⬜ needs annotation |
+| `unvotePoll` | ⬜ needs annotation |
+| `votePoll` | ⬜ needs annotation |
+
+### `StreamRepository` (7 functions)
+> `packages/sdk/src/streamRepository/api/createStream.ts`
+
+| Function | Status |
+|----------|--------|
+| `createStream` | ⬜ needs annotation |
+| `deleteStream` | ⬜ needs annotation |
+| `disposeStream` | ⬜ needs annotation |
+| `editStream` | ⬜ needs annotation |
+| `getStreamById` | ⬜ needs annotation |
+| `getStreams` | ⬜ needs annotation |
+| `updateStream` | ⬜ needs annotation |
+
+### `FeedRepository` (6 functions)
+> `packages/sdk/src/feedRepository/api/queryGlobalFeed.ts`
+
+| Function | Status |
+|----------|--------|
+| `getCommunityFeed` | ⬜ needs annotation |
+| `getCustomRankingGlobalFeed` | ⬜ needs annotation |
+| `getGlobalFeed` | ⬜ needs annotation |
+| `getGlobalFeedSubscriptions` | ⬜ needs annotation |
+| `getUserFeed` | ⬜ needs annotation |
+| `queryGlobalFeed` | ⬜ needs annotation |
+
+### `ReactionRepository` (6 functions)
+> `packages/sdk/src/reactionRepository/api/addReaction.ts`
+
+| Function | Status |
+|----------|--------|
+| `REFERENCE_API_V5` | ⬜ needs annotation |
+| `addReaction` | ⬜ needs annotation |
+| `getReactions` | ⬜ needs annotation |
+| `queryReactions` | ⬜ needs annotation |
+| `queryReactor` | ⬜ needs annotation |
+| `removeReaction` | ⬜ needs annotation |
+
+### `RoomPresenceRepository` (4 functions)
+> `packages/sdk/src/roomPresenceRepository/api/getRoomOnlineUsers.ts`
+
+| Function | Status |
+|----------|--------|
+| `getRoomOnlineUsers` | ⬜ needs annotation |
+| `getRoomUserCount` | ⬜ needs annotation |
+| `startHeartbeat` | ⬜ needs annotation |
+| `stopHeartbeat` | ⬜ needs annotation |
+
+### `InvitationRepository` (3 functions)
+> `packages/sdk/src/invitationRepository/api/cancelInvitation.ts`
+
+| Function | Status |
+|----------|--------|
+| `cancelInvitation` | ⬜ needs annotation |
+| `getInvitations` | ⬜ needs annotation |
+| `getMyCommunityInvitations` | ⬜ needs annotation |
+
+### `CategoryRepository` (2 functions)
+> `packages/sdk/src/categoryRepository/api/getCategory.ts`
+
+| Function | Status |
+|----------|--------|
+| `getCategories` | ⬜ needs annotation |
+| `getCategory` | ⬜ needs annotation |
+
+### `LiveReactionRepository` (2 functions)
+> `packages/sdk/src/liveReactionRepository/api/createReaction.ts`
+
+| Function | Status |
+|----------|--------|
+| `createReaction` | ⬜ needs annotation |
+| `getReactions` | ⬜ needs annotation |
+
+### `ProductRepository` (2 functions)
+> `packages/sdk/src/productRepository/observers/getProduct.ts`
+
+| Function | Status |
+|----------|--------|
+| `getProduct` | ⬜ needs annotation |
+| `searchProducts` | ⬜ needs annotation |
+
+### `AdRepository` (1 functions)
+> `packages/sdk/src/adRepository/api/getNetworkAds.ts`
 
 | Function | Status |
 |----------|--------|

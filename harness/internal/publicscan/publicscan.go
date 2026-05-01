@@ -59,7 +59,7 @@ func Scan(sdkDir, platform string) ([]PublicFunc, error) {
 			strings.HasSuffix(base, "_test.dart") || strings.HasSuffix(base, "tests.swift") {
 			return nil
 		}
-		if !isRepositoryOrClientFile(path) {
+		if !isRepositoryOrClientFile(path) && strings.ToLower(platform) != "typescript" {
 			return nil
 		}
 		fns, err := scanFile(path, platform)
@@ -258,40 +258,53 @@ func scanDart(path, className string) ([]PublicFunc, error) {
 
 var (
 	reTypescriptMethod    = regexp.MustCompile(`^\s+(?:public\s+)?(?:async\s+)?(?:static\s+)?(\w+)\s*[(<]`)
-	reTypescriptExport    = regexp.MustCompile(`^export\s+(?:async\s+)?function\s+(\w+)`)
 	reTypescriptPrivate   = regexp.MustCompile(`\b(?:private|protected)\b`)
 	reTypescriptExportCls = regexp.MustCompile(`^export\s+(?:(?:default|abstract|declare)\s+)*class\b`)
+	// export const funcName = ... OR export async function funcName OR export function funcName
+	reTypescriptExportConst = regexp.MustCompile(`^export\s+(?:async\s+)?(?:const|function)\s+(\w+)`)
 )
 
-// isPublicTypeScriptFile returns true if the file exports a class (public API surface).
-func isPublicTypeScriptFile(lines []string) bool {
-	for _, line := range lines {
-		if reTypescriptExportCls.MatchString(line) {
-			return true
-		}
-		// Also allow files with top-level export functions (e.g. *Client files)
-		if reTypescriptExport.MatchString(line) {
-			return true
-		}
-	}
-	return false
+// isPublicTypeScriptPath returns true if the file is in a public-API directory.
+// TypeScript SDK uses folder-based repos: {feature}Repository/api/ and {feature}Repository/observers/
+// Files under internalApi/, utils/, events/ are internal.
+func isPublicTypeScriptPath(path string) bool {
+	slash := filepath.ToSlash(path)
+	// Must be under a *Repository or *Client folder's api/ or observers/ subdir
+	return (strings.Contains(slash, "Repository/api/") || strings.Contains(slash, "Repository/observers/") ||
+		strings.Contains(slash, "Client/api/") || strings.Contains(slash, "Client/observers/"))
 }
 
-func scanTypeScript(path, className string) ([]PublicFunc, error) {
+// classNameFromTypeScriptPath extracts the Repository/Client folder name from a TypeScript path.
+// e.g. "src/postRepository/api/createPost.ts" → "PostRepository"
+func classNameFromTypeScriptPath(path string) string {
+	slash := filepath.ToSlash(path)
+	parts := strings.Split(slash, "/")
+	for i, p := range parts {
+		lower := strings.ToLower(p)
+		if (strings.HasSuffix(lower, "repository") || strings.HasSuffix(lower, "client")) && i+1 < len(parts) {
+			// Capitalise first letter for display
+			if len(p) > 0 {
+				return strings.ToUpper(p[:1]) + p[1:]
+			}
+		}
+	}
+	return filepath.Base(filepath.Dir(filepath.Dir(path))) // fallback
+}
+
+func scanTypeScript(path, _ string) ([]PublicFunc, error) {
+	if !isPublicTypeScriptPath(path) {
+		return nil, nil
+	}
 	lines, err := readLines(path)
 	if err != nil {
 		return nil, err
 	}
-	if !isPublicTypeScriptFile(lines) {
-		return nil, nil
-	}
+	className := classNameFromTypeScriptPath(path)
 	var results []PublicFunc
 	for _, line := range lines {
-		if reTypescriptPrivate.MatchString(line) {
-			continue
-		}
-		// Class method
-		if m := reTypescriptMethod.FindStringSubmatch(line); m != nil {
+		// Folder-based SDK: one exported const/function per file = the public API entry.
+		// Stop after finding the first export to avoid matching code inside the function body.
+		if m := reTypescriptExportConst.FindStringSubmatch(line); m != nil {
 			name := m[1]
 			if isTypeScriptKeyword(name) {
 				continue
@@ -302,16 +315,7 @@ func scanTypeScript(path, className string) ([]PublicFunc, error) {
 				ClassName: className,
 				FuncName:  name,
 			})
-			continue
-		}
-		// Top-level exported function (for *Client files)
-		if m := reTypescriptExport.FindStringSubmatch(line); m != nil {
-			results = append(results, PublicFunc{
-				File:      path,
-				Platform:  "typescript",
-				ClassName: className,
-				FuncName:  m[1],
-			})
+			break // one exported function per file
 		}
 	}
 	return results, nil
