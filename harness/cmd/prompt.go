@@ -61,6 +61,9 @@ func runPrompt(args []string) {
 		}
 		rel, _ := filepath.Rel(docsBaseForManifest, mpath)
 		pagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".manifest.yml"))
+		if cfg.Docs.Scope != "" && !strings.HasPrefix(pagePath, cfg.Docs.Scope+"/") {
+			return nil // outside scope
+		}
 		m, found, err := manifest.LoadForPage(docsBaseForManifest, pagePath)
 		if !found || err != nil {
 			return nil

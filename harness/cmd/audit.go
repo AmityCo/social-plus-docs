@@ -116,6 +116,10 @@ func runAudit(args []string) {
 			if relErr != nil {
 				return nil
 			}
+			relSlash := filepath.ToSlash(rel)
+			if cfg.Docs.Scope != "" && !strings.HasPrefix(relSlash, cfg.Docs.Scope+"/") {
+				return nil // outside scope
+			}
 			docPagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".mdx"))
 			docFindings := differ.DiffDocPages(docPagePath, path, m, snippetsDir)
 			for _, f := range docFindings {
@@ -203,6 +207,11 @@ func runAudit(args []string) {
 			}
 			if !strings.HasSuffix(path, ".mdx") {
 				return nil
+			}
+			rel, _ := filepath.Rel(docsBase, path)
+			relSlash := filepath.ToSlash(rel)
+			if cfg.Docs.Scope != "" && !strings.HasPrefix(relSlash, cfg.Docs.Scope+"/") {
+				return nil // outside scope
 			}
 			for _, f := range differ.DiffDocImports(path, docsBase) {
 				if !isAlreadyInReport(allFindings, f.ID) {

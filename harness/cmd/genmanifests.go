@@ -63,6 +63,10 @@ func runGenManifests(args []string) {
 			fmt.Fprintf(os.Stderr, "[genmanifests] error getting rel path: %v\n", err)
 			continue
 		}
+		relSlash := filepath.ToSlash(rel)
+		if cfg.Docs.Scope != "" && !strings.HasPrefix(relSlash, cfg.Docs.Scope+"/") {
+			continue // outside configured scope
+		}
 		pagePath := strings.TrimSuffix(rel, ".mdx")
 		manifestPath := manifest.PathForPage(docsBase, pagePath)
 		if _, err := os.Stat(manifestPath); err == nil {

@@ -14,7 +14,8 @@ type SDKConfig struct {
 }
 
 type DocsConfig struct {
-	Path string `yaml:"path"`
+	Path  string `yaml:"path"`
+	Scope string `yaml:"scope"` // optional path prefix filter, e.g. "social-plus-sdk"
 }
 
 type LLMConfig struct {

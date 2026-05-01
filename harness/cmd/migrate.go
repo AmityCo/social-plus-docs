@@ -39,6 +39,10 @@ func runMigrate(args []string) {
 		if f.Type != report.TypeDocPageStaleImport || f.Status != report.StatusOpen {
 			continue
 		}
+		// Skip pages outside configured scope
+		if cfg.Docs.Scope != "" && !strings.HasPrefix(f.DocPage, cfg.Docs.Scope+"/") {
+			continue
+		}
 
 		docPageFile := f.DocPageFile
 		if docPageFile == "" {

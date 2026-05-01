@@ -67,6 +67,9 @@ func runFillManifests(args []string) {
 
 		rel, _ := filepath.Rel(docsBase, path)
 		pagePath := filepath.ToSlash(strings.TrimSuffix(rel, ".manifest.yml"))
+		if cfg.Docs.Scope != "" && !strings.HasPrefix(pagePath, cfg.Docs.Scope+"/") {
+			return nil // outside scope
+		}
 
 		m, found, err := manifest.LoadForPage(docsBase, pagePath)
 		if !found || err != nil {
