@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-05-01 14:24 — 151 findings requiring AI_
+_Generated 2026-05-01 14:45 — 111 findings requiring AI_
 
 ## Step 0 — Start Dashboard (optional but recommended)
 
@@ -51,7 +51,7 @@ Then run `./harness-bin prompt` again if there are still open findings.
 
 ---
 
-## MISSING_SNIPPET (151)
+## MISSING_SNIPPET (101)
 
 For each entry below, create a SDK code snippet file at the given path.
 The snippet **must** use this exact format:
@@ -70,63 +70,6 @@ Rules:
 - Use real Amity/social.plus SDK class names from the platform source
 - Keep it minimal — just enough to demonstrate the function
 - `sp_docs_page` must be a path from `docs.json` (not a full URL)
-
-### Android (Kotlin) — 50 functions
-
-Snippet directory: `../../Amity-Social-Cloud-SDK-Android/amity-sample-code/src/main/java/com/amity/snipet/verifier`
-
-| Function ID | Write to filename |
-|-------------|-------------------|
-| `channel.get_total_channels_unread_info` | `AmityChannelGetTotalChannelsUnreadInfo.kt` |
-| `channel.get_total_channel_unread` | `AmityChannelGetTotalChannelUnread.kt` |
-| `message.create_image` | `AmityMessageCreateImage.kt` |
-| `message.create_file` | `AmityMessageCreateFile.kt` |
-| `message.create_video` | `AmityMessageCreateVideo.kt` |
-| `message.create_audio` | `AmityMessageCreateAudio.kt` |
-| `message.delete_failed` | `AmityMessageDeleteFailed.kt` |
-| `ad.get_network` | `AmityAdGetNetwork.kt` |
-| `file.upload_clip` | `AmityFileUploadClip.kt` |
-| `file.cancel_upload` | `AmityFileCancelUpload.kt` |
-| `file.get_upload_info` | `AmityFileGetUploadInfo.kt` |
-| `file.update_alt_text` | `AmityFileUpdateAltText.kt` |
-| `invitation.get_my_community` | `AmityInvitationGetMyCommunity.kt` |
-| `invitation.get` | `AmityInvitationGet.kt` |
-| `room_presence.start_heartbeat` | `AmityRoomPresenceStartHeartbeat.kt` |
-| `room_presence.stop_heartbeat` | `AmityRoomPresenceStopHeartbeat.kt` |
-| `room_presence.observe_online_users_count` | `AmityRoomPresenceObserveOnlineUsersCount.kt` |
-| `room_presence.get_online_users_count` | `AmityRoomPresenceGetOnlineUsersCount.kt` |
-| `room_presence.get_online_users_snapshot` | `AmityRoomPresenceGetOnlineUsersSnapshot.kt` |
-| `room_presence.room_id` | `AmityRoomPresenceRoomId.kt` |
-| `live_reaction.get_reactions` | `AmityLiveReactionGetReactions.kt` |
-| `live_reaction.create_reaction` | `AmityLiveReactionCreateReaction.kt` |
-| `live_reaction.create_room_reaction` | `AmityLiveReactionCreateRoomReaction.kt` |
-| `post.create_mixed_attachment` | `AmityPostCreateMixedAttachment.kt` |
-| `post.get_pinned` | `AmityPostGetPinned.kt` |
-| `post.get_global_pinned` | `AmityPostGetGlobalPinned.kt` |
-| `post.semantic_search` | `AmityPostSemanticSearch.kt` |
-| `story.get_story_target` | `AmityStoryGetStoryTarget.kt` |
-| `story.get_story_targets` | `AmityStoryGetStoryTargets.kt` |
-| `story.get_global_story_targets` | `AmityStoryGetGlobalStoryTargets.kt` |
-| `story.get_active` | `AmityStoryGetActive.kt` |
-| `story.get_by_targets` | `AmityStoryGetByTargets.kt` |
-| `story.soft_delete` | `AmityStorySoftDelete.kt` |
-| `story.hard_delete` | `AmityStoryHardDelete.kt` |
-| `room.get_co_host_event` | `AmityRoomGetCoHostEvent.kt` |
-| `room.update_cohost_permission` | `AmityRoomUpdateCohostPermission.kt` |
-| `marker_sync.sync_markers` | `AmityMarkerSyncSyncMarkers.kt` |
-| `user_marker.get` | `AmityUserMarkerGet.kt` |
-| `analytics.save_analytic_event` | `AmityAnalyticsSaveAnalyticEvent.kt` |
-| `analytics.send_analytics_events` | `AmityAnalyticsSendAnalyticsEvents.kt` |
-| `analytics.delete_all_analytics_events` | `AmityAnalyticsDeleteAllAnalyticsEvents.kt` |
-| `analytics.get_viewed_users` | `AmityAnalyticsGetViewedUsers.kt` |
-| `analytics.create_analytic_event` | `AmityAnalyticsCreateAnalyticEvent.kt` |
-| `community_notification.save_notification_settings` | `AmityCommunityNotificationSaveNotificationSettings.kt` |
-| `community_notification.get_notification_settings` | `AmityCommunityNotificationGetNotificationSettings.kt` |
-| `user_relationship.has_in_local` | `AmityUserRelationshipHasInLocal.kt` |
-| `tombstone.get` | `AmityTombstoneGet.kt` |
-| `tombstone.save` | `AmityTombstoneSave.kt` |
-| `stream_player.get_function` | `AmityStreamPlayerGetFunction.kt` |
-| `stream_broadcaster.get_function` | `AmityStreamBroadcasterGetFunction.kt` |
 
 ### Ios (Swift) — 40 functions
 
@@ -242,6 +185,22 @@ Snippet directory: `../../Amity-Social-Cloud-SDK-Flutter-Internal/code_snippet`
 | `user_relationships.unblock_user` | `AmityUserRelationshipsUnblockUser.dart` |
 | `user.get_blocked` | `AmityUserGetBlocked.dart` |
 | `user.get_viewed` | `AmityUserGetViewed.dart` |
+
+## DOC_PAGE_STALE_IMPORT (10)
+
+These doc pages reference gendocs snippet files that are not yet imported.
+Run the migrate command to automatically add the missing imports:
+
+```bash
+cd social-plus-docs/harness
+./harness-bin migrate --config harness-config.yml
+```
+
+Or preview changes first with `--dry-run`:
+
+```bash
+./harness-bin migrate --config harness-config.yml --dry-run
+```
 
 
 ---
