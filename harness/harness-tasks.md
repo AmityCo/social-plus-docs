@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-05-01 11:27 — 1 findings requiring AI_
+_Generated 2026-05-01 11:31 — 1 findings requiring AI_
 
 ## Agent Instructions
 
@@ -65,9 +65,9 @@ MANIFEST_FILL findings disappear when all sections have at least one snippet ass
   Manifest: `social-plus-sdk/core-concepts/user-management/user-operations/search-and-query-users.manifest.yml`
 - **`social-plus-sdk/core-concepts/user-management/user-operations/search-and-query-users`** → section `### Search Implementation`  
   Manifest: `social-plus-sdk/core-concepts/user-management/user-operations/search-and-query-users.manifest.yml`
-- **`social-plus-sdk/getting-started/visitor-mode`** → section `### Step 2: Get Visitor Device ID`  
-  Manifest: `social-plus-sdk/getting-started/visitor-mode.manifest.yml`
 - **`social-plus-sdk/getting-started/visitor-mode`** → section `### Permission Enforcement`  
+  Manifest: `social-plus-sdk/getting-started/visitor-mode.manifest.yml`
+- **`social-plus-sdk/getting-started/visitor-mode`** → section `### Step 2: Get Visitor Device ID`  
   Manifest: `social-plus-sdk/getting-started/visitor-mode.manifest.yml`
 - **`social-plus-sdk/video-new/analytics/overview`** → section `### AmityRoom Extension`  
   Manifest: `social-plus-sdk/video-new/analytics/overview.manifest.yml`
