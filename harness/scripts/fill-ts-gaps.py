@@ -47,6 +47,7 @@ def find_gaps(parity_data, min_others=2):
 
 
 def read_android_snippet(fn_entry, android_base):
+    android_base = android_base.rstrip(os.sep)  # Ensure no trailing slash for basename
     """Read android reference snippet. android file paths look like
     '../../Amity-Social-Cloud-SDK-Android/amity-sample-code/...'
     android_base is the absolute path to Amity-Social-Cloud-SDK-Android/.
@@ -120,7 +121,7 @@ Return ONLY the TypeScript file content. No explanations. No markdown fences."""
 
     message = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=600,
+        max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
