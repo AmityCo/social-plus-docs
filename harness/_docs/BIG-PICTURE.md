@@ -103,6 +103,10 @@ fun login(userId: String, authToken: String): Completable { ... }
 /* end_public_function */
 ```
 
+The `audit` command checks every function in public `*Repository`/`*Client` classes for this marker.
+Functions missing the marker are reported as `PUBLIC_FUNC_UNANNOTATED`. The `annotate` command
+auto-generates insertion patches; the `annotate --apply` command inserts them into SDK source.
+
 ### `begin_sample_code` — Actual documentation snippets
 Marks a self-contained code example that should appear in the docs.
 
@@ -178,7 +182,7 @@ handles all inferential steps. They hand off to each other between phases.
 
 ## The Harness CLI (`harness-bin`)
 
-The harness is a Go CLI with 5 commands:
+The harness is a Go CLI with 6 commands:
 
 ### `audit` — Find problems ⚙️ Computational
 Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
@@ -189,6 +193,7 @@ Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
 | `ASC_PAGE_INVALID` | Snippet's `sp_docs_page` doesn't match any page in docs.json | ⚙️ Computational (auto-fix) or 🤖 Inferential (needs_human) |
 | `DOC_MISSING` | Doc page referenced by a snippet doesn't exist | 🤖 Inferential — human or AI creates the page |
 | `DOC_PAGE_STALE_IMPORT` | Doc page still uses hardcoded `<CodeGroup>` instead of a generated import | ⚙️ Computational — `migrate` handles this |
+| `PUBLIC_FUNC_UNANNOTATED` | Public function in `*Repository`/`*Client` has no `begin_public_function` | ⚙️ Semi-computational — `annotate --apply` inserts stubs; 🤖 Inferential review for `id:` values |
 
 ### `fix` — Auto-repair broken URLs ⚙️ Computational
 Normalizes `sp_docs_page` URLs (e.g. `https://docs.amity.co/...` → relative path).
@@ -217,6 +222,19 @@ Reads unresolved findings → writes `harness-tasks.md` with one AI-ready task p
 missing snippet (platform, function, page context, manifest section).
 The harness builds the runbook computationally; an AI agent executes it inferentially.
 
+### `annotate` — Generate annotation patches ⚙️ Computational + 🤖 Review
+Reads `PUBLIC_FUNC_UNANNOTATED` findings → writes `annotation-patches.yml`.
+Each patch contains: source file path, function name, suggested `id:`, insertion line.
+
+```bash
+./harness-bin annotate --config harness-config.yml          # generate patches
+./harness-bin annotate --config harness-config.yml --apply  # apply to SDK source
+```
+
+The `id:` is inferred deterministically (`AmityPostRepository.createPost` → `post.create`).
+A human or AI agent should review the patch file before applying (`id:` values may need adjustment),
+then verify with `audit` to confirm the count drops.
+
 ---
 
 ## Harness Internal Architecture
@@ -234,6 +252,8 @@ internal/
 ├── generator/   ← Builds prompt templates for AI task generation
 ├── fixer/       ← Normalizes broken sp_docs_page URLs
 ├── migrator/    ← Adds imports + replaces CodeGroups in doc pages
+├── publicscan/  ← Scans *Repository/*Client files for public functions missing begin_public_function
+├── patchgen/    ← Infers begin_public_function id + finds function declaration line for patch insertion
 └── report/      ← Finding types, read/write harness-report.json
 ```
 
@@ -292,6 +312,19 @@ Inferential steps ──→ AI agent reads harness-tasks.md, fills gaps
                                   ↓
 Computational steps ──→ verify, regenerate, advance to next phase
 ```
+
+### Phase 0 — SDK Annotation Campaign (in progress)
+*Add `begin_public_function` markers to all public SDK functions that are missing them.*
+
+| Step | Type | Who |
+|---|---|---|
+| `audit` → find `PUBLIC_FUNC_UNANNOTATED` | ⚙️ Computational | harness |
+| `annotate` → generate `annotation-patches.yml` | ⚙️ Computational | harness |
+| Review `id:` values in patch file for correctness | 🤖 Inferential | AI agent / human |
+| `annotate --apply` → insert markers into SDK source | ⚙️ Computational | harness |
+| `audit` → verify count drops | ⚙️ Computational | harness |
+
+**Exit criteria:** 0 `PUBLIC_FUNC_UNANNOTATED` findings
 
 ### Phase 1 — Migration (one-time, in progress)
 *Convert all existing hardcoded `<CodeGroup>` blocks to generated imports.*
@@ -401,12 +434,15 @@ snippets are complete.
 | **ASC_PAGE_INVALID fixes** | ✅ | All legacy URLs in iOS/Android SDK files updated to relative paths |
 | **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
 | **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections — out of scope) |
+| `publicscan` package | ✅ | Scans 4 SDKs; 325 unannotated public functions found |
+| `patchgen` package | ✅ | ID inference + line finder for annotation patches |
+| `annotate` command | ✅ | Generates `annotation-patches.yml`; `--apply` inserts markers |
+| **Phase 0 — SDK Annotation Campaign** | 🔄 In progress | 325 `PUBLIC_FUNC_UNANNOTATED` findings; `annotate` command ready |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
-**Current open findings: 0** ✅
-- All findings resolved: 170 fixed, 0 open, 0 needs_human
-- 59 MANIFEST_FILL sections are UIKit generic sections — out of scope; will be addressed when UIKit gets `sp_docs_page:` markers
-- Harness is now scoped: all commands (genmanifests, audit, migrate, fillmanifests, prompt) skip non-`social-plus-sdk/` pages
+**Current open findings:** 325 `PUBLIC_FUNC_UNANNOTATED` (needs_human) — Phase 0 in progress
+- 0 open audit findings from Phases 1–2 (migration, coverage)
+- 325 public SDK functions missing `begin_public_function` markers (use `harness annotate`)
 
 ---
 
