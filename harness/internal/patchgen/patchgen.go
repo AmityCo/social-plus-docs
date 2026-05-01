@@ -18,7 +18,7 @@ type Patch struct {
 	InsertLine  int    `yaml:"insert_line"`
 	Annotation  string `yaml:"annotation"`
 	EndMarker   string `yaml:"end_marker"`
-	Confidence  string `yaml:"confidence,omitempty"`
+	Confidence  string `yaml:"confidence,omitempty"` // omitempty preserves compatibility with hand-edited patch files
 }
 
 func InferID(className, funcName string) string {

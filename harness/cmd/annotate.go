@@ -66,7 +66,10 @@ func runAnnotate(args []string) {
 	var allSnips []scanner.Snippet
 	for platform, sdkCfg := range cfg.SDKs {
 		snippetPath := filepath.Join(cfgDir, sdkCfg.Path, sdkCfg.SnippetDir)
-		snips, _ := scanner.Scan(snippetPath, platform)
+		snips, err := scanner.Scan(snippetPath, platform)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: skipping %s snippets: %v\n", platform, err)
+		}
 		allSnips = append(allSnips, snips...)
 	}
 	allGroups := docgen.GroupSnippets(allSnips)
@@ -126,7 +129,7 @@ func runAnnotate(args []string) {
 			InsertLine:  lineNo,
 			Annotation:  annotation,
 			EndMarker:   "/* end_public_function */",
-			Confidence:  annotateConfidence(className, allGroups),
+			Confidence:  annotateConfidence(className, platform, allGroups),
 		})
 	}
 
@@ -181,10 +184,13 @@ func extractClassName(detail string) string {
 // annotateConfidence returns "high" if the class name's derived snippet key
 // already exists in groups (meaning sibling platforms already document this
 // function). Returns "low" if no sibling exists to confirm against.
-func annotateConfidence(className string, groups map[string]docgen.SnippetGroup) string {
+func annotateConfidence(className, platform string, groups map[string]docgen.SnippetGroup) string {
+	selfExt := "." + platformExt(platform)
 	for _, ext := range []string{".kt", ".swift", ".dart", ".ts"} {
-		key := docgen.DeriveKey(className + ext)
-		if _, exists := groups[key]; exists {
+		if ext == selfExt {
+			continue
+		}
+		if _, exists := groups[docgen.DeriveKey(className+ext)]; exists {
 			return "high"
 		}
 	}
