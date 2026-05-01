@@ -300,22 +300,18 @@ func runPrompt(args []string) {
 
 	if len(manifestFillTasks) > 0 {
 	sb.WriteString(fmt.Sprintf("\n---\n\n## MANIFEST_FILL (%d sections need assignment)\n\n", len(manifestFillTasks)))
-	sb.WriteString("For each section below, edit the manifest file and add the GendocsKeys\n")
-	sb.WriteString("that belong in that section to the `snippets:` array.\n\n")
+	sb.WriteString("For each section below, open the manifest file and assign candidate snippet keys\n")
+	sb.WriteString("to the matching `snippets:` array. Use the manifest file as your data source —\n")
+	sb.WriteString("candidate keys are listed in the `_candidates:` block inside it.\n\n")
+	sb.WriteString("### How to verify\n\n")
+	sb.WriteString("```bash\ncd social-plus-docs/harness\n./harness-bin audit --config harness-config.yml\n```\n\n")
+	sb.WriteString("MANIFEST_FILL findings disappear when all sections have at least one snippet assigned.\n\n")
+	sb.WriteString("### Sections to fill\n\n")
 	for _, mt := range manifestFillTasks {
-		sb.WriteString(fmt.Sprintf("### %s → %s\n\n", mt.pagePath, mt.sectionSlug))
-		sb.WriteString(fmt.Sprintf("**Manifest:** `%s.manifest.yml`\n", mt.pagePath))
-		sb.WriteString(fmt.Sprintf("**Section:** `%s`\n", mt.heading))
-		if len(mt.candidates) > 0 {
-			sb.WriteString("**Available keys:**\n")
-			for _, k := range mt.candidates {
-				sb.WriteString(fmt.Sprintf("- `%s`\n", k))
-			}
-		} else {
-			sb.WriteString("**Available keys:** _(none yet — write snippets first)_\n")
-		}
-		sb.WriteString("\n")
+		sb.WriteString(fmt.Sprintf("- **`%s`** → section `%s`  \n", mt.pagePath, mt.heading))
+		sb.WriteString(fmt.Sprintf("  Manifest: `%s.manifest.yml`\n", mt.pagePath))
 	}
+	sb.WriteString("\n")
 }
 
 if staleImportCount > 0 {
@@ -335,50 +331,33 @@ if staleImportCount > 0 {
 
 	// PUBLIC_FUNC_UNANNOTATED section
 	if len(unannotatedFuncs) > 0 {
-		type classGroup struct {
-			funcs []unannotatedFunc
-			file  string
-		}
-		byPlatformClass := map[string]map[string]*classGroup{}
-		for _, u := range unannotatedFuncs {
-			if byPlatformClass[u.platform] == nil {
-				byPlatformClass[u.platform] = map[string]*classGroup{}
-			}
-			if byPlatformClass[u.platform][u.className] == nil {
-				byPlatformClass[u.platform][u.className] = &classGroup{file: u.file}
-			}
-			byPlatformClass[u.platform][u.className].funcs = append(byPlatformClass[u.platform][u.className].funcs, u)
-		}
-		sb.WriteString(fmt.Sprintf("\n---\n\n## PUBLIC_FUNC_UNANNOTATED (%d functions need begin_public_function annotation)\n\n", len(unannotatedFuncs)))
-		sb.WriteString("These public functions in `*Repository` / `*Client` classes have no `begin_public_function` annotation.\n")
-		sb.WriteString("Wrap each function with `/* begin_public_function\\n  id: <feature.action>\\n*/` and `/* end_public_function */`, or mark `@Deprecated` if no longer active.\n\n")
-		for _, platform := range []string{"android", "ios", "flutter", "typescript"} {
-			classes, ok := byPlatformClass[platform]
-			if !ok {
-				continue
-			}
-			total := 0
-			for _, cg := range classes {
-				total += len(cg.funcs)
-			}
-			sb.WriteString(fmt.Sprintf("### %s (%d functions)\n\n", strings.ToUpper(platform), total))
-			for className, cg := range classes {
-				sb.WriteString(fmt.Sprintf("**`%s`** (`%s`) — %d functions:\n", className, cg.file, len(cg.funcs)))
-				for _, u := range cg.funcs {
-					sb.WriteString(fmt.Sprintf("- `%s`\n", u.funcName))
-				}
-				sb.WriteString("\n")
-			}
-		}
+		sb.WriteString(fmt.Sprintf("\n---\n\n## PUBLIC_FUNC_UNANNOTATED (%d functions)\n\n", len(unannotatedFuncs)))
+		sb.WriteString("**Read the full list from:** `harness/unannotated-functions-report.md`\n\n")
+		sb.WriteString("### What to do\n\n")
+		sb.WriteString("For each function listed in the report:\n\n")
+		sb.WriteString("1. Open the source file shown in the report\n")
+		sb.WriteString("2. Find the function declaration\n")
+		sb.WriteString("3. Wrap it with `begin_public_function` / `end_public_function`:\n\n")
+		sb.WriteString("```kotlin\n/* begin_public_function\n   id: <feature.action>   e.g. comment.create, post.query\n*/\nfun myFunction(): ReturnType {\n    ...\n}\n/* end_public_function */\n```\n\n")
+		sb.WriteString("The same pattern applies to Swift, Dart, and TypeScript.\n\n")
+		sb.WriteString("4. If the function is truly internal / not for public use, add `@Deprecated` instead\n\n")
+		sb.WriteString("### How to verify\n\n")
+		sb.WriteString("After annotating, re-run the audit — the finding count MUST drop:\n\n")
+		sb.WriteString("```bash\ncd social-plus-docs/harness\n./harness-bin audit --config harness-config.yml\n```\n\n")
+		sb.WriteString("The audit reads the SDK source directly. You cannot satisfy this check by editing\n")
+		sb.WriteString("`harness-tasks.md` or `unannotated-functions-report.md` — only source changes count.\n")
 	}
 
 	sb.WriteString("---\n\n")
 	sb.WriteString("## After completion\n\n")
+	sb.WriteString("Run the full audit to verify all tasks are resolved:\n\n")
 	sb.WriteString("```bash\n")
 	sb.WriteString("cd social-plus-docs/harness\n")
 	sb.WriteString("./harness-bin audit --config harness-config.yml\n")
-	sb.WriteString("# If open findings remain: ./harness-bin prompt --config harness-config.yml\n")
-	sb.WriteString("```\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("**Expected result:** zero `open` findings. The audit is the authoritative proof —\n")
+	sb.WriteString("it re-reads source files directly and cannot be satisfied by editing task or report files.\n\n")
+	sb.WriteString("If findings remain, run `./harness-bin prompt` to regenerate this file with the remaining work.\n")
 
 	content := sb.String()
 
