@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-05-01 10:48 — 3 findings requiring AI_
+_Generated 2026-05-01 11:20 — 1 findings requiring AI_
 
 ## Agent Instructions
 
@@ -573,10 +573,10 @@ that belong in that section to the `snippets:` array.
 - `validate-url`
 - `video-get`
 
-### social-plus-sdk/getting-started/visitor-mode → permission-enforcement
+### social-plus-sdk/getting-started/visitor-mode → step-2-get-visitor-device-id
 
 **Manifest:** `social-plus-sdk/getting-started/visitor-mode.manifest.yml`
-**Section:** `### Permission Enforcement`
+**Section:** `### Step 2: Get Visitor Device ID`
 **Available keys:**
 - `client-fetch-link-preview`
 - `client-get-login-method`
@@ -599,10 +599,10 @@ that belong in that section to the `snippets:` array.
 - `product-get`
 - `renewal_with_auth_token`
 
-### social-plus-sdk/getting-started/visitor-mode → step-2-get-visitor-device-id
+### social-plus-sdk/getting-started/visitor-mode → permission-enforcement
 
 **Manifest:** `social-plus-sdk/getting-started/visitor-mode.manifest.yml`
-**Section:** `### Step 2: Get Visitor Device ID`
+**Section:** `### Permission Enforcement`
 **Available keys:**
 - `client-fetch-link-preview`
 - `client-get-login-method`
@@ -749,7 +749,7 @@ that belong in that section to the `snippets:` array.
 - `stream-update`
 - `stream_moderation`
 
-## DOC_PAGE_STALE_IMPORT (3)
+## DOC_PAGE_STALE_IMPORT (1)
 
 These doc pages reference gendocs snippet files that are not yet imported.
 Run the migrate command to automatically add the missing imports:
@@ -768,185 +768,51 @@ Or preview changes first with `--dry-run`:
 
 ---
 
-## PUBLIC_FUNC_UNANNOTATED (607 functions need sp_docs_page: annotation)
+## PUBLIC_FUNC_UNANNOTATED (325 functions need begin_public_function annotation)
 
-These public functions in `*Repository` / `*Client` classes have no `sp_docs_page:` annotation.
-Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or skip if internal.
+These public functions in `*Repository` / `*Client` classes have no `begin_public_function` annotation.
+Wrap each function with `/* begin_public_function\n  id: <feature.action>\n*/` and `/* end_public_function */`, or mark `@Deprecated` if no longer active.
 
-### ANDROID (203 functions)
+### ANDROID (101 functions)
 
-**`AmityProductRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/product/AmityProductRepository.kt`) — 2 functions:
-- `searchProduct`
-- `getProduct`
+**`AmityClientFetchLinkPreview`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientFetchLinkPreview.kt`) — 1 functions:
+- `fetchLinkPreview`
 
-**`AmityCommentRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/comment/AmityCommentRepository.kt`) — 10 functions:
-- `getComment`
-- `getCommentByIds`
-- `getComments`
-- `createComment`
-- `editComment`
-- `softDeleteComment`
-- `hardDeleteComment`
-- `getLatestComment`
-- `flagComment`
-- `unflagComment`
+**`AmityClientLoginWithAccessToken`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientLoginWithAccessToken.kt`) — 2 functions:
+- `loginWithAccessToken`
+- `sessionWillRenewAccessToken`
 
-**`AmityRoomRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/room/AmityRoomRepository.kt`) — 13 functions:
-- `getRooms`
-- `getRoom`
-- `fetchRoom`
-- `createRoom`
-- `updateRoom`
-- `deleteRoom`
-- `stopRoom`
-- `getBroadcasterData`
-- `getRecordedUrls`
-- `leaveRoom`
-- `removeRoomParticipant`
-- `getCoHostEvent`
-- `updateCohostPermission`
+**`AmityMessageRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/message/AmityMessageRepository.kt`) — 6 functions:
+- `createImageMessage`
+- `createFileMessage`
+- `createVideoMessage`
+- `createAudioMessage`
+- `flagMessage`
+- `deleteFailedMessages`
 
-**`MarkerSyncRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/sync/MarkerSyncRepository.kt`) — 1 functions:
-- `syncMarkers`
+**`AmityAdRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/ads/AmityAdRepository.kt`) — 2 functions:
+- `getNetworkAds`
+- `analytics`
 
-**`AmityLiveReactionRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityLiveReactionRepository.kt`) — 3 functions:
-- `getReactions`
-- `createReaction`
-- `createRoomReaction`
+**`AmityClientPresenceIsEnabled`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceIsEnabled.kt`) — 1 functions:
+- `isPresenceEnabled`
 
-**`AmityUserRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/user/AmityUserRepository.kt`) — 10 functions:
-- `getUsers`
-- `searchUsers`
-- `getUser`
-- `getUserByIds`
-- `flagUser`
-- `unflagUser`
-- `getBlockedUsers`
-- `getAllBlockedUsers`
-- `relationship`
-- `getReachedUsers`
-
-**`UserMarkerRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/user/UserMarkerRepository.kt`) — 1 functions:
-- `getUserMarker`
-
-**`AmityInvitationRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/invitation/AmityInvitationRepository.kt`) — 2 functions:
-- `getMyCommunityInvitations`
-- `getInvitations`
-
-**`AmityFeedRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityFeedRepository.kt`) — 5 functions:
-- `getGlobalFeed`
-- `getCustomRankingGlobalFeed`
-- `getCommunityFeed`
-- `getUserFeed`
-- `getMyFeed`
-
-**`AmityUserPresenceRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/presence/AmityUserPresenceRepository.kt`) — 7 functions:
-- `getUserPresence`
-- `syncUserPresence`
-- `unsyncUserPresence`
-- `unsyncAllUserPresence`
-- `getSyncingUserPresence`
-- `getOnlineUsersSnapshot`
-- `getOnlineUsersCount`
-
-**`AmityCommunityRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/community/AmityCommunityRepository.kt`) — 16 functions:
-- `createCommunity`
-- `getCommunities`
-- `getJoinRequestList`
-- `searchCommunities`
-- `semanticSearchCommunities`
-- `getRecommendedCommunities`
-- `getTrendingCommunities`
-- `membership`
-- `getCommunity`
-- `getCategory`
-- `getCategories`
-- `deleteCommunity`
-- `editCommunity`
-- `joinCommunity`
-- `leaveCommunity`
-- `moderation`
-
-**`AmityEventRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/event/AmityEventRepository.kt`) — 5 functions:
-- `getEvent`
-- `getEvents`
-- `createEvent`
-- `updateEvent`
-- `deleteEvent`
-
-**`AmityPollRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/poll/AmityPollRepository.kt`) — 6 functions:
-- `createPoll`
-- `getPoll`
-- `closePoll`
-- `deletePoll`
-- `votePoll`
-- `unvotePoll`
-
-**`AnalyticsRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/analytics/AnalyticsRepository.kt`) — 5 functions:
-- `saveAnalyticEvent`
-- `sendAnalyticsEvents`
-- `deleteAllAnalyticsEvents`
-- `getViewedUsers`
-- `createAnalyticEvent`
-
-**`CommunityNotificationRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/notification/community/CommunityNotificationRepository.kt`) — 2 functions:
-- `saveNotificationSettings`
-- `getNotificationSettings`
-
-**`AmityChannelRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/channel/AmityChannelRepository.kt`) — 12 functions:
-- `createChannel`
-- `getChannels`
-- `getChannel`
-- `joinChannel`
-- `leaveChannel`
-- `editChannel`
-- `membership`
-- `moderation`
-- `muteChannel`
-- `unmuteChannel`
-- `getTotalChannelsUnreadInfo`
-- `getTotalChannelUnread`
-
-**`AmityRoomPresenceRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/presence/AmityRoomPresenceRepository.kt`) — 6 functions:
+**`AmityClientPresenceStartHeartbeat`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceStartHeartbeat.kt`) — 1 functions:
 - `startHeartbeat`
-- `stopHeartbeat`
-- `observeOnlineUsersCount`
-- `getOnlineUsersCount`
-- `getOnlineUsersSnapshot`
-- `roomId`
 
-**`AmityPostRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityPostRepository.kt`) — 31 functions:
-- `getPost`
-- `getPostByIds`
-- `getPosts`
-- `searchPostsByHashtag`
-- `createTextPost`
-- `createImagePost`
-- `createFilePost`
-- `createVideoPost`
-- `createClipPost`
-- `createPollPost`
-- `createLiveStreamPost`
-- `createRoomPost`
-- `createCustomPost`
-- `createAudioPost`
-- `createMixedAttachmentPost`
-- `editPost`
-- `editCustomPost`
-- `softDeletePost`
-- `hardDeletePost`
-- `approvePost`
-- `declinePost`
-- `flagPost`
-- `unflagPost`
-- `getPinnedPosts`
-- `getGlobalPinnedPosts`
-- `getLiveRoomPosts`
-- `getCommunityLiveRoomPosts`
-- `semanticSearchPosts`
-- `createPost`
-- `pinProduct`
-- `unpinProduct`
+**`AmityFileRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/file/AmityFileRepository.kt`) — 9 functions:
+- `uploadFile`
+- `uploadImage`
+- `uploadAudio`
+- `uploadVideo`
+- `uploadClip`
+- `cancelUpload`
+- `getUploadInfo`
+- `getFile`
+- `updateAltText`
+
+**`AmityUserRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/user/AmityUserRepository.kt`) — 1 functions:
+- `relationship`
 
 **`AmityStoryRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/story/AmityStoryRepository.kt`) — 11 functions:
 - `createImageStory`
@@ -961,213 +827,180 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `hardDeleteStory`
 - `analytics`
 
-**`TombstoneRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/tombstone/TombstoneRepository.kt`) — 2 functions:
-- `getTombstone`
-- `saveTombstone`
-
-**`StreamPlayerClient`** (`amity-video-player/src/main/java/com/amity/socialcloud/sdk/video/StreamPlayerClient.kt`) — 2 functions:
-- `setup`
-- `getFunction`
-
-**`AmitySubChannelRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/subchannel/AmitySubChannelRepository.kt`) — 8 functions:
-- `getSubChannel`
-- `getSubChannels`
-- `createSubChannel`
-- `editSubChannel`
-- `softDeleteSubChannel`
-- `hardDeleteSubChannel`
-- `startMessageReceiptSync`
-- `stopMessageReceiptSync`
-
-**`AmityAdRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/ads/AmityAdRepository.kt`) — 2 functions:
-- `getNetworkAds`
-- `analytics`
-
-**`AmityReactionRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityReactionRepository.kt`) — 3 functions:
-- `getReactions`
-- `addReaction`
-- `removeReaction`
-
-**`AmityStreamRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`) — 6 functions:
-- `getStreams`
+**`AmityStreamRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`) — 2 functions:
 - `fetchStream`
-- `getStream`
-- `createStream`
 - `editStream`
-- `disposeStream`
-
-**`FileRepository`** (`amity-rxupload/src/main/java/co/amity/rxupload/internal/repository/FileRepository.kt`) — 1 functions:
-- `upload`
-
-**`AmityMessageRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/message/AmityMessageRepository.kt`) — 14 functions:
-- `getMessages`
-- `getMessage`
-- `createTextMessage`
-- `createImageMessage`
-- `createFileMessage`
-- `createVideoMessage`
-- `createAudioMessage`
-- `createCustomMessage`
-- `editTextMessage`
-- `editCustomMessage`
-- `softDeleteMessage`
-- `flagMessage`
-- `unflagMessage`
-- `deleteFailedMessages`
-
-**`AmityChannelPresenceRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/presence/AmityChannelPresenceRepository.kt`) — 4 functions:
-- `syncChannelPresence`
-- `unsyncChannelPresence`
-- `unsyncAllChannelPresence`
-- `getSyncingChannelPresence`
-
-**`AmityFileRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/file/AmityFileRepository.kt`) — 10 functions:
-- `uploadFile`
-- `uploadImage`
-- `uploadAudio`
-- `uploadVideo`
-- `uploadClip`
-- `cancelUpload`
-- `getUploadInfo`
-- `deleteFile`
-- `getFile`
-- `updateAltText`
-
-**`UserRelationshipRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/relationship/UserRelationshipRepository.kt`) — 1 functions:
-- `hasInLocal`
 
 **`StreamBroadcasterClient`** (`amity-video-publisher/src/main/java/com/amity/socialcloud/sdk/video/StreamBroadcasterClient.kt`) — 2 functions:
 - `setup`
 - `getFunction`
 
-### IOS (207 functions)
+**`FileRepository`** (`amity-rxupload/src/main/java/co/amity/rxupload/internal/repository/FileRepository.kt`) — 1 functions:
+- `upload`
 
-**`AmityCommentRepository`** (`EkoChat/Features/Comment/Public/AmityCommentRepository.swift`) — 11 functions:
-- `softDeleteComment`
-- `hardDeleteComment`
-- `createComment`
-- `editComment`
-- `getLatestComment`
-- `getComments`
-- `getComment`
+**`AmityClientGetLoginMethod`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientGetLoginMethod.kt`) — 1 functions:
+- `getLoginMethod`
+
+**`AmityClientGetProductCatalogueSetting`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientGetProductCatalogueSetting.kt`) — 1 functions:
+- `getProductCatalogueSetting`
+
+**`AmityClientUnregisterPush`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/notification/registration/AmityClientUnregisterPush.kt`) — 1 functions:
+- `unregisterPush`
+
+**`AmityClientPresenceDisable`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceDisable.kt`) — 1 functions:
+- `disablePresence`
+
+**`AmityClientPresenceStopHeartbeat`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceStopHeartbeat.kt`) — 1 functions:
+- `stopHeartbeat`
+
+**`AmityInitStoryRepository`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/social/story/init/AmityInitStoryRepository.kt`) — 1 functions:
+- `initStoryRepository`
+
+**`UserRelationshipRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/relationship/UserRelationshipRepository.kt`) — 1 functions:
+- `hasInLocal`
+
+**`AmityClientReadSessionState`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientReadSessionState.kt`) — 1 functions:
+- `readSessionState`
+
+**`AmityClientRenewAccessToken`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientRenewAccessToken.kt`) — 2 functions:
+- `setupRenewal`
+- `sessionWillRenewAccessToken`
+
+**`AmityClientRegisterPush`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/notification/registration/AmityClientRegisterPush.kt`) — 1 functions:
+- `registerPush`
+
+**`AmityClientUpdateUser`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/user/AmityClientUpdateUser.kt`) — 1 functions:
+- `updateUser`
+
+**`AmityCommentRepositoryInitialization`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/social/comment/AmityCommentRepositoryInitialization.kt`) — 1 functions:
+- `initializeCommentRepository`
+
+**`AmityPostRepositoryInitialization`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/social/post/AmityPostRepositoryInitialization.kt`) — 1 functions:
+- `initializePostRepository`
+
+**`AmityLiveReactionRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityLiveReactionRepository.kt`) — 3 functions:
 - `getReactions`
-- `flagComment`
-- `unflagComment`
-- `isCommentFlaggedByMe`
+- `createReaction`
+- `createRoomReaction`
 
-**`AmityInvitationRepository`** (`EkoChat/Features/Invitation/Public/Repository/AmityInvitationRepository.swift`) — 2 functions:
-- `getMyCommunityInvitations`
-- `getInvitations`
+**`MarkerSyncRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/sync/MarkerSyncRepository.kt`) — 1 functions:
+- `syncMarkers`
 
-**`AmityMessageRepository`** (`EkoChat/Features/Message/Public/AmityMessageRepository.swift`) — 17 functions:
-- `softDeleteMessage`
-- `deleteFailedMessages`
-- `createCustomMessage`
-- `createTextMessage`
-- `createImageMessage`
-- `createAudioMessage`
-- `createFileMessage`
-- `createVideoMessage`
-- `getMessage`
-- `getMessages`
-- `getReactions`
-- `editTextMessage`
-- `editCustomMessage`
-- `setTags`
-- `flagMessage`
-- `unflagMessage`
-- `isMessageFlaggedByMe`
+**`AmityClientSecureLogout`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientSecureLogout.kt`) — 1 functions:
+- `secureLogout`
 
-**`AmityCommunityRepository`** (`EkoChat/Features/Community/Public/Repository/AmityCommunityRepository.swift`) — 5 functions:
-- `createCommunity`
-- `editCommunity`
-- `deleteCommunity`
-- `joinCommunity`
-- `leaveCommunity`
+**`AmityClientGetCurrentUser`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/user/AmityClientGetCurrentUser.kt`) — 1 functions:
+- `getCurrentUser`
 
-**`AmityStreamRepository`** (`EkoChat/Features/LiveStream/Public/Repositories/AmityStreamRepository.swift`) — 5 functions:
-- `createStream`
-- `disposeStream`
-- `getStream`
-- `getStreams`
-- `editStream`
-
-**`AmityProductRepository`** (`EkoChat/Features/Product/Public/AmityProductRepository.swift`) — 2 functions:
-- `getProduct`
-- `searchProducts`
-
-**`AmitySubChannelRepository`** (`EkoChat/Features/SubChannel/AmitySubChannelRepository.swift`) — 11 functions:
-- `createSubChannel`
-- `editSubChannel`
-- `softDeleteSubChannel`
-- `hardDeleteSubChannel`
-- `getSubChannel`
-- `getSubChannels`
-- `startMessageReceiptSync`
-- `stopMessageReceiptSync`
-- `channelId`
-- `isDeleted`
-- `excludeDefaultSubChannel`
-
-**`AmityRoomRepository`** (`EkoChat/Features/CoHostStream/Public/AmityRoomRepository.swift`) — 11 functions:
-- `createRoom`
-- `getRoom`
-- `updateRoom`
-- `getRooms`
-- `deleteRoom`
-- `stopRoom`
-- `leaveRoom`
-- `removeParticipant`
-- `generateRoomToken`
-- `getCoHostEvent`
-- `updateCohostPermissions`
-
-**`AmityEventRepository`** (`EkoChat/Features/Event/Public/AmityEventRepository.swift`) — 5 functions:
-- `createEvent`
-- `updateEvent`
-- `deleteEvent`
-- `getEvent`
-- `getEvents`
-
-**`AmityPollRepository`** (`EkoChat/Features/Feed/Public/Repository/Poll/AmityPollRepository.swift`) — 5 functions:
-- `createPoll`
-- `closePoll`
-- `votePoll`
-- `unvotePoll`
-- `deletePoll`
-
-**`AmityPostRepository`** (`EkoChat/Features/Feed/Public/Repository/Post/AmityPostRepository.swift`) — 31 functions:
-- `createTextPost`
-- `createCustomPost`
-- `createImagePost`
-- `createFilePost`
-- `createVideoPost`
-- `createPollPost`
-- `createRoomPost`
-- `createLiveStreamPost`
-- `createAudioPost`
-- `createMixedMediaPost`
-- `createClipPost`
-- `editPost`
-- `softDeletePost`
-- `hardDeletePost`
-- `approvePost`
-- `declinePost`
-- `getPost`
-- `getPosts`
-- `getLiveRoomPosts`
-- `getCommunityLiveRoomPosts`
-- `getReactions`
-- `flagPost`
-- `unflagPost`
-- `isFlaggedByMe`
+**`AmityPostRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityPostRepository.kt`) — 4 functions:
+- `createMixedAttachmentPost`
 - `getPinnedPosts`
 - `getGlobalPinnedPosts`
 - `semanticSearchPosts`
-- `searchPostsByHashtag`
-- `pinProduct`
-- `unpinProduct`
-- `updateProductTags`
+
+**`AmityClientSetAccessTokenHandler`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientSetAccessTokenHandler.kt`) — 2 functions:
+- `setAccessTokenHandler`
+- `sessionWillRenewAccessToken`
+
+**`AmityClientPresenceEnable`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceEnable.kt`) — 1 functions:
+- `enablePresence`
+
+**`AmityCommunityRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/community/AmityCommunityRepository.kt`) — 2 functions:
+- `membership`
+- `moderation`
+
+**`CommunityNotificationRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/notification/community/CommunityNotificationRepository.kt`) — 2 functions:
+- `saveNotificationSettings`
+- `getNotificationSettings`
+
+**`TombstoneRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/tombstone/TombstoneRepository.kt`) — 2 functions:
+- `getTombstone`
+- `saveTombstone`
+
+**`AmityClientObserveSessionState`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientObserveSessionState.kt`) — 1 functions:
+- `observeSessionState`
+
+**`AmityRoomPresenceRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/presence/AmityRoomPresenceRepository.kt`) — 6 functions:
+- `startHeartbeat`
+- `stopHeartbeat`
+- `observeOnlineUsersCount`
+- `getOnlineUsersCount`
+- `getOnlineUsersSnapshot`
+- `roomId`
+
+**`AmityRoomRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/room/AmityRoomRepository.kt`) — 6 functions:
+- `fetchRoom`
+- `getRecordedUrls`
+- `leaveRoom`
+- `removeRoomParticipant`
+- `getCoHostEvent`
+- `updateCohostPermission`
+
+**`UserMarkerRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/user/UserMarkerRepository.kt`) — 1 functions:
+- `getUserMarker`
+
+**`AnalyticsRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/analytics/AnalyticsRepository.kt`) — 5 functions:
+- `saveAnalyticEvent`
+- `sendAnalyticsEvents`
+- `deleteAllAnalyticsEvents`
+- `getViewedUsers`
+- `createAnalyticEvent`
+
+**`AmityFeedRepositoryInitialization`** (`amity-sample-code/src/main/java/com/amity/snipet/verifier/social/feed/AmityFeedRepositoryInitialization.kt`) — 1 functions:
+- `initializeFeedRepository`
+
+**`AmityChannelRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/channel/AmityChannelRepository.kt`) — 5 functions:
+- `membership`
+- `moderation`
+- `getChannels`
+- `getTotalChannelsUnreadInfo`
+- `getTotalChannelUnread`
+
+**`AmityInvitationRepository`** (`amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/invitation/AmityInvitationRepository.kt`) — 2 functions:
+- `getMyCommunityInvitations`
+- `getInvitations`
+
+**`StreamPlayerClient`** (`amity-video-player/src/main/java/com/amity/socialcloud/sdk/video/StreamPlayerClient.kt`) — 2 functions:
+- `setup`
+- `getFunction`
+
+### IOS (63 functions)
+
+**`AmityCommentRepository`** (`EkoChat/Features/Comment/Public/AmityCommentRepository.swift`) — 1 functions:
+- `getReactions`
+
+**`AmityFeedRepository`** (`EkoChat/Features/Feed/Public/Repository/Feed/AmityFeedRepository.swift`) — 1 functions:
+- `getMyFeed`
+
+**`AmityFileRepository`** (`EkoChat/Features/File/Public/AmityFileRepository.swift`) — 11 functions:
+- `uploadImage`
+- `uploadFile`
+- `uploadVideo`
+- `uploadAudio`
+- `downloadImageAsData`
+- `downloadImage`
+- `downloadFileAsData`
+- `downloadFile`
+- `getUploadProgress`
+- `cancelFileDownload`
+- `cancelImageDownload`
+
+**`AmityRoomRepository`** (`EkoChat/Features/CoHostStream/Public/AmityRoomRepository.swift`) — 1 functions:
+- `generateRoomToken`
+
+**`AmityPostRepository`** (`EkoChat/Features/Feed/Public/Repository/Post/AmityPostRepository.swift`) — 3 functions:
+- `editPost`
+- `getPosts`
+- `getReactions`
+
+**`AmityMessageRepository`** (`EkoChat/Features/Message/Public/AmityMessageRepository.swift`) — 3 functions:
+- `deleteFailedMessages`
+- `getReactions`
+- `setTags`
+
+**`AmityReactionRepository`** (`EkoChat/Features/Reaction/Public/AmityReactionRepository.swift`) — 2 functions:
+- `createReaction`
+- `getReactions`
 
 **`AmityStoryRepository`** (`EkoChat/Features/Story/Public/AmityStoryRepository.swift`) — 10 functions:
 - `createVideoStory`
@@ -1181,90 +1014,25 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `getStoryTargets`
 - `getGlobalStoryTargets`
 
-**`AmityUserRepository`** (`EkoChat/Features/User/Public/AmityUserRepository.swift`) — 9 functions:
-- `getUser`
-- `searchUsers`
-- `getUsers`
-- `getBlockedUsers`
-- `getAllBlockedUsers`
-- `flagUser`
-- `unflagUser`
-- `isUserFlaggedByMe`
-- `getReachedUsers`
+**`AmitySubChannelRepository`** (`EkoChat/Features/SubChannel/AmitySubChannelRepository.swift`) — 5 functions:
+- `startMessageReceiptSync`
+- `stopMessageReceiptSync`
+- `channelId`
+- `isDeleted`
+- `excludeDefaultSubChannel`
 
-**`AmityUserPresenceRepository`** (`EkoChat/Core/Presence/Public/AmityUserPresenceRepository.swift`) — 8 functions:
-- `defaultViewId`
-- `getOnlineUsersCount`
-- `getOnlineUsersSnapshot`
-- `getUserPresence`
-- `syncUserPresence`
-- `unsyncUserPresence`
-- `unsyncAllUserPresence`
-- `getSyncingUserPresence`
-
-**`AmityAdRepository`** (`EkoChat/Features/Ads/Public/AmityAdRepository.swift`) — 1 functions:
-- `getNetworkAds`
-
-**`AmityRoomPresenceRepository`** (`EkoChat/Features/CoHostStream/Presence/AmityRoomPresenceRepository.swift`) — 4 functions:
-- `startHeartbeat`
-- `stopHeartbeat`
-- `getRoomOnlineUsers`
-- `getRoomUserCount`
-
-**`AmityFeedRepository`** (`EkoChat/Features/Feed/Public/Repository/Feed/AmityFeedRepository.swift`) — 5 functions:
-- `getMyFeed`
-- `getUserFeed`
-- `getGlobalFeed`
-- `getCustomRankingGlobalFeed`
-- `getCommunityFeed`
-
-**`AmityFileRepository`** (`EkoChat/Features/File/Public/AmityFileRepository.swift`) — 15 functions:
-- `uploadImage`
-- `updateAltText`
-- `uploadFile`
-- `uploadVideo`
-- `uploadAudio`
-- `downloadImageAsData`
-- `downloadImage`
-- `downloadFileAsData`
-- `downloadFile`
-- `deleteFile`
-- `getFile`
-- `getUploadProgress`
-- `cancelFileDownload`
-- `cancelImageDownload`
-- `uploadClip`
-
-**`AmityReactionRepository`** (`EkoChat/Features/Reaction/Public/AmityReactionRepository.swift`) — 4 functions:
-- `createReaction`
-- `getReactions`
-- `addReaction`
-- `removeReaction`
-
-**`AmityClient`** (`EkoChat/Core/Client/AmityClient.swift`) — 31 functions:
+**`AmityClient`** (`EkoChat/Core/Client/AmityClient.swift`) — 19 functions:
 - `notificationTray`
 - `currentUserId`
 - `loginMethod`
 - `accessToken`
 - `presence`
 - `getUserUnread`
-- `user`
-- `currentUserType`
-- `notificationManager`
 - `mentionConfigurations`
 - `setup`
 - `enableUnreadCount`
-- `login`
 - `getVisitorDeviceId`
-- `loginAsVisitor`
-- `loginWithAccessToken`
-- `setAccessTokenHandler`
-- `disconnect`
-- `logout`
 - `secureLogout`
-- `registerPushNotification`
-- `unregisterPushNotification`
-- `editUser`
 - `validateUrls`
 - `validateTexts`
 - `setUploadedFileAccessType`
@@ -1274,113 +1042,44 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `observeNetworkActivities`
 - `getLinkPreviewMetadata`
 
-**`AmityChannelPresenceRepository`** (`EkoChat/Core/Presence/Public/AmityChannelPresenceRepository.swift`) — 5 functions:
+**`AmityChannelPresenceRepository`** (`EkoChat/Core/Presence/Public/AmityChannelPresenceRepository.swift`) — 1 functions:
 - `defaultViewId`
-- `syncChannelPresence`
-- `unsyncChannelPresence`
-- `unsyncAllChannelPresence`
-- `getSyncingChannelPresence`
 
-**`AmityChannelRepository`** (`EkoChat/Features/Channel/Public/AmityChannelRepository.swift`) — 10 functions:
+**`AmityUserPresenceRepository`** (`EkoChat/Core/Presence/Public/AmityUserPresenceRepository.swift`) — 1 functions:
+- `defaultViewId`
+
+**`AmityChannelRepository`** (`EkoChat/Features/Channel/Public/AmityChannelRepository.swift`) — 1 functions:
 - `getTotalChannelsUnread`
-- `notificationManagerForChannel`
-- `getChannel`
-- `getChannels`
-- `joinChannel`
-- `createChannel`
-- `editChannel`
-- `leaveChannel`
-- `muteChannel`
-- `unmuteChannel`
 
-### FLUTTER (197 functions)
+**`AmityRoomPresenceRepository`** (`EkoChat/Features/CoHostStream/Presence/AmityRoomPresenceRepository.swift`) — 4 functions:
+- `startHeartbeat`
+- `stopHeartbeat`
+- `getRoomOnlineUsers`
+- `getRoomUserCount`
 
-**`amity_story_repository`** (`lib/src/public/repo/amity_story_repository.dart`) — 9 functions:
-- `createImageStory`
-- `createVideoStory`
-- `getActiveStories`
-- `getStoriesByTargets`
-- `hardDeleteStory`
-- `serviceLocator`
-- `softDeleteStory`
-- `getStoryTargets`
-- `analytics`
+### FLUTTER (95 functions)
 
-**`amity_channel_repository`** (`lib/src/public/repo/channel/amity_channel_repository.dart`) — 21 functions:
-- `createChannel`
-- `updateChannel`
-- `getChannel`
-- `serviceLocator`
-- `getChannels`
-- `joinChannel`
-- `leaveChannel`
-- `muteChannel`
-- `unMuteChannel`
-- `addMembers`
-- `removeMembers`
-- `membership`
-- `moderation`
-- `startReading`
-- `stopReading`
-- `archiveChannel`
-- `unarchiveChannel`
-- `getArchivedChannels`
-- `getArchivedChannelIds`
-- `searchChannels`
-- `getChannelTotalUnreads`
+**`AmityClientGetConfiguration`** (`code_snippet/user/AmityClientGetConfiguration.dart`) — 1 functions:
+- `getConfiguration`
 
-**`message_repository`** (`lib/src/public/repo/message/message_repository.dart`) — 16 functions:
-- `getMessages`
-- `newGetMessages`
-- `newCreateMessage`
-- `getMessage`
-- `serviceLocator`
-- `createMessage`
-- `updateMessage`
-- `editTextMessage`
-- `deleteMessage`
-- `getReaction`
-- `flag`
-- `flagMessage`
-- `unflag`
-- `createCustomMessage`
-- `editCustomMessage`
-- `searchMessage`
+**`amity_video_client`** (`lib/src/public/client/amity_video_client.dart`) — 1 functions:
+- `newStreamRepository`
 
-**`poll_repository`** (`lib/src/public/repo/poll_repository.dart`) — 5 functions:
-- `createPoll`
-- `deletePoll`
-- `serviceLocator`
-- `vote`
-- `closePoll`
+**`comment_repository`** (`lib/src/public/repo/comment_repository.dart`) — 1 functions:
+- `updateComment`
 
-**`amity_user_flag_repository`** (`lib/src/public/repo/sub_set/amity_user_flag_repository.dart`) — 3 functions:
-- `flag`
-- `serviceLocator`
-- `unflag`
+**`sub_channel_repository`** (`lib/src/public/repo/sub_channel_repository.dart`) — 6 functions:
+- `createSubChannel`
+- `getSubChannels`
+- `getSubChannel`
+- `softDeleteSubChannel`
+- `hardDeleteSubChannel`
+- `updateeditSubChannelSubChannel`
 
-**`amity_file_repository`** (`lib/src/public/repo/amity_file_repository.dart`) — 6 functions:
-- `uploadFile`
-- `serviceLocator`
-- `uploadImage`
-- `uploadAudio`
-- `uploadVideo`
-- `cancelUpload`
+**`amity_my_user_relationship_repository`** (`lib/src/public/repo/sub_set/follow/amity_my_user_relationship_repository.dart`) — 1 functions:
+- `getBlockedUsers`
 
-**`feed_repository`** (`lib/src/public/repo/feed_repository.dart`) — 4 functions:
-- `getGlobalFeed`
-- `getCustomRankingGlobalFeed`
-- `getUserFeed`
-- `getCommunityFeed`
-
-**`notification_repository`** (`lib/src/public/repo/notification_repository.dart`) — 3 functions:
-- `registerDeviceNotification`
-- `serviceLocator`
-- `unregisterDeviceNotification`
-
-**`amity_user_relationships_repository`** (`lib/src/public/repo/sub_set/follow/amity_user_relationships_repository.dart`) — 16 functions:
-- `me`
-- `user`
+**`amity_user_relationships_repository`** (`lib/src/public/repo/sub_set/follow/amity_user_relationships_repository.dart`) — 14 functions:
 - `follow`
 - `serviceLocator`
 - `unfollow`
@@ -1396,89 +1095,11 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `blockUser`
 - `unblockUser`
 
-**`amity_video_client`** (`lib/src/public/client/amity_video_client.dart`) — 1 functions:
-- `newStreamRepository`
+**`poll_repository`** (`lib/src/public/repo/poll_repository.dart`) — 1 functions:
+- `createPoll`
 
-**`amity_ad_repository`** (`lib/src/public/repo/ads/amity_ad_repository.dart`) — 3 functions:
-- `getNetworkAds`
-- `serviceLocator`
-- `analytics`
-
-**`amity_community_repository`** (`lib/src/public/repo/amity_community_repository.dart`) — 16 functions:
-- `createCommunity`
-- `updateCommunity`
-- `getCommunities`
-- `getCategories`
-- `getCategory`
-- `serviceLocator`
-- `getCommunity`
-- `deleteCommunity`
-- `joinCommunity`
-- `leaveCommunity`
-- `getTrendingCommunities`
-- `getRecommendedCommunities`
-- `membership`
-- `moderation`
-- `getCurentUserRoles`
-- `getCurrentUserRoles`
-
-**`channel_moderation_repository`** (`lib/src/public/repo/channel/channel_moderation_repository.dart`) — 8 functions:
-- `channelId`
-- `addRole`
-- `serviceLocator`
-- `removeRole`
-- `muteMembers`
-- `unmuteMembers`
-- `banMembers`
-- `unbanMembers`
-
-**`stream_repository`** (`lib/src/public/repo/stream/stream_repository.dart`) — 3 functions:
-- `getStreams`
-- `getStream`
-- `serviceLocator`
-
-**`amity_user_relationship_repository`** (`lib/src/public/repo/sub_set/follow/amity_user_relationship_repository.dart`) — 6 functions:
-- `follow`
-- `serviceLocator`
-- `unfollow`
-- `getFollowings`
-- `getFollowers`
-- `getFollowInfo`
-
-**`user_repository`** (`lib/src/public/repo/user_repository.dart`) — 9 functions:
-- `getUsers`
-- `searchUserByDisplayName`
-- `getUser`
-- `serviceLocator`
-- `updateUser`
-- `report`
-- `relationship`
-- `getBlockedUsers`
-- `getViewedUsers`
-
-**`amity_core_client`** (`lib/src/public/amity_core_client.dart`) — 22 functions:
-- `setup`
-- `login`
-- `logout`
-- `validateUrls`
-- `validateTexts`
-- `disconnect`
-- `isUserLoggedIn`
-- `getUserId`
-- `getCurrentUser`
-- `getConfiguration`
-- `updateUser`
-- `registerDeviceNotification`
-- `unregisterDeviceNotification`
-- `notifications`
-- `hasPermission`
-- `newUserRepository`
-- `newAdRepository`
-- `newFileRepository`
-- `getAnalyticsEngine`
-- `observeSessionState`
-- `observeUnreadCount`
-- `copyWith`
+**`AmityClientGetMentionConfigurations`** (`code_snippet/core/AmityClientGetMentionConfigurations.dart`) — 1 functions:
+- `getMentionConfigurations`
 
 **`amity_social_client`** (`lib/src/public/client/amity_social_client.dart`) — 7 functions:
 - `newPostRepository`
@@ -1489,37 +1110,66 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `newStoryRepository`
 - `newReactionRepository`
 
-**`amity_reaction_repository`** (`lib/src/public/repo/amity_reaction_repository.dart`) — 3 functions:
-- `getReactions`
-- `addReaction`
-- `removeReaction`
+**`AmityClientUnregisterPush`** (`code_snippet/notification/AmityClientUnregisterPush.dart`) — 1 functions:
+- `unregisterPush`
 
-**`comment_repository`** (`lib/src/public/repo/comment_repository.dart`) — 6 functions:
-- `createComment`
-- `updateComment`
-- `getComments`
+**`amity_story_repository_get`** (`code_snippet/story/amity_story_repository_get.dart`) — 1 functions:
+- `initStoryRepository`
+
+**`amity_ad_repository`** (`lib/src/public/repo/ads/amity_ad_repository.dart`) — 3 functions:
+- `getNetworkAds`
+- `serviceLocator`
+- `analytics`
+
+**`amity_post_repository`** (`lib/src/public/repo/amity_post_repository.dart`) — 6 functions:
+- `getPostStream`
+- `serviceLocator`
+- `reviewPost`
 - `getReaction`
-- `getComment`
+- `getPinnedPosts`
+- `getGlobalPinnedPosts`
+
+**`message_repository`** (`lib/src/public/repo/message/message_repository.dart`) — 1 functions:
+- `getReaction`
+
+**`notification_repository`** (`lib/src/public/repo/notification_repository.dart`) — 3 functions:
+- `registerDeviceNotification`
+- `serviceLocator`
+- `unregisterDeviceNotification`
+
+**`stream_repository`** (`lib/src/public/repo/stream/stream_repository.dart`) — 3 functions:
+- `getStreams`
+- `getStream`
 - `serviceLocator`
 
-**`sub_channel_repository`** (`lib/src/public/repo/sub_channel_repository.dart`) — 6 functions:
-- `createSubChannel`
-- `getSubChannels`
-- `getSubChannel`
-- `softDeleteSubChannel`
-- `hardDeleteSubChannel`
-- `updateeditSubChannelSubChannel`
+**`AmityClientGetCurrentUser`** (`code_snippet/user/AmityClientGetCurrentUser.dart`) — 1 functions:
+- `getCurrentUser`
 
-**`amity_my_user_relationship_repository`** (`lib/src/public/repo/sub_set/follow/amity_my_user_relationship_repository.dart`) — 9 functions:
-- `accept`
+**`AmityClientRegisterPush`** (`code_snippet/notification/AmityClientRegisterPush.dart`) — 1 functions:
+- `registerPush`
+
+**`amity_stream_repository_initialization`** (`code_snippet/stream/amity_stream_repository_initialization.dart`) — 1 functions:
+- `initializeStreamRepository`
+
+**`amity_channel_repository`** (`lib/src/public/repo/channel/amity_channel_repository.dart`) — 9 functions:
+- `membership`
 - `serviceLocator`
-- `decline`
-- `removeFollower`
-- `unfollow`
-- `getFollowings`
-- `getFollowers`
-- `getFollowInfo`
-- `getBlockedUsers`
+- `moderation`
+- `startReading`
+- `stopReading`
+- `archiveChannel`
+- `unarchiveChannel`
+- `getArchivedChannels`
+- `getChannelTotalUnreads`
+
+**`AmityClientUnregisterPushNotification`** (`code_snippet/notification/AmityClientUnregisterPushNotification.dart`) — 1 functions:
+- `unregisterPushNotification`
+
+**`AmityClientUpdateUser`** (`code_snippet/user/AmityClientUpdateUser.dart`) — 1 functions:
+- `updateCurrentUser`
+
+**`amity_user_repository`** (`code_snippet/user/amity_user_repository.dart`) — 1 functions:
+- `initUserRepository`
 
 **`amity_chat_client`** (`lib/src/public/client/amity_chat_client.dart`) — 4 functions:
 - `newMessageRepository`
@@ -1527,18 +1177,144 @@ Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or s
 - `newChannelRepository`
 - `newSubChannelRepository`
 
-**`amity_post_repository`** (`lib/src/public/repo/amity_post_repository.dart`) — 11 functions:
-- `getPost`
+**`amity_community_repository`** (`lib/src/public/repo/amity_community_repository.dart`) — 4 functions:
+- `membership`
+- `moderation`
 - `serviceLocator`
-- `getPosts`
-- `getPostStream`
-- `createPost`
+- `getCurrentUserRoles`
+
+**`amity_file_repository`** (`lib/src/public/repo/amity_file_repository.dart`) — 1 functions:
+- `cancelUpload`
+
+**`amity_core_client`** (`lib/src/public/amity_core_client.dart`) — 13 functions:
+- `setup`
+- `validateUrls`
+- `validateTexts`
+- `isUserLoggedIn`
+- `getUserId`
+- `hasPermission`
+- `newUserRepository`
+- `newAdRepository`
+- `newFileRepository`
+- `getAnalyticsEngine`
+- `observeSessionState`
+- `observeUnreadCount`
+- `copyWith`
+
+**`AmityClientRegisterPushNotification`** (`code_snippet/notification/AmityClientRegisterPushNotification.dart`) — 1 functions:
+- `registerPushNotification`
+
+**`channel_moderation_repository`** (`lib/src/public/repo/channel/channel_moderation_repository.dart`) — 1 functions:
+- `channelId`
+
+**`user_repository`** (`lib/src/public/repo/user_repository.dart`) — 5 functions:
+- `updateUser`
+- `report`
+- `relationship`
+- `getBlockedUsers`
+- `getViewedUsers`
+
+### TYPESCRIPT (66 functions)
+
+**`FileRepository`** (`packages/sdk/src/fileRepository/api/fileUrlWithSize.ts`) — 1 functions:
+- `fileUrlWithSize`
+
+**`InvitationRepository`** (`packages/sdk/src/invitationRepository/observers/getMyCommunityInvitations.ts`) — 1 functions:
+- `getMyCommunityInvitations`
+
+**`MessageRepository`** (`packages/sdk/src/messageRepository/api/deleteMessage.ts`) — 5 functions:
+- `deleteMessage`
+- `getDeliveredUsers`
+- `getReadUsers`
+- `markAsDelivered`
+- `queryMessages`
+
+**`ReactionRepository`** (`packages/sdk/src/reactionRepository/api/constants.ts`) — 3 functions:
+- `REFERENCE_API_V5`
+- `queryReactions`
+- `queryReactor`
+
+**`StreamRepository`** (`packages/sdk/src/streamRepository/api/disposeStream.ts`) — 2 functions:
+- `disposeStream`
+- `getStreams`
+
+**`ChannelRepository`** (`packages/sdk/src/channelRepository/api/deleteChannel.ts`) — 5 functions:
+- `deleteChannel`
+- `getChannelByIds`
+- `markChannelsAsReadBySegment`
+- `queryChannels`
+- `getMyMembership`
+
+**`CommentRepository`** (`packages/sdk/src/commentRepository/api/getComment.ts`) — 2 functions:
+- `getComment`
+- `queryComments`
+
+**`FeedRepository`** (`packages/sdk/src/feedRepository/observers/utils.ts`) — 1 functions:
+- `getGlobalFeedSubscriptions`
+
+**`LiveReactionRepository`** (`packages/sdk/src/liveReactionRepository/observers/getReactions.ts`) — 1 functions:
+- `getReactions`
+
+**`AdRepository`** (`packages/sdk/src/adRepository/api/getNetworkAds.ts`) — 1 functions:
+- `getNetworkAds`
+
+**`CommunityRepository`** (`packages/sdk/src/communityRepository/api/getCommunities.ts`) — 7 functions:
+- `getCommunities`
+- `getCommunity`
+- `getTrendingCommunities`
+- `queryCommunities`
+- `getJoinRequests`
+- `prepareSemanticCommunitiesReferenceId`
+- `semanticSearchCommunities`
+
+**`PostRepository`** (`packages/sdk/src/postRepository/api/deletePost.ts`) — 8 functions:
 - `deletePost`
-- `reviewPost`
-- `getReaction`
-- `isFlaggedByMe`
-- `getPinnedPosts`
+- `getPost`
+- `queryPosts`
 - `getGlobalPinnedPosts`
+- `getPinnedPosts`
+- `preparePostResponse`
+- `semanticSearchPosts`
+- `generateCommentSubscriptions`
+
+**`RoomRepository`** (`packages/sdk/src/roomRepository/api/analytics/WatchSessionStorage.ts`) — 4 functions:
+- `getWatchSessionStorage`
+- `syncWatchSessions`
+- `getRoom`
+- `convertToRoomEventPayload`
+
+**`UserRepository`** (`packages/sdk/src/userRepository/api/getUser.ts`) — 4 functions:
+- `getUser`
+- `queryBlockedUsers`
+- `queryUsers`
+- `getReachedUsers`
+
+**`EventRepository`** (`packages/sdk/src/eventRepository/observers/getEvents.ts`) — 3 functions:
+- `getEvents`
+- `getMyEvents`
+- `getRSVPs`
+
+**`StoryRepository`** (`packages/sdk/src/storyRepository/api/createImageStory.ts`) — 10 functions:
+- `createImageStory`
+- `createVideoStory`
+- `hardDeleteStory`
+- `softDeleteStory`
+- `getActiveStoriesByTarget`
+- `getGlobalStoryTargets`
+- `getStoriesByTargetIds`
+- `getStoryByStoryId`
+- `getTargetById`
+- `getTargetsByTargetIds`
+
+**`SubChannelRepository`** (`packages/sdk/src/subChannelRepository/api/deleteSubChannel.ts`) — 8 functions:
+- `deleteSubChannel`
+- `getSubChannel`
+- `getSubChannels`
+- `markAsReadBySegment`
+- `querySubChannels`
+- `readingAPI`
+- `startReadingAPI`
+- `stopReadingAPI`
 
 ---
 

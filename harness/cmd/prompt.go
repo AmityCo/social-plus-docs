@@ -349,9 +349,9 @@ if staleImportCount > 0 {
 			}
 			byPlatformClass[u.platform][u.className].funcs = append(byPlatformClass[u.platform][u.className].funcs, u)
 		}
-		sb.WriteString(fmt.Sprintf("\n---\n\n## PUBLIC_FUNC_UNANNOTATED (%d functions need sp_docs_page: annotation)\n\n", len(unannotatedFuncs)))
-		sb.WriteString("These public functions in `*Repository` / `*Client` classes have no `sp_docs_page:` annotation.\n")
-		sb.WriteString("Add a `begin_sample_code` block with the appropriate `sp_docs_page:` value, or skip if internal.\n\n")
+		sb.WriteString(fmt.Sprintf("\n---\n\n## PUBLIC_FUNC_UNANNOTATED (%d functions need begin_public_function annotation)\n\n", len(unannotatedFuncs)))
+		sb.WriteString("These public functions in `*Repository` / `*Client` classes have no `begin_public_function` annotation.\n")
+		sb.WriteString("Wrap each function with `/* begin_public_function\\n  id: <feature.action>\\n*/` and `/* end_public_function */`, or mark `@Deprecated` if no longer active.\n\n")
 		for _, platform := range []string{"android", "ios", "flutter", "typescript"} {
 			classes, ok := byPlatformClass[platform]
 			if !ok {
