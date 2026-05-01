@@ -41,7 +41,7 @@ func TestLoad_missing(t *testing.T) {
 }
 
 func TestLoad_malformed(t *testing.T) {
-	_, _, err := manifest.LoadForPage("testdata", "malformed")
+	_, err := manifest.ParseManifest([]byte("sections:\n  bad: [unclosed\n"))
 	if err == nil {
 		t.Fatal("expected error for malformed YAML")
 	}

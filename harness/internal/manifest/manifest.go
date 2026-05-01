@@ -31,7 +31,15 @@ func (m *Manifest) SectionForSnippet(gendocsKey string) (string, bool) {
 	return "", false
 }
 
-// PathForPage returns the expected manifest file path for a doc page.
+// ParseManifest parses raw YAML bytes into a Manifest. Returns an error if YAML is invalid.
+func ParseManifest(data []byte) (*Manifest, error) {
+	var m Manifest
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 // docsDir is the absolute path to the docs directory; pagePath is the relative
 // doc page path without extension (e.g. "social-plus-sdk/getting-started/authentication").
 func PathForPage(docsDir, pagePath string) string {
