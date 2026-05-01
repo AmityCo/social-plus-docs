@@ -181,20 +181,30 @@ func extractClassName(detail string) string {
 	return ""
 }
 
-// annotateConfidence returns "high" if the class name's derived snippet key
-// already exists in groups (meaning sibling platforms already document this
-// function). Returns "low" if no sibling exists to confirm against.
+// annotateConfidence returns a confidence level based on how many sibling platforms
+// already document this class:
+//   - "high"   — 2 or more sibling platforms confirm (safe to bulk-approve)
+//   - "medium" — exactly 1 sibling platform confirms (review recommended)
+//   - "low"    — no sibling confirmation (manual review required)
 func annotateConfidence(className, platform string, groups map[string]docgen.SnippetGroup) string {
 	selfExt := "." + platformExt(platform)
+	count := 0
 	for _, ext := range []string{".kt", ".swift", ".dart", ".ts"} {
 		if ext == selfExt {
 			continue
 		}
 		if _, exists := groups[docgen.DeriveKey(className+ext)]; exists {
-			return "high"
+			count++
 		}
 	}
-	return "low"
+	switch {
+	case count >= 2:
+		return "high"
+	case count == 1:
+		return "medium"
+	default:
+		return "low"
+	}
 }
 
 // applyPatches inserts annotation text into SDK source files.

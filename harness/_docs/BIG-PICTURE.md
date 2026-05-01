@@ -196,7 +196,7 @@ Runs automatically; blocks merges on failure.
 ### Gate 2 — Inferential + Computational Oracle 🤖 + ⚙️
 Validates AI-generated work before it ships.
 
-- `annotate` → generates patches with **`confidence: high | low`** field:
+- `annotate` → generates patches with **`confidence: high | medium | low`** field:
   - `high` — sibling platforms already document this function (safe to bulk-approve)
   - `low` — no sibling confirmation; human review required
 - `gendocs` → regenerate snippet MDX
@@ -258,10 +258,11 @@ The harness builds the runbook computationally; an AI agent executes it inferent
 ### `annotate` — Generate annotation patches ⚙️ Computational + 🤖 Review
 Reads `PUBLIC_FUNC_UNANNOTATED` findings → writes `annotation-patches.yml`.
 Each patch contains: source file path, function name, suggested `id:`, insertion line,
-and a **`confidence: high | low`** signal (Gate 2):
+and a **`confidence: high | medium | low`** signal (Gate 2):
 
-- `confidence: high` — sibling platforms already annotate this class → safe to bulk-approve
-- `confidence: low` — no sibling confirmation → human review required before applying
+- `confidence: high` — 2+ sibling platforms already document this function (safe to bulk-approve)
+- `confidence: medium` — exactly 1 sibling platform confirms (review recommended)
+- `confidence: low` — no sibling confirmation; human review required before applying
 
 ```bash
 ./harness-bin annotate --config harness-config.yml          # generate patches
@@ -484,11 +485,11 @@ snippets are complete.
 | **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
 | **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections — out of scope) |
 | `publicscan` package | ✅ | Scans 4 SDKs; public functions audited |
-| `patchgen` package | ✅ | ID inference + line finder; `confidence: high/low` Gate 2 signal |
+| `patchgen` package | ✅ | ID inference + line finder; `confidence: high/medium/low` Gate 2 signal |
 | `annotate` command | ✅ | Generates patches with `confidence:` field; `--apply` inserts markers |
 | **`SNIPPET_KEY_PLATFORM_CONFLICT` finding** | ✅ | Gate 1: 176 real conflicts detected then fixed across all 4 SDK repos |
 | **Gate 1 — Computational CI gate** | ✅ | 0 open `SNIPPET_KEY_PLATFORM_CONFLICT` findings |
-| **Gate 2 — Confidence signal** | ✅ | `annotate` patches carry `confidence: high/low` based on sibling platform coverage |
+| **Gate 2 — Confidence signal** | ✅ | `annotate` patches carry `confidence: high/medium/low` (2+ / 1 / 0 sibling platforms) |
 | **Gate 3 — Human triage** | 🔜 Future | Manual for now; designed to be automatable by LLM agent |
 | **`serve` + `/api/coverage`** | ✅ | Live dashboard with 4-bar platform coverage widget |
 | **Phase 0 — SDK Annotation Campaign** | 🔄 In progress | 11 `PUBLIC_FUNC_UNANNOTATED` needs_human remain |
