@@ -18,6 +18,7 @@ type Patch struct {
 	InsertLine  int    `yaml:"insert_line"`
 	Annotation  string `yaml:"annotation"`
 	EndMarker   string `yaml:"end_marker"`
+	Confidence  string `yaml:"confidence,omitempty"`
 }
 
 func InferID(className, funcName string) string {
@@ -82,8 +83,6 @@ func toSnakeCase(s string) string {
 	}
 	return strings.ToLower(string(result))
 }
-
-
 
 func FindFuncLine(lines []string, funcName, platform string) (int, error) {
 	var pat *regexp.Regexp

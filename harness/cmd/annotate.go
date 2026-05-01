@@ -12,9 +12,11 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"social-plus/harness/internal/config"
+	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/patchgen"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/runstate"
+	"social-plus/harness/internal/scanner"
 )
 
 // PatchFile is the top-level structure written to annotation-patches.yml.
@@ -59,6 +61,15 @@ func runAnnotate(args []string) {
 
 	var patches []patchgen.Patch
 	skipped := 0
+
+	// Build snippet groups to check confidence of each annotation suggestion.
+	var allSnips []scanner.Snippet
+	for platform, sdkCfg := range cfg.SDKs {
+		snippetPath := filepath.Join(cfgDir, sdkCfg.Path, sdkCfg.SnippetDir)
+		snips, _ := scanner.Scan(snippetPath, platform)
+		allSnips = append(allSnips, snips...)
+	}
+	allGroups := docgen.GroupSnippets(allSnips)
 
 	for _, f := range rep.Findings {
 		if f.Type != report.TypePublicFuncUnannotated {
@@ -115,6 +126,7 @@ func runAnnotate(args []string) {
 			InsertLine:  lineNo,
 			Annotation:  annotation,
 			EndMarker:   "/* end_public_function */",
+			Confidence:  annotateConfidence(className, allGroups),
 		})
 	}
 
@@ -164,6 +176,19 @@ func extractClassName(detail string) string {
 		return m[1]
 	}
 	return ""
+}
+
+// annotateConfidence returns "high" if the class name's derived snippet key
+// already exists in groups (meaning sibling platforms already document this
+// function). Returns "low" if no sibling exists to confirm against.
+func annotateConfidence(className string, groups map[string]docgen.SnippetGroup) string {
+	for _, ext := range []string{".kt", ".swift", ".dart", ".ts"} {
+		key := docgen.DeriveKey(className + ext)
+		if _, exists := groups[key]; exists {
+			return "high"
+		}
+	}
+	return "low"
 }
 
 // applyPatches inserts annotation text into SDK source files.
