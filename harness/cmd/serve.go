@@ -99,13 +99,11 @@ type coverageResponse struct {
 
 // coverageHandler computes per-platform annotation coverage from the SDK snippet dirs.
 func coverageHandler(cfgPath string) http.Handler {
+	cfg, loadErr := config.Load(cfgPath)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-
-		cfg, err := config.Load(cfgPath)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error":"config load failed"}`))
+		if loadErr != nil {
+			http.Error(w, "config load error", http.StatusInternalServerError)
 			return
 		}
 		cfgDir := filepath.Dir(cfgPath)
@@ -175,7 +173,7 @@ func matchesExt(path, platform string) bool {
 	case "typescript":
 		return hasSuffix(path, ".ts", ".tsx")
 	default:
-		return true
+		return false
 	}
 }
 
