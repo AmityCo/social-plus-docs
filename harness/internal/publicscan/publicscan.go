@@ -19,12 +19,12 @@ type PublicFunc struct {
 }
 
 // isRepositoryOrClientFile returns true if the base filename (without extension)
-// contains "Repository" or "Client".
+// contains "repository", "client" (case-insensitive).
 func isRepositoryOrClientFile(path string) bool {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	return strings.Contains(name, "Repository") || strings.Contains(name, "Client")
+	name := strings.ToLower(strings.TrimSuffix(base, ext))
+	return strings.Contains(name, "repository") || strings.Contains(name, "client")
 }
 
 // classNameFromFile extracts the class name from a file name (without extension).
