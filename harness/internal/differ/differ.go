@@ -349,6 +349,62 @@ func DiffDocImports(mdxPath, docsBase string) []report.Finding {
     return findings
 }
 
+// DiffSnippetKeyConflicts checks that all platforms for a given snippet key
+// agree on the same sp_docs_page. When platforms disagree, the deterministic
+// sort in GroupSnippets silently picks android's page — this finding surfaces
+// the conflict so it can be resolved in the SDK source.
+//
+// Snippets with blank or absolute-URL SpDocsPage are skipped.
+func DiffSnippetKeyConflicts(snips []scanner.Snippet) []report.Finding {
+	type entry struct {
+		platform string
+		page     string
+	}
+	// key → list of (platform, page) pairs with non-empty page
+	byKey := make(map[string][]entry)
+	for _, s := range snips {
+		if s.Filename == "" || s.SpDocsPage == "" || strings.Contains(s.SpDocsPage, "://") {
+			continue
+		}
+		key := docgen.DeriveKey(s.Filename)
+		if key == "" {
+			continue
+		}
+		byKey[key] = append(byKey[key], entry{platform: s.Platform, page: s.SpDocsPage})
+	}
+
+	var findings []report.Finding
+	for key, entries := range byKey {
+		if len(entries) < 2 {
+			continue
+		}
+		canonical := entries[0].page
+		conflicted := false
+		for _, e := range entries {
+			if e.page != canonical {
+				conflicted = true
+				break
+			}
+		}
+		if !conflicted {
+			continue
+		}
+		// Build detail: list all platform→page pairs
+		var parts []string
+		for _, e := range entries {
+			parts = append(parts, fmt.Sprintf("%s→%s", e.platform, e.page))
+		}
+		findings = append(findings, report.Finding{
+			ID:         fmt.Sprintf("key-conflict:%s", key),
+			Type:       report.TypeSnippetKeyPlatformConflict,
+			GendocsKey: key,
+			Detail:     fmt.Sprintf("key %q has conflicting sp_docs_page across platforms: %s", key, strings.Join(parts, ", ")),
+			Status:     report.StatusOpen,
+		})
+	}
+	return findings
+}
+
 func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
 	groups := m.Lookup(docPagePath)
 	if len(groups) == 0 {

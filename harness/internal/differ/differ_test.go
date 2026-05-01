@@ -3,6 +3,7 @@ package differ_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -255,6 +256,49 @@ func TestDiffDocImports_BrokenImport(t *testing.T) {
     if findings[0].Type != report.TypeDocBrokenImport {
         t.Errorf("wrong finding type: %s", findings[0].Type)
     }
+}
+
+func TestDiffSnippetKeyConflicts_NoConflict(t *testing.T) {
+	snips := []scanner.Snippet{
+		{Filename: "AmityPostGet.kt",    Platform: "android",  SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.swift", Platform: "ios",      SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.dart",  Platform: "flutter",  SpDocsPage: "social-plus-sdk/social/post-get"},
+	}
+	findings := differ.DiffSnippetKeyConflicts(snips)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings, got %d: %+v", len(findings), findings)
+	}
+}
+
+func TestDiffSnippetKeyConflicts_Conflict(t *testing.T) {
+	snips := []scanner.Snippet{
+		{Filename: "AmityAdQuery.kt",    Platform: "android", SpDocsPage: "social-plus-sdk/social/notification-items"},
+		{Filename: "AmityAdQuery.swift", Platform: "ios",     SpDocsPage: "social-plus-sdk/core-concepts/ads"},
+	}
+	findings := differ.DiffSnippetKeyConflicts(snips)
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings))
+	}
+	if findings[0].Type != report.TypeSnippetKeyPlatformConflict {
+		t.Errorf("expected TypeSnippetKeyPlatformConflict, got %s", findings[0].Type)
+	}
+	if !strings.Contains(findings[0].Detail, "ad-query") {
+		t.Errorf("detail should mention key, got: %s", findings[0].Detail)
+	}
+	if !strings.Contains(findings[0].Detail, "android") || !strings.Contains(findings[0].Detail, "ios") {
+		t.Errorf("detail should mention both platforms, got: %s", findings[0].Detail)
+	}
+}
+
+func TestDiffSnippetKeyConflicts_SkipBlankPage(t *testing.T) {
+	snips := []scanner.Snippet{
+		{Filename: "AmityPostGet.kt",    Platform: "android", SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.swift", Platform: "ios",     SpDocsPage: ""},
+	}
+	findings := differ.DiffSnippetKeyConflicts(snips)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings (blank page skipped), got %d", len(findings))
+	}
 }
 
 func TestDiffManifestCoverage_emptyManifest(t *testing.T) {
