@@ -107,14 +107,33 @@ func scanFile(path, platform string) ([]PublicFunc, error) {
 // --- Kotlin ---
 
 var (
-	reKotlinFun     = regexp.MustCompile(`^\s*(?:(?:override|suspend|inline|operator|infix|open|final|actual|external|tailrec)\s+)*fun\s+(\w+)\s*[(<]`)
-	reKotlinPrivate = regexp.MustCompile(`\b(?:private|internal|protected)\s+(?:(?:override|suspend|inline|operator|infix|open|final|actual|external|tailrec)\s+)*fun\b`)
+	reKotlinFun        = regexp.MustCompile(`^\s*(?:(?:override|suspend|inline|operator|infix|open|final|actual|external|tailrec)\s+)*fun\s+(\w+)\s*[(<]`)
+	reKotlinPrivate    = regexp.MustCompile(`\b(?:private|internal|protected)\s+(?:(?:override|suspend|inline|operator|infix|open|final|actual|external|tailrec)\s+)*fun\b`)
+	reKotlinClassDecl  = regexp.MustCompile(`^(?:(\w+)\s+)?(?:(?:abstract|open|data|sealed|inner|enum|annotation|value)\s+)*class\s+\w+`)
 )
+
+// isPublicKotlinClass returns true if the file's primary class declaration is publicly accessible.
+// In Kotlin, the default visibility is public, so only `internal`, `private`, or `protected` classes are excluded.
+func isPublicKotlinClass(lines []string) bool {
+	for _, line := range lines {
+		if m := reKotlinClassDecl.FindStringSubmatch(line); m != nil {
+			modifier := m[1]
+			if modifier == "internal" || modifier == "private" || modifier == "protected" {
+				return false
+			}
+			return true
+		}
+	}
+	return false
+}
 
 func scanKotlin(path, className string) ([]PublicFunc, error) {
 	lines, err := readLines(path)
 	if err != nil {
 		return nil, err
+	}
+	if !isPublicKotlinClass(lines) {
+		return nil, nil
 	}
 	var results []PublicFunc
 	for i, line := range lines {
@@ -148,12 +167,28 @@ func scanKotlin(path, className string) ([]PublicFunc, error) {
 
 // --- Swift ---
 
-var reSwiftPublic = regexp.MustCompile(`\b(?:public|open)\s+(?:(?:static|class|final|override|required|convenience|mutating|nonmutating|dynamic|lazy)\s+)*(?:func|init|var|let)\s+(\w+)`)
+var (
+	reSwiftPublic      = regexp.MustCompile(`\b(?:public|open)\s+(?:(?:static|class|final|override|required|convenience|mutating|nonmutating|dynamic|lazy)\s+)*(?:func|init|var|let)\s+(\w+)`)
+	reSwiftPublicClass = regexp.MustCompile(`\b(?:public|open)\s+(?:(?:final|class)\s+)*(?:class|struct|extension)\b`)
+)
+
+// isPublicSwiftClass returns true if the file contains a public/open class or struct declaration.
+func isPublicSwiftClass(lines []string) bool {
+	for _, line := range lines {
+		if reSwiftPublicClass.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
 
 func scanSwift(path, className string) ([]PublicFunc, error) {
 	lines, err := readLines(path)
 	if err != nil {
 		return nil, err
+	}
+	if !isPublicSwiftClass(lines) {
+		return nil, nil
 	}
 	var results []PublicFunc
 	for _, line := range lines {
@@ -176,7 +211,23 @@ func scanSwift(path, className string) ([]PublicFunc, error) {
 // Matches instance methods: indented, optional static, return type (possibly nested generics), method name.
 var reDartMethod = regexp.MustCompile(`^\s+(?:static\s+)?[A-Za-z_]\w*(?:<(?:[^<>]*(?:<[^<>]*>)?)*>)?\??\s+([a-z]\w*)\s*[(<]`)
 
+// isPublicDartFile returns true if the file is not in a known internal implementation directory.
+// Flutter convention: internal code lives under lib/src/core/, lib/src/data/, lib/src/domain/.
+func isPublicDartFile(path string) bool {
+	slash := filepath.ToSlash(path)
+	internalDirs := []string{"/lib/src/core/", "/lib/src/data/", "/lib/src/domain/"}
+	for _, dir := range internalDirs {
+		if strings.Contains(slash, dir) {
+			return false
+		}
+	}
+	return true
+}
+
 func scanDart(path, className string) ([]PublicFunc, error) {
+	if !isPublicDartFile(path) {
+		return nil, nil
+	}
 	lines, err := readLines(path)
 	if err != nil {
 		return nil, err
@@ -206,15 +257,33 @@ func scanDart(path, className string) ([]PublicFunc, error) {
 // --- TypeScript ---
 
 var (
-	reTypescriptMethod  = regexp.MustCompile(`^\s+(?:public\s+)?(?:async\s+)?(?:static\s+)?(\w+)\s*[(<]`)
-	reTypescriptExport  = regexp.MustCompile(`^export\s+(?:async\s+)?function\s+(\w+)`)
-	reTypescriptPrivate = regexp.MustCompile(`\b(?:private|protected)\b`)
+	reTypescriptMethod    = regexp.MustCompile(`^\s+(?:public\s+)?(?:async\s+)?(?:static\s+)?(\w+)\s*[(<]`)
+	reTypescriptExport    = regexp.MustCompile(`^export\s+(?:async\s+)?function\s+(\w+)`)
+	reTypescriptPrivate   = regexp.MustCompile(`\b(?:private|protected)\b`)
+	reTypescriptExportCls = regexp.MustCompile(`^export\s+(?:(?:default|abstract|declare)\s+)*class\b`)
 )
+
+// isPublicTypeScriptFile returns true if the file exports a class (public API surface).
+func isPublicTypeScriptFile(lines []string) bool {
+	for _, line := range lines {
+		if reTypescriptExportCls.MatchString(line) {
+			return true
+		}
+		// Also allow files with top-level export functions (e.g. *Client files)
+		if reTypescriptExport.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
 
 func scanTypeScript(path, className string) ([]PublicFunc, error) {
 	lines, err := readLines(path)
 	if err != nil {
 		return nil, err
+	}
+	if !isPublicTypeScriptFile(lines) {
+		return nil, nil
 	}
 	var results []PublicFunc
 	for _, line := range lines {
