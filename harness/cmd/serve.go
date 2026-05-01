@@ -31,6 +31,7 @@ func runServe(args []string) {
 	mux.Handle("/api/report", reportHandler(dir))
 	mux.Handle("/api/run", runHandler(dir))
 	mux.Handle("/api/coverage", coverageHandler(*cfgPath))
+	mux.Handle("/api/parity", parityHandler(dir))
 	mux.Handle("/", dashboardHandler())
 
 	addr := "localhost:" + *port
@@ -184,4 +185,75 @@ func hasSuffix(s string, suffixes ...string) bool {
 		}
 	}
 	return false
+}
+
+// parityPlatformRow is one row in the /api/parity response.
+type parityPlatformRow struct {
+	Platform string  `json:"platform"`
+	Exists   int     `json:"exists"`
+	Total    int     `json:"total"`
+	Percent  float64 `json:"percent"`
+}
+
+// paritySummaryResponse is the full /api/parity JSON response.
+type paritySummaryResponse struct {
+	TotalKeys int                 `json:"total_keys"`
+	Platforms []parityPlatformRow `json:"platforms"`
+}
+
+// parityHandler reads function-parity.json and returns per-platform exists/total counts.
+func parityHandler(dir string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		data, err := os.ReadFile(filepath.Join(dir, "function-parity.json"))
+		if errors.Is(err, os.ErrNotExist) {
+			_, _ = w.Write([]byte(`{"total_keys":0,"platforms":[]}`))
+			return
+		}
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		// Minimal decode — only the fields we need.
+		var raw struct {
+			TotalKeys    int      `json:"total_keys"`
+			AllPlatforms []string `json:"platforms"`
+			Functions    []struct {
+				Platforms map[string]struct {
+					Status string `json:"status"`
+				} `json:"platforms"`
+			} `json:"functions"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			http.Error(w, "parse error", http.StatusInternalServerError)
+			return
+		}
+		// Count exists per platform.
+		counts := make(map[string]int, len(raw.AllPlatforms))
+		for _, fn := range raw.Functions {
+			for p, pe := range fn.Platforms {
+				if pe.Status == "exists" {
+					counts[p]++
+				}
+			}
+		}
+		rows := make([]parityPlatformRow, 0, len(raw.AllPlatforms))
+		for _, p := range raw.AllPlatforms {
+			exists := counts[p]
+			var pct float64
+			if raw.TotalKeys > 0 {
+				pct = float64(exists) / float64(raw.TotalKeys) * 100
+			}
+			rows = append(rows, parityPlatformRow{
+				Platform: p,
+				Exists:   exists,
+				Total:    raw.TotalKeys,
+				Percent:  pct,
+			})
+		}
+		resp := paritySummaryResponse{TotalKeys: raw.TotalKeys, Platforms: rows}
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(resp)
+	})
 }
