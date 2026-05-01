@@ -310,10 +310,6 @@ func fnIDToClassName(id string) string {
 	return result
 }
 
-// DiffDocPages checks a single doc page for DOC_PAGE_STALE_IMPORT findings.
-// docPagePath is the page's docs.json-relative path (e.g. "social-plus-sdk/social/...").
-// docPageFile is the absolute path to the MDX file on disk.
-// snippetsDir is the relative prefix used in import paths (e.g. "snippets").
 // DiffDocImports scans an MDX file for `import X from '/snippets/...'` lines
 // and returns a DOC_BROKEN_IMPORT finding for each import whose target file
 // does not exist under docsBase.
@@ -353,6 +349,10 @@ func DiffDocImports(mdxPath, docsBase string) []report.Finding {
 	return findings
 }
 
+// DiffDocPages checks a single doc page for DOC_PAGE_STALE_IMPORT findings.
+// docPagePath is the page's docs.json-relative path (e.g. "social-plus-sdk/social/...").
+// docPageFile is the absolute path to the MDX file on disk.
+// snippetsDir is the relative prefix used in import paths (e.g. "snippets").
 func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
 	groups := m.Lookup(docPagePath)
 	if len(groups) == 0 {
