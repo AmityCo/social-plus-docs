@@ -17,6 +17,7 @@ type Patch struct {
 	SuggestedID string `yaml:"id"`
 	InsertLine  int    `yaml:"insert_line"`
 	Annotation  string `yaml:"annotation"`
+	EndMarker   string `yaml:"end_marker"`
 }
 
 func InferID(className, funcName string) string {
@@ -102,7 +103,16 @@ func FindFuncLine(lines []string, funcName, platform string) (int, error) {
 	default:
 		return 0, errors.New("unsupported platform")
 	}
+	inPublicBlock := false
 	for i, line := range lines {
+		if strings.Contains(line, "begin_public_function") {
+			inPublicBlock = true
+		} else if strings.Contains(line, "end_public_function") {
+			inPublicBlock = false
+		}
+		if inPublicBlock {
+			continue // skip already-annotated functions
+		}
 		if platform == "flutter" {
 			for _, p := range pats {
 				if p.MatchString(line) {
@@ -118,6 +128,8 @@ func FindFuncLine(lines []string, funcName, platform string) (int, error) {
 	return 0, errors.New("function not found")
 }
 
+// BuildAnnotation returns the begin marker block to insert BEFORE a function declaration.
+// The caller (applyPatches) must also insert "/* end_public_function */" after the function body.
 func BuildAnnotation(id, platform string) string {
 	indent := "   " // 3 spaces for kotlin, swift, dart
 	if strings.ToLower(platform) == "typescript" {

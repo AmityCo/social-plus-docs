@@ -29,14 +29,37 @@ func isRepositoryOrClientFile(path string) bool {
 }
 
 // classNameFromFile extracts the class name from a file name (without extension).
+// For Dart files (snake_case filenames), converts to PascalCase:
+// amity_core_client.dart → AmityCoreClient
 func classNameFromFile(path string) string {
 	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+	// Dart uses snake_case filenames — convert to PascalCase
+	if strings.ToLower(filepath.Ext(base)) == ".dart" && strings.Contains(name, "_") {
+		parts := strings.Split(name, "_")
+		for i, p := range parts {
+			if len(p) > 0 {
+				parts[i] = strings.ToUpper(p[:1]) + p[1:]
+			}
+		}
+		return strings.Join(parts, "")
+	}
+	return name
 }
 
 // Scan walks the SDK directory for the given platform and returns all public
 // functions in *Repository and *Client files.
-func Scan(sdkDir, platform string) ([]PublicFunc, error) {
+// excludeRelDirs is a list of relative paths (from sdkDir) to skip entirely,
+// e.g. the snippet_dir containing sample code wrappers.
+func Scan(sdkDir, platform string, excludeRelDirs ...string) ([]PublicFunc, error) {
+	// Build absolute exclude paths for fast prefix matching
+	excludeAbs := make([]string, 0, len(excludeRelDirs))
+	for _, rel := range excludeRelDirs {
+		if rel != "" {
+			excludeAbs = append(excludeAbs, filepath.Join(sdkDir, filepath.FromSlash(rel))+string(filepath.Separator))
+		}
+	}
+
 	var results []PublicFunc
 	err := filepath.WalkDir(sdkDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -46,6 +69,17 @@ func Scan(sdkDir, platform string) ([]PublicFunc, error) {
 			// Skip test directories
 			dir := strings.ToLower(d.Name())
 			if dir == "test" || dir == "tests" || dir == "__tests__" || dir == "spec" {
+				return filepath.SkipDir
+			}
+			// Skip excluded snippet/sample dirs
+			dirPath := path + string(filepath.Separator)
+			for _, ex := range excludeAbs {
+				if strings.HasPrefix(dirPath, ex) {
+					return filepath.SkipDir
+				}
+			}
+			// Skip internal implementation directories (e.g. amity-rxupload/…/internal/)
+			if dir == "internal" {
 				return filepath.SkipDir
 			}
 			return nil

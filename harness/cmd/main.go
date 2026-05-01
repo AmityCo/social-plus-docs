@@ -7,10 +7,12 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: harness <audit|fillmanifests|fix|genmanifests|gendocs|migrate|prompt> [--config path]\n")
+		fmt.Fprintf(os.Stderr, "usage: harness <annotate|audit|fillmanifests|fix|genmanifests|gendocs|migrate|prompt> [--config path]\n")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
+	case "annotate":
+		runAnnotate(os.Args[2:])
 	case "audit":
 		runAudit(os.Args[2:])
 	case "fillmanifests":

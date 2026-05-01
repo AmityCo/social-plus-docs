@@ -274,15 +274,35 @@ func runAudit(args []string) {
 	// publicscan.Scan sets IsAnnotated=true for those functions.
 	{
 		pubFuncCount := 0
+		reVerifiedFixed := 0
 		for platform, sdkCfg := range cfg.SDKs {
 			sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
 			if _, err := os.Stat(sdkPath); os.IsNotExist(err) {
 				continue // SDK not present in this environment
 			}
-			pubFuncs, err := publicscan.Scan(sdkPath, platform)
+			pubFuncs, err := publicscan.Scan(sdkPath, platform, sdkCfg.SnippetDir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "publicscan %s: %v\n", platform, err)
 				continue
+			}
+			// Build a set of annotated function IDs from the current scan.
+			nowAnnotated := map[string]bool{}
+			for _, pf := range pubFuncs {
+				if pf.IsAnnotated {
+					rel, _ := filepath.Rel(sdkPath, pf.File)
+					rel = filepath.ToSlash(rel)
+					nowAnnotated["public-func-unannotated:"+platform+":"+rel+":"+pf.FuncName] = true
+				}
+			}
+			// Re-verify existing needs_human findings: mark fixed if now annotated.
+			for i, f := range allFindings {
+				if f.Type != report.TypePublicFuncUnannotated || f.Status != report.StatusNeedsHuman {
+					continue
+				}
+				if nowAnnotated[f.ID] {
+					allFindings[i].Status = report.StatusFixed
+					reVerifiedFixed++
+				}
 			}
 			for _, pf := range pubFuncs {
 				if pf.IsAnnotated {
@@ -307,6 +327,9 @@ func runAudit(args []string) {
 		}
 		if pubFuncCount > 0 {
 			fmt.Printf("[audit] %d PUBLIC_FUNC_UNANNOTATED findings\n", pubFuncCount)
+		}
+		if reVerifiedFixed > 0 {
+			fmt.Printf("[audit] %d PUBLIC_FUNC_UNANNOTATED findings re-verified as fixed\n", reVerifiedFixed)
 		}
 	}
 

@@ -50,6 +50,24 @@ func TestFindFuncLine_NotFound(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestFindFuncLine_SkipsAnnotated verifies that FindFuncLine skips overloads that
+// are already inside a begin_public_function block, returning the unannotated one.
+func TestFindFuncLine_SkipsAnnotated(t *testing.T) {
+	lines := []string{
+		"/* begin_public_function",
+		"   id: channel.query",
+		"*/",
+		"    fun getChannels(): List<Channel> {", // line 4 — already annotated, skip
+		"    }",
+		"/* end_public_function */",
+		"    fun getChannels(ids: List<String>): Flowable<List<Channel>> {", // line 7 — unannotated
+		"    }",
+	}
+	line, err := FindFuncLine(lines, "getChannels", "android")
+	assert.NoError(t, err)
+	assert.Equal(t, 7, line) // should find the unannotated overload, not line 4
+}
+
 func TestBuildAnnotation(t *testing.T) {
 	ann := BuildAnnotation("post.create", "android")
 	assert.Contains(t, ann, "begin_public_function")
