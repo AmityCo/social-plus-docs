@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -223,6 +224,46 @@ func runAudit(args []string) {
 		})
 		if importErrCount > 0 {
 			fmt.Printf("[audit] %d broken import findings\n", importErrCount)
+		}
+	}
+
+	// --- Mintlify broken-links check (computational: parse errors are open findings) ---
+	{
+		docsRoot := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
+		fmt.Printf("[audit] running mintlify broken-links ...\n")
+		cmd := exec.Command("npx", "mintlify", "broken-links")
+		cmd.Dir = docsRoot
+		out, _ := cmd.CombinedOutput()
+		output := string(out)
+		// Parse syntax errors — these are critical (MDX won't render)
+		mintlifyErrCount := 0
+		for _, line := range strings.Split(output, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "erro Syntax error") {
+				continue
+			}
+			// Extract file path from next token after "Unable to parse"
+			parts := strings.SplitN(line, " - ", 2)
+			filePart := ""
+			if len(parts) == 2 {
+				filePart = strings.Fields(parts[0])[len(strings.Fields(parts[0]))-1]
+			}
+			findingID := "mintlify-syntax:" + filePart
+			if !isAlreadyInReport(allFindings, findingID) {
+				allFindings = append(allFindings, report.Finding{
+					ID:      findingID,
+					Type:    "MINTLIFY_SYNTAX_ERROR",
+					Status:  report.StatusOpen,
+					Detail:  line,
+					DocPage: filePart,
+				})
+				mintlifyErrCount++
+			}
+		}
+		if mintlifyErrCount > 0 {
+			fmt.Printf("[audit] %d Mintlify syntax error findings\n", mintlifyErrCount)
+		} else {
+			fmt.Printf("[audit] Mintlify: no syntax errors\n")
 		}
 	}
 
