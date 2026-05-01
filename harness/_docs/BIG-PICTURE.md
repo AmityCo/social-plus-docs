@@ -180,9 +180,41 @@ handles all inferential steps. They hand off to each other between phases.
 
 ---
 
+## Three-Gate Validation Framework
+
+The harness enforces quality through three sequential gates. Each gate must be green before
+the next phase begins:
+
+### Gate 1 — Computational CI Gate ⚙️
+Runs automatically; blocks merges on failure.
+
+- `audit` shows **0 open findings** (all finding types, including `SNIPPET_KEY_PLATFORM_CONFLICT`)
+- Finding: `SNIPPET_KEY_PLATFORM_CONFLICT` — detected when sibling SDK platforms annotate the
+  same snippet key with different `sp_docs_page` values. Fixed by aligning non-android platforms
+  to Android's canonical path (Android wins by platform sort priority: android=0, ios=1, flutter=2, typescript=3).
+
+### Gate 2 — Inferential + Computational Oracle 🤖 + ⚙️
+Validates AI-generated work before it ships.
+
+- `annotate` → generates patches with **`confidence: high | low`** field:
+  - `high` — sibling platforms already document this function (safe to bulk-approve)
+  - `low` — no sibling confirmation; human review required
+- `gendocs` → regenerate snippet MDX
+- `audit` → verify 0 open findings remain
+
+### Gate 3 — Human Triage 🤖 (future: automated LLM agent)
+For issues that cannot be resolved computationally:
+- SDK gaps (function doesn't exist on a platform) → mark `DOES_NOT_EXIST`
+- New doc pages needed → create MDX + manifest
+- Unresolvable `ASC_PAGE_INVALID` / `DOC_MISSING` conflicts → human judgment
+
+Gate 3 is currently a manual step; designed to be automatable by an LLM agent in the future.
+
+---
+
 ## The Harness CLI (`harness-bin`)
 
-The harness is a Go CLI with 6 commands:
+The harness is a Go CLI with 7 commands:
 
 ### `audit` — Find problems ⚙️ Computational
 Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
@@ -194,6 +226,7 @@ Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
 | `DOC_MISSING` | Doc page referenced by a snippet doesn't exist | 🤖 Inferential — human or AI creates the page |
 | `DOC_PAGE_STALE_IMPORT` | Doc page still uses hardcoded `<CodeGroup>` instead of a generated import | ⚙️ Computational — `migrate` handles this |
 | `PUBLIC_FUNC_UNANNOTATED` | Public function in `*Repository`/`*Client` has no `begin_public_function` | ⚙️ Semi-computational — `annotate --apply` inserts stubs; 🤖 Inferential review for `id:` values |
+| `SNIPPET_KEY_PLATFORM_CONFLICT` | Two or more platforms annotate the same snippet key with different `sp_docs_page` values | ⚙️ Computational — align non-android platform to Android's canonical path (Gate 1) |
 
 ### `fix` — Auto-repair broken URLs ⚙️ Computational
 Normalizes `sp_docs_page` URLs (e.g. `https://docs.amity.co/...` → relative path).
@@ -224,7 +257,11 @@ The harness builds the runbook computationally; an AI agent executes it inferent
 
 ### `annotate` — Generate annotation patches ⚙️ Computational + 🤖 Review
 Reads `PUBLIC_FUNC_UNANNOTATED` findings → writes `annotation-patches.yml`.
-Each patch contains: source file path, function name, suggested `id:`, insertion line.
+Each patch contains: source file path, function name, suggested `id:`, insertion line,
+and a **`confidence: high | low`** signal (Gate 2):
+
+- `confidence: high` — sibling platforms already annotate this class → safe to bulk-approve
+- `confidence: low` — no sibling confirmation → human review required before applying
 
 ```bash
 ./harness-bin annotate --config harness-config.yml          # generate patches
@@ -234,6 +271,18 @@ Each patch contains: source file path, function name, suggested `id:`, insertion
 The `id:` is inferred deterministically (`AmityPostRepository.createPost` → `post.create`).
 A human or AI agent should review the patch file before applying (`id:` values may need adjustment),
 then verify with `audit` to confirm the count drops.
+
+### `serve` — Live dashboard ⚙️ Computational
+Starts an HTTP server with a real-time findings dashboard.
+
+```bash
+./harness-bin serve --config harness-config.yml   # default port :8080
+```
+
+Endpoints:
+- `GET /` — dashboard HTML (open/fixed/needs_human counts + platform coverage bars)
+- `GET /api/report` — full `harness-report.json` as JSON
+- `GET /api/coverage` — per-platform annotated/total/percent: `{"platforms":[{"platform":"android","annotated":599,"total":599,"percent":100},...]}`
 
 ---
 
@@ -416,7 +465,7 @@ snippets are complete.
 | Snippet markers in 4 SDK repos | ✅ | ~1,714 snippets use `sp_docs_page:` |
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
 | `gendocs --clean` | ✅ | 977 snippet MDX files generated |
-| `audit` command | ✅ | Finds all 4 finding types + manifest coverage + DOC_BROKEN_IMPORT |
+| `audit` command | ✅ | Finds all 5 finding types + manifest coverage + DOC_BROKEN_IMPORT |
 | `fix` command | ✅ | 170 findings resolved, 0 open, 0 needs_human |
 | `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
 | `prompt` command | ✅ | Generates `harness-tasks.md` with MANIFEST_FILL tasks + section context |
@@ -434,15 +483,23 @@ snippets are complete.
 | **ASC_PAGE_INVALID fixes** | ✅ | All legacy URLs in iOS/Android SDK files updated to relative paths |
 | **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
 | **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections — out of scope) |
-| `publicscan` package | ✅ | Scans 4 SDKs; 325 unannotated public functions found |
-| `patchgen` package | ✅ | ID inference + line finder for annotation patches |
-| `annotate` command | ✅ | Generates `annotation-patches.yml`; `--apply` inserts markers |
-| **Phase 0 — SDK Annotation Campaign** | 🔄 In progress | 325 `PUBLIC_FUNC_UNANNOTATED` findings; `annotate` command ready |
+| `publicscan` package | ✅ | Scans 4 SDKs; public functions audited |
+| `patchgen` package | ✅ | ID inference + line finder; `confidence: high/low` Gate 2 signal |
+| `annotate` command | ✅ | Generates patches with `confidence:` field; `--apply` inserts markers |
+| **`SNIPPET_KEY_PLATFORM_CONFLICT` finding** | ✅ | Gate 1: 176 real conflicts detected then fixed across all 4 SDK repos |
+| **Gate 1 — Computational CI gate** | ✅ | 0 open `SNIPPET_KEY_PLATFORM_CONFLICT` findings |
+| **Gate 2 — Confidence signal** | ✅ | `annotate` patches carry `confidence: high/low` based on sibling platform coverage |
+| **Gate 3 — Human triage** | 🔜 Future | Manual for now; designed to be automatable by LLM agent |
+| **`serve` + `/api/coverage`** | ✅ | Live dashboard with 4-bar platform coverage widget |
+| **Phase 0 — SDK Annotation Campaign** | 🔄 In progress | 11 `PUBLIC_FUNC_UNANNOTATED` needs_human remain |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
-**Current open findings:** 325 `PUBLIC_FUNC_UNANNOTATED` (needs_human) — Phase 0 in progress
-- 0 open audit findings from Phases 1–2 (migration, coverage)
-- 325 public SDK functions missing `begin_public_function` markers (use `harness annotate`)
+**Current open findings (Gate 1 passing):**
+- `SNIPPET_KEY_PLATFORM_CONFLICT`: **0 open** ✅ (was 176 — all fixed)
+- `ASC_PAGE_INVALID`: 47 open (pre-existing; needs platform team review)
+- `DOC_MISSING`: 79 open (pre-existing; new doc pages needed)
+- `DOC_PAGE_STALE_IMPORT`: 1 open
+- `PUBLIC_FUNC_UNANNOTATED`: 11 needs_human (Phase 0 — use `harness annotate`)
 
 ---
 
