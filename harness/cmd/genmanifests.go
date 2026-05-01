@@ -11,6 +11,7 @@ import (
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/mdxparse"
+	"social-plus/harness/internal/runstate"
 )
 
 type sectionYAML struct {
@@ -33,9 +34,12 @@ func runGenManifests(args []string) {
 		fmt.Fprintf(os.Stderr, "[genmanifests] failed to load config: %v\n", err)
 		os.Exit(1)
 	}
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "genmanifests", "script", "")
 	docsBase := cfg.Docs.Path
 	if docsBase == "" {
 		fmt.Fprintf(os.Stderr, "[genmanifests] docs.path missing in config\n")
+		_ = runstate.Fail(cfgDir, "genmanifests", "see stderr")
 		os.Exit(1)
 	}
 
@@ -54,6 +58,7 @@ func runGenManifests(args []string) {
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[genmanifests] error walking docs dir: %v\n", err)
+		_ = runstate.Fail(cfgDir, "genmanifests", "see stderr")
 		os.Exit(1)
 	}
 
@@ -109,4 +114,5 @@ func runGenManifests(args []string) {
 		}
 		fmt.Printf("[genmanifests] created %s (%d sections)\n", manifestPath, len(m.Sections))
 	}
+	_ = runstate.Finish(cfgDir, "genmanifests", "manifests generated")
 }

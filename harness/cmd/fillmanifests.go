@@ -11,6 +11,7 @@ import (
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/scanner"
+	"social-plus/harness/internal/runstate"
 )
 
 func runFillManifests(args []string) {
@@ -24,6 +25,8 @@ func runFillManifests(args []string) {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "fillmanifests", "script", "")
 	docsBase := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
 
 	// Build page → []GendocsKey map from all SDK snippet dirs.
@@ -50,7 +53,7 @@ func runFillManifests(args []string) {
 	totalEmpty := 0
 	manifestsUpdated := 0
 
-	_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -137,6 +140,12 @@ func runFillManifests(args []string) {
 		return nil
 	})
 
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fillmanifests: walk: %v\n", err)
+		_ = runstate.Fail(cfgDir, "fillmanifests", "see stderr")
+		os.Exit(1)
+	}
+	_ = runstate.Finish(cfgDir, "fillmanifests", "manifests filled")
 	if *dryRun {
 		fmt.Printf("[fillmanifests] DRY RUN: would assign %d keys in %d manifests; %d sections still need AI\n",
 			totalAssigned, manifestsUpdated, totalEmpty)

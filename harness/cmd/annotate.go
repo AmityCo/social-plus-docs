@@ -14,12 +14,13 @@ import (
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/patchgen"
 	"social-plus/harness/internal/report"
+	"social-plus/harness/internal/runstate"
 )
 
 // PatchFile is the top-level structure written to annotation-patches.yml.
 type PatchFile struct {
-	GeneratedBy string         `yaml:"generated_by"`
-	Note        string         `yaml:"note"`
+	GeneratedBy string           `yaml:"generated_by"`
+	Note        string           `yaml:"note"`
 	Patches     []patchgen.Patch `yaml:"patches"`
 }
 
@@ -41,13 +42,20 @@ func runAnnotate(args []string) {
 		os.Exit(1)
 	}
 	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "annotate", "script", "")
 
 	repPath := filepath.Join(cfgDir, "harness-report.json")
 	rep, err := report.Read(repPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load report: %v\n", err)
+		_ = runstate.Fail(cfgDir, "annotate", "see stderr")
 		os.Exit(1)
 	}
+	_ = runstate.UpdateSubstep(cfgDir, "annotate", runstate.Substep{
+		Label:  "load report",
+		Detail: fmt.Sprintf("%d PUBLIC_FUNC_UNANNOTATED findings", len(rep.Findings)),
+		Status: "done",
+	})
 
 	var patches []patchgen.Patch
 	skipped := 0
@@ -118,20 +126,36 @@ func runAnnotate(args []string) {
 	b, err := yaml.Marshal(pf)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "marshal patches: %v\n", err)
+		_ = runstate.Fail(cfgDir, "annotate", "see stderr")
 		os.Exit(1)
 	}
 	if err := os.WriteFile(*outPath, b, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write patches: %v\n", err)
+		_ = runstate.Fail(cfgDir, "annotate", "see stderr")
 		os.Exit(1)
 	}
 
+	_ = runstate.UpdateSubstep(cfgDir, "annotate", runstate.Substep{
+		Label:  "generate patches",
+		Detail: fmt.Sprintf("%d patches, %d skipped", len(patches), skipped),
+		Status: "done",
+	})
 	fmt.Printf("[annotate] %d patches written to %s (%d skipped)\n", len(patches), *outPath, skipped)
 
 	if *apply {
+		_ = runstate.UpdateSubstep(cfgDir, "annotate", runstate.Substep{
+			Label:  "apply patches",
+			Status: "running",
+		})
 		applyPatches(cfg, cfgDir, patches)
+		_ = runstate.UpdateSubstep(cfgDir, "annotate", runstate.Substep{
+			Label:  "apply patches",
+			Status: "done",
+		})
 	} else {
 		fmt.Printf("[annotate] Review %s then re-run with --apply to insert annotations\n", *outPath)
 	}
+	_ = runstate.Finish(cfgDir, "annotate", fmt.Sprintf("%d patches, %d skipped", len(patches), skipped))
 }
 
 func extractClassName(detail string) string {

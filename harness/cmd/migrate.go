@@ -11,6 +11,7 @@ import (
 	"social-plus/harness/internal/migrator"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/manifest"
+	"social-plus/harness/internal/runstate"
 )
 
 func runMigrate(args []string) {
@@ -25,10 +26,13 @@ func runMigrate(args []string) {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "migrate", "script", "")
 
 	r, err := report.Read(*reportPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read report: %v\n", err)
+		_ = runstate.Fail(cfgDir, "migrate", "see stderr")
 		os.Exit(1)
 	}
 
@@ -101,5 +105,6 @@ func runMigrate(args []string) {
 		// --- End manifest-aware migration logic ---
 	}
 
+	_ = runstate.Finish(cfgDir, "migrate", "migration complete")
 	fmt.Printf("[migrate] done — written: %d, dry-run skipped: %d, errors: %d\n", written, skipped, warned)
 }

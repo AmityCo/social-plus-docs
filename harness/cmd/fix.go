@@ -12,6 +12,7 @@ import (
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/verifier"
+	"social-plus/harness/internal/runstate"
 )
 
 func runFix(args []string) {
@@ -26,10 +27,13 @@ func runFix(args []string) {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "fix", "ai_agent", cfg.LLM.Model)
 
 	r, err := report.Read(*reportPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read report: %v\n", err)
+		_ = runstate.Fail(cfgDir, "fix", "see stderr")
 		os.Exit(1)
 	}
 
@@ -38,6 +42,7 @@ func runFix(args []string) {
 	reg, err := pages.Load(docsJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load pages registry: %v\n", err)
+		_ = runstate.Fail(cfgDir, "fix", "see stderr")
 		os.Exit(1)
 	}
 
@@ -143,13 +148,16 @@ func runFix(args []string) {
 
 	if writeErr := report.Write(r, *reportPath); writeErr != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", writeErr)
+		_ = runstate.Fail(cfgDir, "fix", "see stderr")
 		os.Exit(1)
 	}
 	if writeErr := report.WriteIssues(r.Findings, *issuesPath); writeErr != nil {
 		fmt.Fprintf(os.Stderr, "write issues: %v\n", writeErr)
+		_ = runstate.Fail(cfgDir, "fix", "see stderr")
 		os.Exit(1)
 	}
 
+	_ = runstate.Finish(cfgDir, "fix", fmt.Sprintf("fixed %d, %d need AI", fixedCount, aiCount))
 	fmt.Printf("\nFixed %d findings deterministically. %d findings need Copilot CLI (run 'harness prompt').\n", fixedCount, aiCount)
 }
 

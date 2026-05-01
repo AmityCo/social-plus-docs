@@ -20,6 +20,7 @@ import (
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/publicscan"
 	"social-plus/harness/internal/report"
+	"social-plus/harness/internal/runstate"
 	"social-plus/harness/internal/scanner"
 )
 
@@ -39,10 +40,20 @@ func runAudit(args []string) {
 		os.Exit(1)
 	}
 
-	docsJSON := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path, "docs.json")
+	cfgDir := filepath.Dir(*cfgPath)
+	_ = runstate.Start(cfgDir, "audit", "script", "")
+	defer func() {
+		if r := recover(); r != nil {
+			_ = runstate.Fail(cfgDir, "audit", fmt.Sprintf("panic: %v", r))
+			panic(r)
+		}
+	}()
+
+	docsJSON := filepath.Join(cfgDir, cfg.Docs.Path, "docs.json")
 	reg, err := pages.Load(docsJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load pages: %v\n", err)
+		_ = runstate.Fail(cfgDir, "audit", "see stderr")
 		os.Exit(1)
 	}
 
@@ -285,6 +296,11 @@ func runAudit(args []string) {
 				fmt.Fprintf(os.Stderr, "publicscan %s: %v\n", platform, err)
 				continue
 			}
+			_ = runstate.UpdateSubstep(cfgDir, "audit", runstate.Substep{
+				Label:  fmt.Sprintf("scan %s", platform),
+				Detail: fmt.Sprintf("%d public functions", len(pubFuncs)),
+				Status: "done",
+			})
 			// Build a set of annotated function IDs from the current scan.
 			nowAnnotated := map[string]bool{}
 			for _, pf := range pubFuncs {
@@ -341,9 +357,12 @@ func runAudit(args []string) {
 
 	if err := report.Write(r, *reportPath); err != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", err)
+		_ = runstate.Fail(cfgDir, "audit", "see stderr")
 		os.Exit(1)
 	}
 
+	_ = runstate.Finish(cfgDir, "audit", fmt.Sprintf("%d open, %d fixed, %d needs_human",
+		r.Summary.Open, r.Summary.Fixed, r.Summary.NeedsHuman))
 	fmt.Printf("\nSummary: %d open, %d fixed, %d needs_human\n",
 		r.Summary.Open, r.Summary.Fixed, r.Summary.NeedsHuman)
 
