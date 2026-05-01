@@ -1,1404 +1,1014 @@
 # Unannotated Public Functions Report
 
-**Total:** 805 functions need `sp_docs_page:` annotation
+**Total:** 349 functions need `begin_public_function` annotation
 
-## Android (203 functions across 31 classes)
+## Android (116 functions across 47 classes)
 
-### `AmityPostRepository` (31 functions)
+### `AmityPostRepository` (13 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityPostRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `approvePost` | ⬜ needs annotation |
-| `createAudioPost` | ⬜ needs annotation |
-| `createClipPost` | ⬜ needs annotation |
-| `createCustomPost` | ⬜ needs annotation |
-| `createFilePost` | ⬜ needs annotation |
-| `createImagePost` | ⬜ needs annotation |
-| `createLiveStreamPost` | ⬜ needs annotation |
-| `createMixedAttachmentPost` | ⬜ needs annotation |
-| `createPollPost` | ⬜ needs annotation |
-| `createPost` | ⬜ needs annotation |
-| `createRoomPost` | ⬜ needs annotation |
-| `createTextPost` | ⬜ needs annotation |
-| `createVideoPost` | ⬜ needs annotation |
-| `declinePost` | ⬜ needs annotation |
-| `editCustomPost` | ⬜ needs annotation |
-| `editPost` | ⬜ needs annotation |
-| `flagPost` | ⬜ needs annotation |
-| `getCommunityLiveRoomPosts` | ⬜ needs annotation |
-| `getGlobalPinnedPosts` | ⬜ needs annotation |
-| `getLiveRoomPosts` | ⬜ needs annotation |
-| `getPinnedPosts` | ⬜ needs annotation |
-| `getPost` | ⬜ needs annotation |
-| `getPostByIds` | ⬜ needs annotation |
-| `getPosts` | ⬜ needs annotation |
-| `hardDeletePost` | ⬜ needs annotation |
-| `pinProduct` | ⬜ needs annotation |
-| `searchPostsByHashtag` | ⬜ needs annotation |
-| `semanticSearchPosts` | ⬜ needs annotation |
-| `softDeletePost` | ⬜ needs annotation |
-| `unflagPost` | ⬜ needs annotation |
-| `unpinProduct` | ⬜ needs annotation |
-
-### `AmityCommunityRepository` (16 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/community/AmityCommunityRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createCommunity` | ⬜ needs annotation |
-| `deleteCommunity` | ⬜ needs annotation |
-| `editCommunity` | ⬜ needs annotation |
-| `getCategories` | ⬜ needs annotation |
-| `getCategory` | ⬜ needs annotation |
-| `getCommunities` | ⬜ needs annotation |
-| `getCommunity` | ⬜ needs annotation |
-| `getJoinRequestList` | ⬜ needs annotation |
-| `getRecommendedCommunities` | ⬜ needs annotation |
-| `getTrendingCommunities` | ⬜ needs annotation |
-| `joinCommunity` | ⬜ needs annotation |
-| `leaveCommunity` | ⬜ needs annotation |
-| `membership` | ⬜ needs annotation |
-| `moderation` | ⬜ needs annotation |
-| `searchCommunities` | ⬜ needs annotation |
-| `semanticSearchCommunities` | ⬜ needs annotation |
-
-### `AmityMessageRepository` (14 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/message/AmityMessageRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createAudioMessage` | ⬜ needs annotation |
-| `createCustomMessage` | ⬜ needs annotation |
-| `createFileMessage` | ⬜ needs annotation |
-| `createImageMessage` | ⬜ needs annotation |
-| `createTextMessage` | ⬜ needs annotation |
-| `createVideoMessage` | ⬜ needs annotation |
-| `deleteFailedMessages` | ⬜ needs annotation |
-| `editCustomMessage` | ⬜ needs annotation |
-| `editTextMessage` | ⬜ needs annotation |
-| `flagMessage` | ⬜ needs annotation |
-| `getMessage` | ⬜ needs annotation |
-| `getMessages` | ⬜ needs annotation |
-| `softDeleteMessage` | ⬜ needs annotation |
-| `unflagMessage` | ⬜ needs annotation |
-
-### `AmityRoomRepository` (13 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/room/AmityRoomRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createRoom` | ⬜ needs annotation |
-| `deleteRoom` | ⬜ needs annotation |
-| `fetchRoom` | ⬜ needs annotation |
-| `getBroadcasterData` | ⬜ needs annotation |
-| `getCoHostEvent` | ⬜ needs annotation |
-| `getRecordedUrls` | ⬜ needs annotation |
-| `getRoom` | ⬜ needs annotation |
-| `getRooms` | ⬜ needs annotation |
-| `leaveRoom` | ⬜ needs annotation |
-| `removeRoomParticipant` | ⬜ needs annotation |
-| `stopRoom` | ⬜ needs annotation |
-| `updateCohostPermission` | ⬜ needs annotation |
-| `updateRoom` | ⬜ needs annotation |
-
-### `AmityChannelRepository` (12 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/channel/AmityChannelRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createChannel` | ⬜ needs annotation |
-| `editChannel` | ⬜ needs annotation |
-| `getChannel` | ⬜ needs annotation |
-| `getChannels` | ⬜ needs annotation |
-| `getTotalChannelUnread` | ⬜ needs annotation |
-| `getTotalChannelsUnreadInfo` | ⬜ needs annotation |
-| `joinChannel` | ⬜ needs annotation |
-| `leaveChannel` | ⬜ needs annotation |
-| `membership` | ⬜ needs annotation |
-| `moderation` | ⬜ needs annotation |
-| `muteChannel` | ⬜ needs annotation |
-| `unmuteChannel` | ⬜ needs annotation |
+| `createCustomPost` | ⬜ needs `begin_public_function` |
+| `createFilePost` | ⬜ needs `begin_public_function` |
+| `createImagePost` | ⬜ needs `begin_public_function` |
+| `createLiveStreamPost` | ⬜ needs `begin_public_function` |
+| `createMixedAttachmentPost` | ⬜ needs `begin_public_function` |
+| `createPollPost` | ⬜ needs `begin_public_function` |
+| `createPost` | ⬜ needs `begin_public_function` |
+| `createTextPost` | ⬜ needs `begin_public_function` |
+| `createVideoPost` | ⬜ needs `begin_public_function` |
+| `flagPost` | ⬜ needs `begin_public_function` |
+| `getGlobalPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPinnedPosts` | ⬜ needs `begin_public_function` |
+| `semanticSearchPosts` | ⬜ needs `begin_public_function` |
 
 ### `AmityStoryRepository` (11 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/story/AmityStoryRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `analytics` | ⬜ needs annotation |
-| `createImageStory` | ⬜ needs annotation |
-| `createVideoStory` | ⬜ needs annotation |
-| `getActiveStories` | ⬜ needs annotation |
-| `getGlobalStoryTargets` | ⬜ needs annotation |
-| `getStoriesByTargets` | ⬜ needs annotation |
-| `getStory` | ⬜ needs annotation |
-| `getStoryTarget` | ⬜ needs annotation |
-| `getStoryTargets` | ⬜ needs annotation |
-| `hardDeleteStory` | ⬜ needs annotation |
-| `softDeleteStory` | ⬜ needs annotation |
+| `analytics` | ⬜ needs `begin_public_function` |
+| `createImageStory` | ⬜ needs `begin_public_function` |
+| `createVideoStory` | ⬜ needs `begin_public_function` |
+| `getActiveStories` | ⬜ needs `begin_public_function` |
+| `getGlobalStoryTargets` | ⬜ needs `begin_public_function` |
+| `getStoriesByTargets` | ⬜ needs `begin_public_function` |
+| `getStory` | ⬜ needs `begin_public_function` |
+| `getStoryTarget` | ⬜ needs `begin_public_function` |
+| `getStoryTargets` | ⬜ needs `begin_public_function` |
+| `hardDeleteStory` | ⬜ needs `begin_public_function` |
+| `softDeleteStory` | ⬜ needs `begin_public_function` |
 
-### `AmityFileRepository` (10 functions)
+### `AmityFileRepository` (9 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/file/AmityFileRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `cancelUpload` | ⬜ needs annotation |
-| `deleteFile` | ⬜ needs annotation |
-| `getFile` | ⬜ needs annotation |
-| `getUploadInfo` | ⬜ needs annotation |
-| `updateAltText` | ⬜ needs annotation |
-| `uploadAudio` | ⬜ needs annotation |
-| `uploadClip` | ⬜ needs annotation |
-| `uploadFile` | ⬜ needs annotation |
-| `uploadImage` | ⬜ needs annotation |
-| `uploadVideo` | ⬜ needs annotation |
+| `cancelUpload` | ⬜ needs `begin_public_function` |
+| `getFile` | ⬜ needs `begin_public_function` |
+| `getUploadInfo` | ⬜ needs `begin_public_function` |
+| `updateAltText` | ⬜ needs `begin_public_function` |
+| `uploadAudio` | ⬜ needs `begin_public_function` |
+| `uploadClip` | ⬜ needs `begin_public_function` |
+| `uploadFile` | ⬜ needs `begin_public_function` |
+| `uploadImage` | ⬜ needs `begin_public_function` |
+| `uploadVideo` | ⬜ needs `begin_public_function` |
 
-### `AmityUserRepository` (10 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/user/AmityUserRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `flagUser` | ⬜ needs annotation |
-| `getAllBlockedUsers` | ⬜ needs annotation |
-| `getBlockedUsers` | ⬜ needs annotation |
-| `getReachedUsers` | ⬜ needs annotation |
-| `getUser` | ⬜ needs annotation |
-| `getUserByIds` | ⬜ needs annotation |
-| `getUsers` | ⬜ needs annotation |
-| `relationship` | ⬜ needs annotation |
-| `searchUsers` | ⬜ needs annotation |
-| `unflagUser` | ⬜ needs annotation |
-
-### `AmityCommentRepository` (10 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/comment/AmityCommentRepository.kt`
+### `AmityMessageRepository` (6 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/message/AmityMessageRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `createComment` | ⬜ needs annotation |
-| `editComment` | ⬜ needs annotation |
-| `flagComment` | ⬜ needs annotation |
-| `getComment` | ⬜ needs annotation |
-| `getCommentByIds` | ⬜ needs annotation |
-| `getComments` | ⬜ needs annotation |
-| `getLatestComment` | ⬜ needs annotation |
-| `hardDeleteComment` | ⬜ needs annotation |
-| `softDeleteComment` | ⬜ needs annotation |
-| `unflagComment` | ⬜ needs annotation |
-
-### `AmitySubChannelRepository` (8 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/subchannel/AmitySubChannelRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createSubChannel` | ⬜ needs annotation |
-| `editSubChannel` | ⬜ needs annotation |
-| `getSubChannel` | ⬜ needs annotation |
-| `getSubChannels` | ⬜ needs annotation |
-| `hardDeleteSubChannel` | ⬜ needs annotation |
-| `softDeleteSubChannel` | ⬜ needs annotation |
-| `startMessageReceiptSync` | ⬜ needs annotation |
-| `stopMessageReceiptSync` | ⬜ needs annotation |
-
-### `AmityUserPresenceRepository` (7 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/presence/AmityUserPresenceRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `getOnlineUsersCount` | ⬜ needs annotation |
-| `getOnlineUsersSnapshot` | ⬜ needs annotation |
-| `getSyncingUserPresence` | ⬜ needs annotation |
-| `getUserPresence` | ⬜ needs annotation |
-| `syncUserPresence` | ⬜ needs annotation |
-| `unsyncAllUserPresence` | ⬜ needs annotation |
-| `unsyncUserPresence` | ⬜ needs annotation |
+| `createAudioMessage` | ⬜ needs `begin_public_function` |
+| `createFileMessage` | ⬜ needs `begin_public_function` |
+| `createImageMessage` | ⬜ needs `begin_public_function` |
+| `createVideoMessage` | ⬜ needs `begin_public_function` |
+| `deleteFailedMessages` | ⬜ needs `begin_public_function` |
+| `flagMessage` | ⬜ needs `begin_public_function` |
 
 ### `AmityRoomPresenceRepository` (6 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/presence/AmityRoomPresenceRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getOnlineUsersCount` | ⬜ needs annotation |
-| `getOnlineUsersSnapshot` | ⬜ needs annotation |
-| `observeOnlineUsersCount` | ⬜ needs annotation |
-| `roomId` | ⬜ needs annotation |
-| `startHeartbeat` | ⬜ needs annotation |
-| `stopHeartbeat` | ⬜ needs annotation |
+| `getOnlineUsersCount` | ⬜ needs `begin_public_function` |
+| `getOnlineUsersSnapshot` | ⬜ needs `begin_public_function` |
+| `observeOnlineUsersCount` | ⬜ needs `begin_public_function` |
+| `roomId` | ⬜ needs `begin_public_function` |
+| `startHeartbeat` | ⬜ needs `begin_public_function` |
+| `stopHeartbeat` | ⬜ needs `begin_public_function` |
 
-### `AmityPollRepository` (6 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/poll/AmityPollRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `closePoll` | ⬜ needs annotation |
-| `createPoll` | ⬜ needs annotation |
-| `deletePoll` | ⬜ needs annotation |
-| `getPoll` | ⬜ needs annotation |
-| `unvotePoll` | ⬜ needs annotation |
-| `votePoll` | ⬜ needs annotation |
-
-### `AmityStreamRepository` (6 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`
+### `AmityRoomRepository` (6 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/room/AmityRoomRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `createStream` | ⬜ needs annotation |
-| `disposeStream` | ⬜ needs annotation |
-| `editStream` | ⬜ needs annotation |
-| `fetchStream` | ⬜ needs annotation |
-| `getStream` | ⬜ needs annotation |
-| `getStreams` | ⬜ needs annotation |
+| `fetchRoom` | ⬜ needs `begin_public_function` |
+| `getCoHostEvent` | ⬜ needs `begin_public_function` |
+| `getRecordedUrls` | ⬜ needs `begin_public_function` |
+| `leaveRoom` | ⬜ needs `begin_public_function` |
+| `removeRoomParticipant` | ⬜ needs `begin_public_function` |
+| `updateCohostPermission` | ⬜ needs `begin_public_function` |
 
-### `AmityEventRepository` (5 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/event/AmityEventRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createEvent` | ⬜ needs annotation |
-| `deleteEvent` | ⬜ needs annotation |
-| `getEvent` | ⬜ needs annotation |
-| `getEvents` | ⬜ needs annotation |
-| `updateEvent` | ⬜ needs annotation |
-
-### `AmityFeedRepository` (5 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityFeedRepository.kt`
+### `AmityChannelRepository` (5 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/channel/AmityChannelRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getCommunityFeed` | ⬜ needs annotation |
-| `getCustomRankingGlobalFeed` | ⬜ needs annotation |
-| `getGlobalFeed` | ⬜ needs annotation |
-| `getMyFeed` | ⬜ needs annotation |
-| `getUserFeed` | ⬜ needs annotation |
+| `getChannels` | ⬜ needs `begin_public_function` |
+| `getTotalChannelUnread` | ⬜ needs `begin_public_function` |
+| `getTotalChannelsUnreadInfo` | ⬜ needs `begin_public_function` |
+| `membership` | ⬜ needs `begin_public_function` |
+| `moderation` | ⬜ needs `begin_public_function` |
 
 ### `AnalyticsRepository` (5 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/analytics/AnalyticsRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `createAnalyticEvent` | ⬜ needs annotation |
-| `deleteAllAnalyticsEvents` | ⬜ needs annotation |
-| `getViewedUsers` | ⬜ needs annotation |
-| `saveAnalyticEvent` | ⬜ needs annotation |
-| `sendAnalyticsEvents` | ⬜ needs annotation |
-
-### `AmityChannelPresenceRepository` (4 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/chat/presence/AmityChannelPresenceRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `getSyncingChannelPresence` | ⬜ needs annotation |
-| `syncChannelPresence` | ⬜ needs annotation |
-| `unsyncAllChannelPresence` | ⬜ needs annotation |
-| `unsyncChannelPresence` | ⬜ needs annotation |
+| `createAnalyticEvent` | ⬜ needs `begin_public_function` |
+| `deleteAllAnalyticsEvents` | ⬜ needs `begin_public_function` |
+| `getViewedUsers` | ⬜ needs `begin_public_function` |
+| `saveAnalyticEvent` | ⬜ needs `begin_public_function` |
+| `sendAnalyticsEvents` | ⬜ needs `begin_public_function` |
 
 ### `AmityLiveReactionRepository` (3 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityLiveReactionRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `createReaction` | ⬜ needs annotation |
-| `createRoomReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
+| `createReaction` | ⬜ needs `begin_public_function` |
+| `createRoomReaction` | ⬜ needs `begin_public_function` |
+| `getReactions` | ⬜ needs `begin_public_function` |
 
 ### `AmityReactionRepository` (3 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityReactionRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `addReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `removeReaction` | ⬜ needs annotation |
+| `addReaction` | ⬜ needs `begin_public_function` |
+| `getReactions` | ⬜ needs `begin_public_function` |
+| `removeReaction` | ⬜ needs `begin_public_function` |
+
+### `AmityStreamRepository` (3 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `createStream` | ⬜ needs `begin_public_function` |
+| `editStream` | ⬜ needs `begin_public_function` |
+| `fetchStream` | ⬜ needs `begin_public_function` |
+
+### `AmityClientLoginWithAccessToken` (2 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientLoginWithAccessToken.kt`
+
+| Function | Status |
+|----------|--------|
+| `loginWithAccessToken` | ⬜ needs `begin_public_function` |
+| `sessionWillRenewAccessToken` | ⬜ needs `begin_public_function` |
+
+### `AmityClientRenewAccessToken` (2 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientRenewAccessToken.kt`
+
+| Function | Status |
+|----------|--------|
+| `sessionWillRenewAccessToken` | ⬜ needs `begin_public_function` |
+| `setupRenewal` | ⬜ needs `begin_public_function` |
+
+### `AmityClientSetAccessTokenHandler` (2 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientSetAccessTokenHandler.kt`
+
+| Function | Status |
+|----------|--------|
+| `sessionWillRenewAccessToken` | ⬜ needs `begin_public_function` |
+| `setAccessTokenHandler` | ⬜ needs `begin_public_function` |
 
 ### `AmityAdRepository` (2 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/ads/AmityAdRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `analytics` | ⬜ needs annotation |
-| `getNetworkAds` | ⬜ needs annotation |
+| `analytics` | ⬜ needs `begin_public_function` |
+| `getNetworkAds` | ⬜ needs `begin_public_function` |
 
 ### `AmityInvitationRepository` (2 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/invitation/AmityInvitationRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getInvitations` | ⬜ needs annotation |
-| `getMyCommunityInvitations` | ⬜ needs annotation |
+| `getInvitations` | ⬜ needs `begin_public_function` |
+| `getMyCommunityInvitations` | ⬜ needs `begin_public_function` |
 
-### `AmityProductRepository` (2 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/product/AmityProductRepository.kt`
+### `AmityCommunityRepository` (2 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/community/AmityCommunityRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getProduct` | ⬜ needs annotation |
-| `searchProduct` | ⬜ needs annotation |
+| `membership` | ⬜ needs `begin_public_function` |
+| `moderation` | ⬜ needs `begin_public_function` |
 
 ### `CommunityNotificationRepository` (2 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/notification/community/CommunityNotificationRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getNotificationSettings` | ⬜ needs annotation |
-| `saveNotificationSettings` | ⬜ needs annotation |
+| `getNotificationSettings` | ⬜ needs `begin_public_function` |
+| `saveNotificationSettings` | ⬜ needs `begin_public_function` |
 
 ### `TombstoneRepository` (2 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/tombstone/TombstoneRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getTombstone` | ⬜ needs annotation |
-| `saveTombstone` | ⬜ needs annotation |
+| `getTombstone` | ⬜ needs `begin_public_function` |
+| `saveTombstone` | ⬜ needs `begin_public_function` |
 
 ### `StreamPlayerClient` (2 functions)
 > `amity-video-player/src/main/java/com/amity/socialcloud/sdk/video/StreamPlayerClient.kt`
 
 | Function | Status |
 |----------|--------|
-| `getFunction` | ⬜ needs annotation |
-| `setup` | ⬜ needs annotation |
+| `getFunction` | ⬜ needs `begin_public_function` |
+| `setup` | ⬜ needs `begin_public_function` |
 
 ### `StreamBroadcasterClient` (2 functions)
 > `amity-video-publisher/src/main/java/com/amity/socialcloud/sdk/video/StreamBroadcasterClient.kt`
 
 | Function | Status |
 |----------|--------|
-| `getFunction` | ⬜ needs annotation |
-| `setup` | ⬜ needs annotation |
+| `getFunction` | ⬜ needs `begin_public_function` |
+| `setup` | ⬜ needs `begin_public_function` |
 
 ### `FileRepository` (1 functions)
 > `amity-rxupload/src/main/java/co/amity/rxupload/internal/repository/FileRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `upload` | ⬜ needs annotation |
+| `upload` | ⬜ needs `begin_public_function` |
+
+### `AmityClientFetchLinkPreview` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientFetchLinkPreview.kt`
+
+| Function | Status |
+|----------|--------|
+| `fetchLinkPreview` | ⬜ needs `begin_public_function` |
+
+### `AmityClientGetLoginMethod` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientGetLoginMethod.kt`
+
+| Function | Status |
+|----------|--------|
+| `getLoginMethod` | ⬜ needs `begin_public_function` |
+
+### `AmityClientGetProductCatalogueSetting` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientGetProductCatalogueSetting.kt`
+
+| Function | Status |
+|----------|--------|
+| `getProductCatalogueSetting` | ⬜ needs `begin_public_function` |
+
+### `AmityClientObserveSessionState` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientObserveSessionState.kt`
+
+| Function | Status |
+|----------|--------|
+| `observeSessionState` | ⬜ needs `begin_public_function` |
+
+### `AmityClientReadSessionState` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientReadSessionState.kt`
+
+| Function | Status |
+|----------|--------|
+| `readSessionState` | ⬜ needs `begin_public_function` |
+
+### `AmityClientSecureLogout` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientSecureLogout.kt`
+
+| Function | Status |
+|----------|--------|
+| `secureLogout` | ⬜ needs `begin_public_function` |
+
+### `AmityClientRegisterPush` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/notification/registration/AmityClientRegisterPush.kt`
+
+| Function | Status |
+|----------|--------|
+| `registerPush` | ⬜ needs `begin_public_function` |
+
+### `AmityClientUnregisterPush` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/notification/registration/AmityClientUnregisterPush.kt`
+
+| Function | Status |
+|----------|--------|
+| `unregisterPush` | ⬜ needs `begin_public_function` |
+
+### `AmityClientPresenceDisable` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceDisable.kt`
+
+| Function | Status |
+|----------|--------|
+| `disablePresence` | ⬜ needs `begin_public_function` |
+
+### `AmityClientPresenceEnable` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceEnable.kt`
+
+| Function | Status |
+|----------|--------|
+| `enablePresence` | ⬜ needs `begin_public_function` |
+
+### `AmityClientPresenceIsEnabled` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceIsEnabled.kt`
+
+| Function | Status |
+|----------|--------|
+| `isPresenceEnabled` | ⬜ needs `begin_public_function` |
+
+### `AmityClientPresenceStartHeartbeat` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceStartHeartbeat.kt`
+
+| Function | Status |
+|----------|--------|
+| `startHeartbeat` | ⬜ needs `begin_public_function` |
+
+### `AmityClientPresenceStopHeartbeat` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/presence/AmityClientPresenceStopHeartbeat.kt`
+
+| Function | Status |
+|----------|--------|
+| `stopHeartbeat` | ⬜ needs `begin_public_function` |
+
+### `AmityClientGetCurrentUser` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/user/AmityClientGetCurrentUser.kt`
+
+| Function | Status |
+|----------|--------|
+| `getCurrentUser` | ⬜ needs `begin_public_function` |
+
+### `AmityClientUpdateUser` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/user/AmityClientUpdateUser.kt`
+
+| Function | Status |
+|----------|--------|
+| `updateUser` | ⬜ needs `begin_public_function` |
+
+### `AmityCommentRepositoryInitialization` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/social/comment/AmityCommentRepositoryInitialization.kt`
+
+| Function | Status |
+|----------|--------|
+| `initializeCommentRepository` | ⬜ needs `begin_public_function` |
+
+### `AmityFeedRepositoryInitialization` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/social/feed/AmityFeedRepositoryInitialization.kt`
+
+| Function | Status |
+|----------|--------|
+| `initializeFeedRepository` | ⬜ needs `begin_public_function` |
+
+### `AmityPostRepositoryInitialization` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/social/post/AmityPostRepositoryInitialization.kt`
+
+| Function | Status |
+|----------|--------|
+| `initializePostRepository` | ⬜ needs `begin_public_function` |
+
+### `AmityInitStoryRepository` (1 functions)
+> `amity-sample-code/src/main/java/com/amity/snipet/verifier/social/story/init/AmityInitStoryRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `initStoryRepository` | ⬜ needs `begin_public_function` |
+
+### `AmityUserRepository` (1 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/user/AmityUserRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `relationship` | ⬜ needs `begin_public_function` |
+
+### `AmityCommentRepository` (1 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/comment/AmityCommentRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `flagComment` | ⬜ needs `begin_public_function` |
+
+### `AmityFeedRepository` (1 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityFeedRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `getMyFeed` | ⬜ needs `begin_public_function` |
 
 ### `MarkerSyncRepository` (1 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/sync/MarkerSyncRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `syncMarkers` | ⬜ needs annotation |
+| `syncMarkers` | ⬜ needs `begin_public_function` |
 
 ### `UserMarkerRepository` (1 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/user/UserMarkerRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `getUserMarker` | ⬜ needs annotation |
+| `getUserMarker` | ⬜ needs `begin_public_function` |
 
 ### `UserRelationshipRepository` (1 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/relationship/UserRelationshipRepository.kt`
 
 | Function | Status |
 |----------|--------|
-| `hasInLocal` | ⬜ needs annotation |
+| `hasInLocal` | ⬜ needs `begin_public_function` |
 
-## Flutter (197 functions across 24 classes)
-
-### `amity_core_client` (22 functions)
-> `lib/src/public/amity_core_client.dart`
-
-| Function | Status |
-|----------|--------|
-| `copyWith` | ⬜ needs annotation |
-| `disconnect` | ⬜ needs annotation |
-| `getAnalyticsEngine` | ⬜ needs annotation |
-| `getConfiguration` | ⬜ needs annotation |
-| `getCurrentUser` | ⬜ needs annotation |
-| `getUserId` | ⬜ needs annotation |
-| `hasPermission` | ⬜ needs annotation |
-| `isUserLoggedIn` | ⬜ needs annotation |
-| `login` | ⬜ needs annotation |
-| `logout` | ⬜ needs annotation |
-| `newAdRepository` | ⬜ needs annotation |
-| `newFileRepository` | ⬜ needs annotation |
-| `newUserRepository` | ⬜ needs annotation |
-| `notifications` | ⬜ needs annotation |
-| `observeSessionState` | ⬜ needs annotation |
-| `observeUnreadCount` | ⬜ needs annotation |
-| `registerDeviceNotification` | ⬜ needs annotation |
-| `setup` | ⬜ needs annotation |
-| `unregisterDeviceNotification` | ⬜ needs annotation |
-| `updateUser` | ⬜ needs annotation |
-| `validateTexts` | ⬜ needs annotation |
-| `validateUrls` | ⬜ needs annotation |
-
-### `amity_channel_repository` (21 functions)
-> `lib/src/public/repo/channel/amity_channel_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `addMembers` | ⬜ needs annotation |
-| `archiveChannel` | ⬜ needs annotation |
-| `createChannel` | ⬜ needs annotation |
-| `getArchivedChannelIds` | ⬜ needs annotation |
-| `getArchivedChannels` | ⬜ needs annotation |
-| `getChannel` | ⬜ needs annotation |
-| `getChannelTotalUnreads` | ⬜ needs annotation |
-| `getChannels` | ⬜ needs annotation |
-| `joinChannel` | ⬜ needs annotation |
-| `leaveChannel` | ⬜ needs annotation |
-| `membership` | ⬜ needs annotation |
-| `moderation` | ⬜ needs annotation |
-| `muteChannel` | ⬜ needs annotation |
-| `removeMembers` | ⬜ needs annotation |
-| `searchChannels` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `startReading` | ⬜ needs annotation |
-| `stopReading` | ⬜ needs annotation |
-| `unMuteChannel` | ⬜ needs annotation |
-| `unarchiveChannel` | ⬜ needs annotation |
-| `updateChannel` | ⬜ needs annotation |
-
-### `amity_community_repository` (16 functions)
-> `lib/src/public/repo/amity_community_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `createCommunity` | ⬜ needs annotation |
-| `deleteCommunity` | ⬜ needs annotation |
-| `getCategories` | ⬜ needs annotation |
-| `getCategory` | ⬜ needs annotation |
-| `getCommunities` | ⬜ needs annotation |
-| `getCommunity` | ⬜ needs annotation |
-| `getCurentUserRoles` | ⬜ needs annotation |
-| `getCurrentUserRoles` | ⬜ needs annotation |
-| `getRecommendedCommunities` | ⬜ needs annotation |
-| `getTrendingCommunities` | ⬜ needs annotation |
-| `joinCommunity` | ⬜ needs annotation |
-| `leaveCommunity` | ⬜ needs annotation |
-| `membership` | ⬜ needs annotation |
-| `moderation` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `updateCommunity` | ⬜ needs annotation |
-
-### `message_repository` (16 functions)
-> `lib/src/public/repo/message/message_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `createCustomMessage` | ⬜ needs annotation |
-| `createMessage` | ⬜ needs annotation |
-| `deleteMessage` | ⬜ needs annotation |
-| `editCustomMessage` | ⬜ needs annotation |
-| `editTextMessage` | ⬜ needs annotation |
-| `flag` | ⬜ needs annotation |
-| `flagMessage` | ⬜ needs annotation |
-| `getMessage` | ⬜ needs annotation |
-| `getMessages` | ⬜ needs annotation |
-| `getReaction` | ⬜ needs annotation |
-| `newCreateMessage` | ⬜ needs annotation |
-| `newGetMessages` | ⬜ needs annotation |
-| `searchMessage` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unflag` | ⬜ needs annotation |
-| `updateMessage` | ⬜ needs annotation |
+## Flutter (101 functions across 30 classes)
 
 ### `amity_user_relationships_repository` (16 functions)
 > `lib/src/public/repo/sub_set/follow/amity_user_relationships_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `acceptMyFollower` | ⬜ needs annotation |
-| `blockUser` | ⬜ needs annotation |
-| `declineMyFollower` | ⬜ needs annotation |
-| `follow` | ⬜ needs annotation |
-| `getFollowInfo` | ⬜ needs annotation |
-| `getFollowers` | ⬜ needs annotation |
-| `getFollowings` | ⬜ needs annotation |
-| `getMyFollowInfo` | ⬜ needs annotation |
-| `getMyFollowers` | ⬜ needs annotation |
-| `getMyFollowings` | ⬜ needs annotation |
-| `me` | ⬜ needs annotation |
-| `removeMyFollower` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unblockUser` | ⬜ needs annotation |
-| `unfollow` | ⬜ needs annotation |
-| `user` | ⬜ needs annotation |
+| `acceptMyFollower` | ⬜ needs `begin_public_function` |
+| `blockUser` | ⬜ needs `begin_public_function` |
+| `declineMyFollower` | ⬜ needs `begin_public_function` |
+| `follow` | ⬜ needs `begin_public_function` |
+| `getFollowInfo` | ⬜ needs `begin_public_function` |
+| `getFollowers` | ⬜ needs `begin_public_function` |
+| `getFollowings` | ⬜ needs `begin_public_function` |
+| `getMyFollowInfo` | ⬜ needs `begin_public_function` |
+| `getMyFollowers` | ⬜ needs `begin_public_function` |
+| `getMyFollowings` | ⬜ needs `begin_public_function` |
+| `me` | ⬜ needs `begin_public_function` |
+| `removeMyFollower` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
+| `unblockUser` | ⬜ needs `begin_public_function` |
+| `unfollow` | ⬜ needs `begin_public_function` |
+| `user` | ⬜ needs `begin_public_function` |
 
-### `amity_post_repository` (11 functions)
-> `lib/src/public/repo/amity_post_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `createPost` | ⬜ needs annotation |
-| `deletePost` | ⬜ needs annotation |
-| `getGlobalPinnedPosts` | ⬜ needs annotation |
-| `getPinnedPosts` | ⬜ needs annotation |
-| `getPost` | ⬜ needs annotation |
-| `getPostStream` | ⬜ needs annotation |
-| `getPosts` | ⬜ needs annotation |
-| `getReaction` | ⬜ needs annotation |
-| `isFlaggedByMe` | ⬜ needs annotation |
-| `reviewPost` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-
-### `amity_story_repository` (9 functions)
-> `lib/src/public/repo/amity_story_repository.dart`
+### `amity_core_client` (13 functions)
+> `lib/src/public/amity_core_client.dart`
 
 | Function | Status |
 |----------|--------|
-| `analytics` | ⬜ needs annotation |
-| `createImageStory` | ⬜ needs annotation |
-| `createVideoStory` | ⬜ needs annotation |
-| `getActiveStories` | ⬜ needs annotation |
-| `getStoriesByTargets` | ⬜ needs annotation |
-| `getStoryTargets` | ⬜ needs annotation |
-| `hardDeleteStory` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `softDeleteStory` | ⬜ needs annotation |
+| `copyWith` | ⬜ needs `begin_public_function` |
+| `getAnalyticsEngine` | ⬜ needs `begin_public_function` |
+| `getUserId` | ⬜ needs `begin_public_function` |
+| `hasPermission` | ⬜ needs `begin_public_function` |
+| `isUserLoggedIn` | ⬜ needs `begin_public_function` |
+| `newAdRepository` | ⬜ needs `begin_public_function` |
+| `newFileRepository` | ⬜ needs `begin_public_function` |
+| `newUserRepository` | ⬜ needs `begin_public_function` |
+| `observeSessionState` | ⬜ needs `begin_public_function` |
+| `observeUnreadCount` | ⬜ needs `begin_public_function` |
+| `setup` | ⬜ needs `begin_public_function` |
+| `validateTexts` | ⬜ needs `begin_public_function` |
+| `validateUrls` | ⬜ needs `begin_public_function` |
 
-### `amity_my_user_relationship_repository` (9 functions)
-> `lib/src/public/repo/sub_set/follow/amity_my_user_relationship_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `accept` | ⬜ needs annotation |
-| `decline` | ⬜ needs annotation |
-| `getBlockedUsers` | ⬜ needs annotation |
-| `getFollowInfo` | ⬜ needs annotation |
-| `getFollowers` | ⬜ needs annotation |
-| `getFollowings` | ⬜ needs annotation |
-| `removeFollower` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unfollow` | ⬜ needs annotation |
-
-### `user_repository` (9 functions)
-> `lib/src/public/repo/user_repository.dart`
+### `amity_channel_repository` (9 functions)
+> `lib/src/public/repo/channel/amity_channel_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `getBlockedUsers` | ⬜ needs annotation |
-| `getUser` | ⬜ needs annotation |
-| `getUsers` | ⬜ needs annotation |
-| `getViewedUsers` | ⬜ needs annotation |
-| `relationship` | ⬜ needs annotation |
-| `report` | ⬜ needs annotation |
-| `searchUserByDisplayName` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `updateUser` | ⬜ needs annotation |
-
-### `channel_moderation_repository` (8 functions)
-> `lib/src/public/repo/channel/channel_moderation_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `addRole` | ⬜ needs annotation |
-| `banMembers` | ⬜ needs annotation |
-| `channelId` | ⬜ needs annotation |
-| `muteMembers` | ⬜ needs annotation |
-| `removeRole` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unbanMembers` | ⬜ needs annotation |
-| `unmuteMembers` | ⬜ needs annotation |
+| `archiveChannel` | ⬜ needs `begin_public_function` |
+| `getArchivedChannels` | ⬜ needs `begin_public_function` |
+| `getChannelTotalUnreads` | ⬜ needs `begin_public_function` |
+| `membership` | ⬜ needs `begin_public_function` |
+| `moderation` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
+| `startReading` | ⬜ needs `begin_public_function` |
+| `stopReading` | ⬜ needs `begin_public_function` |
+| `unarchiveChannel` | ⬜ needs `begin_public_function` |
 
 ### `amity_social_client` (7 functions)
 > `lib/src/public/client/amity_social_client.dart`
 
 | Function | Status |
 |----------|--------|
-| `newCommentRepository` | ⬜ needs annotation |
-| `newCommunityRepository` | ⬜ needs annotation |
-| `newFeedRepository` | ⬜ needs annotation |
-| `newPollRepository` | ⬜ needs annotation |
-| `newPostRepository` | ⬜ needs annotation |
-| `newReactionRepository` | ⬜ needs annotation |
-| `newStoryRepository` | ⬜ needs annotation |
+| `newCommentRepository` | ⬜ needs `begin_public_function` |
+| `newCommunityRepository` | ⬜ needs `begin_public_function` |
+| `newFeedRepository` | ⬜ needs `begin_public_function` |
+| `newPollRepository` | ⬜ needs `begin_public_function` |
+| `newPostRepository` | ⬜ needs `begin_public_function` |
+| `newReactionRepository` | ⬜ needs `begin_public_function` |
+| `newStoryRepository` | ⬜ needs `begin_public_function` |
 
-### `amity_file_repository` (6 functions)
-> `lib/src/public/repo/amity_file_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `cancelUpload` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `uploadAudio` | ⬜ needs annotation |
-| `uploadFile` | ⬜ needs annotation |
-| `uploadImage` | ⬜ needs annotation |
-| `uploadVideo` | ⬜ needs annotation |
-
-### `comment_repository` (6 functions)
-> `lib/src/public/repo/comment_repository.dart`
+### `amity_post_repository` (6 functions)
+> `lib/src/public/repo/amity_post_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `createComment` | ⬜ needs annotation |
-| `getComment` | ⬜ needs annotation |
-| `getComments` | ⬜ needs annotation |
-| `getReaction` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `updateComment` | ⬜ needs annotation |
+| `getGlobalPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPostStream` | ⬜ needs `begin_public_function` |
+| `getReaction` | ⬜ needs `begin_public_function` |
+| `reviewPost` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
 
 ### `sub_channel_repository` (6 functions)
 > `lib/src/public/repo/sub_channel_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `createSubChannel` | ⬜ needs annotation |
-| `getSubChannel` | ⬜ needs annotation |
-| `getSubChannels` | ⬜ needs annotation |
-| `hardDeleteSubChannel` | ⬜ needs annotation |
-| `softDeleteSubChannel` | ⬜ needs annotation |
-| `updateeditSubChannelSubChannel` | ⬜ needs annotation |
+| `createSubChannel` | ⬜ needs `begin_public_function` |
+| `getSubChannel` | ⬜ needs `begin_public_function` |
+| `getSubChannels` | ⬜ needs `begin_public_function` |
+| `hardDeleteSubChannel` | ⬜ needs `begin_public_function` |
+| `softDeleteSubChannel` | ⬜ needs `begin_public_function` |
+| `updateeditSubChannelSubChannel` | ⬜ needs `begin_public_function` |
 
-### `amity_user_relationship_repository` (6 functions)
-> `lib/src/public/repo/sub_set/follow/amity_user_relationship_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `follow` | ⬜ needs annotation |
-| `getFollowInfo` | ⬜ needs annotation |
-| `getFollowers` | ⬜ needs annotation |
-| `getFollowings` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unfollow` | ⬜ needs annotation |
-
-### `poll_repository` (5 functions)
-> `lib/src/public/repo/poll_repository.dart`
+### `amity_community_repository` (5 functions)
+> `lib/src/public/repo/amity_community_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `closePoll` | ⬜ needs annotation |
-| `createPoll` | ⬜ needs annotation |
-| `deletePoll` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `vote` | ⬜ needs annotation |
+| `getCurentUserRoles` | ⬜ needs `begin_public_function` |
+| `getCurrentUserRoles` | ⬜ needs `begin_public_function` |
+| `membership` | ⬜ needs `begin_public_function` |
+| `moderation` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
+
+### `user_repository` (5 functions)
+> `lib/src/public/repo/user_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `getBlockedUsers` | ⬜ needs `begin_public_function` |
+| `getViewedUsers` | ⬜ needs `begin_public_function` |
+| `relationship` | ⬜ needs `begin_public_function` |
+| `report` | ⬜ needs `begin_public_function` |
+| `updateUser` | ⬜ needs `begin_public_function` |
 
 ### `amity_chat_client` (4 functions)
 > `lib/src/public/client/amity_chat_client.dart`
 
 | Function | Status |
 |----------|--------|
-| `newChannelRepository` | ⬜ needs annotation |
-| `newMessageRepository` | ⬜ needs annotation |
-| `newSubChannelRepository` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
+| `newChannelRepository` | ⬜ needs `begin_public_function` |
+| `newMessageRepository` | ⬜ needs `begin_public_function` |
+| `newSubChannelRepository` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
 
-### `feed_repository` (4 functions)
-> `lib/src/public/repo/feed_repository.dart`
+### `message_repository` (4 functions)
+> `lib/src/public/repo/message/message_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `getCommunityFeed` | ⬜ needs annotation |
-| `getCustomRankingGlobalFeed` | ⬜ needs annotation |
-| `getGlobalFeed` | ⬜ needs annotation |
-| `getUserFeed` | ⬜ needs annotation |
+| `flag` | ⬜ needs `begin_public_function` |
+| `getReaction` | ⬜ needs `begin_public_function` |
+| `newCreateMessage` | ⬜ needs `begin_public_function` |
+| `newGetMessages` | ⬜ needs `begin_public_function` |
 
 ### `amity_ad_repository` (3 functions)
 > `lib/src/public/repo/ads/amity_ad_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `analytics` | ⬜ needs annotation |
-| `getNetworkAds` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-
-### `amity_reaction_repository` (3 functions)
-> `lib/src/public/repo/amity_reaction_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `addReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `removeReaction` | ⬜ needs annotation |
+| `analytics` | ⬜ needs `begin_public_function` |
+| `getNetworkAds` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
 
 ### `notification_repository` (3 functions)
 > `lib/src/public/repo/notification_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `registerDeviceNotification` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unregisterDeviceNotification` | ⬜ needs annotation |
+| `registerDeviceNotification` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
+| `unregisterDeviceNotification` | ⬜ needs `begin_public_function` |
 
 ### `stream_repository` (3 functions)
 > `lib/src/public/repo/stream/stream_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `getStream` | ⬜ needs annotation |
-| `getStreams` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
+| `getStream` | ⬜ needs `begin_public_function` |
+| `getStreams` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
 
-### `amity_user_flag_repository` (3 functions)
-> `lib/src/public/repo/sub_set/amity_user_flag_repository.dart`
+### `AmityClientGetMentionConfigurations` (1 functions)
+> `code_snippet/core/AmityClientGetMentionConfigurations.dart`
 
 | Function | Status |
 |----------|--------|
-| `flag` | ⬜ needs annotation |
-| `serviceLocator` | ⬜ needs annotation |
-| `unflag` | ⬜ needs annotation |
+| `getMentionConfigurations` | ⬜ needs `begin_public_function` |
+
+### `AmityClientRegisterPush` (1 functions)
+> `code_snippet/notification/AmityClientRegisterPush.dart`
+
+| Function | Status |
+|----------|--------|
+| `registerPush` | ⬜ needs `begin_public_function` |
+
+### `AmityClientRegisterPushNotification` (1 functions)
+> `code_snippet/notification/AmityClientRegisterPushNotification.dart`
+
+| Function | Status |
+|----------|--------|
+| `registerPushNotification` | ⬜ needs `begin_public_function` |
+
+### `AmityClientUnregisterPush` (1 functions)
+> `code_snippet/notification/AmityClientUnregisterPush.dart`
+
+| Function | Status |
+|----------|--------|
+| `unregisterPush` | ⬜ needs `begin_public_function` |
+
+### `AmityClientUnregisterPushNotification` (1 functions)
+> `code_snippet/notification/AmityClientUnregisterPushNotification.dart`
+
+| Function | Status |
+|----------|--------|
+| `unregisterPushNotification` | ⬜ needs `begin_public_function` |
+
+### `amity_story_repository_get` (1 functions)
+> `code_snippet/story/amity_story_repository_get.dart`
+
+| Function | Status |
+|----------|--------|
+| `initStoryRepository` | ⬜ needs `begin_public_function` |
+
+### `amity_stream_repository_initialization` (1 functions)
+> `code_snippet/stream/amity_stream_repository_initialization.dart`
+
+| Function | Status |
+|----------|--------|
+| `initializeStreamRepository` | ⬜ needs `begin_public_function` |
+
+### `AmityClientGetConfiguration` (1 functions)
+> `code_snippet/user/AmityClientGetConfiguration.dart`
+
+| Function | Status |
+|----------|--------|
+| `getConfiguration` | ⬜ needs `begin_public_function` |
+
+### `AmityClientGetCurrentUser` (1 functions)
+> `code_snippet/user/AmityClientGetCurrentUser.dart`
+
+| Function | Status |
+|----------|--------|
+| `getCurrentUser` | ⬜ needs `begin_public_function` |
+
+### `AmityClientUpdateUser` (1 functions)
+> `code_snippet/user/AmityClientUpdateUser.dart`
+
+| Function | Status |
+|----------|--------|
+| `updateCurrentUser` | ⬜ needs `begin_public_function` |
+
+### `amity_user_repository` (1 functions)
+> `code_snippet/user/amity_user_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `initUserRepository` | ⬜ needs `begin_public_function` |
 
 ### `amity_video_client` (1 functions)
 > `lib/src/public/client/amity_video_client.dart`
 
 | Function | Status |
 |----------|--------|
-| `newStreamRepository` | ⬜ needs annotation |
+| `newStreamRepository` | ⬜ needs `begin_public_function` |
 
-## Ios (207 functions across 22 classes)
+### `amity_file_repository` (1 functions)
+> `lib/src/public/repo/amity_file_repository.dart`
 
-### `AmityClient` (31 functions)
+| Function | Status |
+|----------|--------|
+| `cancelUpload` | ⬜ needs `begin_public_function` |
+
+### `channel_moderation_repository` (1 functions)
+> `lib/src/public/repo/channel/channel_moderation_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `channelId` | ⬜ needs `begin_public_function` |
+
+### `comment_repository` (1 functions)
+> `lib/src/public/repo/comment_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `updateComment` | ⬜ needs `begin_public_function` |
+
+### `poll_repository` (1 functions)
+> `lib/src/public/repo/poll_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `createPoll` | ⬜ needs `begin_public_function` |
+
+### `amity_my_user_relationship_repository` (1 functions)
+> `lib/src/public/repo/sub_set/follow/amity_my_user_relationship_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `getBlockedUsers` | ⬜ needs `begin_public_function` |
+
+## Ios (66 functions across 15 classes)
+
+### `AmityClient` (19 functions)
 > `EkoChat/Core/Client/AmityClient.swift`
 
 | Function | Status |
 |----------|--------|
-| `accessToken` | ⬜ needs annotation |
-| `currentUserId` | ⬜ needs annotation |
-| `currentUserType` | ⬜ needs annotation |
-| `disconnect` | ⬜ needs annotation |
-| `editUser` | ⬜ needs annotation |
-| `enableUnreadCount` | ⬜ needs annotation |
-| `getLinkPreviewMetadata` | ⬜ needs annotation |
-| `getShareableLinkConfiguration` | ⬜ needs annotation |
-| `getUserUnread` | ⬜ needs annotation |
-| `getVisitorDeviceId` | ⬜ needs annotation |
-| `login` | ⬜ needs annotation |
-| `loginAsVisitor` | ⬜ needs annotation |
-| `loginMethod` | ⬜ needs annotation |
-| `loginWithAccessToken` | ⬜ needs annotation |
-| `logout` | ⬜ needs annotation |
-| `mentionConfigurations` | ⬜ needs annotation |
-| `notificationManager` | ⬜ needs annotation |
-| `notificationTray` | ⬜ needs annotation |
-| `observeNetworkActivities` | ⬜ needs annotation |
-| `presence` | ⬜ needs annotation |
-| `registerPushNotification` | ⬜ needs annotation |
-| `secureLogout` | ⬜ needs annotation |
-| `sendCustomCommand` | ⬜ needs annotation |
-| `sendCustomCommandRequest` | ⬜ needs annotation |
-| `setAccessTokenHandler` | ⬜ needs annotation |
-| `setUploadedFileAccessType` | ⬜ needs annotation |
-| `setup` | ⬜ needs annotation |
-| `unregisterPushNotification` | ⬜ needs annotation |
-| `user` | ⬜ needs annotation |
-| `validateTexts` | ⬜ needs annotation |
-| `validateUrls` | ⬜ needs annotation |
+| `accessToken` | ⬜ needs `begin_public_function` |
+| `currentUserId` | ⬜ needs `begin_public_function` |
+| `enableUnreadCount` | ⬜ needs `begin_public_function` |
+| `getLinkPreviewMetadata` | ⬜ needs `begin_public_function` |
+| `getShareableLinkConfiguration` | ⬜ needs `begin_public_function` |
+| `getUserUnread` | ⬜ needs `begin_public_function` |
+| `getVisitorDeviceId` | ⬜ needs `begin_public_function` |
+| `loginMethod` | ⬜ needs `begin_public_function` |
+| `mentionConfigurations` | ⬜ needs `begin_public_function` |
+| `notificationTray` | ⬜ needs `begin_public_function` |
+| `observeNetworkActivities` | ⬜ needs `begin_public_function` |
+| `presence` | ⬜ needs `begin_public_function` |
+| `secureLogout` | ⬜ needs `begin_public_function` |
+| `sendCustomCommand` | ⬜ needs `begin_public_function` |
+| `sendCustomCommandRequest` | ⬜ needs `begin_public_function` |
+| `setUploadedFileAccessType` | ⬜ needs `begin_public_function` |
+| `setup` | ⬜ needs `begin_public_function` |
+| `validateTexts` | ⬜ needs `begin_public_function` |
+| `validateUrls` | ⬜ needs `begin_public_function` |
 
-### `AmityPostRepository` (31 functions)
-> `EkoChat/Features/Feed/Public/Repository/Post/AmityPostRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `approvePost` | ⬜ needs annotation |
-| `createAudioPost` | ⬜ needs annotation |
-| `createClipPost` | ⬜ needs annotation |
-| `createCustomPost` | ⬜ needs annotation |
-| `createFilePost` | ⬜ needs annotation |
-| `createImagePost` | ⬜ needs annotation |
-| `createLiveStreamPost` | ⬜ needs annotation |
-| `createMixedMediaPost` | ⬜ needs annotation |
-| `createPollPost` | ⬜ needs annotation |
-| `createRoomPost` | ⬜ needs annotation |
-| `createTextPost` | ⬜ needs annotation |
-| `createVideoPost` | ⬜ needs annotation |
-| `declinePost` | ⬜ needs annotation |
-| `editPost` | ⬜ needs annotation |
-| `flagPost` | ⬜ needs annotation |
-| `getCommunityLiveRoomPosts` | ⬜ needs annotation |
-| `getGlobalPinnedPosts` | ⬜ needs annotation |
-| `getLiveRoomPosts` | ⬜ needs annotation |
-| `getPinnedPosts` | ⬜ needs annotation |
-| `getPost` | ⬜ needs annotation |
-| `getPosts` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `hardDeletePost` | ⬜ needs annotation |
-| `isFlaggedByMe` | ⬜ needs annotation |
-| `pinProduct` | ⬜ needs annotation |
-| `searchPostsByHashtag` | ⬜ needs annotation |
-| `semanticSearchPosts` | ⬜ needs annotation |
-| `softDeletePost` | ⬜ needs annotation |
-| `unflagPost` | ⬜ needs annotation |
-| `unpinProduct` | ⬜ needs annotation |
-| `updateProductTags` | ⬜ needs annotation |
-
-### `AmityMessageRepository` (17 functions)
-> `EkoChat/Features/Message/Public/AmityMessageRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createAudioMessage` | ⬜ needs annotation |
-| `createCustomMessage` | ⬜ needs annotation |
-| `createFileMessage` | ⬜ needs annotation |
-| `createImageMessage` | ⬜ needs annotation |
-| `createTextMessage` | ⬜ needs annotation |
-| `createVideoMessage` | ⬜ needs annotation |
-| `deleteFailedMessages` | ⬜ needs annotation |
-| `editCustomMessage` | ⬜ needs annotation |
-| `editTextMessage` | ⬜ needs annotation |
-| `flagMessage` | ⬜ needs annotation |
-| `getMessage` | ⬜ needs annotation |
-| `getMessages` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `isMessageFlaggedByMe` | ⬜ needs annotation |
-| `setTags` | ⬜ needs annotation |
-| `softDeleteMessage` | ⬜ needs annotation |
-| `unflagMessage` | ⬜ needs annotation |
-
-### `AmityFileRepository` (15 functions)
+### `AmityFileRepository` (11 functions)
 > `EkoChat/Features/File/Public/AmityFileRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `cancelFileDownload` | ⬜ needs annotation |
-| `cancelImageDownload` | ⬜ needs annotation |
-| `deleteFile` | ⬜ needs annotation |
-| `downloadFile` | ⬜ needs annotation |
-| `downloadFileAsData` | ⬜ needs annotation |
-| `downloadImage` | ⬜ needs annotation |
-| `downloadImageAsData` | ⬜ needs annotation |
-| `getFile` | ⬜ needs annotation |
-| `getUploadProgress` | ⬜ needs annotation |
-| `updateAltText` | ⬜ needs annotation |
-| `uploadAudio` | ⬜ needs annotation |
-| `uploadClip` | ⬜ needs annotation |
-| `uploadFile` | ⬜ needs annotation |
-| `uploadImage` | ⬜ needs annotation |
-| `uploadVideo` | ⬜ needs annotation |
-
-### `AmityRoomRepository` (11 functions)
-> `EkoChat/Features/CoHostStream/Public/AmityRoomRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createRoom` | ⬜ needs annotation |
-| `deleteRoom` | ⬜ needs annotation |
-| `generateRoomToken` | ⬜ needs annotation |
-| `getCoHostEvent` | ⬜ needs annotation |
-| `getRoom` | ⬜ needs annotation |
-| `getRooms` | ⬜ needs annotation |
-| `leaveRoom` | ⬜ needs annotation |
-| `removeParticipant` | ⬜ needs annotation |
-| `stopRoom` | ⬜ needs annotation |
-| `updateCohostPermissions` | ⬜ needs annotation |
-| `updateRoom` | ⬜ needs annotation |
-
-### `AmityCommentRepository` (11 functions)
-> `EkoChat/Features/Comment/Public/AmityCommentRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createComment` | ⬜ needs annotation |
-| `editComment` | ⬜ needs annotation |
-| `flagComment` | ⬜ needs annotation |
-| `getComment` | ⬜ needs annotation |
-| `getComments` | ⬜ needs annotation |
-| `getLatestComment` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `hardDeleteComment` | ⬜ needs annotation |
-| `isCommentFlaggedByMe` | ⬜ needs annotation |
-| `softDeleteComment` | ⬜ needs annotation |
-| `unflagComment` | ⬜ needs annotation |
-
-### `AmitySubChannelRepository` (11 functions)
-> `EkoChat/Features/SubChannel/AmitySubChannelRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `channelId` | ⬜ needs annotation |
-| `createSubChannel` | ⬜ needs annotation |
-| `editSubChannel` | ⬜ needs annotation |
-| `excludeDefaultSubChannel` | ⬜ needs annotation |
-| `getSubChannel` | ⬜ needs annotation |
-| `getSubChannels` | ⬜ needs annotation |
-| `hardDeleteSubChannel` | ⬜ needs annotation |
-| `isDeleted` | ⬜ needs annotation |
-| `softDeleteSubChannel` | ⬜ needs annotation |
-| `startMessageReceiptSync` | ⬜ needs annotation |
-| `stopMessageReceiptSync` | ⬜ needs annotation |
-
-### `AmityChannelRepository` (10 functions)
-> `EkoChat/Features/Channel/Public/AmityChannelRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createChannel` | ⬜ needs annotation |
-| `editChannel` | ⬜ needs annotation |
-| `getChannel` | ⬜ needs annotation |
-| `getChannels` | ⬜ needs annotation |
-| `getTotalChannelsUnread` | ⬜ needs annotation |
-| `joinChannel` | ⬜ needs annotation |
-| `leaveChannel` | ⬜ needs annotation |
-| `muteChannel` | ⬜ needs annotation |
-| `notificationManagerForChannel` | ⬜ needs annotation |
-| `unmuteChannel` | ⬜ needs annotation |
+| `cancelFileDownload` | ⬜ needs `begin_public_function` |
+| `cancelImageDownload` | ⬜ needs `begin_public_function` |
+| `downloadFile` | ⬜ needs `begin_public_function` |
+| `downloadFileAsData` | ⬜ needs `begin_public_function` |
+| `downloadImage` | ⬜ needs `begin_public_function` |
+| `downloadImageAsData` | ⬜ needs `begin_public_function` |
+| `getUploadProgress` | ⬜ needs `begin_public_function` |
+| `uploadAudio` | ⬜ needs `begin_public_function` |
+| `uploadFile` | ⬜ needs `begin_public_function` |
+| `uploadImage` | ⬜ needs `begin_public_function` |
+| `uploadVideo` | ⬜ needs `begin_public_function` |
 
 ### `AmityStoryRepository` (10 functions)
 > `EkoChat/Features/Story/Public/AmityStoryRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `createImageStory` | ⬜ needs annotation |
-| `createVideoStory` | ⬜ needs annotation |
-| `getActiveStoriesByTarget` | ⬜ needs annotation |
-| `getGlobalStoryTargets` | ⬜ needs annotation |
-| `getStoriesByTargets` | ⬜ needs annotation |
-| `getStory` | ⬜ needs annotation |
-| `getStoryTarget` | ⬜ needs annotation |
-| `getStoryTargets` | ⬜ needs annotation |
-| `hardDeleteStory` | ⬜ needs annotation |
-| `softDeleteStory` | ⬜ needs annotation |
+| `createImageStory` | ⬜ needs `begin_public_function` |
+| `createVideoStory` | ⬜ needs `begin_public_function` |
+| `getActiveStoriesByTarget` | ⬜ needs `begin_public_function` |
+| `getGlobalStoryTargets` | ⬜ needs `begin_public_function` |
+| `getStoriesByTargets` | ⬜ needs `begin_public_function` |
+| `getStory` | ⬜ needs `begin_public_function` |
+| `getStoryTarget` | ⬜ needs `begin_public_function` |
+| `getStoryTargets` | ⬜ needs `begin_public_function` |
+| `hardDeleteStory` | ⬜ needs `begin_public_function` |
+| `softDeleteStory` | ⬜ needs `begin_public_function` |
 
-### `AmityUserRepository` (9 functions)
-> `EkoChat/Features/User/Public/AmityUserRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `flagUser` | ⬜ needs annotation |
-| `getAllBlockedUsers` | ⬜ needs annotation |
-| `getBlockedUsers` | ⬜ needs annotation |
-| `getReachedUsers` | ⬜ needs annotation |
-| `getUser` | ⬜ needs annotation |
-| `getUsers` | ⬜ needs annotation |
-| `isUserFlaggedByMe` | ⬜ needs annotation |
-| `searchUsers` | ⬜ needs annotation |
-| `unflagUser` | ⬜ needs annotation |
-
-### `AmityUserPresenceRepository` (8 functions)
-> `EkoChat/Core/Presence/Public/AmityUserPresenceRepository.swift`
+### `AmitySubChannelRepository` (5 functions)
+> `EkoChat/Features/SubChannel/AmitySubChannelRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `defaultViewId` | ⬜ needs annotation |
-| `getOnlineUsersCount` | ⬜ needs annotation |
-| `getOnlineUsersSnapshot` | ⬜ needs annotation |
-| `getSyncingUserPresence` | ⬜ needs annotation |
-| `getUserPresence` | ⬜ needs annotation |
-| `syncUserPresence` | ⬜ needs annotation |
-| `unsyncAllUserPresence` | ⬜ needs annotation |
-| `unsyncUserPresence` | ⬜ needs annotation |
-
-### `AmityChannelPresenceRepository` (5 functions)
-> `EkoChat/Core/Presence/Public/AmityChannelPresenceRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `defaultViewId` | ⬜ needs annotation |
-| `getSyncingChannelPresence` | ⬜ needs annotation |
-| `syncChannelPresence` | ⬜ needs annotation |
-| `unsyncAllChannelPresence` | ⬜ needs annotation |
-| `unsyncChannelPresence` | ⬜ needs annotation |
-
-### `AmityCommunityRepository` (5 functions)
-> `EkoChat/Features/Community/Public/Repository/AmityCommunityRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createCommunity` | ⬜ needs annotation |
-| `deleteCommunity` | ⬜ needs annotation |
-| `editCommunity` | ⬜ needs annotation |
-| `joinCommunity` | ⬜ needs annotation |
-| `leaveCommunity` | ⬜ needs annotation |
-
-### `AmityEventRepository` (5 functions)
-> `EkoChat/Features/Event/Public/AmityEventRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createEvent` | ⬜ needs annotation |
-| `deleteEvent` | ⬜ needs annotation |
-| `getEvent` | ⬜ needs annotation |
-| `getEvents` | ⬜ needs annotation |
-| `updateEvent` | ⬜ needs annotation |
-
-### `AmityFeedRepository` (5 functions)
-> `EkoChat/Features/Feed/Public/Repository/Feed/AmityFeedRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `getCommunityFeed` | ⬜ needs annotation |
-| `getCustomRankingGlobalFeed` | ⬜ needs annotation |
-| `getGlobalFeed` | ⬜ needs annotation |
-| `getMyFeed` | ⬜ needs annotation |
-| `getUserFeed` | ⬜ needs annotation |
-
-### `AmityPollRepository` (5 functions)
-> `EkoChat/Features/Feed/Public/Repository/Poll/AmityPollRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `closePoll` | ⬜ needs annotation |
-| `createPoll` | ⬜ needs annotation |
-| `deletePoll` | ⬜ needs annotation |
-| `unvotePoll` | ⬜ needs annotation |
-| `votePoll` | ⬜ needs annotation |
-
-### `AmityStreamRepository` (5 functions)
-> `EkoChat/Features/LiveStream/Public/Repositories/AmityStreamRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createStream` | ⬜ needs annotation |
-| `disposeStream` | ⬜ needs annotation |
-| `editStream` | ⬜ needs annotation |
-| `getStream` | ⬜ needs annotation |
-| `getStreams` | ⬜ needs annotation |
+| `channelId` | ⬜ needs `begin_public_function` |
+| `excludeDefaultSubChannel` | ⬜ needs `begin_public_function` |
+| `isDeleted` | ⬜ needs `begin_public_function` |
+| `startMessageReceiptSync` | ⬜ needs `begin_public_function` |
+| `stopMessageReceiptSync` | ⬜ needs `begin_public_function` |
 
 ### `AmityRoomPresenceRepository` (4 functions)
 > `EkoChat/Features/CoHostStream/Presence/AmityRoomPresenceRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `getRoomOnlineUsers` | ⬜ needs annotation |
-| `getRoomUserCount` | ⬜ needs annotation |
-| `startHeartbeat` | ⬜ needs annotation |
-| `stopHeartbeat` | ⬜ needs annotation |
+| `getRoomOnlineUsers` | ⬜ needs `begin_public_function` |
+| `getRoomUserCount` | ⬜ needs `begin_public_function` |
+| `startHeartbeat` | ⬜ needs `begin_public_function` |
+| `stopHeartbeat` | ⬜ needs `begin_public_function` |
 
-### `AmityReactionRepository` (4 functions)
+### `AmityPostRepository` (4 functions)
+> `EkoChat/Features/Feed/Public/Repository/Post/AmityPostRepository.swift`
+
+| Function | Status |
+|----------|--------|
+| `createLiveStreamPost` | ⬜ needs `begin_public_function` |
+| `editPost` | ⬜ needs `begin_public_function` |
+| `getPosts` | ⬜ needs `begin_public_function` |
+| `getReactions` | ⬜ needs `begin_public_function` |
+
+### `AmityMessageRepository` (4 functions)
+> `EkoChat/Features/Message/Public/AmityMessageRepository.swift`
+
+| Function | Status |
+|----------|--------|
+| `deleteFailedMessages` | ⬜ needs `begin_public_function` |
+| `flagMessage` | ⬜ needs `begin_public_function` |
+| `getReactions` | ⬜ needs `begin_public_function` |
+| `setTags` | ⬜ needs `begin_public_function` |
+
+### `AmityReactionRepository` (2 functions)
 > `EkoChat/Features/Reaction/Public/AmityReactionRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `addReaction` | ⬜ needs annotation |
-| `createReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `removeReaction` | ⬜ needs annotation |
+| `createReaction` | ⬜ needs `begin_public_function` |
+| `getReactions` | ⬜ needs `begin_public_function` |
 
-### `AmityInvitationRepository` (2 functions)
-> `EkoChat/Features/Invitation/Public/Repository/AmityInvitationRepository.swift`
+### `AmityChannelPresenceRepository` (1 functions)
+> `EkoChat/Core/Presence/Public/AmityChannelPresenceRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `getInvitations` | ⬜ needs annotation |
-| `getMyCommunityInvitations` | ⬜ needs annotation |
+| `defaultViewId` | ⬜ needs `begin_public_function` |
 
-### `AmityProductRepository` (2 functions)
-> `EkoChat/Features/Product/Public/AmityProductRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `getProduct` | ⬜ needs annotation |
-| `searchProducts` | ⬜ needs annotation |
-
-### `AmityAdRepository` (1 functions)
-> `EkoChat/Features/Ads/Public/AmityAdRepository.swift`
+### `AmityUserPresenceRepository` (1 functions)
+> `EkoChat/Core/Presence/Public/AmityUserPresenceRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `getNetworkAds` | ⬜ needs annotation |
+| `defaultViewId` | ⬜ needs `begin_public_function` |
 
-## Typescript (198 functions across 21 classes)
-
-### `PostRepository` (30 functions)
-> `packages/sdk/src/postRepository/api/approvePost.ts`
+### `AmityChannelRepository` (1 functions)
+> `EkoChat/Features/Channel/Public/AmityChannelRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `approvePost` | ⬜ needs annotation |
-| `createAudioPost` | ⬜ needs annotation |
-| `createClipPost` | ⬜ needs annotation |
-| `createMixedMediaPost` | ⬜ needs annotation |
-| `createPost` | ⬜ needs annotation |
-| `createRoomPost` | ⬜ needs annotation |
-| `declinePost` | ⬜ needs annotation |
-| `deletePost` | ⬜ needs annotation |
-| `editPost` | ⬜ needs annotation |
-| `flagPost` | ⬜ needs annotation |
-| `generateCommentSubscriptions` | ⬜ needs annotation |
-| `getCommunityLiveRoomPosts` | ⬜ needs annotation |
-| `getGlobalPinnedPosts` | ⬜ needs annotation |
-| `getLiveRoomPosts` | ⬜ needs annotation |
-| `getPinnedPosts` | ⬜ needs annotation |
-| `getPost` | ⬜ needs annotation |
-| `getPost` | ⬜ needs annotation |
-| `getPostByIds` | ⬜ needs annotation |
-| `getPosts` | ⬜ needs annotation |
-| `hardDeletePost` | ⬜ needs annotation |
-| `isPostFlaggedByMe` | ⬜ needs annotation |
-| `pinProduct` | ⬜ needs annotation |
-| `preparePostResponse` | ⬜ needs annotation |
-| `queryPosts` | ⬜ needs annotation |
-| `searchPostsByHashtag` | ⬜ needs annotation |
-| `semanticSearchPosts` | ⬜ needs annotation |
-| `softDeletePost` | ⬜ needs annotation |
-| `unflagPost` | ⬜ needs annotation |
-| `unpinProduct` | ⬜ needs annotation |
-| `updateProductTags` | ⬜ needs annotation |
+| `getTotalChannelsUnread` | ⬜ needs `begin_public_function` |
 
-### `CommunityRepository` (19 functions)
-> `packages/sdk/src/communityRepository/api/createCommunity.ts`
+### `AmityRoomRepository` (1 functions)
+> `EkoChat/Features/CoHostStream/Public/AmityRoomRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `createCommunity` | ⬜ needs annotation |
-| `deleteCommunity` | ⬜ needs annotation |
-| `getCommunities` | ⬜ needs annotation |
-| `getCommunities` | ⬜ needs annotation |
-| `getCommunity` | ⬜ needs annotation |
-| `getCommunity` | ⬜ needs annotation |
-| `getJoinRequestList` | ⬜ needs annotation |
-| `getJoinRequests` | ⬜ needs annotation |
-| `getRecommendedCommunities` | ⬜ needs annotation |
-| `getRecommendedCommunities` | ⬜ needs annotation |
-| `getTrendingCommunities` | ⬜ needs annotation |
-| `getTrendingCommunities` | ⬜ needs annotation |
-| `joinCommunity` | ⬜ needs annotation |
-| `leaveCommunity` | ⬜ needs annotation |
-| `prepareSemanticCommunitiesReferenceId` | ⬜ needs annotation |
-| `queryCommunities` | ⬜ needs annotation |
-| `searchCommunities` | ⬜ needs annotation |
-| `semanticSearchCommunities` | ⬜ needs annotation |
-| `updateCommunity` | ⬜ needs annotation |
+| `generateRoomToken` | ⬜ needs `begin_public_function` |
 
-### `ChannelRepository` (14 functions)
-> `packages/sdk/src/channelRepository/api/createChannel.ts`
+### `AmityCommentRepository` (1 functions)
+> `EkoChat/Features/Comment/Public/AmityCommentRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `createChannel` | ⬜ needs annotation |
-| `deleteChannel` | ⬜ needs annotation |
-| `getChannel` | ⬜ needs annotation |
-| `getChannelByIds` | ⬜ needs annotation |
-| `getChannels` | ⬜ needs annotation |
-| `getMyMembership` | ⬜ needs annotation |
-| `getTotalChannelsUnread` | ⬜ needs annotation |
-| `joinChannel` | ⬜ needs annotation |
-| `leaveChannel` | ⬜ needs annotation |
-| `markChannelsAsReadBySegment` | ⬜ needs annotation |
-| `muteChannel` | ⬜ needs annotation |
-| `queryChannels` | ⬜ needs annotation |
-| `unmuteChannel` | ⬜ needs annotation |
-| `updateChannel` | ⬜ needs annotation |
+| `getReactions` | ⬜ needs `begin_public_function` |
 
-### `MessageRepository` (14 functions)
-> `packages/sdk/src/messageRepository/api/createMessage.ts`
+### `AmityFeedRepository` (1 functions)
+> `EkoChat/Features/Feed/Public/Repository/Feed/AmityFeedRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `createMessage` | ⬜ needs annotation |
-| `deleteMessage` | ⬜ needs annotation |
-| `editMessage` | ⬜ needs annotation |
-| `flagMessage` | ⬜ needs annotation |
-| `getDeliveredUsers` | ⬜ needs annotation |
-| `getMessage` | ⬜ needs annotation |
-| `getMessages` | ⬜ needs annotation |
-| `getReadUsers` | ⬜ needs annotation |
-| `isMessageFlaggedByMe` | ⬜ needs annotation |
-| `markAsDelivered` | ⬜ needs annotation |
-| `queryMessages` | ⬜ needs annotation |
-| `softDeleteMessage` | ⬜ needs annotation |
-| `unflagMessage` | ⬜ needs annotation |
-| `updateMessage` | ⬜ needs annotation |
+| `getMyFeed` | ⬜ needs `begin_public_function` |
 
-### `RoomRepository` (14 functions)
-> `packages/sdk/src/roomRepository/api/analytics/WatchSessionStorage.ts`
+### `AmityStreamRepository` (1 functions)
+> `EkoChat/Features/LiveStream/Public/Repositories/AmityStreamRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `convertToRoomEventPayload` | ⬜ needs annotation |
-| `createRoom` | ⬜ needs annotation |
-| `deleteRoom` | ⬜ needs annotation |
-| `getBroadcasterData` | ⬜ needs annotation |
-| `getRecordedUrl` | ⬜ needs annotation |
-| `getRoom` | ⬜ needs annotation |
-| `getRooms` | ⬜ needs annotation |
-| `getWatchSessionStorage` | ⬜ needs annotation |
-| `leaveRoom` | ⬜ needs annotation |
-| `removeParticipant` | ⬜ needs annotation |
-| `stopRoom` | ⬜ needs annotation |
-| `syncWatchSessions` | ⬜ needs annotation |
-| `updateCohostPermission` | ⬜ needs annotation |
-| `updateRoom` | ⬜ needs annotation |
+| `createStream` | ⬜ needs `begin_public_function` |
 
-### `SubChannelRepository` (14 functions)
-> `packages/sdk/src/subChannelRepository/api/createSubChannel.ts`
-
-| Function | Status |
-|----------|--------|
-| `createSubChannel` | ⬜ needs annotation |
-| `deleteSubChannel` | ⬜ needs annotation |
-| `getSubChannel` | ⬜ needs annotation |
-| `getSubChannel` | ⬜ needs annotation |
-| `getSubChannels` | ⬜ needs annotation |
-| `getSubChannels` | ⬜ needs annotation |
-| `hardDeleteSubChannel` | ⬜ needs annotation |
-| `markAsReadBySegment` | ⬜ needs annotation |
-| `querySubChannels` | ⬜ needs annotation |
-| `readingAPI` | ⬜ needs annotation |
-| `softDeleteSubChannel` | ⬜ needs annotation |
-| `startReadingAPI` | ⬜ needs annotation |
-| `stopReadingAPI` | ⬜ needs annotation |
-| `updateSubChannel` | ⬜ needs annotation |
-
-### `UserRepository` (14 functions)
-> `packages/sdk/src/userRepository/api/flagUser.ts`
-
-| Function | Status |
-|----------|--------|
-| `flagUser` | ⬜ needs annotation |
-| `getAllBlockedUsers` | ⬜ needs annotation |
-| `getBlockedUsers` | ⬜ needs annotation |
-| `getReachedUsers` | ⬜ needs annotation |
-| `getUser` | ⬜ needs annotation |
-| `getUser` | ⬜ needs annotation |
-| `getUserByIds` | ⬜ needs annotation |
-| `getUsers` | ⬜ needs annotation |
-| `isUserFlaggedByMe` | ⬜ needs annotation |
-| `queryBlockedUsers` | ⬜ needs annotation |
-| `queryUsers` | ⬜ needs annotation |
-| `searchUserByDisplayName` | ⬜ needs annotation |
-| `unflagUser` | ⬜ needs annotation |
-| `updateUser` | ⬜ needs annotation |
-
-### `CommentRepository` (13 functions)
-> `packages/sdk/src/commentRepository/api/createComment.ts`
-
-| Function | Status |
-|----------|--------|
-| `createComment` | ⬜ needs annotation |
-| `deleteComment` | ⬜ needs annotation |
-| `flagComment` | ⬜ needs annotation |
-| `getComment` | ⬜ needs annotation |
-| `getComment` | ⬜ needs annotation |
-| `getCommentByIds` | ⬜ needs annotation |
-| `getComments` | ⬜ needs annotation |
-| `hardDeleteComment` | ⬜ needs annotation |
-| `isCommentFlaggedByMe` | ⬜ needs annotation |
-| `queryComments` | ⬜ needs annotation |
-| `softDeleteComment` | ⬜ needs annotation |
-| `unflagComment` | ⬜ needs annotation |
-| `updateComment` | ⬜ needs annotation |
+## Typescript (66 functions across 17 classes)
 
 ### `StoryRepository` (10 functions)
 > `packages/sdk/src/storyRepository/api/createImageStory.ts`
 
 | Function | Status |
 |----------|--------|
-| `createImageStory` | ⬜ needs annotation |
-| `createVideoStory` | ⬜ needs annotation |
-| `getActiveStoriesByTarget` | ⬜ needs annotation |
-| `getGlobalStoryTargets` | ⬜ needs annotation |
-| `getStoriesByTargetIds` | ⬜ needs annotation |
-| `getStoryByStoryId` | ⬜ needs annotation |
-| `getTargetById` | ⬜ needs annotation |
-| `getTargetsByTargetIds` | ⬜ needs annotation |
-| `hardDeleteStory` | ⬜ needs annotation |
-| `softDeleteStory` | ⬜ needs annotation |
+| `createImageStory` | ⬜ needs `begin_public_function` |
+| `createVideoStory` | ⬜ needs `begin_public_function` |
+| `getActiveStoriesByTarget` | ⬜ needs `begin_public_function` |
+| `getGlobalStoryTargets` | ⬜ needs `begin_public_function` |
+| `getStoriesByTargetIds` | ⬜ needs `begin_public_function` |
+| `getStoryByStoryId` | ⬜ needs `begin_public_function` |
+| `getTargetById` | ⬜ needs `begin_public_function` |
+| `getTargetsByTargetIds` | ⬜ needs `begin_public_function` |
+| `hardDeleteStory` | ⬜ needs `begin_public_function` |
+| `softDeleteStory` | ⬜ needs `begin_public_function` |
 
-### `FileRepository` (9 functions)
-> `packages/sdk/src/fileRepository/api/deleteFile.ts`
-
-| Function | Status |
-|----------|--------|
-| `deleteFile` | ⬜ needs annotation |
-| `fileUrlWithSize` | ⬜ needs annotation |
-| `getFile` | ⬜ needs annotation |
-| `updateAltText` | ⬜ needs annotation |
-| `uploadAudio` | ⬜ needs annotation |
-| `uploadClip` | ⬜ needs annotation |
-| `uploadFile` | ⬜ needs annotation |
-| `uploadImage` | ⬜ needs annotation |
-| `uploadVideo` | ⬜ needs annotation |
-
-### `EventRepository` (7 functions)
-> `packages/sdk/src/eventRepository/api/createEvent.ts`
+### `PostRepository` (8 functions)
+> `packages/sdk/src/postRepository/api/deletePost.ts`
 
 | Function | Status |
 |----------|--------|
-| `createEvent` | ⬜ needs annotation |
-| `deleteEvent` | ⬜ needs annotation |
-| `getEvent` | ⬜ needs annotation |
-| `getEvents` | ⬜ needs annotation |
-| `getMyEvents` | ⬜ needs annotation |
-| `getRSVPs` | ⬜ needs annotation |
-| `updateEvent` | ⬜ needs annotation |
+| `deletePost` | ⬜ needs `begin_public_function` |
+| `generateCommentSubscriptions` | ⬜ needs `begin_public_function` |
+| `getGlobalPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPost` | ⬜ needs `begin_public_function` |
+| `preparePostResponse` | ⬜ needs `begin_public_function` |
+| `queryPosts` | ⬜ needs `begin_public_function` |
+| `semanticSearchPosts` | ⬜ needs `begin_public_function` |
 
-### `PollRepository` (7 functions)
-> `packages/sdk/src/pollRepository/api/closePoll.ts`
-
-| Function | Status |
-|----------|--------|
-| `closePoll` | ⬜ needs annotation |
-| `createPoll` | ⬜ needs annotation |
-| `deletePoll` | ⬜ needs annotation |
-| `getPoll` | ⬜ needs annotation |
-| `getPoll` | ⬜ needs annotation |
-| `unvotePoll` | ⬜ needs annotation |
-| `votePoll` | ⬜ needs annotation |
-
-### `StreamRepository` (7 functions)
-> `packages/sdk/src/streamRepository/api/createStream.ts`
+### `SubChannelRepository` (8 functions)
+> `packages/sdk/src/subChannelRepository/api/deleteSubChannel.ts`
 
 | Function | Status |
 |----------|--------|
-| `createStream` | ⬜ needs annotation |
-| `deleteStream` | ⬜ needs annotation |
-| `disposeStream` | ⬜ needs annotation |
-| `editStream` | ⬜ needs annotation |
-| `getStreamById` | ⬜ needs annotation |
-| `getStreams` | ⬜ needs annotation |
-| `updateStream` | ⬜ needs annotation |
+| `deleteSubChannel` | ⬜ needs `begin_public_function` |
+| `getSubChannel` | ⬜ needs `begin_public_function` |
+| `getSubChannels` | ⬜ needs `begin_public_function` |
+| `markAsReadBySegment` | ⬜ needs `begin_public_function` |
+| `querySubChannels` | ⬜ needs `begin_public_function` |
+| `readingAPI` | ⬜ needs `begin_public_function` |
+| `startReadingAPI` | ⬜ needs `begin_public_function` |
+| `stopReadingAPI` | ⬜ needs `begin_public_function` |
 
-### `FeedRepository` (6 functions)
-> `packages/sdk/src/feedRepository/api/queryGlobalFeed.ts`
-
-| Function | Status |
-|----------|--------|
-| `getCommunityFeed` | ⬜ needs annotation |
-| `getCustomRankingGlobalFeed` | ⬜ needs annotation |
-| `getGlobalFeed` | ⬜ needs annotation |
-| `getGlobalFeedSubscriptions` | ⬜ needs annotation |
-| `getUserFeed` | ⬜ needs annotation |
-| `queryGlobalFeed` | ⬜ needs annotation |
-
-### `ReactionRepository` (6 functions)
-> `packages/sdk/src/reactionRepository/api/addReaction.ts`
+### `CommunityRepository` (7 functions)
+> `packages/sdk/src/communityRepository/api/getCommunities.ts`
 
 | Function | Status |
 |----------|--------|
-| `REFERENCE_API_V5` | ⬜ needs annotation |
-| `addReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
-| `queryReactions` | ⬜ needs annotation |
-| `queryReactor` | ⬜ needs annotation |
-| `removeReaction` | ⬜ needs annotation |
+| `getCommunities` | ⬜ needs `begin_public_function` |
+| `getCommunity` | ⬜ needs `begin_public_function` |
+| `getJoinRequests` | ⬜ needs `begin_public_function` |
+| `getTrendingCommunities` | ⬜ needs `begin_public_function` |
+| `prepareSemanticCommunitiesReferenceId` | ⬜ needs `begin_public_function` |
+| `queryCommunities` | ⬜ needs `begin_public_function` |
+| `semanticSearchCommunities` | ⬜ needs `begin_public_function` |
 
-### `RoomPresenceRepository` (4 functions)
-> `packages/sdk/src/roomPresenceRepository/api/getRoomOnlineUsers.ts`
-
-| Function | Status |
-|----------|--------|
-| `getRoomOnlineUsers` | ⬜ needs annotation |
-| `getRoomUserCount` | ⬜ needs annotation |
-| `startHeartbeat` | ⬜ needs annotation |
-| `stopHeartbeat` | ⬜ needs annotation |
-
-### `InvitationRepository` (3 functions)
-> `packages/sdk/src/invitationRepository/api/cancelInvitation.ts`
+### `ChannelRepository` (5 functions)
+> `packages/sdk/src/channelRepository/api/deleteChannel.ts`
 
 | Function | Status |
 |----------|--------|
-| `cancelInvitation` | ⬜ needs annotation |
-| `getInvitations` | ⬜ needs annotation |
-| `getMyCommunityInvitations` | ⬜ needs annotation |
+| `deleteChannel` | ⬜ needs `begin_public_function` |
+| `getChannelByIds` | ⬜ needs `begin_public_function` |
+| `getMyMembership` | ⬜ needs `begin_public_function` |
+| `markChannelsAsReadBySegment` | ⬜ needs `begin_public_function` |
+| `queryChannels` | ⬜ needs `begin_public_function` |
 
-### `CategoryRepository` (2 functions)
-> `packages/sdk/src/categoryRepository/api/getCategory.ts`
-
-| Function | Status |
-|----------|--------|
-| `getCategories` | ⬜ needs annotation |
-| `getCategory` | ⬜ needs annotation |
-
-### `LiveReactionRepository` (2 functions)
-> `packages/sdk/src/liveReactionRepository/api/createReaction.ts`
+### `MessageRepository` (5 functions)
+> `packages/sdk/src/messageRepository/api/deleteMessage.ts`
 
 | Function | Status |
 |----------|--------|
-| `createReaction` | ⬜ needs annotation |
-| `getReactions` | ⬜ needs annotation |
+| `deleteMessage` | ⬜ needs `begin_public_function` |
+| `getDeliveredUsers` | ⬜ needs `begin_public_function` |
+| `getReadUsers` | ⬜ needs `begin_public_function` |
+| `markAsDelivered` | ⬜ needs `begin_public_function` |
+| `queryMessages` | ⬜ needs `begin_public_function` |
 
-### `ProductRepository` (2 functions)
-> `packages/sdk/src/productRepository/observers/getProduct.ts`
+### `RoomRepository` (4 functions)
+> `packages/sdk/src/roomRepository/api/analytics/WatchSessionStorage.ts`
 
 | Function | Status |
 |----------|--------|
-| `getProduct` | ⬜ needs annotation |
-| `searchProducts` | ⬜ needs annotation |
+| `convertToRoomEventPayload` | ⬜ needs `begin_public_function` |
+| `getRoom` | ⬜ needs `begin_public_function` |
+| `getWatchSessionStorage` | ⬜ needs `begin_public_function` |
+| `syncWatchSessions` | ⬜ needs `begin_public_function` |
+
+### `UserRepository` (4 functions)
+> `packages/sdk/src/userRepository/api/getUser.ts`
+
+| Function | Status |
+|----------|--------|
+| `getReachedUsers` | ⬜ needs `begin_public_function` |
+| `getUser` | ⬜ needs `begin_public_function` |
+| `queryBlockedUsers` | ⬜ needs `begin_public_function` |
+| `queryUsers` | ⬜ needs `begin_public_function` |
+
+### `EventRepository` (3 functions)
+> `packages/sdk/src/eventRepository/observers/getEvents.ts`
+
+| Function | Status |
+|----------|--------|
+| `getEvents` | ⬜ needs `begin_public_function` |
+| `getMyEvents` | ⬜ needs `begin_public_function` |
+| `getRSVPs` | ⬜ needs `begin_public_function` |
+
+### `ReactionRepository` (3 functions)
+> `packages/sdk/src/reactionRepository/api/constants.ts`
+
+| Function | Status |
+|----------|--------|
+| `REFERENCE_API_V5` | ⬜ needs `begin_public_function` |
+| `queryReactions` | ⬜ needs `begin_public_function` |
+| `queryReactor` | ⬜ needs `begin_public_function` |
+
+### `CommentRepository` (2 functions)
+> `packages/sdk/src/commentRepository/api/getComment.ts`
+
+| Function | Status |
+|----------|--------|
+| `getComment` | ⬜ needs `begin_public_function` |
+| `queryComments` | ⬜ needs `begin_public_function` |
+
+### `StreamRepository` (2 functions)
+> `packages/sdk/src/streamRepository/api/disposeStream.ts`
+
+| Function | Status |
+|----------|--------|
+| `disposeStream` | ⬜ needs `begin_public_function` |
+| `getStreams` | ⬜ needs `begin_public_function` |
 
 ### `AdRepository` (1 functions)
 > `packages/sdk/src/adRepository/api/getNetworkAds.ts`
 
 | Function | Status |
 |----------|--------|
-| `getNetworkAds` | ⬜ needs annotation |
+| `getNetworkAds` | ⬜ needs `begin_public_function` |
+
+### `FeedRepository` (1 functions)
+> `packages/sdk/src/feedRepository/observers/utils.ts`
+
+| Function | Status |
+|----------|--------|
+| `getGlobalFeedSubscriptions` | ⬜ needs `begin_public_function` |
+
+### `FileRepository` (1 functions)
+> `packages/sdk/src/fileRepository/api/fileUrlWithSize.ts`
+
+| Function | Status |
+|----------|--------|
+| `fileUrlWithSize` | ⬜ needs `begin_public_function` |
+
+### `InvitationRepository` (1 functions)
+> `packages/sdk/src/invitationRepository/observers/getMyCommunityInvitations.ts`
+
+| Function | Status |
+|----------|--------|
+| `getMyCommunityInvitations` | ⬜ needs `begin_public_function` |
+
+### `LiveReactionRepository` (1 functions)
+> `packages/sdk/src/liveReactionRepository/observers/getReactions.ts`
+
+| Function | Status |
+|----------|--------|
+| `getReactions` | ⬜ needs `begin_public_function` |

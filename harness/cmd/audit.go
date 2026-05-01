@@ -270,17 +270,9 @@ func runAudit(args []string) {
 	}
 
 	// --- PUBLIC_FUNC_UNANNOTATED check ---
-	// Build a set of annotated (platform/basename/funcName) from already-scanned snippets.
+	// A function is annotated if its source file wraps it with /* begin_public_function */.
+	// publicscan.Scan sets IsAnnotated=true for those functions.
 	{
-		type annotatedKey struct{ platform, basename, funcName string }
-		annotated := make(map[annotatedKey]struct{})
-		for _, s := range allSnips {
-			base := filepath.Base(s.File)
-			for _, name := range extractFuncNamesFromSnippet(s.Content, s.Platform) {
-				annotated[annotatedKey{s.Platform, base, name}] = struct{}{}
-			}
-		}
-
 		pubFuncCount := 0
 		for platform, sdkCfg := range cfg.SDKs {
 			sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
@@ -293,10 +285,8 @@ func runAudit(args []string) {
 				continue
 			}
 			for _, pf := range pubFuncs {
-				base := filepath.Base(pf.File)
-				key := annotatedKey{pf.Platform, base, pf.FuncName}
-				if _, ok := annotated[key]; ok {
-					continue // already annotated
+				if pf.IsAnnotated {
+					continue // already annotated with begin_public_function
 				}
 				rel, _ := filepath.Rel(sdkPath, pf.File)
 				rel = filepath.ToSlash(rel)
@@ -310,7 +300,7 @@ func runAudit(args []string) {
 					Status:   report.StatusNeedsHuman,
 					Platform: platform,
 					DocPage:  "",
-					Detail:   fmt.Sprintf("Public function '%s' in %s (%s) has no sp_docs_page: annotation", pf.FuncName, pf.ClassName, rel),
+					Detail:   fmt.Sprintf("Public function '%s' in %s (%s) has no begin_public_function annotation", pf.FuncName, pf.ClassName, rel),
 				})
 				pubFuncCount++
 			}

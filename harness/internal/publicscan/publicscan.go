@@ -12,10 +12,11 @@ import (
 
 // PublicFunc represents a discovered public function in a *Repository or *Client class.
 type PublicFunc struct {
-	File      string // absolute path to source file
-	Platform  string // android, ios, flutter, typescript
-	ClassName string // e.g. AmityCommunityRepository
-	FuncName  string // e.g. createCommunity
+	File        string // absolute path to source file
+	Platform    string // android, ios, flutter, typescript
+	ClassName   string // e.g. AmityCommunityRepository
+	FuncName    string // e.g. createCommunity
+	IsAnnotated bool   // true if wrapped by /* begin_public_function */
 }
 
 // isRepositoryOrClientFile returns true if the base filename (without extension)
@@ -136,15 +137,19 @@ func scanKotlin(path, className string) ([]PublicFunc, error) {
 		return nil, nil
 	}
 	var results []PublicFunc
+	inPublicBlock := false
 	for i, line := range lines {
+		if strings.Contains(line, "begin_public_function") {
+			inPublicBlock = true
+		} else if strings.Contains(line, "end_public_function") {
+			inPublicBlock = false
+		}
 		if !reKotlinFun.MatchString(line) {
 			continue
 		}
-		// Skip if the line itself contains a visibility modifier making it non-public.
 		if reKotlinPrivate.MatchString(line) {
 			continue
 		}
-		// Check the preceding non-blank line for a visibility modifier.
 		if i > 0 {
 			prev := prevNonBlankLine(lines, i)
 			if reKotlinPrivate.MatchString(prev) {
@@ -156,10 +161,11 @@ func scanKotlin(path, className string) ([]PublicFunc, error) {
 			continue
 		}
 		results = append(results, PublicFunc{
-			File:      path,
-			Platform:  "android",
-			ClassName: className,
-			FuncName:  m[1],
+			File:        path,
+			Platform:    "android",
+			ClassName:   className,
+			FuncName:    m[1],
+			IsAnnotated: inPublicBlock,
 		})
 	}
 	return results, nil
@@ -191,16 +197,23 @@ func scanSwift(path, className string) ([]PublicFunc, error) {
 		return nil, nil
 	}
 	var results []PublicFunc
+	inPublicBlock := false
 	for _, line := range lines {
+		if strings.Contains(line, "begin_public_function") {
+			inPublicBlock = true
+		} else if strings.Contains(line, "end_public_function") {
+			inPublicBlock = false
+		}
 		m := reSwiftPublic.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
 		results = append(results, PublicFunc{
-			File:      path,
-			Platform:  "ios",
-			ClassName: className,
-			FuncName:  m[1],
+			File:        path,
+			Platform:    "ios",
+			ClassName:   className,
+			FuncName:    m[1],
+			IsAnnotated: inPublicBlock,
 		})
 	}
 	return results, nil
@@ -233,22 +246,28 @@ func scanDart(path, className string) ([]PublicFunc, error) {
 		return nil, err
 	}
 	var results []PublicFunc
+	inPublicBlock := false
 	for _, line := range lines {
+		if strings.Contains(line, "begin_public_function") {
+			inPublicBlock = true
+		} else if strings.Contains(line, "end_public_function") {
+			inPublicBlock = false
+		}
 		m := reDartMethod.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
 		name := m[1]
-		// Skip common non-function keywords that can appear in this position.
 		switch name {
 		case "if", "for", "while", "switch", "return", "final", "var", "const":
 			continue
 		}
 		results = append(results, PublicFunc{
-			File:      path,
-			Platform:  "flutter",
-			ClassName: className,
-			FuncName:  name,
+			File:        path,
+			Platform:    "flutter",
+			ClassName:   className,
+			FuncName:    name,
+			IsAnnotated: inPublicBlock,
 		})
 	}
 	return results, nil
@@ -300,20 +319,28 @@ func scanTypeScript(path, _ string) ([]PublicFunc, error) {
 		return nil, err
 	}
 	className := classNameFromTypeScriptPath(path)
+	// For folder-based TS SDK, each file exports one function.
+	// The file is annotated if it contains begin_public_function anywhere.
+	isAnnotated := false
+	for _, line := range lines {
+		if strings.Contains(line, "begin_public_function") {
+			isAnnotated = true
+			break
+		}
+	}
 	var results []PublicFunc
 	for _, line := range lines {
-		// Folder-based SDK: one exported const/function per file = the public API entry.
-		// Stop after finding the first export to avoid matching code inside the function body.
 		if m := reTypescriptExportConst.FindStringSubmatch(line); m != nil {
 			name := m[1]
 			if isTypeScriptKeyword(name) {
 				continue
 			}
 			results = append(results, PublicFunc{
-				File:      path,
-				Platform:  "typescript",
-				ClassName: className,
-				FuncName:  name,
+				File:        path,
+				Platform:    "typescript",
+				ClassName:   className,
+				FuncName:    name,
+				IsAnnotated: isAnnotated,
 			})
 			break // one exported function per file
 		}
