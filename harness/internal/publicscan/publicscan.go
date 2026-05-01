@@ -138,27 +138,41 @@ func scanKotlin(path, className string) ([]PublicFunc, error) {
 	}
 	var results []PublicFunc
 	inPublicBlock := false
+	pendingDeprecated := false
 	for i, line := range lines {
 		if strings.Contains(line, "begin_public_function") {
 			inPublicBlock = true
 		} else if strings.Contains(line, "end_public_function") {
 			inPublicBlock = false
 		}
+		// Track @Deprecated annotation — applies to the next function declaration
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "@Deprecated") || strings.HasPrefix(trimmed, "@deprecated") {
+			pendingDeprecated = true
+		}
 		if !reKotlinFun.MatchString(line) {
 			continue
 		}
 		if reKotlinPrivate.MatchString(line) {
+			pendingDeprecated = false
 			continue
 		}
 		if i > 0 {
 			prev := prevNonBlankLine(lines, i)
 			if reKotlinPrivate.MatchString(prev) {
+				pendingDeprecated = false
 				continue
 			}
 		}
 		m := reKotlinFun.FindStringSubmatch(line)
 		if m == nil {
+			pendingDeprecated = false
 			continue
+		}
+		isDeprecated := pendingDeprecated
+		pendingDeprecated = false
+		if isDeprecated {
+			continue // skip deprecated functions
 		}
 		results = append(results, PublicFunc{
 			File:        path,
@@ -198,14 +212,24 @@ func scanSwift(path, className string) ([]PublicFunc, error) {
 	}
 	var results []PublicFunc
 	inPublicBlock := false
+	pendingDeprecated := false
 	for _, line := range lines {
 		if strings.Contains(line, "begin_public_function") {
 			inPublicBlock = true
 		} else if strings.Contains(line, "end_public_function") {
 			inPublicBlock = false
 		}
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "@available") && strings.Contains(trimmed, "deprecated") {
+			pendingDeprecated = true
+		}
 		m := reSwiftPublic.FindStringSubmatch(line)
 		if m == nil {
+			continue
+		}
+		isDeprecated := pendingDeprecated
+		pendingDeprecated = false
+		if isDeprecated {
 			continue
 		}
 		results = append(results, PublicFunc{
@@ -247,11 +271,16 @@ func scanDart(path, className string) ([]PublicFunc, error) {
 	}
 	var results []PublicFunc
 	inPublicBlock := false
+	pendingDeprecated := false
 	for _, line := range lines {
 		if strings.Contains(line, "begin_public_function") {
 			inPublicBlock = true
 		} else if strings.Contains(line, "end_public_function") {
 			inPublicBlock = false
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "@Deprecated") || strings.HasPrefix(trimmed, "@deprecated") {
+			pendingDeprecated = true
 		}
 		m := reDartMethod.FindStringSubmatch(line)
 		if m == nil {
@@ -260,6 +289,11 @@ func scanDart(path, className string) ([]PublicFunc, error) {
 		name := m[1]
 		switch name {
 		case "if", "for", "while", "switch", "return", "final", "var", "const":
+			continue
+		}
+		isDeprecated := pendingDeprecated
+		pendingDeprecated = false
+		if isDeprecated {
 			continue
 		}
 		results = append(results, PublicFunc{
@@ -319,14 +353,18 @@ func scanTypeScript(path, _ string) ([]PublicFunc, error) {
 		return nil, err
 	}
 	className := classNameFromTypeScriptPath(path)
-	// For folder-based TS SDK, each file exports one function.
-	// The file is annotated if it contains begin_public_function anywhere.
 	isAnnotated := false
+	isDeprecated := false
 	for _, line := range lines {
 		if strings.Contains(line, "begin_public_function") {
 			isAnnotated = true
-			break
 		}
+		if strings.Contains(line, "@deprecated") || strings.Contains(line, "@Deprecated") {
+			isDeprecated = true
+		}
+	}
+	if isDeprecated {
+		return nil, nil // skip entire file — deprecated function
 	}
 	var results []PublicFunc
 	for _, line := range lines {

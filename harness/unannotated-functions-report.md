@@ -1,27 +1,8 @@
 # Unannotated Public Functions Report
 
-**Total:** 349 functions need `begin_public_function` annotation
+**Total:** 325 functions need `begin_public_function` annotation
 
-## Android (116 functions across 47 classes)
-
-### `AmityPostRepository` (13 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityPostRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createCustomPost` | ⬜ needs `begin_public_function` |
-| `createFilePost` | ⬜ needs `begin_public_function` |
-| `createImagePost` | ⬜ needs `begin_public_function` |
-| `createLiveStreamPost` | ⬜ needs `begin_public_function` |
-| `createMixedAttachmentPost` | ⬜ needs `begin_public_function` |
-| `createPollPost` | ⬜ needs `begin_public_function` |
-| `createPost` | ⬜ needs `begin_public_function` |
-| `createTextPost` | ⬜ needs `begin_public_function` |
-| `createVideoPost` | ⬜ needs `begin_public_function` |
-| `flagPost` | ⬜ needs `begin_public_function` |
-| `getGlobalPinnedPosts` | ⬜ needs `begin_public_function` |
-| `getPinnedPosts` | ⬜ needs `begin_public_function` |
-| `semanticSearchPosts` | ⬜ needs `begin_public_function` |
+## Android (101 functions across 44 classes)
 
 ### `AmityStoryRepository` (11 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/story/AmityStoryRepository.kt`
@@ -113,6 +94,16 @@
 | `saveAnalyticEvent` | ⬜ needs `begin_public_function` |
 | `sendAnalyticsEvents` | ⬜ needs `begin_public_function` |
 
+### `AmityPostRepository` (4 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityPostRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `createMixedAttachmentPost` | ⬜ needs `begin_public_function` |
+| `getGlobalPinnedPosts` | ⬜ needs `begin_public_function` |
+| `getPinnedPosts` | ⬜ needs `begin_public_function` |
+| `semanticSearchPosts` | ⬜ needs `begin_public_function` |
+
 ### `AmityLiveReactionRepository` (3 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityLiveReactionRepository.kt`
 
@@ -121,24 +112,6 @@
 | `createReaction` | ⬜ needs `begin_public_function` |
 | `createRoomReaction` | ⬜ needs `begin_public_function` |
 | `getReactions` | ⬜ needs `begin_public_function` |
-
-### `AmityReactionRepository` (3 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/core/reaction/AmityReactionRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `addReaction` | ⬜ needs `begin_public_function` |
-| `getReactions` | ⬜ needs `begin_public_function` |
-| `removeReaction` | ⬜ needs `begin_public_function` |
-
-### `AmityStreamRepository` (3 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `createStream` | ⬜ needs `begin_public_function` |
-| `editStream` | ⬜ needs `begin_public_function` |
-| `fetchStream` | ⬜ needs `begin_public_function` |
 
 ### `AmityClientLoginWithAccessToken` (2 functions)
 > `amity-sample-code/src/main/java/com/amity/snipet/verifier/core/gettingstarted/AmityClientLoginWithAccessToken.kt`
@@ -187,6 +160,14 @@
 |----------|--------|
 | `membership` | ⬜ needs `begin_public_function` |
 | `moderation` | ⬜ needs `begin_public_function` |
+
+### `AmityStreamRepository` (2 functions)
+> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/video/stream/AmityStreamRepository.kt`
+
+| Function | Status |
+|----------|--------|
+| `editStream` | ⬜ needs `begin_public_function` |
+| `fetchStream` | ⬜ needs `begin_public_function` |
 
 ### `CommunityNotificationRepository` (2 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/core/data/notification/community/CommunityNotificationRepository.kt`
@@ -367,20 +348,6 @@
 |----------|--------|
 | `relationship` | ⬜ needs `begin_public_function` |
 
-### `AmityCommentRepository` (1 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/comment/AmityCommentRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `flagComment` | ⬜ needs `begin_public_function` |
-
-### `AmityFeedRepository` (1 functions)
-> `amity-sdk/src/main/java/com/amity/socialcloud/sdk/api/social/post/AmityFeedRepository.kt`
-
-| Function | Status |
-|----------|--------|
-| `getMyFeed` | ⬜ needs `begin_public_function` |
-
 ### `MarkerSyncRepository` (1 functions)
 > `amity-sdk/src/main/java/com/amity/socialcloud/sdk/chat/data/marker/sync/MarkerSyncRepository.kt`
 
@@ -402,9 +369,9 @@
 |----------|--------|
 | `hasInLocal` | ⬜ needs `begin_public_function` |
 
-## Flutter (101 functions across 30 classes)
+## Flutter (95 functions across 30 classes)
 
-### `amity_user_relationships_repository` (16 functions)
+### `amity_user_relationships_repository` (14 functions)
 > `lib/src/public/repo/sub_set/follow/amity_user_relationships_repository.dart`
 
 | Function | Status |
@@ -419,12 +386,10 @@
 | `getMyFollowInfo` | ⬜ needs `begin_public_function` |
 | `getMyFollowers` | ⬜ needs `begin_public_function` |
 | `getMyFollowings` | ⬜ needs `begin_public_function` |
-| `me` | ⬜ needs `begin_public_function` |
 | `removeMyFollower` | ⬜ needs `begin_public_function` |
 | `serviceLocator` | ⬜ needs `begin_public_function` |
 | `unblockUser` | ⬜ needs `begin_public_function` |
 | `unfollow` | ⬜ needs `begin_public_function` |
-| `user` | ⬜ needs `begin_public_function` |
 
 ### `amity_core_client` (13 functions)
 > `lib/src/public/amity_core_client.dart`
@@ -497,17 +462,6 @@
 | `softDeleteSubChannel` | ⬜ needs `begin_public_function` |
 | `updateeditSubChannelSubChannel` | ⬜ needs `begin_public_function` |
 
-### `amity_community_repository` (5 functions)
-> `lib/src/public/repo/amity_community_repository.dart`
-
-| Function | Status |
-|----------|--------|
-| `getCurentUserRoles` | ⬜ needs `begin_public_function` |
-| `getCurrentUserRoles` | ⬜ needs `begin_public_function` |
-| `membership` | ⬜ needs `begin_public_function` |
-| `moderation` | ⬜ needs `begin_public_function` |
-| `serviceLocator` | ⬜ needs `begin_public_function` |
-
 ### `user_repository` (5 functions)
 > `lib/src/public/repo/user_repository.dart`
 
@@ -529,15 +483,15 @@
 | `newSubChannelRepository` | ⬜ needs `begin_public_function` |
 | `serviceLocator` | ⬜ needs `begin_public_function` |
 
-### `message_repository` (4 functions)
-> `lib/src/public/repo/message/message_repository.dart`
+### `amity_community_repository` (4 functions)
+> `lib/src/public/repo/amity_community_repository.dart`
 
 | Function | Status |
 |----------|--------|
-| `flag` | ⬜ needs `begin_public_function` |
-| `getReaction` | ⬜ needs `begin_public_function` |
-| `newCreateMessage` | ⬜ needs `begin_public_function` |
-| `newGetMessages` | ⬜ needs `begin_public_function` |
+| `getCurrentUserRoles` | ⬜ needs `begin_public_function` |
+| `membership` | ⬜ needs `begin_public_function` |
+| `moderation` | ⬜ needs `begin_public_function` |
+| `serviceLocator` | ⬜ needs `begin_public_function` |
 
 ### `amity_ad_repository` (3 functions)
 > `lib/src/public/repo/ads/amity_ad_repository.dart`
@@ -671,6 +625,13 @@
 |----------|--------|
 | `updateComment` | ⬜ needs `begin_public_function` |
 
+### `message_repository` (1 functions)
+> `lib/src/public/repo/message/message_repository.dart`
+
+| Function | Status |
+|----------|--------|
+| `getReaction` | ⬜ needs `begin_public_function` |
+
 ### `poll_repository` (1 functions)
 > `lib/src/public/repo/poll_repository.dart`
 
@@ -685,7 +646,7 @@
 |----------|--------|
 | `getBlockedUsers` | ⬜ needs `begin_public_function` |
 
-## Ios (66 functions across 15 classes)
+## Ios (63 functions across 14 classes)
 
 ### `AmityClient` (19 functions)
 > `EkoChat/Core/Client/AmityClient.swift`
@@ -766,23 +727,21 @@
 | `startHeartbeat` | ⬜ needs `begin_public_function` |
 | `stopHeartbeat` | ⬜ needs `begin_public_function` |
 
-### `AmityPostRepository` (4 functions)
+### `AmityPostRepository` (3 functions)
 > `EkoChat/Features/Feed/Public/Repository/Post/AmityPostRepository.swift`
 
 | Function | Status |
 |----------|--------|
-| `createLiveStreamPost` | ⬜ needs `begin_public_function` |
 | `editPost` | ⬜ needs `begin_public_function` |
 | `getPosts` | ⬜ needs `begin_public_function` |
 | `getReactions` | ⬜ needs `begin_public_function` |
 
-### `AmityMessageRepository` (4 functions)
+### `AmityMessageRepository` (3 functions)
 > `EkoChat/Features/Message/Public/AmityMessageRepository.swift`
 
 | Function | Status |
 |----------|--------|
 | `deleteFailedMessages` | ⬜ needs `begin_public_function` |
-| `flagMessage` | ⬜ needs `begin_public_function` |
 | `getReactions` | ⬜ needs `begin_public_function` |
 | `setTags` | ⬜ needs `begin_public_function` |
 
@@ -835,13 +794,6 @@
 | Function | Status |
 |----------|--------|
 | `getMyFeed` | ⬜ needs `begin_public_function` |
-
-### `AmityStreamRepository` (1 functions)
-> `EkoChat/Features/LiveStream/Public/Repositories/AmityStreamRepository.swift`
-
-| Function | Status |
-|----------|--------|
-| `createStream` | ⬜ needs `begin_public_function` |
 
 ## Typescript (66 functions across 17 classes)
 
