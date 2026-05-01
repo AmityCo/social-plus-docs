@@ -394,17 +394,19 @@ snippets are complete.
 | `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
 | `fillmanifests` command | ✅ | Keyword + page-hint + leaf-hint(≥2) fallback |
 | `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
-| **Page manifest `snippets:` fill-in** | 🔄 Partial | 433 keys assigned; 59 UIKit generic sections with no matching SDK keys |
+| **Harness scope** | ✅ | Scoped to `social-plus-sdk/` tab only (`scope: social-plus-sdk` in config) |
+| **Page manifest `snippets:` fill-in** | 🔄 Partial | 433 keys assigned; 59 UIKit generic sections (out of scope — will fill when UIKit gets markers) |
 | **DOC_PAGE_STALE_IMPORT migration** | ✅ | All migrations complete — CodeGroups now import generated snippets |
 | **Mintlify build validation** | ✅ | 0 broken imports after migration |
 | **ASC_PAGE_INVALID fixes** | ✅ | All legacy URLs in iOS/Android SDK files updated to relative paths |
 | **DOC_MISSING fixes** | ✅ | Notification-tray pages added to docs.json nav |
-| **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections) |
+| **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections — out of scope) |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
 **Current open findings: 0** ✅
 - All findings resolved: 170 fixed, 0 open, 0 needs_human
-- 59 MANIFEST_FILL sections remain with generic names (e.g. `code-examples`) — UIKit sections where available SDK keys don't map to component rendering calls
+- 59 MANIFEST_FILL sections are UIKit generic sections — out of scope; will be addressed when UIKit gets `sp_docs_page:` markers
+- Harness is now scoped: all commands (genmanifests, audit, migrate, fillmanifests, prompt) skip non-`social-plus-sdk/` pages
 
 ---
 
