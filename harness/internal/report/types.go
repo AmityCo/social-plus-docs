@@ -3,13 +3,14 @@ package report
 type FindingType string
 
 const (
-	TypeMissingSnippet      FindingType = "MISSING_SNIPPET"
-	TypeDocMissing          FindingType = "DOC_MISSING"
-	TypeAscPageInvalid      FindingType = "ASC_PAGE_INVALID"
-	TypeDocSurfaceDrift     FindingType = "DOC_SURFACE_DRIFT"
-	TypeSnippetContentDrift FindingType = "SNIPPET_CONTENT_DRIFT"
-	TypeDocPageStaleImport  FindingType = "DOC_PAGE_STALE_IMPORT"
-	TypeDocBrokenImport     FindingType = "DOC_BROKEN_IMPORT"
+	TypeMissingSnippet        FindingType = "MISSING_SNIPPET"
+	TypeDocMissing            FindingType = "DOC_MISSING"
+	TypeAscPageInvalid        FindingType = "ASC_PAGE_INVALID"
+	TypeDocSurfaceDrift       FindingType = "DOC_SURFACE_DRIFT"
+	TypeSnippetContentDrift   FindingType = "SNIPPET_CONTENT_DRIFT"
+	TypeDocPageStaleImport    FindingType = "DOC_PAGE_STALE_IMPORT"
+	TypeDocBrokenImport       FindingType = "DOC_BROKEN_IMPORT"
+	TypePublicFuncUnannotated FindingType = "PUBLIC_FUNC_UNANNOTATED"
 )
 
 type FindingStatus string

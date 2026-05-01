@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,11 +15,12 @@ import (
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
 	"social-plus/harness/internal/fixer"
+	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
+	"social-plus/harness/internal/publicscan"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
-	"social-plus/harness/internal/manifest"
 )
 
 func runAudit(args []string) {
@@ -267,6 +269,57 @@ func runAudit(args []string) {
 		}
 	}
 
+	// --- PUBLIC_FUNC_UNANNOTATED check ---
+	// Build a set of annotated (platform/basename/funcName) from already-scanned snippets.
+	{
+		type annotatedKey struct{ platform, basename, funcName string }
+		annotated := make(map[annotatedKey]struct{})
+		for _, s := range allSnips {
+			base := filepath.Base(s.File)
+			for _, name := range extractFuncNamesFromSnippet(s.Content, s.Platform) {
+				annotated[annotatedKey{s.Platform, base, name}] = struct{}{}
+			}
+		}
+
+		pubFuncCount := 0
+		for platform, sdkCfg := range cfg.SDKs {
+			sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
+			if _, err := os.Stat(sdkPath); os.IsNotExist(err) {
+				continue // SDK not present in this environment
+			}
+			pubFuncs, err := publicscan.Scan(sdkPath, platform)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "publicscan %s: %v\n", platform, err)
+				continue
+			}
+			for _, pf := range pubFuncs {
+				base := filepath.Base(pf.File)
+				key := annotatedKey{pf.Platform, base, pf.FuncName}
+				if _, ok := annotated[key]; ok {
+					continue // already annotated
+				}
+				rel, _ := filepath.Rel(sdkPath, pf.File)
+				rel = filepath.ToSlash(rel)
+				findingID := "public-func-unannotated:" + platform + ":" + rel + ":" + pf.FuncName
+				if isAlreadyInReport(allFindings, findingID) {
+					continue
+				}
+				allFindings = append(allFindings, report.Finding{
+					ID:       findingID,
+					Type:     report.TypePublicFuncUnannotated,
+					Status:   report.StatusNeedsHuman,
+					Platform: platform,
+					DocPage:  "",
+					Detail:   fmt.Sprintf("Public function '%s' in %s (%s) has no sp_docs_page: annotation", pf.FuncName, pf.ClassName, rel),
+				})
+				pubFuncCount++
+			}
+		}
+		if pubFuncCount > 0 {
+			fmt.Printf("[audit] %d PUBLIC_FUNC_UNANNOTATED findings\n", pubFuncCount)
+		}
+	}
+
 	r := &report.Report{
 		GeneratedAt: time.Now().Format(time.RFC3339),
 		Findings:    allFindings,
@@ -293,4 +346,48 @@ func isAlreadyInReport(findings []report.Finding, id string) bool {
 		}
 	}
 	return false
+}
+
+// extractFuncNamesFromSnippet extracts function names from a snippet's content
+// using platform-specific heuristics for cross-referencing.
+func extractFuncNamesFromSnippet(content, platform string) []string {
+	var names []string
+	seen := make(map[string]struct{})
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+
+	switch strings.ToLower(platform) {
+	case "android":
+		re := regexp.MustCompile(`\bfun\s+(\w+)\s*[(<]`)
+		for _, m := range re.FindAllStringSubmatch(content, -1) {
+			add(m[1])
+		}
+	case "ios":
+		re := regexp.MustCompile(`\bfunc\s+(\w+)\s*[(<]`)
+		for _, m := range re.FindAllStringSubmatch(content, -1) {
+			add(m[1])
+		}
+	case "flutter":
+		re := regexp.MustCompile(`\b([a-z]\w+)\s*\(`)
+		for _, m := range re.FindAllStringSubmatch(content, -1) {
+			add(m[1])
+		}
+	case "typescript":
+		re := regexp.MustCompile(`(?:function|async\s+function)\s+(\w+)\s*[(<]`)
+		for _, m := range re.FindAllStringSubmatch(content, -1) {
+			add(m[1])
+		}
+		re2 := regexp.MustCompile(`^\s+(?:async\s+)?(\w+)\s*\(`)
+		for _, m := range re2.FindAllStringSubmatch(content, -1) {
+			add(m[1])
+		}
+	}
+	return names
 }
