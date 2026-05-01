@@ -18,6 +18,7 @@ import (
 	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
+	"social-plus/harness/internal/paritymap"
 	"social-plus/harness/internal/publicscan"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/runstate"
@@ -118,6 +119,16 @@ func runAudit(args []string) {
 			}
 		}
 		allGroups := docgen.GroupSnippets(allSnips)
+
+		// Write function-parity.json as a side effect of audit.
+		{
+			platforms := sortedPlatforms(cfg)
+			pm := paritymap.Build(allSnips, platforms)
+			parityDest := filepath.Join(cfgDir, "function-parity.json")
+			if err := paritymap.Write(parityDest, pm); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not write function-parity.json: %v\n", err)
+			}
+		}
 
 		// Gate 1: check for cross-platform sp_docs_page conflicts on same key
 		{
