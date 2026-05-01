@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
-	"social-plus/harness/internal/manifest"
-	"social-plus/harness/internal/report"
+
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
+	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
+	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/scanner"
 )
 
@@ -20,7 +22,9 @@ import (
 // docPage is the relative page path (e.g. "social-plus-sdk/getting-started/authentication").
 //
 // The expected snippet file path is:
-//   snippetsAbsDir / <seg0> / <seg1> / <gendocsKey>.mdx
+//
+//	snippetsAbsDir / <seg0> / <seg1> / <gendocsKey>.mdx
+//
 // where seg0 and seg1 are the first two "/" segments of docPage.
 //
 // Returns MISSING_SNIPPET findings (platform="", status=open) for any key with no file.
@@ -45,13 +49,13 @@ func DiffManifestCoverage(docPage string, m *manifest.Manifest, snippetsAbsDir s
 			}
 			if _, err := os.Stat(snippetPath); os.IsNotExist(err) {
 				findings = append(findings, report.Finding{
-					ID:       fmt.Sprintf("manifest-missing:%s:%s:%s", docPage, sectionKey, gendocsKey),
-					Type:     report.TypeMissingSnippet,
-					Platform: "",
-					DocPage:  docPage,
+					ID:         fmt.Sprintf("manifest-missing:%s:%s:%s", docPage, sectionKey, gendocsKey),
+					Type:       report.TypeMissingSnippet,
+					Platform:   "",
+					DocPage:    docPage,
 					GendocsKey: gendocsKey,
-					Detail:   fmt.Sprintf("Section %q (%s): missing snippet file %s", sectionKey, section.Heading, snippetPath),
-					Status:   report.StatusOpen,
+					Detail:     fmt.Sprintf("Section %q (%s): missing snippet file %s", sectionKey, section.Heading, snippetPath),
+					Status:     report.StatusOpen,
 				})
 			}
 		}
@@ -314,39 +318,76 @@ func fnIDToClassName(id string) string {
 // and returns a DOC_BROKEN_IMPORT finding for each import whose target file
 // does not exist under docsBase.
 func DiffDocImports(mdxPath, docsBase string) []report.Finding {
-    data, err := os.ReadFile(mdxPath)
-    if err != nil {
-        return nil
-    }
-    var findings []report.Finding
-    for i, line := range strings.Split(string(data), "\n") {
-        trimmed := strings.TrimSpace(line)
-        if !strings.HasPrefix(trimmed, "import ") || !strings.Contains(trimmed, "'/snippets/") {
-            continue
-        }
-        start := strings.Index(trimmed, "'/snippets/")
-        if start == -1 {
-            continue
-        }
-        rest := trimmed[start+1:]
-        end := strings.Index(rest, "'")
-        if end == -1 {
-            continue
-        }
-        importPath := rest[:end] // e.g. /snippets/social-plus-sdk/getting-started/client-login.mdx
-        absTarget := filepath.Join(docsBase, filepath.FromSlash(strings.TrimPrefix(importPath, "/")))
-        if _, statErr := os.Stat(absTarget); os.IsNotExist(statErr) {
-            rel, _ := filepath.Rel(docsBase, mdxPath)
-            findings = append(findings, report.Finding{
-                ID:      fmt.Sprintf("broken-import:%s:%d", filepath.ToSlash(rel), i+1),
-                Type:    report.TypeDocBrokenImport,
-                DocPage: filepath.ToSlash(strings.TrimSuffix(rel, ".mdx")),
-                Detail:  fmt.Sprintf("import %q not found (line %d)", importPath, i+1),
-                Status:  report.StatusOpen,
-            })
-        }
-    }
-    return findings
+	data, err := os.ReadFile(mdxPath)
+	if err != nil {
+		return nil
+	}
+	var findings []report.Finding
+	for i, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "import ") || !strings.Contains(trimmed, "'/snippets/") {
+			continue
+		}
+		start := strings.Index(trimmed, "'/snippets/")
+		if start == -1 {
+			continue
+		}
+		rest := trimmed[start+1:]
+		end := strings.Index(rest, "'")
+		if end == -1 {
+			continue
+		}
+		importPath := rest[:end] // e.g. /snippets/social-plus-sdk/getting-started/client-login.mdx
+		absTarget := filepath.Join(docsBase, filepath.FromSlash(strings.TrimPrefix(importPath, "/")))
+		if _, statErr := os.Stat(absTarget); os.IsNotExist(statErr) {
+			rel, _ := filepath.Rel(docsBase, mdxPath)
+			findings = append(findings, report.Finding{
+				ID:      fmt.Sprintf("broken-import:%s:%d", filepath.ToSlash(rel), i+1),
+				Type:    report.TypeDocBrokenImport,
+				DocPage: filepath.ToSlash(strings.TrimSuffix(rel, ".mdx")),
+				Detail:  fmt.Sprintf("import %q not found (line %d)", importPath, i+1),
+				Status:  report.StatusOpen,
+			})
+		}
+	}
+	return findings
+}
+
+func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
+	groups := m.Lookup(docPagePath)
+	if len(groups) == 0 {
+		return nil
+	}
+
+	content, err := os.ReadFile(docPageFile)
+	if err != nil {
+		return nil // unreadable file: skip
+	}
+	contentStr := string(content)
+
+	var findings []report.Finding
+	for _, g := range groups {
+		gendocsPath := docgen.DeriveMDXPath(g.SpDocsPage, g.Key)
+		importPath := "/" + snippetsDir + "/" + gendocsPath
+
+		// Already imported → no finding
+		if strings.Contains(contentStr, importPath) {
+			continue
+		}
+
+		findings = append(findings, report.Finding{
+			ID:                    fmt.Sprintf("doc-stale-%s-%s", docPagePath, g.Key),
+			Type:                  report.TypeDocPageStaleImport,
+			DocPage:               docPagePath,
+			DocPageFile:           docPageFile,
+			GendocsKey:            g.Key,
+			GendocsPath:           gendocsPath,
+			HasHardcodedCodeGroup: strings.Contains(contentStr, "<CodeGroup>"),
+			Detail:                fmt.Sprintf("doc page %q has gendocs snippet %q but does not import it", docPagePath, gendocsPath),
+			Status:                report.StatusOpen,
+		})
+	}
+	return findings
 }
 
 // DiffSnippetKeyConflicts checks that all platforms for a given snippet key
@@ -402,42 +443,8 @@ func DiffSnippetKeyConflicts(snips []scanner.Snippet) []report.Finding {
 			Status:     report.StatusOpen,
 		})
 	}
-	return findings
-}
-
-func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsDir string) []report.Finding {
-	groups := m.Lookup(docPagePath)
-	if len(groups) == 0 {
-		return nil
-	}
-
-	content, err := os.ReadFile(docPageFile)
-	if err != nil {
-		return nil // unreadable file: skip
-	}
-	contentStr := string(content)
-
-	var findings []report.Finding
-	for _, g := range groups {
-		gendocsPath := docgen.DeriveMDXPath(g.SpDocsPage, g.Key)
-		importPath := "/" + snippetsDir + "/" + gendocsPath
-
-		// Already imported → no finding
-		if strings.Contains(contentStr, importPath) {
-			continue
-		}
-
-		findings = append(findings, report.Finding{
-			ID:                    fmt.Sprintf("doc-stale-%s-%s", docPagePath, g.Key),
-			Type:                  report.TypeDocPageStaleImport,
-			DocPage:               docPagePath,
-			DocPageFile:           docPageFile,
-			GendocsKey:            g.Key,
-			GendocsPath:           gendocsPath,
-			HasHardcodedCodeGroup: strings.Contains(contentStr, "<CodeGroup>"),
-			Detail:                fmt.Sprintf("doc page %q has gendocs snippet %q but does not import it", docPagePath, gendocsPath),
-			Status:                report.StatusOpen,
-		})
-	}
+	sort.Slice(findings, func(i, j int) bool {
+		return findings[i].ID < findings[j].ID
+	})
 	return findings
 }

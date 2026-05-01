@@ -11,10 +11,10 @@ import (
 	"social-plus/harness/internal/differ"
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
+	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/matcher"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
-	"social-plus/harness/internal/manifest"
 	"social-plus/harness/internal/scanner"
 )
 
@@ -59,10 +59,10 @@ func TestDocSurfaceDrift(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
 		{
-			SpDocsPage:  "social-plus-sdk/chat/channels/create",
-			Content:  "AmityChatClient.newChannelRepository().communityType().create()",
-			Platform: "flutter",
-			File:     "snippet.dart",
+			SpDocsPage: "social-plus-sdk/chat/channels/create",
+			Content:    "AmityChatClient.newChannelRepository().communityType().create()",
+			Platform:   "flutter",
+			File:       "snippet.dart",
 		},
 	}
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
@@ -84,10 +84,10 @@ func TestSnippetContentDrift(t *testing.T) {
 	fns := []extractor.PublicFunction{}
 	snips := []scanner.Snippet{
 		{
-			SpDocsPage:  "social-plus-sdk/chat/channels/create",
-			Content:  "AmityChatClient.newChannelRepository().communityType().create()",
-			Platform: "flutter",
-			File:     "snippet.dart",
+			SpDocsPage: "social-plus-sdk/chat/channels/create",
+			Content:    "AmityChatClient.newChannelRepository().communityType().create()",
+			Platform:   "flutter",
+			File:       "snippet.dart",
 		},
 	}
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
@@ -108,10 +108,10 @@ func TestSnippetContentDrift(t *testing.T) {
 func TestSnippetContentDrift_NoFalsePositive(t *testing.T) {
 	snips := []scanner.Snippet{
 		{
-			SpDocsPage:  "social-plus-sdk/chat/channels/create",
-			Content:  "AmityChatClient.newChannelRepository().create()",
-			Platform: "flutter",
-			File:     "snippet.dart",
+			SpDocsPage: "social-plus-sdk/chat/channels/create",
+			Content:    "AmityChatClient.newChannelRepository().create()",
+			Platform:   "flutter",
+			File:       "snippet.dart",
 		},
 	}
 	reg := pages.NewFromPaths([]string{"social-plus-sdk/chat/channels/create"})
@@ -224,45 +224,45 @@ func TestDiffManifestCoverage_allPresent(t *testing.T) {
 }
 
 func TestDiffDocImports_NoImports(t *testing.T) {
-    dir := t.TempDir()
-    mdxFile := filepath.Join(dir, "page.mdx")
-    os.WriteFile(mdxFile, []byte("# Hello\n\nsome prose\n"), 0644)
-    findings := differ.DiffDocImports(mdxFile, dir)
-    if len(findings) != 0 {
-        t.Fatalf("want 0 findings, got %d", len(findings))
-    }
+	dir := t.TempDir()
+	mdxFile := filepath.Join(dir, "page.mdx")
+	os.WriteFile(mdxFile, []byte("# Hello\n\nsome prose\n"), 0644)
+	findings := differ.DiffDocImports(mdxFile, dir)
+	if len(findings) != 0 {
+		t.Fatalf("want 0 findings, got %d", len(findings))
+	}
 }
 
 func TestDiffDocImports_GoodImport(t *testing.T) {
-    dir := t.TempDir()
-    os.MkdirAll(filepath.Join(dir, "snippets", "sdk", "auth"), 0755)
-    os.WriteFile(filepath.Join(dir, "snippets", "sdk", "auth", "client-login.mdx"), []byte("content"), 0644)
-    mdxFile := filepath.Join(dir, "page.mdx")
-    os.WriteFile(mdxFile, []byte("import ClientLogin from '/snippets/sdk/auth/client-login.mdx'\n"), 0644)
-    findings := differ.DiffDocImports(mdxFile, dir)
-    if len(findings) != 0 {
-        t.Fatalf("want 0 findings for valid import, got %d", len(findings))
-    }
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "snippets", "sdk", "auth"), 0755)
+	os.WriteFile(filepath.Join(dir, "snippets", "sdk", "auth", "client-login.mdx"), []byte("content"), 0644)
+	mdxFile := filepath.Join(dir, "page.mdx")
+	os.WriteFile(mdxFile, []byte("import ClientLogin from '/snippets/sdk/auth/client-login.mdx'\n"), 0644)
+	findings := differ.DiffDocImports(mdxFile, dir)
+	if len(findings) != 0 {
+		t.Fatalf("want 0 findings for valid import, got %d", len(findings))
+	}
 }
 
 func TestDiffDocImports_BrokenImport(t *testing.T) {
-    dir := t.TempDir()
-    mdxFile := filepath.Join(dir, "page.mdx")
-    os.WriteFile(mdxFile, []byte("import Missing from '/snippets/does/not/exist.mdx'\n"), 0644)
-    findings := differ.DiffDocImports(mdxFile, dir)
-    if len(findings) != 1 {
-        t.Fatalf("want 1 finding for broken import, got %d", len(findings))
-    }
-    if findings[0].Type != report.TypeDocBrokenImport {
-        t.Errorf("wrong finding type: %s", findings[0].Type)
-    }
+	dir := t.TempDir()
+	mdxFile := filepath.Join(dir, "page.mdx")
+	os.WriteFile(mdxFile, []byte("import Missing from '/snippets/does/not/exist.mdx'\n"), 0644)
+	findings := differ.DiffDocImports(mdxFile, dir)
+	if len(findings) != 1 {
+		t.Fatalf("want 1 finding for broken import, got %d", len(findings))
+	}
+	if findings[0].Type != report.TypeDocBrokenImport {
+		t.Errorf("wrong finding type: %s", findings[0].Type)
+	}
 }
 
 func TestDiffSnippetKeyConflicts_NoConflict(t *testing.T) {
 	snips := []scanner.Snippet{
-		{Filename: "AmityPostGet.kt",    Platform: "android",  SpDocsPage: "social-plus-sdk/social/post-get"},
-		{Filename: "AmityPostGet.swift", Platform: "ios",      SpDocsPage: "social-plus-sdk/social/post-get"},
-		{Filename: "AmityPostGet.dart",  Platform: "flutter",  SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.kt", Platform: "android", SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.swift", Platform: "ios", SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.dart", Platform: "flutter", SpDocsPage: "social-plus-sdk/social/post-get"},
 	}
 	findings := differ.DiffSnippetKeyConflicts(snips)
 	if len(findings) != 0 {
@@ -272,8 +272,8 @@ func TestDiffSnippetKeyConflicts_NoConflict(t *testing.T) {
 
 func TestDiffSnippetKeyConflicts_Conflict(t *testing.T) {
 	snips := []scanner.Snippet{
-		{Filename: "AmityAdQuery.kt",    Platform: "android", SpDocsPage: "social-plus-sdk/social/notification-items"},
-		{Filename: "AmityAdQuery.swift", Platform: "ios",     SpDocsPage: "social-plus-sdk/core-concepts/ads"},
+		{Filename: "AmityAdQuery.kt", Platform: "android", SpDocsPage: "social-plus-sdk/social/notification-items"},
+		{Filename: "AmityAdQuery.swift", Platform: "ios", SpDocsPage: "social-plus-sdk/core-concepts/ads"},
 	}
 	findings := differ.DiffSnippetKeyConflicts(snips)
 	if len(findings) != 1 {
@@ -292,12 +292,23 @@ func TestDiffSnippetKeyConflicts_Conflict(t *testing.T) {
 
 func TestDiffSnippetKeyConflicts_SkipBlankPage(t *testing.T) {
 	snips := []scanner.Snippet{
-		{Filename: "AmityPostGet.kt",    Platform: "android", SpDocsPage: "social-plus-sdk/social/post-get"},
-		{Filename: "AmityPostGet.swift", Platform: "ios",     SpDocsPage: ""},
+		{Filename: "AmityPostGet.kt", Platform: "android", SpDocsPage: "social-plus-sdk/social/post-get"},
+		{Filename: "AmityPostGet.swift", Platform: "ios", SpDocsPage: ""},
 	}
 	findings := differ.DiffSnippetKeyConflicts(snips)
 	if len(findings) != 0 {
 		t.Fatalf("expected 0 findings (blank page skipped), got %d", len(findings))
+	}
+}
+
+func TestDiffSnippetKeyConflicts_SkipAbsoluteURL(t *testing.T) {
+	snips := []scanner.Snippet{
+		{Filename: "AmityPostGet.kt", Platform: "android", SpDocsPage: "https://example.com/post-get"},
+		{Filename: "AmityPostGet.swift", Platform: "ios", SpDocsPage: "social-plus-sdk/social/post-get"},
+	}
+	findings := differ.DiffSnippetKeyConflicts(snips)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings (absolute URL skipped), got %d", len(findings))
 	}
 }
 
