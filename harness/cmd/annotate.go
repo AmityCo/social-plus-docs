@@ -13,6 +13,7 @@ import (
 
 	"social-plus/harness/internal/config"
 	"social-plus/harness/internal/docgen"
+	"social-plus/harness/internal/paritymap"
 	"social-plus/harness/internal/patchgen"
 	"social-plus/harness/internal/report"
 	"social-plus/harness/internal/runstate"
@@ -62,9 +63,15 @@ func runAnnotate(args []string) {
 	var patches []patchgen.Patch
 	skipped := 0
 
-	// Build snippet groups to check confidence of each annotation suggestion.
+	// Build parity map for Gate 2 confidence signals.
 	var allSnips []scanner.Snippet
-	for platform, sdkCfg := range cfg.SDKs {
+	allPlatforms := make([]string, 0, len(cfg.SDKs))
+	for p := range cfg.SDKs {
+		allPlatforms = append(allPlatforms, p)
+	}
+	sort.Strings(allPlatforms)
+	for _, platform := range allPlatforms {
+		sdkCfg := cfg.SDKs[platform]
 		snippetPath := filepath.Join(cfgDir, sdkCfg.Path, sdkCfg.SnippetDir)
 		snips, err := scanner.Scan(snippetPath, platform)
 		if err != nil {
@@ -72,7 +79,7 @@ func runAnnotate(args []string) {
 		}
 		allSnips = append(allSnips, snips...)
 	}
-	allGroups := docgen.GroupSnippets(allSnips)
+	pm := paritymap.Build(allSnips, allPlatforms)
 
 	for _, f := range rep.Findings {
 		if f.Type != report.TypePublicFuncUnannotated {
@@ -129,7 +136,7 @@ func runAnnotate(args []string) {
 			InsertLine:  lineNo,
 			Annotation:  annotation,
 			EndMarker:   "/* end_public_function */",
-			Confidence:  annotateConfidence(className, platform, allGroups),
+			Confidence:  pm.Confidence(docgen.DeriveKey(className+"."+platformExt(platform)), platform),
 		})
 	}
 
@@ -179,32 +186,6 @@ func extractClassName(detail string) string {
 		return m[1]
 	}
 	return ""
-}
-
-// annotateConfidence returns a confidence level based on how many sibling platforms
-// already document this class:
-//   - "high"   — 2 or more sibling platforms confirm (safe to bulk-approve)
-//   - "medium" — exactly 1 sibling platform confirms (review recommended)
-//   - "low"    — no sibling confirmation (manual review required)
-func annotateConfidence(className, platform string, groups map[string]docgen.SnippetGroup) string {
-	selfExt := "." + platformExt(platform)
-	count := 0
-	for _, ext := range []string{".kt", ".swift", ".dart", ".ts"} {
-		if ext == selfExt {
-			continue
-		}
-		if _, exists := groups[docgen.DeriveKey(className+ext)]; exists {
-			count++
-		}
-	}
-	switch {
-	case count >= 2:
-		return "high"
-	case count == 1:
-		return "medium"
-	default:
-		return "low"
-	}
 }
 
 // applyPatches inserts annotation text into SDK source files.
