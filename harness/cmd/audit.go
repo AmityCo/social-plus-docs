@@ -118,6 +118,22 @@ func runAudit(args []string) {
 			}
 		}
 		allGroups := docgen.GroupSnippets(allSnips)
+
+		// Gate 1: check for cross-platform sp_docs_page conflicts on same key
+		{
+			conflictFindings := differ.DiffSnippetKeyConflicts(allSnips)
+			conflictCount := 0
+			for _, f := range conflictFindings {
+				if !isAlreadyInReport(allFindings, f.ID) {
+					allFindings = append(allFindings, f)
+					conflictCount++
+				}
+			}
+			if conflictCount > 0 {
+				fmt.Printf("[audit] %d SNIPPET_KEY_PLATFORM_CONFLICT findings\n", conflictCount)
+			}
+		}
+
 		m := matcher.New(allGroups)
 		snippetsDir := "snippets"
 		docsBase := filepath.Join(filepath.Dir(*cfgPath), cfg.Docs.Path)
