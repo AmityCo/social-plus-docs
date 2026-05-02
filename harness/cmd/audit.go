@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -220,6 +221,10 @@ func runAudit(args []string) {
 		snippetsAbsDir := filepath.Join(docsBase, "snippets")
 		manifestCount := 0
 		addedCount := 0
+
+		// Load global snippets/manifest.json for cross-domain snippet lookup
+		globalSnippetIndex := loadSnippetsManifest(filepath.Join(snippetsAbsDir, "manifest.json"))
+
 		_ = filepath.WalkDir(docsBase, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -245,7 +250,7 @@ func runAudit(args []string) {
 				fmt.Fprintf(os.Stderr, "manifest load error: %v\n", err)
 				return nil
 			}
-			findings := differ.DiffManifestCoverage(pagePath, m, snippetsAbsDir)
+			findings := differ.DiffManifestCoverage(pagePath, m, snippetsAbsDir, globalSnippetIndex)
 			for _, f := range findings {
 				if !isAlreadyInReport(allFindings, f.ID) {
 					allFindings = append(allFindings, f)
@@ -446,6 +451,21 @@ func isAlreadyInReport(findings []report.Finding, id string) bool {
 		}
 	}
 	return false
+}
+
+// loadSnippetsManifest reads snippets/manifest.json and returns a map of
+// gendocsKey → relative path (e.g. "social-plus-sdk/core-concepts/foo.mdx").
+// Returns nil if the file cannot be read or parsed.
+func loadSnippetsManifest(path string) map[string]string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	return raw
 }
 
 // extractFuncNamesFromSnippet extracts function names from a snippet's content

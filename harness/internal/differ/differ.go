@@ -20,16 +20,15 @@ import (
 // has a corresponding *.mdx file under snippetsAbsDir.
 // snippetsAbsDir is the absolute path to the snippets/ directory.
 // docPage is the relative page path (e.g. "social-plus-sdk/getting-started/authentication").
+// globalSnippetIndex maps gendocsKey → relative path from snippets/manifest.json (may be nil).
 //
-// The expected snippet file path is:
+// Resolution order:
+//  1. Inferred path: snippetsAbsDir/<seg0>/<seg1>/<gendocsKey>.mdx
+//  2. Global manifest lookup: snippetsAbsDir/<globalSnippetIndex[gendocsKey]>
 //
-//	snippetsAbsDir / <seg0> / <seg1> / <gendocsKey>.mdx
-//
-// where seg0 and seg1 are the first two "/" segments of docPage.
-//
-// Returns MISSING_SNIPPET findings (platform="", status=open) for any key with no file.
-// Detail includes the section key, heading, and expected file path.
-func DiffManifestCoverage(docPage string, m *manifest.Manifest, snippetsAbsDir string) []report.Finding {
+// Returns MISSING_SNIPPET findings (platform="", status=open) only when the snippet
+// cannot be found via either path.
+func DiffManifestCoverage(docPage string, m *manifest.Manifest, snippetsAbsDir string, globalSnippetIndex map[string]string) []report.Finding {
 	var findings []report.Finding
 	if m == nil || len(m.Sections) == 0 {
 		return nil
@@ -38,26 +37,45 @@ func DiffManifestCoverage(docPage string, m *manifest.Manifest, snippetsAbsDir s
 	parts := strings.Split(docPage, "/")
 	for sectionKey, section := range m.Sections {
 		for _, gendocsKey := range section.Snippets {
-			// Build expected snippet path
-			snippetPath := filepath.Join(snippetsAbsDir)
+			// 1. Build inferred snippet path from docPage segments
+			inferredPath := filepath.Join(snippetsAbsDir)
 			if len(parts) >= 2 {
-				snippetPath = filepath.Join(snippetPath, parts[0], parts[1], gendocsKey+".mdx")
+				inferredPath = filepath.Join(inferredPath, parts[0], parts[1], gendocsKey+".mdx")
 			} else if len(parts) == 1 {
-				snippetPath = filepath.Join(snippetPath, parts[0], gendocsKey+".mdx")
+				inferredPath = filepath.Join(inferredPath, parts[0], gendocsKey+".mdx")
 			} else {
-				snippetPath = filepath.Join(snippetPath, gendocsKey+".mdx")
+				inferredPath = filepath.Join(inferredPath, gendocsKey+".mdx")
 			}
-			if _, err := os.Stat(snippetPath); os.IsNotExist(err) {
-				findings = append(findings, report.Finding{
-					ID:         fmt.Sprintf("manifest-missing:%s:%s:%s", docPage, sectionKey, gendocsKey),
-					Type:       report.TypeMissingSnippet,
-					Platform:   "",
-					DocPage:    docPage,
-					GendocsKey: gendocsKey,
-					Detail:     fmt.Sprintf("Section %q (%s): missing snippet file %s", sectionKey, section.Heading, snippetPath),
-					Status:     report.StatusOpen,
-				})
+			if _, err := os.Stat(inferredPath); err == nil {
+				continue // found at inferred path
 			}
+
+			// 2. Fallback: look up in global snippets/manifest.json index
+			if globalSnippetIndex != nil {
+				if relPath, ok := globalSnippetIndex[gendocsKey]; ok {
+					absPath := filepath.Join(snippetsAbsDir, filepath.FromSlash(relPath))
+					// relPath from manifest.json is like "social-plus-sdk/core-concepts/foo.mdx"
+					// but snippetsAbsDir already contains "snippets/", so strip leading "snippets/" if present
+					if _, err := os.Stat(absPath); err == nil {
+						continue // found via global index
+					}
+					// relPath may start with "social-plus-sdk/..." without "snippets/" prefix
+					absPath2 := filepath.Join(snippetsAbsDir, "..", filepath.FromSlash(relPath))
+					if _, err := os.Stat(absPath2); err == nil {
+						continue // found via global index (relative to docs root)
+					}
+				}
+			}
+
+			findings = append(findings, report.Finding{
+				ID:         fmt.Sprintf("manifest-missing:%s:%s:%s", docPage, sectionKey, gendocsKey),
+				Type:       report.TypeMissingSnippet,
+				Platform:   "",
+				DocPage:    docPage,
+				GendocsKey: gendocsKey,
+				Detail:     fmt.Sprintf("Section %q (%s): missing snippet file %s", sectionKey, section.Heading, inferredPath),
+				Status:     report.StatusOpen,
+			})
 		}
 	}
 	return findings

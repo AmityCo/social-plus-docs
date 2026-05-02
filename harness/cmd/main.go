@@ -7,7 +7,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: harness <annotate|audit|fillmanifests|fix|genmanifests|gendocs|migrate|parity|prompt|serve> [--config path]\n")
+		fmt.Fprintf(os.Stderr, "usage: harness <annotate|audit|fillmanifests|fix|genmanifests|gendocs|migrate|parity|place|prompt|serve> [--config path]\n")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -29,6 +29,8 @@ func main() {
 		runMigrate(os.Args[2:])
 	case "parity":
 		runParity(os.Args[2:])
+	case "place":
+		runPlace(os.Args[2:])
 	case "serve":
 		runServe(os.Args[2:])
 	default:

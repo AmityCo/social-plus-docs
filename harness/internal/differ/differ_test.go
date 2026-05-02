@@ -223,7 +223,7 @@ func TestDiffManifestCoverage_missingSnippet(t *testing.T) {
 		"step-1": {Heading: "Step 1", Snippets: []string{"client-setup"}},
 		"step-2": {Heading: "Step 2", Snippets: []string{"client-login"}},
 	}}
-	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir, nil)
 	assert.Len(t, findings, 1)
 	f := findings[0]
 	assert.Equal(t, report.TypeMissingSnippet, f.Type)
@@ -243,7 +243,7 @@ func TestDiffManifestCoverage_allPresent(t *testing.T) {
 		"step-1": {Heading: "Step 1", Snippets: []string{"client-setup"}},
 		"step-2": {Heading: "Step 2", Snippets: []string{"client-login"}},
 	}}
-	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir, nil)
 	assert.Empty(t, findings)
 }
 
@@ -341,6 +341,6 @@ func TestDiffManifestCoverage_emptyManifest(t *testing.T) {
 	snippetsDir := filepath.Join(dir, "snippets")
 	docPage := "social-plus-sdk/getting-started/authentication"
 	m := &manifest.Manifest{Sections: map[string]manifest.Section{}}
-	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir)
+	findings := differ.DiffManifestCoverage(docPage, m, snippetsDir, nil)
 	assert.Empty(t, findings)
 }
