@@ -33,6 +33,7 @@ func runServe(args []string) {
 	mux.Handle("/api/run", runHandler(dir))
 	mux.Handle("/api/coverage", coverageHandler(*cfgPath))
 	mux.Handle("/api/parity", parityHandler(dir))
+	mux.Handle("/api/parity/detail", parityDetailHandler(dir))
 	mux.Handle("/", dashboardHandler())
 
 	addr := "localhost:" + *port
@@ -255,6 +256,73 @@ func parityHandler(dir string) http.Handler {
 			})
 		}
 		resp := paritySummaryResponse{TotalKeys: raw.TotalKeys, Platforms: rows}
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(resp)
+	})
+}
+
+// parityDetailResponse is the full per-function parity data for the table page.
+type parityDetailFunction struct {
+	Key        string            `json:"key"`
+	SpDocsPage string            `json:"sp_docs_page"`
+	Platforms  map[string]string `json:"platforms"` // platform -> "exists" or "unknown"
+	Coverage   int               `json:"coverage"`
+}
+
+type parityDetailResponse struct {
+	TotalKeys    int                    `json:"total_keys"`
+	AllPlatforms []string               `json:"platforms"`
+	Functions    []parityDetailFunction `json:"functions"`
+}
+
+// parityDetailHandler returns full function-level parity data for the comparison table.
+func parityDetailHandler(dir string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		data, err := os.ReadFile(filepath.Join(dir, "function-parity.json"))
+		if errors.Is(err, os.ErrNotExist) {
+			_, _ = w.Write([]byte(`{"total_keys":0,"platforms":[],"functions":[]}`))
+			return
+		}
+		if err != nil {
+			http.Error(w, "read error", http.StatusInternalServerError)
+			return
+		}
+		var raw struct {
+			TotalKeys    int      `json:"total_keys"`
+			AllPlatforms []string `json:"platforms"`
+			Functions    []struct {
+				Key        string `json:"key"`
+				SpDocsPage string `json:"sp_docs_page"`
+				Coverage   int    `json:"coverage"`
+				Platforms  map[string]struct {
+					Status string `json:"status"`
+				} `json:"platforms"`
+			} `json:"functions"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			http.Error(w, "parse error", http.StatusInternalServerError)
+			return
+		}
+		fns := make([]parityDetailFunction, 0, len(raw.Functions))
+		for _, fn := range raw.Functions {
+			plats := make(map[string]string, len(fn.Platforms))
+			for p, pe := range fn.Platforms {
+				plats[p] = pe.Status
+			}
+			fns = append(fns, parityDetailFunction{
+				Key:        fn.Key,
+				SpDocsPage: fn.SpDocsPage,
+				Platforms:  plats,
+				Coverage:   fn.Coverage,
+			})
+		}
+		resp := parityDetailResponse{
+			TotalKeys:    raw.TotalKeys,
+			AllPlatforms: raw.AllPlatforms,
+			Functions:    fns,
+		}
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(resp)
