@@ -1,6 +1,6 @@
 # SDK Harness — Agent Runbook
 
-_Generated 2026-05-01 14:45 — 111 findings requiring AI_
+_Generated 2026-05-02 11:24 — 10 findings requiring AI_
 
 ## Step 0 — Start Dashboard (optional but recommended)
 
@@ -51,7 +51,7 @@ Then run `./harness-bin prompt` again if there are still open findings.
 
 ---
 
-## MISSING_SNIPPET (101)
+## MISSING_SNIPPET (10)
 
 For each entry below, create a SDK code snippet file at the given path.
 The snippet **must** use this exact format:
@@ -71,141 +71,27 @@ Rules:
 - Keep it minimal — just enough to demonstrate the function
 - `sp_docs_page` must be a path from `docs.json` (not a full URL)
 
-### Ios (Swift) — 40 functions
+### Ios (Swift) — 10 functions
 
 Snippet directory: `../../AmitySDKIOS/SDKSampleCode/SDKSampleCode`
 
 | Function ID | Write to filename |
 |-------------|-------------------|
-| `client.get_user_unread` | `AmityClientGetUserUnread.swift` |
-| `client.enable_unread_count` | `AmityClientEnableUnreadCount.swift` |
-| `client.get_visitor_device_id` | `AmityClientGetVisitorDeviceId.swift` |
-| `client.secure_logout` | `AmityClientSecureLogout.swift` |
-| `client.validate_urls` | `AmityClientValidateUrls.swift` |
-| `client.validate_texts` | `AmityClientValidateTexts.swift` |
-| `client.set_uploaded_file_access_type` | `AmityClientSetUploadedFileAccessType.swift` |
-| `client.send_custom_command_request` | `AmityClientSendCustomCommandRequest.swift` |
-| `client.get_shareable_link_configuration` | `AmityClientGetShareableLinkConfiguration.swift` |
-| `client.send_custom_command` | `AmityClientSendCustomCommand.swift` |
-| `client.observe_network_activities` | `AmityClientObserveNetworkActivities.swift` |
-| `client.get_link_preview_metadata` | `AmityClientGetLinkPreviewMetadata.swift` |
-| `channel.get_total_channels_unread` | `AmityChannelGetTotalChannelsUnread.swift` |
-| `room_presence.start_heartbeat` | `AmityRoomPresenceStartHeartbeat.swift` |
-| `room_presence.stop_heartbeat` | `AmityRoomPresenceStopHeartbeat.swift` |
-| `room_presence.get_room_online_users` | `AmityRoomPresenceGetRoomOnlineUsers.swift` |
-| `room_presence.get_room_user_count` | `AmityRoomPresenceGetRoomUserCount.swift` |
-| `room.generate_room_token` | `AmityRoomGenerateRoomToken.swift` |
-| `comment.get_reactions` | `AmityCommentGetReactions.swift` |
-| `feed.get_my` | `AmityFeedGetMy.swift` |
-| `post.get_reactions` | `AmityPostGetReactions.swift` |
-| `file.download_image_as_data` | `AmityFileDownloadImageAsData.swift` |
-| `file.download_image` | `AmityFileDownloadImage.swift` |
-| `file.download_file_as_data` | `AmityFileDownloadFileAsData.swift` |
-| `file.get_upload_progress` | `AmityFileGetUploadProgress.swift` |
-| `file.cancel_file_download` | `AmityFileCancelFileDownload.swift` |
-| `file.cancel_image_download` | `AmityFileCancelImageDownload.swift` |
-| `message.delete_failed` | `AmityMessageDeleteFailed.swift` |
-| `message.get_reactions` | `AmityMessageGetReactions.swift` |
-| `message.set_tags` | `AmityMessageSetTags.swift` |
-| `reaction.get` | `AmityReactionGet.swift` |
-| `story.get_active_by_target` | `AmityStoryGetActiveByTarget.swift` |
-| `story.get_by_targets` | `AmityStoryGetByTargets.swift` |
-| `story.get_story_target` | `AmityStoryGetStoryTarget.swift` |
-| `story.soft_delete` | `AmityStorySoftDelete.swift` |
-| `story.hard_delete` | `AmityStoryHardDelete.swift` |
-| `story.get_story_targets` | `AmityStoryGetStoryTargets.swift` |
-| `story.get_global_story_targets` | `AmityStoryGetGlobalStoryTargets.swift` |
-| `sub_channel.start_message_receipt_sync` | `AmitySubChannelStartMessageReceiptSync.swift` |
-| `sub_channel.stop_message_receipt_sync` | `AmitySubChannelStopMessageReceiptSync.swift` |
-
-### Flutter (Dart) — 61 functions
-
-Snippet directory: `../../Amity-Social-Cloud-SDK-Flutter-Internal/code_snippet`
-
-| Function ID | Write to filename |
-|-------------|-------------------|
-| `core.validate_urls` | `AmityCoreValidateUrls.dart` |
-| `core.validate_texts` | `AmityCoreValidateTexts.dart` |
-| `core.is_user_logged_in` | `AmityCoreIsUserLoggedIn.dart` |
-| `core.get_user_id` | `AmityCoreGetUserId.dart` |
-| `core.has_permission` | `AmityCoreHasPermission.dart` |
-| `core.get_analytics_engine` | `AmityCoreGetAnalyticsEngine.dart` |
-| `core.observe_session_state` | `AmityCoreObserveSessionState.dart` |
-| `core.observe_unread_count` | `AmityCoreObserveUnreadCount.dart` |
-| `core.copy_with` | `AmityCoreCopyWith.dart` |
-| `chat.service_locator` | `AmityChatServiceLocator.dart` |
-| `chat.new_channel_repository` | `AmityChatNewChannelRepository.dart` |
-| `chat.new_sub_channel_repository` | `AmityChatNewSubChannelRepository.dart` |
-| `social.new_post_repository` | `AmitySocialNewPostRepository.dart` |
-| `social.new_comment_repository` | `AmitySocialNewCommentRepository.dart` |
-| `social.new_feed_repository` | `AmitySocialNewFeedRepository.dart` |
-| `social.new_community_repository` | `AmitySocialNewCommunityRepository.dart` |
-| `social.new_poll_repository` | `AmitySocialNewPollRepository.dart` |
-| `social.new_story_repository` | `AmitySocialNewStoryRepository.dart` |
-| `social.new_reaction_repository` | `AmitySocialNewReactionRepository.dart` |
-| `video.new_stream_repository` | `AmityVideoNewStreamRepository.dart` |
-| `ad.service_locator` | `AmityAdServiceLocator.dart` |
-| `community.service_locator` | `AmityCommunityServiceLocator.dart` |
-| `community.get_current_user_roles` | `AmityCommunityGetCurrentUserRoles.dart` |
-| `file.cancel_upload` | `AmityFileCancelUpload.dart` |
-| `post.service_locator` | `AmityPostServiceLocator.dart` |
-| `post.get_post_stream` | `AmityPostGetPostStream.dart` |
-| `post.review` | `AmityPostReview.dart` |
-| `post.get_reaction` | `AmityPostGetReaction.dart` |
-| `post.get_pinned` | `AmityPostGetPinned.dart` |
-| `post.get_global_pinned` | `AmityPostGetGlobalPinned.dart` |
-| `channel.service_locator` | `AmityChannelServiceLocator.dart` |
-| `channel.start_reading` | `AmityChannelStartReading.dart` |
-| `channel.stop_reading` | `AmityChannelStopReading.dart` |
-| `channel.archive` | `AmityChannelArchive.dart` |
-| `channel.unarchive` | `AmityChannelUnarchive.dart` |
-| `channel.get_archived` | `AmityChannelGetArchived.dart` |
-| `channel.get_channel_total_unreads` | `AmityChannelGetChannelTotalUnreads.dart` |
-| `channel_moderation.channel_id` | `AmityChannelModerationChannelId.dart` |
-| `message.get_reaction` | `AmityMessageGetReaction.dart` |
-| `notification.service_locator` | `AmityNotificationServiceLocator.dart` |
-| `notification.unregister_device` | `AmityNotificationUnregisterDevice.dart` |
-| `stream.service_locator` | `AmityStreamServiceLocator.dart` |
-| `sub_channel.get` | `AmitySubChannelGet.dart` |
-| `sub_channel.soft_delete` | `AmitySubChannelSoftDelete.dart` |
-| `sub_channel.hard_delete` | `AmitySubChannelHardDelete.dart` |
-| `sub_channel.updateedit_sub_channel` | `AmitySubChannelUpdateeditSubChannel.dart` |
-| `my_user_relationship.get_blocked_users` | `AmityMyUserRelationshipGetBlockedUsers.dart` |
-| `user_relationships.service_locator` | `AmityUserRelationshipsServiceLocator.dart` |
-| `user_relationships.accept_my_follower` | `AmityUserRelationshipsAcceptMyFollower.dart` |
-| `user_relationships.decline_my_follower` | `AmityUserRelationshipsDeclineMyFollower.dart` |
-| `user_relationships.remove_my_follower` | `AmityUserRelationshipsRemoveMyFollower.dart` |
-| `user_relationships.get_my_followings` | `AmityUserRelationshipsGetMyFollowings.dart` |
-| `user_relationships.get_followings` | `AmityUserRelationshipsGetFollowings.dart` |
-| `user_relationships.get_my_followers` | `AmityUserRelationshipsGetMyFollowers.dart` |
-| `user_relationships.get_followers` | `AmityUserRelationshipsGetFollowers.dart` |
-| `user_relationships.get_my_follow_info` | `AmityUserRelationshipsGetMyFollowInfo.dart` |
-| `user_relationships.get_follow_info` | `AmityUserRelationshipsGetFollowInfo.dart` |
-| `user_relationships.block_user` | `AmityUserRelationshipsBlockUser.dart` |
-| `user_relationships.unblock_user` | `AmityUserRelationshipsUnblockUser.dart` |
-| `user.get_blocked` | `AmityUserGetBlocked.dart` |
-| `user.get_viewed` | `AmityUserGetViewed.dart` |
-
-## DOC_PAGE_STALE_IMPORT (10)
-
-These doc pages reference gendocs snippet files that are not yet imported.
-Run the migrate command to automatically add the missing imports:
-
-```bash
-cd social-plus-docs/harness
-./harness-bin migrate --config harness-config.yml
-```
-
-Or preview changes first with `--dry-run`:
-
-```bash
-./harness-bin migrate --config harness-config.yml --dry-run
-```
+| `client.notification_tray` | `AmityClientNotificationTray.swift` |
+| `client.current_user_id` | `AmityClientCurrentUserId.swift` |
+| `client.login_method` | `AmityClientLoginMethod.swift` |
+| `client.access_token` | `AmityClientAccessToken.swift` |
+| `client.mention_configurations` | `AmityClientMentionConfigurations.swift` |
+| `channel-presence.default_view_id` | `AmityChannel-presenceDefaultViewId.swift` |
+| `user-presence.default_view_id` | `AmityUser-presenceDefaultViewId.swift` |
+| `subchannel.query_options.channel_id` | `AmitySubchannelQueryOptionsChannelId.swift` |
+| `subchannel.query_options.is_deleted` | `AmitySubchannelQueryOptionsIsDeleted.swift` |
+| `subchannel.query_options.exclude_default` | `AmitySubchannelQueryOptionsExcludeDefault.swift` |
 
 
 ---
 
-## PUBLIC_FUNC_UNANNOTATED (11 functions)
+## PUBLIC_FUNC_UNANNOTATED (84 functions)
 
 **Full list:** `harness/unannotated-functions-report.md`
 
