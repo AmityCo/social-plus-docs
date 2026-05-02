@@ -351,14 +351,30 @@ var (
 	reTypescriptExportConst = regexp.MustCompile(`^export\s+(?:async\s+)?(?:const|function)\s+(\w+)`)
 )
 
-// isPublicTypeScriptPath returns true if the file is in a public-API directory.
-// TypeScript SDK uses folder-based repos: {feature}Repository/api/ and {feature}Repository/observers/
-// Files under internalApi/, utils/, events/ are internal.
+// isPublicTypeScriptPath returns true if the file is DIRECTLY inside a
+// *Repository/api/ or *Repository/observers/ directory (not nested deeper).
+// TypeScript SDK layout: {feature}Repository/api/{funcName}.ts
+// Internal helpers live in sub-subdirectories like observers/getEvents/PaginationController.ts.
 func isPublicTypeScriptPath(path string) bool {
 	slash := filepath.ToSlash(path)
-	// Must be under a *Repository or *Client folder's api/ or observers/ subdir
-	return (strings.Contains(slash, "Repository/api/") || strings.Contains(slash, "Repository/observers/") ||
-		strings.Contains(slash, "Client/api/") || strings.Contains(slash, "Client/observers/"))
+	parts := strings.Split(slash, "/")
+	n := len(parts)
+	if n < 3 {
+		return false
+	}
+	filename := parts[n-1]
+	parentDir := strings.ToLower(parts[n-2])   // must be "api" or "observers"
+	grandparent := strings.ToLower(parts[n-3]) // must end with "repository" or "client"
+
+	// Exclude index files and test files
+	if filename == "index.ts" || strings.HasSuffix(filename, ".test.ts") || strings.HasSuffix(filename, ".spec.ts") {
+		return false
+	}
+
+	if parentDir != "api" && parentDir != "observers" {
+		return false
+	}
+	return strings.HasSuffix(grandparent, "repository") || strings.HasSuffix(grandparent, "client")
 }
 
 // classNameFromTypeScriptPath extracts the Repository/Client folder name from a TypeScript path.

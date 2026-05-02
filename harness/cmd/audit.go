@@ -350,7 +350,16 @@ func runAudit(args []string) {
 			if _, err := os.Stat(sdkPath); os.IsNotExist(err) {
 				continue // SDK not present in this environment
 			}
-			pubFuncs, err := publicscan.Scan(sdkPath, platform, sdkCfg.SnippetDir)
+			// For TypeScript, snippet_dir is the source directory itself, so scan it directly.
+			// For other platforms, scan the full SDK path and exclude the snippet_dir (sample code).
+			pubScanDir := sdkPath
+			var pubScanExclude []string
+			if sdkCfg.SnippetDir != "" && strings.ToLower(platform) != "typescript" {
+				pubScanExclude = []string{sdkCfg.SnippetDir}
+			} else if strings.ToLower(platform) == "typescript" && sdkCfg.SnippetDir != "" {
+				pubScanDir = filepath.Join(sdkPath, sdkCfg.SnippetDir)
+			}
+			pubFuncs, err := publicscan.Scan(pubScanDir, platform, pubScanExclude...)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "publicscan %s: %v\n", platform, err)
 				continue
