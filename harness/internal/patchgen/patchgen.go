@@ -91,7 +91,11 @@ func FindFuncLine(lines []string, funcName, platform string) (int, error) {
 	case "android":
 		pat = regexp.MustCompile(`\bfun\s+` + regexp.QuoteMeta(funcName) + `\s*[(<]`)
 	case "ios":
-		pat = regexp.MustCompile(`\bfunc\s+` + regexp.QuoteMeta(funcName) + `\s*[(<]`)
+		// Match Swift functions, computed properties, and lazy vars
+		pats = []*regexp.Regexp{
+			regexp.MustCompile(`\bfunc\s+` + regexp.QuoteMeta(funcName) + `\s*[(<]`),
+			regexp.MustCompile(`\b(?:var|let|lazy\s+var)\s+` + regexp.QuoteMeta(funcName) + `\b`),
+		}
 	case "flutter":
 		pats = []*regexp.Regexp{
 			regexp.MustCompile(`^\s+\S.*\s+` + regexp.QuoteMeta(funcName) + `\s*[(<]`),
@@ -112,7 +116,7 @@ func FindFuncLine(lines []string, funcName, platform string) (int, error) {
 		if inPublicBlock {
 			continue // skip already-annotated functions
 		}
-		if platform == "flutter" {
+		if platform == "flutter" || platform == "ios" {
 			for _, p := range pats {
 				if p.MatchString(line) {
 					return i + 1, nil
