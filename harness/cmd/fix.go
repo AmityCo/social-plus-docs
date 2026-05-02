@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"social-plus/harness/internal/config"
+	"social-plus/harness/internal/conflictfix"
 	"social-plus/harness/internal/fixer"
 	"social-plus/harness/internal/pages"
 	"social-plus/harness/internal/report"
-	"social-plus/harness/internal/verifier"
 	"social-plus/harness/internal/runstate"
+	"social-plus/harness/internal/verifier"
 )
 
 func runFix(args []string) {
@@ -44,6 +45,38 @@ func runFix(args []string) {
 		fmt.Fprintf(os.Stderr, "load pages registry: %v\n", err)
 		_ = runstate.Fail(cfgDir, "fix", "see stderr")
 		os.Exit(1)
+	}
+
+	// --- Conflict pre-pass: resolve all SNIPPET_KEY_PLATFORM_CONFLICT at once ---
+	hasConflicts := false
+	for _, f := range r.Findings {
+		if f.Status == report.StatusOpen && f.Type == report.TypeSnippetKeyPlatformConflict {
+			hasConflicts = true
+			break
+		}
+	}
+	if hasConflicts {
+		conflictDirs := make(map[string]string)
+		cfgDir := filepath.Dir(*cfgPath)
+		for platform, sdk := range cfg.SDKs {
+			conflictDirs[platform] = filepath.Join(cfgDir, sdk.Path, sdk.SnippetDir)
+		}
+		resolutions, cfErr := conflictfix.Fix(conflictDirs)
+		if cfErr != nil {
+			fmt.Fprintf(os.Stderr, "[conflict] fix failed: %v\n", cfErr)
+		} else {
+			rewrittenKeys := make(map[string]bool)
+			for _, res := range resolutions {
+				rewrittenKeys[res.Key] = true
+				fmt.Printf("[conflict] rewrite %s: %s → %s (%s)\n", res.Key, res.OldPage, res.CanonicalPage, res.Platform)
+			}
+			for i, f := range r.Findings {
+				if f.Status == report.StatusOpen && f.Type == report.TypeSnippetKeyPlatformConflict {
+					r.Findings[i].Status = report.StatusFixed
+					r.Findings[i].Detail += fmt.Sprintf(" | auto-fixed: rewrote %d platform file(s) to android canonical page", len(resolutions))
+				}
+			}
+		}
 	}
 
 	fixedCount := 0

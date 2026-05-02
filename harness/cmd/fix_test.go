@@ -191,6 +191,78 @@ func TestExtractAscPageFromSnippet(t *testing.T) {
 	})
 }
 
+func TestRunFix_ConflictResolution(t *testing.T) {
+	dir := t.TempDir()
+	androidSnipDir := filepath.Join(dir, "android-sdk", "snippets")
+	flutterSnipDir := filepath.Join(dir, "flutter-sdk", "snippets")
+	docsDir := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(androidSnipDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(flutterSnipDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// docs.json
+	docsJSON := `{"navigation":{"tabs":[{"groups":[{"pages":["social-plus-sdk/chat/ban-management"]}]}]}}`
+	if err := os.WriteFile(filepath.Join(docsDir, "docs.json"), []byte(docsJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Android snippet (canonical page)
+	androidSnip := "/* begin_sample_code\n   filename: AmityBanChannelMembers\n   sp_docs_page: social-plus-sdk/chat/ban-management\n   description: test\n   */\nfun ban() {}\n/* end_sample_code */"
+	if err := os.WriteFile(filepath.Join(androidSnipDir, "AmityBanChannelMembers.kt"), []byte(androidSnip), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Flutter snippet (wrong page — conflicts with android)
+	flutterSnip := "/* begin_sample_code\n   filename: AmityBanChannelMembers\n   sp_docs_page: social-plus-sdk/chat/archive-channels\n   description: test\n   */\nvoid ban() {}\n/* end_sample_code */"
+	flutterFile := filepath.Join(flutterSnipDir, "AmityBanChannelMembers.dart")
+	if err := os.WriteFile(flutterFile, []byte(flutterSnip), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Config pointing to the snippet dirs
+	cfgData := "docs:\n  path: docs\nsdks:\n  android:\n    path: android-sdk\n    snippet_dir: snippets\n  flutter:\n    path: flutter-sdk\n    snippet_dir: snippets\nllm:\n  model: test\n"
+	cfgPath := filepath.Join(dir, "harness-config.yml")
+	if err := os.WriteFile(cfgPath, []byte(cfgData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Report with one open conflict finding
+	reportData := `{"generated_at":"2026-01-01T00:00:00Z","findings":[{"id":"key-conflict:ban-channel-members","type":"SNIPPET_KEY_PLATFORM_CONFLICT","status":"open","gendocs_key":"ban-channel-members","detail":"key conflict"}]}`
+	reportPath := filepath.Join(dir, "harness-report.json")
+	if err := os.WriteFile(reportPath, []byte(reportData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runFix([]string{"--config", cfgPath, "--report", reportPath, "--issues", filepath.Join(dir, "issues.md")})
+
+	// Flutter file must be rewritten to use android's canonical page
+	data, err := os.ReadFile(flutterFile)
+	if err != nil {
+		t.Fatalf("read flutter file: %v", err)
+	}
+	if !strings.Contains(string(data), "sp_docs_page: social-plus-sdk/chat/ban-management") {
+		t.Errorf("flutter file not rewritten: %s", string(data))
+	}
+
+	// Conflict finding must be marked fixed
+	r, err := report.Read(reportPath)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	if len(r.Findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(r.Findings))
+	}
+	if r.Findings[0].Status != report.StatusFixed {
+		t.Errorf("expected finding status=fixed, got %q", r.Findings[0].Status)
+	}
+}
+
 func TestRunFix_DocMissing(t *testing.T) {
 	dir := t.TempDir()
 
