@@ -180,9 +180,13 @@ h2{font-size:11px;font-weight:600;color:#7d8590;text-transform:uppercase;letter-
       </div>
 
       <div id="parity-section" style="margin-top:18px">
-        <h2>Function Key Parity</h2>
-        <div class="parity-total" id="parity-total" style="font-size:11px;color:#7d8590;margin-bottom:8px">Loading…</div>
+        <h2>Snippet Parity Coverage</h2>
+        <div style="font-size:10px;color:#7d8590;margin-bottom:6px">Code snippets per platform across all <span id="parity-total-count">…</span> function keys</div>
         <div id="parity-bars"></div>
+        <div style="margin-top:10px">
+          <button onclick="toggleFeatureBreakdown()" style="background:none;border:1px solid #30363d;color:#7d8590;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer" id="breakdown-btn">▸ By feature area</button>
+          <div id="feature-breakdown" style="display:none;margin-top:8px"></div>
+        </div>
       </div>
 
       <div style="margin-top:18px">
@@ -435,24 +439,79 @@ function loadCoverage(){
 loadCoverage();
 
 /* ── Parity sidebar bars ── */
+function parityBarColor(pct){
+  if(pct<30) return '#f85149'; // red
+  if(pct<50) return '#d29922'; // yellow
+  if(pct<70) return '#f0883e'; // orange
+  return '#3fb950';            // green
+}
 function loadParitySummary(){
   fetch('/api/parity').then(r=>r.json()).then(data=>{
-    const totalEl=document.getElementById('parity-total');
+    const totalEl=document.getElementById('parity-total-count');
     const barsEl=document.getElementById('parity-bars');
-    if(!data.platforms||!data.platforms.length){barsEl.innerHTML='<div style="color:#7d8590;font-size:11px">Run audit to generate parity data</div>';totalEl.textContent='';return}
-    totalEl.textContent=`${data.total_keys} unique function keys`;
+    if(!data.platforms||!data.platforms.length){barsEl.innerHTML='<div style="color:#7d8590;font-size:11px">Run audit to generate parity data</div>';return}
+    if(totalEl) totalEl.textContent=data.total_keys.toLocaleString();
     barsEl.innerHTML=data.platforms.map(p=>{
       const pct=p.percent.toFixed(1);
-      const pc=PLATFORM_COLORS[p.platform]||{bar:'#3fb950'};
+      const color=parityBarColor(p.percent);
+      const label=p.platform==='typescript'?'TypeScript':p.platform.charAt(0).toUpperCase()+p.platform.slice(1);
       return `<div class="coverage-row">
-        <span class="platform-label">${esc(p.platform)}</span>
-        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${pc.bar}"></div></div>
+        <span class="platform-label">${esc(label)}</span>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
         <span class="pct-label">${pct}% <span style="color:#7d8590;font-size:9px">${p.exists}/${p.total}</span></span>
       </div>`;
     }).join('');
   }).catch(()=>{});
 }
 loadParitySummary();
+
+let featureBreakdownLoaded=false;
+function toggleFeatureBreakdown(){
+  const el=document.getElementById('feature-breakdown');
+  const btn=document.getElementById('breakdown-btn');
+  if(el.style.display==='none'){
+    el.style.display='block';
+    btn.textContent='▾ By feature area';
+    if(!featureBreakdownLoaded) loadFeatureBreakdown();
+  } else {
+    el.style.display='none';
+    btn.textContent='▸ By feature area';
+  }
+}
+function loadFeatureBreakdown(){
+  fetch('/api/parity/detail').then(r=>r.json()).then(data=>{
+    featureBreakdownLoaded=true;
+    // Group function keys by first segment of key (e.g. 'post', 'channel', 'community')
+    const groups={};
+    const platforms=['android','ios','flutter','typescript'];
+    (data.functions||[]).forEach(fn=>{
+      const key=fn.key||'';
+      const seg=key.split('-')[0]||'other';
+      if(!groups[seg]) groups[seg]={total:0,counts:{android:0,ios:0,flutter:0,typescript:0}};
+      groups[seg].total++;
+      platforms.forEach(p=>{
+        if(fn.platforms&&fn.platforms[p]&&fn.platforms[p].status==='exists') groups[seg].counts[p]++;
+      });
+    });
+    const sorted=Object.entries(groups).sort((a,b)=>b[1].total-a[1].total).slice(0,12);
+    const colors={android:'#3fb950',ios:'#a0a8d8',flutter:'#58a6ff',typescript:'#3b82f6'};
+    const el=document.getElementById('feature-breakdown');
+    el.innerHTML=sorted.map(([seg,g])=>{
+      const dots=platforms.map(p=>{
+        const pct=g.total>0?Math.round(g.counts[p]/g.total*100):0;
+        const bg=parityBarColor(pct);
+        return `<span title="${p}: ${g.counts[p]}/${g.total} (${pct}%)" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${bg};margin-right:2px"></span>`;
+      }).join('');
+      return `<div style="display:flex;align-items:center;padding:3px 0;border-bottom:1px solid #21262d">
+        <span style="flex:1;font-size:10px;color:#e6edf3;text-transform:capitalize">${esc(seg)}</span>
+        <span style="font-size:9px;color:#7d8590;margin-right:6px">${g.total}</span>
+        ${dots}
+      </div>`;
+    }).join('');
+  }).catch(()=>{
+    document.getElementById('feature-breakdown').innerHTML='<div style="color:#7d8590;font-size:10px">Load parity table first</div>';
+  });
+}
 
 /* ════════════════════════════════════════════════════
    PARITY TABLE TAB
