@@ -35,10 +35,17 @@ func KebabToPascal(key string) string {
 
 // AddImport inserts an import statement at the top of content if not already present.
 // Ensures a blank line separates the last import from any following frontmatter (---).
+// If the same identifier is already imported (from any path), the call is a no-op to
+// prevent duplicate-identifier MDX errors caused by hyphen/underscore key variants.
 func AddImport(content, componentName, importPath string) string {
 	importLine := fmt.Sprintf("import %s from '%s';", componentName, importPath)
 	if strings.Contains(content, importLine) {
-		return content // idempotent
+		return content // idempotent: exact match
+	}
+	// Guard against duplicate identifiers: if this componentName is already imported
+	// (possibly from a variant path like observe_channel vs observe-channel), skip.
+	if strings.Contains(content, "import "+componentName+" from ") {
+		return content
 	}
 	updated := importLine + "\n" + content
 	// Ensure blank line before frontmatter if imports immediately precede ---

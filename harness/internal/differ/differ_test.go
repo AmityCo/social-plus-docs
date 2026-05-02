@@ -188,6 +188,30 @@ func TestDiffDocPages_AlreadyImported(t *testing.T) {
 	assert.Empty(t, findings)
 }
 
+func TestDiffDocPages_AliasVariantAlreadyImported(t *testing.T) {
+	// observe_channel (underscore) and observe-channel (hyphen) both produce
+	// identifier "ObserveChannel". If the hyphen variant is already imported,
+	// the underscore variant should NOT produce a stale-import finding.
+	dir := t.TempDir()
+	// Page imports the hyphen variant
+	docContent := "import ObserveChannel from '/snippets/social-plus-sdk/chat/observe-channel.mdx';\n<ObserveChannel />\n"
+	docFile := filepath.Join(dir, "archive-channels.mdx")
+	require.NoError(t, os.WriteFile(docFile, []byte(docContent), 0o644))
+
+	// Matcher knows about the underscore variant (different key, same identifier)
+	groups := map[string]docgen.SnippetGroup{
+		"observe_channel": {
+			Key:        "observe_channel",
+			SpDocsPage: "social-plus-sdk/chat/archive-channels",
+			Snippets:   map[string]scanner.Snippet{"android": {}},
+		},
+	}
+	m := matcher.New(groups)
+
+	findings := differ.DiffDocPages("social-plus-sdk/chat/archive-channels", docFile, m, "snippets")
+	assert.Empty(t, findings, "underscore variant should be suppressed because hyphen variant (same identifier) is already imported")
+}
+
 func TestDiffManifestCoverage_missingSnippet(t *testing.T) {
 	dir := t.TempDir()
 	snippetsDir := filepath.Join(dir, "snippets")

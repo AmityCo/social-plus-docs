@@ -26,6 +26,17 @@ func TestAddImport_Idempotent(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
+func TestAddImport_SkipsWhenIdentifierAlreadyUsed(t *testing.T) {
+	// Simulate: observe_channel is already imported; trying to also import observe-channel
+	// (different path, same identifier "ObserveChannel") should be a no-op.
+	content := "import ObserveChannel from '/snippets/social-plus-sdk/chat/observe_channel.mdx';\n# Page\n"
+	result := migrator.AddImport(content, "ObserveChannel", "/snippets/social-plus-sdk/chat/observe-channel.mdx")
+	count := strings.Count(result, "import ObserveChannel")
+	assert.Equal(t, 1, count, "should not add duplicate identifier")
+	assert.Contains(t, result, "observe_channel.mdx", "original import should be preserved")
+	assert.NotContains(t, result, "observe-channel.mdx", "variant import should not be added")
+}
+
 func TestReplaceCodeGroup_ReplacesBlock(t *testing.T) {
 	content := "import CommunityCreate from '/snippets/social-plus-sdk/social/community-create.mdx';\n\n<CodeGroup>\n\n```kotlin Android\nfoo()\n```\n\n</CodeGroup>\n"
 	result, ok := migrator.ReplaceCodeGroup(content, "CommunityCreate")

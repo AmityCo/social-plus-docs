@@ -370,8 +370,15 @@ func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsD
 		gendocsPath := docgen.DeriveMDXPath(g.SpDocsPage, g.Key)
 		importPath := "/" + snippetsDir + "/" + gendocsPath
 
-		// Already imported → no finding
+		// Already imported via exact path → no finding
 		if strings.Contains(contentStr, importPath) {
+			continue
+		}
+
+		// Covered by an alias variant (e.g. "observe_channel" vs "observe-channel" both
+		// produce identifier "ObserveChannel"). If the identifier is already imported from
+		// any path, the snippet is effectively present — skip the finding.
+		if strings.Contains(contentStr, "import "+keyToIdentifier(g.Key)+" from ") {
 			continue
 		}
 
@@ -388,6 +395,28 @@ func DiffDocPages(docPagePath, docPageFile string, m *matcher.Matcher, snippetsD
 		})
 	}
 	return findings
+}
+
+// keyToIdentifier converts a gendocs key (kebab or snake) to a PascalCase MDX identifier.
+// "observe-channel" → "ObserveChannel", "observe_channel" → "ObserveChannel"
+// Mirrors migrator.KebabToPascal to keep the logic consistent.
+func keyToIdentifier(key string) string {
+	parts := strings.FieldsFunc(key, func(r rune) bool { return r == '-' || r == '_' })
+	var b strings.Builder
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+	}
+	if b.Len() == 0 {
+		return "Snippet"
+	}
+	result := b.String()
+	if result[0] >= '0' && result[0] <= '9' {
+		return "X" + result
+	}
+	return result
 }
 
 // DiffSnippetKeyConflicts checks that all platforms for a given snippet key
