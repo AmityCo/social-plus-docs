@@ -95,6 +95,38 @@ func runAudit(args []string) {
 		// For now, only MISSING_SNIPPET, ASC_PAGE_INVALID, and DOC_MISSING are active.
 		findings := differ.Diff(fns, snips, reg, platform)
 
+		// Build set of currently-detected finding IDs for re-verification.
+		currentlyDetected := map[string]bool{}
+		for _, f := range findings {
+			currentlyDetected[f.ID] = true
+		}
+		// Re-verify existing needs_human/open findings: if no longer detected, mark fixed.
+		autoVerifiable := map[report.FindingType]bool{
+			report.TypeAscPageInvalid:  true,
+			report.TypeMissingSnippet:  true,
+			report.TypeDocMissing:      true,
+			report.TypeDocBrokenImport: true,
+		}
+		reVerifiedDiff := 0
+		for i, f := range allFindings {
+			if f.Platform != platform {
+				continue
+			}
+			if !autoVerifiable[f.Type] {
+				continue
+			}
+			if f.Status == report.StatusFixed {
+				continue
+			}
+			if !currentlyDetected[f.ID] {
+				allFindings[i].Status = report.StatusFixed
+				reVerifiedDiff++
+			}
+		}
+		if reVerifiedDiff > 0 {
+			fmt.Printf("[%s] %d findings re-verified as fixed\n", platform, reVerifiedDiff)
+		}
+
 		newCount := 0
 		for _, f := range findings {
 			if isAlreadyInReport(allFindings, f.ID) {
