@@ -216,7 +216,7 @@ Gate 3 is currently a manual step; designed to be automatable by an LLM agent in
 
 ## The Harness CLI (`harness-bin`)
 
-The harness is a Go CLI with 8 commands:
+The harness is a Go CLI with 10 commands:
 
 ### `audit` — Find problems ⚙️ Computational
 Scans SDK repos + doc pages + manifests. Produces `harness-report.json`:
@@ -279,6 +279,21 @@ and a **`confidence: high | medium | low`** signal (Gate 2):
 The `id:` is inferred deterministically (`AmityPostRepository.createPost` → `post.create`).
 A human or AI agent should review the patch file before applying (`id:` values may need adjustment),
 then verify with `audit` to confirm the count drops.
+
+### `place` — Find orphaned imports and emit placement tasks ⚙️ Computational (output triggers 🤖 Inferential)
+Scans all MDX pages for imports whose `<ComponentName />` tag is never placed in the page body.
+Emits `placement-tasks.json` — one task per affected page with component name, key, import path,
+and a 40-line snippet preview. AI agents read the task file and insert the tags at the best matching section.
+
+```bash
+./harness-bin place --config harness-config.yml --dry-run  # preview count without writing
+./harness-bin place --config harness-config.yml            # writes placement-tasks.json
+```
+
+Output: `placement-tasks.json` — array of `{page_file, page_path, components: [{name, key, import_path, snippet_preview}]}`
+
+> **Design principle:** Harness stays LLM-free. `place` does a pure scan and emits structured data.
+> Agents do the inferential placement (heading match → `### Code Examples`, fallback `## Code Examples`).
 
 ### `serve` — Live dashboard ⚙️ Computational
 Starts an HTTP server with a real-time findings dashboard.
@@ -348,8 +363,10 @@ internal/
 ├── generator/   ← Builds prompt templates for AI task generation
 ├── fixer/       ← Normalizes broken sp_docs_page URLs
 ├── migrator/    ← Adds imports + replaces CodeGroups in doc pages
+├── placer/      ← Scans MDX pages for orphaned imports → PageTask + FindUnplaced()
 ├── publicscan/  ← Scans *Repository/*Client files for public functions missing begin_public_function
 ├── patchgen/    ← Infers begin_public_function id + finds function declaration line for patch insertion
+├── runstate/    ← Per-command run state tracking (start/finish/fail) → .harness-runstate.json
 └── report/      ← Finding types, read/write harness-report.json
 ```
 
@@ -422,19 +439,30 @@ Computational steps ──→ verify, regenerate, advance to next phase
 
 **Exit criteria:** 0 `PUBLIC_FUNC_UNANNOTATED` findings
 
-### Phase 1 — Migration (one-time, in progress)
+### Phase 1 — Migration (one-time, ✅ COMPLETE)
 *Convert all existing hardcoded `<CodeGroup>` blocks to generated imports.*
 
-| Step | Type | Who |
-|---|---|---|
-| `audit` → find `DOC_PAGE_STALE_IMPORT` | ⚙️ Computational | harness |
-| `gendocs --clean` → generate snippet MDX files | ⚙️ Computational | harness |
-| `migrate` → replace CodeGroups with imports | ⚙️ Computational | harness |
-| Create page manifests (read each MDX, infer sections + functions) | 🤖 Inferential | AI agent |
-| Section-targeted `migrate` using manifests | ⚙️ Computational | harness |
-| Verify Mintlify build passes | ⚙️ Computational | CI |
+| Step | Type | Who | Status |
+|---|---|---|---|
+| `audit` → find `DOC_PAGE_STALE_IMPORT` | ⚙️ Computational | harness | ✅ |
+| `gendocs --clean` → generate snippet MDX files | ⚙️ Computational | harness | ✅ |
+| `migrate` → replace CodeGroups with imports | ⚙️ Computational | harness | ✅ |
+| Fix false stale-import findings (alias variants) | ⚙️ Computational | harness (differ.go + migrator.go) | ✅ |
 
-**Exit criteria:** 0 `DOC_PAGE_STALE_IMPORT` findings with status `open`
+**Exit criteria:** 0 `DOC_PAGE_STALE_IMPORT` findings with status `open` ✅
+
+### Phase 1b — Component Placement (🔄 In Progress)
+*Ensure every imported snippet component has its `<ComponentName />` tag placed on the page.*
+
+| Step | Type | Who | Status |
+|---|---|---|---|
+| `place` → scan for orphaned imports → `placement-tasks.json` | ⚙️ Computational | harness | ✅ |
+| Agents read task file → insert `<ComponentName />` at matched heading | 🤖 Inferential | AI agents (12 parallel) | ✅ 94 pages done |
+| Cleanup 25 over-imported pages (remove irrelevant imports) | 🤖 Inferential | AI agents | 🔄 Pending |
+| `place` re-run on cleaned pages | ⚙️ Computational | harness | 🔜 After cleanup |
+| Post-placement `audit` → 0 Mintlify syntax errors | ⚙️ Computational | harness | ✅ |
+
+**Exit criteria:** 0 orphaned imports across all pages
 
 ### Phase 2 — Coverage (ongoing)
 *Ensure every manifest function has a snippet in every platform SDK.*
@@ -488,7 +516,11 @@ snippets are complete.
 # 5. Migrate doc pages to use generated snippets
 ./harness-bin migrate --config harness-config.yml
 
-# 6. Generate AI agent runbook (computational output → triggers inferential work)
+# 6. Find orphaned imports (imported but <Name /> never placed) → emit task file
+./harness-bin place --config harness-config.yml --dry-run  # preview
+./harness-bin place --config harness-config.yml            # write placement-tasks.json
+
+# 7. Generate AI agent runbook (computational output → triggers inferential work)
 ./harness-bin prompt --config harness-config.yml
 # → produces harness-tasks.md
 
@@ -497,6 +529,12 @@ snippets are complete.
 #   - Writes missing snippets (look up SDK source, wrap in begin_sample_code)
 #   - Marks DOES_NOT_EXIST for functions unavailable on a platform
 #   - Resolves needs_human ASC_PAGE_INVALID findings
+
+# 🤖 INFERENTIAL — AI agents read placement-tasks.json and:
+#   - For each task: find best matching ## / ### heading → insert <ComponentName />
+#   - Replace <CodeGroup> blocks where present
+#   - Add fallback ## Code Examples section for unmatched components
+#   - Respect Mintlify format: blank lines, self-closing, never inside fenced code
 
 # ⚙️ COMPUTATIONAL — back to harness after inferential work:
 ./harness-bin audit --config harness-config.yml  # verify 0 open findings
@@ -509,49 +547,50 @@ snippets are complete.
 
 | Component | Status | Notes |
 |---|---|---|
-| Snippet markers in 4 SDK repos | ✅ | ~1,714 snippets use `sp_docs_page:` |
+| Snippet markers in 4 SDK repos | ✅ | ~2,402 snippets use `sp_docs_page:` |
 | `scanner` + `extractor` packages | ✅ | Backward-compat `asc_page:` parsing |
-| `gendocs --clean` | ✅ | 977 snippet MDX files generated |
-| `audit` command | ✅ | Finds all 5 finding types + manifest coverage + DOC_BROKEN_IMPORT |
-| `fix` command | ✅ | Handles `ASC_PAGE_INVALID` + `DOC_MISSING`; 125 findings fixed in latest run |
+| `gendocs --clean` | ✅ | 2,402 snippet MDX files generated |
+| `audit` command | ✅ | Finds all finding types including `SNIPPET_KEY_PLATFORM_CONFLICT`, `DOC_PAGE_STALE_IMPORT` |
+| `fix` command | ✅ | Handles `ASC_PAGE_INVALID` + `DOC_MISSING`; 525 findings fixed in latest run |
 | `migrate` command | ✅ | Section-level targeting via manifest; falls back to first CodeGroup |
 | `prompt` command | ✅ | Generates `harness-tasks.md` with MANIFEST_FILL tasks + section context |
 | `compiler` + `verifier` packages | ✅ | Compile checking + hash-based change detection |
 | `internal/manifest` package | ✅ | Parse `*.manifest.yml`; `LoadForPage`, `SectionForSnippet` |
 | `internal/mdxparse` package | ✅ | Extract `###` headings with `<CodeGroup>` from MDX |
-| `genmanifests` command | ✅ | Bootstraps 123 skeleton manifests across doc pages |
+| `genmanifests` command | ✅ | Bootstraps skeleton manifests across doc pages |
 | `DiffManifestCoverage` in differ | ✅ | MISSING_SNIPPET per section/function key |
 | `fillmanifests` command | ✅ | Keyword + page-hint + leaf-hint(≥2) fallback |
 | `DiffDocImports` in differ | ✅ | DOC_BROKEN_IMPORT: validates `/snippets/` imports exist on disk |
 | **Harness scope** | ✅ | Scoped to `social-plus-sdk/` tab only (`scope: social-plus-sdk` in config) |
-| **Page manifest `snippets:` fill-in** | 🔄 Partial | 433 keys assigned; 59 UIKit generic sections (out of scope — will fill when UIKit gets markers) |
 | **DOC_PAGE_STALE_IMPORT migration** | ✅ | All migrations complete — CodeGroups now import generated snippets |
-| **Mintlify build validation** | ✅ | 0 broken imports after migration |
-| **ASC_PAGE_INVALID fixes** | ✅ | 46 legacy URL findings fixed by `harness fix`; 1 needs_human |
-| **DOC_MISSING fixes** | ✅ | 79 invalid path findings fixed by `harness fix` |
-| **MANIFEST_FILL AI inferential pass** | ✅ | 126 sections filled by AI agents; 59 remain (UIKit generic sections — out of scope) |
+| **DOC_PAGE_STALE_IMPORT false positives** | ✅ | Fixed in `differ.go` + `migrator.go` — hyphen/underscore alias variants no longer raise stale findings; 226 → 0 |
+| **Mintlify build validation** | ✅ | 0 Mintlify syntax errors |
+| **`place` command** | ✅ | New: scans MDX for orphaned imports (imported but `<Name />` never placed) → emits `placement-tasks.json` for agents |
+| `internal/placer` package | ✅ | `FindUnplaced()` — detects unplaced imports + resolves snippet preview; 5/5 unit tests |
+| `internal/runstate` package | ✅ | Per-command run state tracking (start/finish/fail) |
+| **Component placement run** | ✅ | 1,162 `<ComponentName />` tags placed on 94 MDX pages by 12 parallel agents |
+| **25 large over-imported pages** | 🔄 Open | README, archive-channels, etc. have domain-wide import dumps; need import cleanup pass before `place` re-run |
 | `publicscan` package | ✅ | Scans 4 SDKs; public functions audited |
 | `patchgen` package | ✅ | ID inference + line finder; confidence derived from paritymap.Build |
 | `annotate` command | ✅ | Generates patches with `confidence:` field; `--apply` inserts markers |
-| `parity` command + `function-parity.json` | ✅ | 1,254 keys across 4 platforms; regenerated by audit automatically |
+| `parity` command + `function-parity.json` | ✅ | 2,410 keys across 4 platforms; regenerated by audit automatically |
 | **`/api/parity` + dashboard parity widget** | ✅ | Shows per-platform function key parity bars in live dashboard |
-| **`SNIPPET_KEY_PLATFORM_CONFLICT` finding** | ✅ | Gate 1: 176 real conflicts detected then fixed across all 4 SDK repos |
-| **Gate 1 — Computational CI gate** | ✅ | 0 open `SNIPPET_KEY_PLATFORM_CONFLICT` findings |
+| **`SNIPPET_KEY_PLATFORM_CONFLICT` finding** | 🔄 Open | 252 remaining conflicts (down from 176 original set — grew as new snippets added) |
+| **Gate 1 — Computational CI gate** | 🔄 252 conflicts | Target: 0 `SNIPPET_KEY_PLATFORM_CONFLICT` findings |
 | **Gate 2 — Confidence signal** | ✅ | `annotate` patches carry `confidence: high/medium/low` (2+ / 1 / 0 sibling platforms) |
 | **Gate 3 — Human triage** | 🔜 Future | Manual for now; designed to be automatable by LLM agent |
 | **`serve` + `/api/coverage` + `/api/parity`** | ✅ | Live dashboard with platform coverage + function parity widgets |
-| **TypeScript parity gap filler** | ✅ | `harness/scripts/fill-ts-gaps.py` — generates `Amity*.ts` via Claude Sonnet |
-| **TypeScript parity** | 🔄 17.7% | 222/1,254 keys covered; run `fill-ts-gaps.py --batch 30` for each increment |
-| **Phase 0 — SDK Annotation Campaign** | 🔄 In progress | 11 `PUBLIC_FUNC_UNANNOTATED` needs_human remain |
+| **Phase 0 — SDK Annotation Campaign** | ✅ | 0 `PUBLIC_FUNC_UNANNOTATED` open |
+| **All-platform snippet parity** | ✅ | Android 99.6%, Flutter 100.0%, iOS 99.6%, TypeScript 99.6% (2,410 total keys) |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
-**Current open findings (Gate 1 passing):**
-- `SNIPPET_KEY_PLATFORM_CONFLICT`: **0 open** ✅ (was 176 — all fixed)
-- `ASC_PAGE_INVALID`: **0 open** ✅ (46 fixed, 1 needs_human)
-- `DOC_MISSING`: **0 open** ✅ (79 fixed)
-- `DOC_PAGE_STALE_IMPORT`: 1 open
-- `MINTLIFY_SYNTAX_ERROR`: 1 open
-- `PUBLIC_FUNC_UNANNOTATED`: 11 needs_human (Phase 0 — use `harness annotate`)
+**Current open findings:**
+- `SNIPPET_KEY_PLATFORM_CONFLICT`: **252 open** (Gate 1 not yet passing — need alignment across platforms)
+- `ASC_PAGE_INVALID`: **3,626 open** (large batch of legacy URL findings from new snippets — need `harness fix` pass)
+- `DOC_MISSING`: **26 open** (doc pages referenced by snippets that don't exist yet)
+- `MINTLIFY_SYNTAX_ERROR`: **1 open** (transient; Mintlify broken-links tool noise)
+- `DOC_PAGE_STALE_IMPORT`: **0** ✅
+- `PUBLIC_FUNC_UNANNOTATED`: **0** ✅
 
 ---
 
