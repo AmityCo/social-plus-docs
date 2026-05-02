@@ -63,6 +63,35 @@ func runFix(args []string) {
 		_ = sdkPath
 
 		switch f.Type {
+		case report.TypeDocMissing:
+			fmt.Printf("[fix] DOC_MISSING %s\n", f.SnippetFile)
+			if f.SnippetFile == "" || f.DocPage == "" {
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | missing snippet_file or doc_page field"
+				continue
+			}
+			snippetAbs := filepath.Clean(filepath.Join(filepath.Dir(*cfgPath), f.SnippetFile))
+			liveDocPage, extractErr := extractAscPageFromSnippet(snippetAbs)
+if extractErr != nil {
+    liveDocPage = f.DocPage
+}
+newPath, fixErr := fixer.FixAscPage(snippetAbs, liveDocPage, reg)
+			if fixErr != nil {
+				fmt.Printf("  FAILED: %v\n", fixErr)
+				r.Findings[i].Status = report.StatusNeedsHuman
+				r.Findings[i].Detail += " | auto-fix failed: " + fixErr.Error()
+			} else {
+				sealed, sealErr := verifier.Seal(f, snippetAbs, "PASS", "n/a")
+				if sealErr != nil {
+					fmt.Printf("  FAILED to seal: %v\n", sealErr)
+					r.Findings[i].Status = report.StatusNeedsHuman
+					r.Findings[i].Detail += " | seal failed: " + sealErr.Error()
+				} else {
+					r.Findings[i] = sealed
+					fmt.Printf("  → %s\n", newPath)
+					fixedCount++
+				}
+			}
 		case report.TypeAscPageInvalid:
 			fmt.Printf("[fix] ASC_PAGE_INVALID %s\n", f.SnippetFile)
 			// Fix 4: guard against empty snippet_file field.
