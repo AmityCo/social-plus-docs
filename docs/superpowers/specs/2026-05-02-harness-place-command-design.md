@@ -98,6 +98,17 @@ Each agent receives one task entry. The agent:
 - Do NOT add or remove imports (already done by migrate)
 - One `<ComponentName />` tag per component, placed exactly once
 - If a `<ComponentName />` already exists anywhere in the file, skip that component
+- Always place with a blank line before and after: `\n\n<ComponentName />\n\n`
+- Match existing indentation if placing inside a `<Tab>` / `<Accordion>` / `<Step>` block (typically 4 spaces)
+- **Never** place inside a fenced code block (` ```...``` `), inside frontmatter (`---...---`), or inside an HTML/JSX attribute value
+- Self-closing tag only: `<ComponentName />` — never `<ComponentName></ComponentName>`
+- Replace `<CodeGroup>...</CodeGroup>` (full block) with `<ComponentName />` when found in the matched section, preserving surrounding blank lines
+
+**Post-placement validation (Copilot CLI, after all agents complete):**
+```
+cd harness && ./harness-bin audit
+```
+Must report 0 Mintlify syntax errors. If any page has a new syntax error, revert that file and log it as needing manual review.
 
 ---
 
