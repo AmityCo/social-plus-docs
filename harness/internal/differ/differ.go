@@ -299,7 +299,7 @@ func firstNonEmptyLine(content string) string {
 // This matches the naming convention used when generating snippet files.
 func fnIDToClassName(id string) string {
 	parts := strings.FieldsFunc(id, func(r rune) bool {
-		return r == '.' || r == '_' || r == ' '
+		return r == '.' || r == '_' || r == ' ' || r == '-'
 	})
 	result := "Amity"
 	for _, p := range parts {
