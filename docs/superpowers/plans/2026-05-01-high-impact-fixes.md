@@ -421,7 +421,7 @@ mkdir -p harness/scripts
 
 - [ ] **Step 2: Create `harness/scripts/fill-ts-gaps.py`**
 
-```python
+````python
 #!/usr/bin/env python3
 """
 fill-ts-gaps.py — Generate TypeScript snippet files for parity gaps.
@@ -646,7 +646,7 @@ def main():
 
 if __name__ == '__main__':
     main()
-```
+````
 
 - [ ] **Step 3: Test the script in dry-run mode**
 
