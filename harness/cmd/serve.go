@@ -13,7 +13,8 @@ import (
 	"sort"
 
 	"social-plus/harness/internal/config"
-	"social-plus/harness/internal/scanner"
+	"social-plus/harness/internal/publicscan"
+	"strings"
 )
 
 //go:embed dashboard.html
@@ -98,7 +99,9 @@ type coverageResponse struct {
 	Platforms []coveragePlatform `json:"platforms"`
 }
 
-// coverageHandler computes per-platform annotation coverage from the SDK snippet dirs.
+// coverageHandler computes per-platform annotation coverage using publicscan.
+// This correctly identifies public API functions per platform (e.g. for TypeScript,
+// only files directly in *Repository/api/ or *Client/api/ are counted).
 func coverageHandler(cfgPath string) http.Handler {
 	cfg, loadErr := config.Load(cfgPath)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -118,30 +121,30 @@ func coverageHandler(cfgPath string) http.Handler {
 		rows := make([]coveragePlatform, 0, len(platforms))
 		for _, platform := range platforms {
 			sdkCfg := cfg.SDKs[platform]
-			snippetPath := filepath.Join(cfgDir, sdkCfg.Path, sdkCfg.SnippetDir)
+			sdkPath := filepath.Join(cfgDir, sdkCfg.Path)
 
-			// Count total platform-matching source files in the snippet dir.
-			total := 0
-			_ = filepath.WalkDir(snippetPath, func(path string, d os.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
-					return nil //nolint:nilerr
-				}
-				if matchesExt(path, platform) {
-					total++
-				}
-				return nil
-			})
+			// Use publicscan.Scan to count public functions, consistent with
+			// the PUBLIC_FUNC_UNANNOTATED harness check.
+			pubScanDir := sdkPath
+			var pubScanExclude []string
+			if sdkCfg.SnippetDir != "" && strings.ToLower(platform) != "typescript" {
+				pubScanExclude = []string{sdkCfg.SnippetDir}
+			} else if strings.ToLower(platform) == "typescript" && sdkCfg.SnippetDir != "" {
+				pubScanDir = filepath.Join(sdkPath, sdkCfg.SnippetDir)
+			}
 
-			// Count files that have at least one annotated snippet.
-			snippets, err := scanner.Scan(snippetPath, platform)
+			pubFuncs, err := publicscan.Scan(pubScanDir, platform, pubScanExclude...)
 			if err != nil {
-				snippets = nil
+				pubFuncs = nil
 			}
-			annotatedSet := make(map[string]struct{}, len(snippets))
-			for _, s := range snippets {
-				annotatedSet[s.File] = struct{}{}
+
+			total := len(pubFuncs)
+			annotated := 0
+			for _, pf := range pubFuncs {
+				if pf.IsAnnotated {
+					annotated++
+				}
 			}
-			annotated := len(annotatedSet)
 
 			var pct float64
 			if total > 0 {
