@@ -107,14 +107,35 @@ func TestReadDeletedFile(t *testing.T) {
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=t@t.com",
 			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=t@t.com")
-		_, err := cmd.CombinedOutput()
-		require.NoError(t, err)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git cmd failed: %s\n%s", args, out)
 	}
 	run("git", "rm", "snippets/Foo.kt")
 	run("git", "commit", "-m", "delete foo")
 	content, err := delta.ReadDeletedFile(dir, baseline, "snippets/Foo.kt")
 	require.NoError(t, err)
 	require.Equal(t, "// foo", content)
+}
+
+func TestScan_RenameOutOfSnippetDir(t *testing.T) {
+	dir := initRepo(t)
+	baseline := gitHEAD(t, dir)
+	run := func(args ...string) {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=t@t.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=t@t.com")
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git cmd failed: %s\n%s", args, out)
+	}
+	run("git", "mv", "snippets/Foo.kt", "Foo.kt")
+	run("git", "commit", "-m", "move out of snippets")
+	result, err := delta.Scan(dir, "snippets", baseline)
+	require.NoError(t, err)
+	require.Len(t, result.Deleted, 1)
+	require.Equal(t, "snippets/Foo.kt", result.Deleted[0])
+	require.Empty(t, result.Added)
+	require.Empty(t, result.Modified)
 }
 
 func gitHEAD(t *testing.T, dir string) string {

@@ -1,6 +1,7 @@
 package delta
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,11 @@ func Scan(repoPath, snippetDir, baseline string) (DeltaResult, error) {
 	cmd.Dir = repoPath
 	out, err := cmd.Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return DeltaResult{}, fmt.Errorf("git diff in %s: %w\n%s",
+				repoPath, err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return DeltaResult{}, fmt.Errorf("git diff in %s: %w", repoPath, err)
 	}
 	var result DeltaResult
@@ -48,17 +54,35 @@ func Scan(repoPath, snippetDir, baseline string) (DeltaResult, error) {
 			continue
 		}
 		status := fields[0]
-		path := filepath.ToSlash(fields[len(fields)-1])
-		if !strings.HasPrefix(path, prefix) {
-			continue
-		}
 		switch {
 		case status == "A":
-			result.Added = append(result.Added, path)
-		case status == "M" || strings.HasPrefix(status, "R"):
-			result.Modified = append(result.Modified, path)
+			path := filepath.ToSlash(fields[len(fields)-1])
+			if strings.HasPrefix(path, prefix) {
+				result.Added = append(result.Added, path)
+			}
+		case status == "M":
+			path := filepath.ToSlash(fields[len(fields)-1])
+			if strings.HasPrefix(path, prefix) {
+				result.Modified = append(result.Modified, path)
+			}
+		case strings.HasPrefix(status, "R"):
+			oldPath := filepath.ToSlash(fields[1])
+			newPath := filepath.ToSlash(fields[len(fields)-1])
+			oldInSnippets := strings.HasPrefix(oldPath, prefix)
+			newInSnippets := strings.HasPrefix(newPath, prefix)
+			switch {
+			case oldInSnippets && newInSnippets:
+				result.Modified = append(result.Modified, newPath)
+			case oldInSnippets: // renamed out → treat as deletion
+				result.Deleted = append(result.Deleted, oldPath)
+			case newInSnippets: // renamed in → treat as addition
+				result.Added = append(result.Added, newPath)
+			}
 		case status == "D":
-			result.Deleted = append(result.Deleted, path)
+			path := filepath.ToSlash(fields[len(fields)-1])
+			if strings.HasPrefix(path, prefix) {
+				result.Deleted = append(result.Deleted, path)
+			}
 		}
 	}
 	return result, nil
@@ -72,7 +96,12 @@ func ReadDeletedFile(repoPath, baseline, path string) (string, error) {
 	cmd.Dir = repoPath
 	out, err := cmd.Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return "", fmt.Errorf("git show %s in %s: %w\n%s",
+				ref, repoPath, err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return "", fmt.Errorf("git show %s in %s: %w", ref, repoPath, err)
 	}
-	return strings.TrimRight(string(out), "\n"), nil
+	return strings.TrimSuffix(string(out), "\n"), nil
 }
