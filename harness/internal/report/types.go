@@ -13,6 +13,11 @@ const (
 	TypePublicFuncUnannotated      FindingType = "PUBLIC_FUNC_UNANNOTATED"
 	TypeSnippetKeyPlatformConflict FindingType = "SNIPPET_KEY_PLATFORM_CONFLICT"
 	TypeSnippetOrphaned            FindingType = "SNIPPET_ORPHANED"
+	TypeSnippetCuratedRemoved      FindingType = "SNIPPET_CURATED_REMOVED"
+	TypeSnippetCuratedMoved        FindingType = "SNIPPET_CURATED_MOVED"
+	TypeSnippetCurationFlagged     FindingType = "SNIPPET_CURATION_FLAGGED"
+	TypeAnnotationSuspect          FindingType = "ANNOTATION_SUSPECT"
+	TypeAnnotationUncertain        FindingType = "ANNOTATION_UNCERTAIN"
 )
 
 type FindingStatus string
