@@ -20,7 +20,8 @@ func (d DeltaResult) HasChanges() bool {
 }
 
 // Scan runs git diff --name-status <baseline>..HEAD in repoPath and returns
-// files under snippetDir that were added (A), modified (M), or deleted (D).
+// files under snippetDir that were added (A), modified (M/R), or deleted (D).
+// Renamed files (R<score>) are classified as Modified.
 // snippetDir is a path prefix relative to the repo root (e.g. "snippets").
 // Returns empty DeltaResult (no error) if baseline == "".
 func Scan(repoPath, snippetDir, baseline string) (DeltaResult, error) {
