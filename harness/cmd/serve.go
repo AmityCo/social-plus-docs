@@ -166,31 +166,6 @@ func coverageHandler(cfgPath string) http.Handler {
 	})
 }
 
-// matchesExt returns true when path has a file extension appropriate for platform.
-func matchesExt(path, platform string) bool {
-	switch platform {
-	case "android":
-		return hasSuffix(path, ".kt", ".java")
-	case "ios":
-		return hasSuffix(path, ".swift")
-	case "flutter":
-		return hasSuffix(path, ".dart")
-	case "typescript":
-		return hasSuffix(path, ".ts", ".tsx")
-	default:
-		return false
-	}
-}
-
-func hasSuffix(s string, suffixes ...string) bool {
-	for _, suf := range suffixes {
-		if len(s) >= len(suf) && s[len(s)-len(suf):] == suf {
-			return true
-		}
-	}
-	return false
-}
-
 // parityPlatformRow is one row in the /api/parity response.
 type parityPlatformRow struct {
 	Platform string  `json:"platform"`

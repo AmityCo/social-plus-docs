@@ -80,7 +80,10 @@ func runAudit(args []string) {
 		sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
 		snippetPath := filepath.Join(sdkPath, sdkCfg.SnippetDir)
 
-		// --- Incremental: skip platform if no changes since baseline ---
+		// --- Incremental: skip diff/audit for platforms with no changes since baseline ---
+		// skipAudit = true means we still collect snippets for parity/stale-import checks,
+		// but skip extractor.Scan + differ.Diff (the expensive per-function diff work).
+		var skipAudit bool
 		if *incremental && sdkCfg.BaselineCommit != "" {
 			d, deltaErr := delta.Scan(sdkPath, sdkCfg.SnippetDir, sdkCfg.BaselineCommit)
 			if deltaErr != nil {
@@ -90,8 +93,8 @@ func runAudit(args []string) {
 				if len(shortHash) >= 12 {
 					shortHash = shortHash[:12]
 				}
-				fmt.Printf("[%s] no changes since %s, skipping\n", platform, shortHash)
-				continue
+				fmt.Printf("[%s] no changes since %s, skipping audit\n", platform, shortHash)
+				skipAudit = true
 			} else {
 				// Emit SNIPPET_ORPHANED findings for deleted snippet files
 				for _, deletedPath := range d.Deleted {
@@ -121,18 +124,24 @@ func runAudit(args []string) {
 			}
 		}
 
-		fns, err := extractor.Scan(sdkPath, platform)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "extract %s: %v\n", platform, err)
-			continue
-		}
-
+		// Always scan snippets so allSnips is complete for parity + stale-import checks,
+		// even when this platform's audit is being skipped.
 		snips, err := scanner.Scan(snippetPath, platform)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "scan snippets %s: %v\n", platform, err)
 			continue
 		}
-		allSnips = append(allSnips, snips...) // collect for DOC_PAGE_STALE_IMPORT below
+		allSnips = append(allSnips, snips...)
+
+		if skipAudit {
+			continue
+		}
+
+		fns, err := extractor.Scan(sdkPath, platform)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "extract %s: %v\n", platform, err)
+			continue
+		}
 
 		// TODO: Load MDX content for each snippet's asc_page and call differ.DiffWithMDX
 		// to enable DOC_SURFACE_DRIFT and SNIPPET_CONTENT_DRIFT detection.
