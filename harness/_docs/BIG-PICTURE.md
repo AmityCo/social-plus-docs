@@ -480,6 +480,45 @@ Computational steps ──→ verify, regenerate, advance to next phase
 
 **Exit criteria:** Every manifest function has snippets or is marked `DOES_NOT_EXIST`
 
+### Phase 2A: Incremental Audit (Delta Mode) ✅
+
+**Status:** Complete  
+**Completed:** 2026-05-03
+
+The harness now supports `harness audit --incremental` which:
+- Skips SDK platforms with no git changes since `baseline_commit`
+- Emits `SNIPPET_ORPHANED` findings when annotated snippet files are deleted
+- Automatically updates baseline hashes in `harness-config.yml` after a successful run
+
+#### New components
+
+| Package / Command | Responsibility |
+|---|---|
+| `internal/delta` | `Scan()` + `ReadDeletedFile()` — git diff wrapper |
+| `internal/config` | `BaselineCommit` field + atomic `Config.Save()` |
+| `internal/scanner` | `ScanFiles()` + `ScanFileContent()` for delta-scoped scanning |
+| `cmd/baseline` | Records current SDK HEAD commits as baselines |
+| `cmd/audit --incremental` | Delta-mode audit with skip/orphan detection |
+
+#### Usage
+
+First run (after a full audit):
+```bash
+./harness-bin baseline          # records HEAD commits for all 4 SDKs
+./harness-bin audit --incremental  # all platforms skip (no changes)
+```
+
+Steady-state (after SDK changes):
+```bash
+./harness-bin audit --incremental  # only changed platforms re-scan
+# baselines auto-updated after successful run
+```
+
+#### Finding type added
+- `SNIPPET_ORPHANED` — emitted when a deleted file contained annotated snippet blocks; signals that a doc page section may need a content decision (keep, update, or remove)
+
+---
+
 ### Phase 3 — Steady State (CI, future)
 *Keep docs in sync automatically on every SDK change.*
 
