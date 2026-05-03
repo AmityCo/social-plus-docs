@@ -46,17 +46,15 @@ func runCurate(args []string) {
 }
 
 func runCurateGenTasks(cfgDir, docsBase, pageFilter, outPath string) error {
-	return runCurateGenTasksForTest(cfgDir, "", pageFilter, outPath)
+	return runCurateGenTasksForTest(cfgDir, docsBase, pageFilter, outPath)
 }
 
 // runCurateGenTasksForTest is the testable core of gen-tasks mode.
-// If cfgPath is non-empty, it loads config from that path to resolve docsBase.
-func runCurateGenTasksForTest(cfgDir, cfgPath, pageFilter, outPath string) error {
-	docsBase := filepath.Join(cfgDir, "docs")
-	if cfgPath != "" {
-		if cfg, err := config.Load(cfgPath); err == nil {
-			docsBase = filepath.Join(cfgDir, cfg.Docs.Path)
-		}
+// cfgDir is used only for resolving relative paths; docsBase is the pre-resolved docs directory.
+// Tests pass an explicit docsBase derived from the test fixture config.
+func runCurateGenTasksForTest(cfgDir, docsBase, pageFilter, outPath string) error {
+	if docsBase == "" {
+		docsBase = filepath.Join(cfgDir, "docs")
 	}
 
 	snippetReader := func(importPath string) string {

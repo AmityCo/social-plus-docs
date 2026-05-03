@@ -43,7 +43,7 @@ title: "Reactions"
 	require.NoError(t, os.WriteFile(filepath.Join(snipDir, "post-like.mdx"), []byte("// post like code"), 0o644))
 
 	outPath := filepath.Join(dir, "curate-tasks.md")
-	err := runCurateGenTasksForTest(dir, filepath.Join(dir, "harness-config.yml"), "", outPath)
+	err := runCurateGenTasksForTest(dir, filepath.Join(dir, "docs"), "", outPath)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(outPath)
@@ -79,7 +79,7 @@ No code here.
 	require.NoError(t, os.WriteFile(filepath.Join(docsDir, "empty.mdx"), []byte(mdxContent), 0o644))
 
 	outPath := filepath.Join(dir, "curate-tasks.md")
-	err := runCurateGenTasksForTest(dir, filepath.Join(dir, "harness-config.yml"), "", outPath)
+	err := runCurateGenTasksForTest(dir, filepath.Join(dir, "docs"), "", outPath)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(outPath)
