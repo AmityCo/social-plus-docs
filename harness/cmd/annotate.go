@@ -34,8 +34,9 @@ func runAnnotate(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	apply := fs.Bool("apply", false, "insert annotations into SDK source files")
 	outPath := fs.String("out", "annotation-patches.yml", "output patch file path")
-	qa := fs.Bool("qa", false, "generate annotation-qa-tasks.md for AI agent review of asc_page assignments")
-	qaOut := fs.String("qa-out", "annotation-qa-tasks.md", "output path for QA tasks file")
+	qa       := fs.Bool("qa", false, "generate annotation-qa-tasks.md for AI agent review of asc_page assignments")
+	qaOut    := fs.String("qa-out", "annotation-qa-tasks.md", "output path for QA tasks file")
+	qaPatches := fs.String("qa-patches", "annotation-qa-patches.yml", "input QA patches file (format: patches: [{file, function, asc_page}])")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
 		os.Exit(1)
@@ -48,7 +49,7 @@ func runAnnotate(args []string) {
 		if err2 == nil {
 			docsBase2 = filepath.Join(cfgDir2, cfg2.Docs.Path)
 		}
-		patchFile := filepath.Join(cfgDir2, *outPath)
+		patchFile := filepath.Join(cfgDir2, *qaPatches)
 		if err2 = runAnnotateQA(docsBase2, patchFile, filepath.Join(cfgDir2, *qaOut)); err2 != nil {
 			fmt.Fprintf(os.Stderr, "annotate --qa: %v\n", err2)
 			os.Exit(1)
@@ -414,9 +415,6 @@ func writeAnnotationQATasks(outPath string, byPage map[string][]QAPatch, pagePro
 		sb.WriteString(fmt.Sprintf("## Page: `%s`\n\n", page))
 		sb.WriteString("**Page prose:**\n")
 		prose := pageProse[page]
-		if len(prose) > 500 {
-			prose = prose[:500] + "…"
-		}
 		sb.WriteString("> " + strings.ReplaceAll(strings.TrimSpace(prose), "\n", "\n> ") + "\n\n")
 		sb.WriteString("**Functions to assess:**\n\n")
 		for _, p := range patches {
