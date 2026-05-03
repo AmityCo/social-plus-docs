@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"social-plus/harness/internal/config"
+	"social-plus/harness/internal/delta"
 	"social-plus/harness/internal/differ"
 	"social-plus/harness/internal/docgen"
 	"social-plus/harness/internal/extractor"
@@ -31,6 +32,7 @@ func runAudit(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	reportPath := fs.String("report", "harness-report.json", "output report path")
 	failOnFindings := fs.Bool("fail-on-findings", false, "exit non-zero if open findings exist")
+	incremental := fs.Bool("incremental", false, "only scan platforms with changes since baseline_commit")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
 		os.Exit(1)
@@ -77,6 +79,47 @@ func runAudit(args []string) {
 	for platform, sdkCfg := range cfg.SDKs {
 		sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
 		snippetPath := filepath.Join(sdkPath, sdkCfg.SnippetDir)
+
+		// --- Incremental: skip platform if no changes since baseline ---
+		if *incremental && sdkCfg.BaselineCommit != "" {
+			d, deltaErr := delta.Scan(sdkPath, sdkCfg.SnippetDir, sdkCfg.BaselineCommit)
+			if deltaErr != nil {
+				fmt.Fprintf(os.Stderr, "[%s] delta scan error: %v — falling back to full scan\n", platform, deltaErr)
+			} else if !d.HasChanges() {
+				shortHash := sdkCfg.BaselineCommit
+				if len(shortHash) >= 12 {
+					shortHash = shortHash[:12]
+				}
+				fmt.Printf("[%s] no changes since %s, skipping\n", platform, shortHash)
+				continue
+			} else {
+				// Emit SNIPPET_ORPHANED findings for deleted snippet files
+				for _, deletedPath := range d.Deleted {
+					content, readErr := delta.ReadDeletedFile(sdkPath, sdkCfg.BaselineCommit, deletedPath)
+					if readErr != nil {
+						fmt.Fprintf(os.Stderr, "[%s] read deleted %s: %v\n", platform, deletedPath, readErr)
+						continue
+					}
+					absDeleted := filepath.Join(sdkPath, deletedPath)
+					deletedSnips, _ := scanner.ScanFileContent(content, absDeleted, platform)
+					for _, s := range deletedSnips {
+						key := docgen.DeriveKey(s.Filename)
+						findingID := "snippet-orphaned:" + platform + ":" + key
+						if isAlreadyInReport(allFindings, findingID) {
+							continue
+						}
+						allFindings = append(allFindings, report.Finding{
+							ID:       findingID,
+							Type:     report.TypeSnippetOrphaned,
+							Platform: platform,
+							Status:   report.StatusOpen,
+							Detail:   fmt.Sprintf("snippet key %q was deleted from %s (file: %s)", key, platform, deletedPath),
+						})
+						fmt.Printf("[%s] SNIPPET_ORPHANED: %s (deleted)\n", platform, key)
+					}
+				}
+			}
+		}
 
 		fns, err := extractor.Scan(sdkPath, platform)
 		if err != nil {
@@ -438,6 +481,33 @@ func runAudit(args []string) {
 		r.Summary.Open, r.Summary.Fixed, r.Summary.NeedsHuman))
 	fmt.Printf("\nSummary: %d open, %d fixed, %d needs_human\n",
 		r.Summary.Open, r.Summary.Fixed, r.Summary.NeedsHuman)
+
+	// Update baseline commits after successful incremental run
+	if *incremental {
+		anyUpdated := false
+		for platform, sdkCfg := range cfg.SDKs {
+			sdkPath := filepath.Join(filepath.Dir(*cfgPath), sdkCfg.Path)
+			cmd := exec.Command("git", "rev-parse", "HEAD")
+			cmd.Dir = sdkPath
+			out, err := cmd.Output()
+			if err != nil {
+				continue
+			}
+			newCommit := strings.TrimSpace(string(out))
+			if newCommit != sdkCfg.BaselineCommit {
+				sdkCfg.BaselineCommit = newCommit
+				cfg.SDKs[platform] = sdkCfg
+				anyUpdated = true
+			}
+		}
+		if anyUpdated {
+			if err := cfg.Save(*cfgPath); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not update baselines in config: %v\n", err)
+			} else {
+				fmt.Println("[audit] baselines updated in config")
+			}
+		}
+	}
 
 	if *failOnFindings && r.Summary.Open > 0 {
 		os.Exit(1)
