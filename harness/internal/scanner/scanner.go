@@ -114,7 +114,7 @@ func ScanFiles(paths []string, platform string) ([]Snippet, error) {
 		}
 		snips, err := scanFile(p, platform)
 		if err != nil {
-			return results, err
+			return nil, err
 		}
 		results = append(results, snips...)
 	}

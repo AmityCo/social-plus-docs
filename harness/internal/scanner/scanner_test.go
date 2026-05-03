@@ -52,6 +52,30 @@ fun foo() {}
 	require.Equal(t, "social-plus-sdk/chat/channels", snips[0].SpDocsPage)
 }
 
+func TestScanFileContent(t *testing.T) {
+	content := `/* begin_sample_code
+   filename: foo.kt
+   sp_docs_page: social-plus-sdk/chat/channels
+   description: from content
+   */
+fun foo() {}
+/* end_sample_code */`
+
+	snips, err := scanner.ScanFileContent(content, "Foo.kt", "android")
+	require.NoError(t, err)
+	require.Len(t, snips, 1)
+	require.Equal(t, "social-plus-sdk/chat/channels", snips[0].SpDocsPage)
+	require.Equal(t, "foo.kt", snips[0].Filename)
+	require.Equal(t, "from content", snips[0].Description)
+	require.Equal(t, "Foo.kt", snips[0].File)
+	require.Equal(t, "android", snips[0].Platform)
+
+	// platform mismatch → nothing returned
+	snips2, err2 := scanner.ScanFileContent(content, "Foo.kt", "flutter")
+	require.NoError(t, err2)
+	require.Empty(t, snips2)
+}
+
 func TestScanBackwardCompatAscPage(t *testing.T) {
 	// Snippets using legacy asc_page: key are still parsed into SpDocsPage.
 	dir := t.TempDir()
