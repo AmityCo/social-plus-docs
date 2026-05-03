@@ -8,9 +8,10 @@ import (
 )
 
 type SDKConfig struct {
-	Path       string   `yaml:"path"`
-	SnippetDir string   `yaml:"snippet_dir"`
-	CompileCmd []string `yaml:"compile_cmd"`
+	Path           string   `yaml:"path"`
+	SnippetDir     string   `yaml:"snippet_dir"`
+	CompileCmd     []string `yaml:"compile_cmd"`
+	BaselineCommit string   `yaml:"baseline_commit,omitempty"`
 }
 
 type DocsConfig struct {
@@ -26,6 +27,16 @@ type Config struct {
 	SDKs map[string]SDKConfig `yaml:"sdks"`
 	Docs DocsConfig           `yaml:"docs"`
 	LLM  LLMConfig            `yaml:"llm"`
+}
+
+// Save writes the config back to path using YAML marshalling.
+// Existing comments in the file are not preserved.
+func (c *Config) Save(path string) error {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0o644)
 }
 
 func Load(path string) (*Config, error) {

@@ -12,6 +12,7 @@ const (
 	TypeDocBrokenImport            FindingType = "DOC_BROKEN_IMPORT"
 	TypePublicFuncUnannotated      FindingType = "PUBLIC_FUNC_UNANNOTATED"
 	TypeSnippetKeyPlatformConflict FindingType = "SNIPPET_KEY_PLATFORM_CONFLICT"
+	TypeSnippetOrphaned            FindingType = "SNIPPET_ORPHANED"
 )
 
 type FindingStatus string
