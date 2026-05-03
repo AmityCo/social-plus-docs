@@ -30,6 +30,28 @@ func TestScanLegacyURL(t *testing.T) {
 	assert.Equal(t, "https://docs.amity.co/social/android", snippets[0].SpDocsPage)
 }
 
+func TestScanFiles(t *testing.T) {
+	dir := t.TempDir()
+	f1 := filepath.Join(dir, "Foo.kt")
+	f2 := filepath.Join(dir, "Bar.kt")
+	content := `class AmityFoo {
+/* begin_sample_code
+   filename: foo.kt
+   sp_docs_page: social-plus-sdk/chat/channels
+   description: test
+   */
+fun foo() {}
+/* end_sample_code */
+}`
+	require.NoError(t, os.WriteFile(f1, []byte(content), 0o644))
+	require.NoError(t, os.WriteFile(f2, []byte("// no snippet"), 0o644))
+
+	snips, err := scanner.ScanFiles([]string{f1, f2}, "android")
+	require.NoError(t, err)
+	require.Len(t, snips, 1)
+	require.Equal(t, "social-plus-sdk/chat/channels", snips[0].SpDocsPage)
+}
+
 func TestScanBackwardCompatAscPage(t *testing.T) {
 	// Snippets using legacy asc_page: key are still parsed into SpDocsPage.
 	dir := t.TempDir()
