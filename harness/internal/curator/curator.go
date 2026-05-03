@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -73,14 +74,14 @@ type ParsedPage struct {
 }
 
 var (
-	importRe    = regexp.MustCompile(`(?m)^import\s+(\w+)\s+from\s+'([^']+\.mdx)'\s*;?\s*$`)
+	importRe    = regexp.MustCompile(`(?m)^import\s+(\w+)\s+from\s+['"]([^'"]+\.mdx)['"]\s*;?\s*$`)
 	componentRe = regexp.MustCompile(`<(\w+)\s*/>|<(\w+)\s*>`)
 	headingRe   = regexp.MustCompile(`^##\s+.+`)
 )
 
 // ParsePage parses mdx content and returns a ParsedPage.
 // snippetReader(importPath) should return the snippet file content; "" is fine.
-func ParsePage(file, pagePath, content string, snippetReader func(importPath string) string) (ParsedPage, error) {
+func ParsePage(file, pagePath, content string, snippetReader func(importPath string) string) ParsedPage {
 	imports := map[string]string{} // name -> importPath
 	for _, m := range importRe.FindAllStringSubmatch(content, -1) {
 		imports[m[1]] = m[2]
@@ -105,6 +106,8 @@ func ParsePage(file, pagePath, content string, snippetReader func(importPath str
 			})
 		}
 	}
+
+	sort.Slice(placed, func(i, j int) bool { return placed[i].Name < placed[j].Name })
 
 	// Extract ## sections.
 	var sections []string
@@ -132,7 +135,7 @@ func ParsePage(file, pagePath, content string, snippetReader func(importPath str
 		Prose:    prose,
 		Sections: sections,
 		Placed:   placed,
-	}, nil
+	}
 }
 
 // ReadDecisions reads curate-decisions.json from path.
