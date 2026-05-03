@@ -34,9 +34,26 @@ func runAnnotate(args []string) {
 	cfgPath := fs.String("config", "harness-config.yml", "path to harness-config.yml")
 	apply := fs.Bool("apply", false, "insert annotations into SDK source files")
 	outPath := fs.String("out", "annotation-patches.yml", "output patch file path")
+	qa := fs.Bool("qa", false, "generate annotation-qa-tasks.md for AI agent review of asc_page assignments")
+	qaOut := fs.String("qa-out", "annotation-qa-tasks.md", "output path for QA tasks file")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *qa {
+		cfgDir2 := filepath.Dir(*cfgPath)
+		cfg2, err2 := config.Load(*cfgPath)
+		docsBase2 := filepath.Join(cfgDir2, "docs")
+		if err2 == nil {
+			docsBase2 = filepath.Join(cfgDir2, cfg2.Docs.Path)
+		}
+		patchFile := filepath.Join(cfgDir2, *outPath)
+		if err2 = runAnnotateQA(docsBase2, patchFile, filepath.Join(cfgDir2, *qaOut)); err2 != nil {
+			fmt.Fprintf(os.Stderr, "annotate --qa: %v\n", err2)
+			os.Exit(1)
+		}
+		return
 	}
 
 	cfg, err := config.Load(*cfgPath)
@@ -291,4 +308,122 @@ func findFuncBodyEnd(lines []string, startLine int) int {
 		}
 	}
 	return startLine
+}
+
+// QAPatch is a minimal view of one patch entry for QA purposes.
+type QAPatch struct {
+	File     string `yaml:"file"`
+	Function string `yaml:"function"`
+	AscPage  string `yaml:"asc_page"`
+}
+
+// QAPatchFile is the minimal structure of annotation-patches.yml for QA reading.
+type QAPatchFile struct {
+	Patches []QAPatch `yaml:"patches"`
+}
+
+// runAnnotateQA reads annotation-patches.yml, loads each asc_page's prose,
+// and generates annotation-qa-tasks.md for the AI agent to assess asc_page correctness.
+func runAnnotateQA(docsBase, patchPath, outPath string) error {
+	data, err := os.ReadFile(patchPath)
+	if err != nil {
+		return fmt.Errorf("read patches: %w", err)
+	}
+	var pf QAPatchFile
+	if err := yaml.Unmarshal(data, &pf); err != nil {
+		return fmt.Errorf("parse patches: %w", err)
+	}
+
+	// Group by asc_page to avoid re-reading the same page multiple times.
+	byPage := map[string][]QAPatch{}
+	for _, p := range pf.Patches {
+		if p.AscPage == "" {
+			continue
+		}
+		byPage[p.AscPage] = append(byPage[p.AscPage], p)
+	}
+
+	// Load prose per page (first 500 words).
+	pageProse := map[string]string{}
+	for page := range byPage {
+		mdxPath := filepath.Join(docsBase, filepath.FromSlash(page)+".mdx")
+		raw, err := os.ReadFile(mdxPath)
+		if err != nil {
+			pageProse[page] = "(page file not found: " + mdxPath + ")"
+			continue
+		}
+		pageProse[page] = extractProse(string(raw), 500)
+	}
+
+	return writeAnnotationQATasks(outPath, byPage, pageProse)
+}
+
+// extractProse strips MDX frontmatter and import lines, returning up to maxWords words of prose.
+func extractProse(content string, maxWords int) string {
+	lines := strings.Split(content, "\n")
+	inFrontmatter := false
+	fmDone := false
+	var proseLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !fmDone && trimmed == "---" {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			}
+			inFrontmatter = false
+			fmDone = true
+			continue
+		}
+		if inFrontmatter {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "import ") {
+			continue
+		}
+		proseLines = append(proseLines, line)
+	}
+	full := strings.Join(proseLines, "\n")
+	words := strings.Fields(full)
+	if len(words) > maxWords {
+		words = words[:maxWords]
+	}
+	return strings.Join(words, " ")
+}
+
+func writeAnnotationQATasks(outPath string, byPage map[string][]QAPatch, pageProse map[string]string) error {
+	var sb strings.Builder
+	sb.WriteString("# Annotation QA Tasks\n\n")
+	sb.WriteString("For each function below, assess whether it belongs on its annotated page.\n\n")
+	sb.WriteString("Write findings to `annotation-qa-findings.json`:\n")
+	sb.WriteString("```json\n{\"findings\": [{\"function\": \"addReaction\", \"file\": \"...\", \"asc_page\": \"...\", \"verdict\": \"ANNOTATION_SUSPECT\" | \"ANNOTATION_UNCERTAIN\" | \"OK\", \"reason\": \"...\", \"suggested_page\": \"...\"}]}\n```\n\n")
+	sb.WriteString("- `ANNOTATION_SUSPECT`: function clearly does NOT belong on this page\n")
+	sb.WriteString("- `ANNOTATION_UNCERTAIN`: hard to tell — needs human review\n")
+	sb.WriteString("- `OK`: function clearly belongs on this page\n\n")
+	sb.WriteString("---\n\n")
+
+	// Sort pages for deterministic output.
+	pages := make([]string, 0, len(byPage))
+	for p := range byPage {
+		pages = append(pages, p)
+	}
+	sort.Strings(pages)
+
+	for _, page := range pages {
+		patches := byPage[page]
+		sb.WriteString(fmt.Sprintf("## Page: `%s`\n\n", page))
+		sb.WriteString("**Page prose:**\n")
+		prose := pageProse[page]
+		if len(prose) > 500 {
+			prose = prose[:500] + "…"
+		}
+		sb.WriteString("> " + strings.ReplaceAll(strings.TrimSpace(prose), "\n", "\n> ") + "\n\n")
+		sb.WriteString("**Functions to assess:**\n\n")
+		for _, p := range patches {
+			sb.WriteString(fmt.Sprintf("- `%s` (file: `%s`)\n", p.Function, p.File))
+		}
+		sb.WriteString("\n---\n\n")
+	}
+
+	return os.WriteFile(outPath, []byte(sb.String()), 0o644)
 }
