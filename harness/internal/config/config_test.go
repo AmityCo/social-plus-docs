@@ -48,6 +48,25 @@ func TestLoadInvalidYAML(t *testing.T) {
 	assert.Contains(t, err.Error(), "parse config")
 }
 
+func TestSave_OmitsEmptyBaselineCommit(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "harness-config.yml")
+
+	cfg := &config.Config{
+		SDKs: map[string]config.SDKConfig{
+			"android": {Path: "../android", SnippetDir: "snippets"},
+		},
+		Docs: config.DocsConfig{Path: "../docs"},
+		LLM:  config.LLMConfig{Model: "test"},
+	}
+	require.NoError(t, cfg.Save(cfgPath))
+
+	raw, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "baseline_commit",
+		"empty BaselineCommit must not be written to disk (omitempty contract)")
+}
+
 func TestLoadAndSave_WithBaselineCommit(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "harness-config.yml")
