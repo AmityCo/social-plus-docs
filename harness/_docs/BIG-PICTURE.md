@@ -426,7 +426,7 @@ Inferential steps ──→ AI agent reads harness-tasks.md, fills gaps
 Computational steps ──→ verify, regenerate, advance to next phase
 ```
 
-### Phase 0 — SDK Annotation Campaign (in progress)
+### Phase 0 — SDK Annotation Campaign ✅ COMPLETE
 *Add `begin_public_function` markers to all public SDK functions that are missing them.*
 
 | Step | Type | Who |
@@ -458,8 +458,8 @@ Computational steps ──→ verify, regenerate, advance to next phase
 |---|---|---|---|
 | `place` → scan for orphaned imports → `placement-tasks.json` | ⚙️ Computational | harness | ✅ |
 | Agents read task file → insert `<ComponentName />` at matched heading | 🤖 Inferential | AI agents (12 parallel) | ✅ 94 pages done |
-| Cleanup 25 over-imported pages (remove irrelevant imports) | 🤖 Inferential | AI agents | 🔄 Pending |
-| `place` re-run on cleaned pages | ⚙️ Computational | harness | 🔜 After cleanup |
+| Cleanup 25 over-imported pages (remove irrelevant imports) | 🤖 Inferential | AI agents | ✅ 23 pages cleaned (376 imports removed, 1,145 tags placed) |
+| `place` re-run on cleaned pages | ⚙️ Computational | harness | ✅ 0 unplaced components |
 | Post-placement `audit` → 0 Mintlify syntax errors | ⚙️ Computational | harness | ✅ |
 
 **Exit criteria:** 0 orphaned imports across all pages
@@ -608,7 +608,7 @@ snippets are complete.
 | `internal/placer` package | ✅ | `FindUnplaced()` — detects unplaced imports + resolves snippet preview; 5/5 unit tests |
 | `internal/runstate` package | ✅ | Per-command run state tracking (start/finish/fail) |
 | **Component placement run** | ✅ | 1,162 `<ComponentName />` tags placed on 94 MDX pages by 12 parallel agents |
-| **25 large over-imported pages** | 🔄 Open | README, archive-channels, etc. have domain-wide import dumps; need import cleanup pass before `place` re-run |
+| **25 large over-imported pages** | ✅ | 23 pages cleaned — 376 spurious imports removed, 1,145 component tags placed; 0 unplaced components |
 | `publicscan` package | ✅ | Scans 4 SDKs; public functions audited |
 | `patchgen` package | ✅ | ID inference + line finder; confidence derived from paritymap.Build |
 | `annotate` command | ✅ | Generates patches with `confidence:` field; `--apply` inserts markers |
@@ -620,6 +620,7 @@ snippets are complete.
 | **Gate 3 — Human triage** | 🔜 Future | Manual for now; designed to be automatable by LLM agent |
 | **`serve` + `/api/coverage` + `/api/parity`** | ✅ | Live dashboard with platform coverage + function parity widgets |
 | **Phase 0 — SDK Annotation Campaign** | ✅ | 0 `PUBLIC_FUNC_UNANNOTATED` open |
+| **Phase 2A — Incremental Audit (Delta Mode)** | ✅ | `harness audit --incremental` + `harness baseline`; all 4 SDKs baselined |
 | **All-platform snippet parity** | ✅ | Android 99.6%, Flutter 100.0%, iOS 99.6%, TypeScript 99.6% (2,410 total keys) |
 | **CI integration** | 🔜 Future | Auto-trigger on SDK PR merge |
 
