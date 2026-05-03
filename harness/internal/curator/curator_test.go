@@ -1,6 +1,7 @@
 package curator_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -73,4 +74,102 @@ func TestParsePage_UnusedImportNotPlaced(t *testing.T) {
 	mdx := "import Ghost from '/snippets/ghost.mdx';\n\nSome prose without a ghost tag.\n"
 	p := curator.ParsePage("f.mdx", "page", mdx, nil)
 	assert.Len(t, p.Placed, 0)
+}
+
+func TestApply_RemoveHighConfidence(t *testing.T) {
+	decisions := []curator.Decision{
+		{Name: "PostLike", Action: curator.ActionRemove, Confidence: curator.ConfidenceHigh, Reason: "irrelevant"},
+	}
+	modified, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 1)
+	assert.Len(t, flagged, 0)
+	assert.NotContains(t, modified, "import PostLike")
+	assert.NotContains(t, modified, "<PostLike />")
+	// Other imports untouched
+	assert.Contains(t, modified, "import AddReaction")
+	assert.Contains(t, modified, "<AddReaction />")
+}
+
+func TestApply_RemoveLowConfidenceFlags(t *testing.T) {
+	decisions := []curator.Decision{
+		{Name: "PostLike", Action: curator.ActionRemove, Confidence: curator.ConfidenceLow, Reason: "unsure"},
+	}
+	modified, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 0)
+	assert.Len(t, flagged, 1)
+	// Content unchanged
+	assert.Contains(t, modified, "import PostLike")
+	assert.Contains(t, modified, "<PostLike />")
+}
+
+func TestApply_KeepResections(t *testing.T) {
+	// StoryLike is under ## Related Topics; move it to ## Add Reactions
+	decisions := []curator.Decision{
+		{Name: "StoryLike", Action: curator.ActionKeep, Section: "## Add Reactions", Confidence: curator.ConfidenceHigh, Reason: "belongs here"},
+	}
+	modified, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 1)
+	assert.Len(t, flagged, 0)
+	// Tag moved: appears after ## Add Reactions, not at end of file
+	lines := strings.Split(modified, "\n")
+	addReactionIdx := -1
+	storyLikeIdx := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "## Add Reactions" {
+			addReactionIdx = i
+		}
+		if strings.Contains(l, "<StoryLike") {
+			storyLikeIdx = i
+		}
+	}
+	assert.Greater(t, storyLikeIdx, addReactionIdx, "StoryLike should appear after ## Add Reactions")
+	// Should not appear under Related Topics anymore (which comes after)
+	relTopicsIdx := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "## Related Topics" {
+			relTopicsIdx = i
+		}
+	}
+	assert.Less(t, storyLikeIdx, relTopicsIdx, "StoryLike should not be under Related Topics")
+}
+
+func TestApply_MoveHighConfidenceRemovesFromPage(t *testing.T) {
+	decisions := []curator.Decision{
+		{Name: "PostLike", Action: curator.ActionMove, TargetPage: "social/posts", Confidence: curator.ConfidenceHigh, Reason: "belongs on post page"},
+	}
+	modified, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 1)
+	assert.Len(t, flagged, 0)
+	assert.NotContains(t, modified, "import PostLike")
+	assert.NotContains(t, modified, "<PostLike />")
+}
+
+func TestApply_MoveLowConfidenceFlags(t *testing.T) {
+	decisions := []curator.Decision{
+		{Name: "PostLike", Action: curator.ActionMove, TargetPage: "social/posts", Confidence: curator.ConfidenceLow, Reason: "unsure"},
+	}
+	modified, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 0)
+	assert.Len(t, flagged, 1)
+	assert.Contains(t, modified, "import PostLike")
+}
+
+func TestApply_FlagAlwaysFlags(t *testing.T) {
+	decisions := []curator.Decision{
+		{Name: "AddReaction", Action: curator.ActionFlag, Confidence: curator.ConfidenceHigh, Reason: "ambiguous"},
+	}
+	_, applied, flagged := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 0)
+	assert.Len(t, flagged, 1)
+}
+
+func TestApply_KeepNoResection_NoChange(t *testing.T) {
+	// AddReaction is already under ## Add Reactions — no move needed
+	decisions := []curator.Decision{
+		{Name: "AddReaction", Action: curator.ActionKeep, Section: "## Add Reactions", Confidence: curator.ConfidenceMedium, Reason: "correct"},
+	}
+	modified, applied, _ := curator.Apply(sampleMDX, decisions)
+	assert.Len(t, applied, 1)
+	// Content structurally same (AddReaction already in right section)
+	assert.Contains(t, modified, "<AddReaction />")
 }

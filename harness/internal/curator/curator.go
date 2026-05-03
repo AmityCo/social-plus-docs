@@ -151,6 +151,165 @@ func ReadDecisions(path string) (DecisionsFile, error) {
 	return df, nil
 }
 
+// Apply applies decisions to MDX content according to confidence-gating rules.
+// Returns: modified content, auto-applied decisions, flagged decisions (need human review).
+// Rules:
+//
+//	KEEP (any confidence)  → auto-apply (re-section tag if Section is specified and tag not already there)
+//	REMOVE high            → auto-apply (remove import + tag)
+//	REMOVE medium/low      → flag
+//	MOVE high              → auto-apply (remove import + tag from this page)
+//	MOVE medium/low        → flag
+//	FLAG any               → always flag
+func Apply(content string, decisions []Decision) (modified string, applied []Decision, flagged []Decision) {
+	applied = []Decision{}
+	flagged = []Decision{}
+	modified = content
+
+	for _, d := range decisions {
+		switch d.Action {
+		case ActionFlag:
+			flagged = append(flagged, d)
+
+		case ActionRemove:
+			if d.Confidence == ConfidenceHigh {
+				modified = removeSnippet(modified, d.Name)
+				applied = append(applied, d)
+			} else {
+				flagged = append(flagged, d)
+			}
+
+		case ActionMove:
+			if d.Confidence == ConfidenceHigh {
+				modified = removeSnippet(modified, d.Name)
+				applied = append(applied, d)
+			} else {
+				flagged = append(flagged, d)
+			}
+
+		case ActionKeep:
+			if d.Section != "" {
+				modified = resectionSnippet(modified, d.Name, d.Section)
+			}
+			applied = append(applied, d)
+		}
+	}
+	return modified, applied, flagged
+}
+
+// removeSnippet removes the import line and all component tags for name from content.
+func removeSnippet(content, name string) string {
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	importPrefix := "import " + name + " "
+	tagPatterns := []string{"<" + name + " />", "<" + name + "/>", "<" + name + ">"}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, importPrefix) {
+			continue
+		}
+		isTag := false
+		for _, pat := range tagPatterns {
+			if trimmed == pat {
+				isTag = true
+				break
+			}
+		}
+		if isTag {
+			continue
+		}
+		out = append(out, line)
+	}
+	return collapseBlankLines(strings.Join(out, "\n"))
+}
+
+// resectionSnippet moves the <name /> tag to immediately after the targetSection heading.
+// If the tag is already in the correct section, content is returned unchanged.
+func resectionSnippet(content, name, targetSection string) string {
+	tag := "<" + name + " />"
+	lines := strings.Split(content, "\n")
+
+	// Find target section index.
+	targetIdx := -1
+	for i, line := range lines {
+		if strings.TrimRight(line, " \t") == targetSection {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx == -1 {
+		return content // section not found, leave unchanged
+	}
+
+	// Find where the tag currently is.
+	tagIdx := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == tag {
+			tagIdx = i
+			break
+		}
+	}
+	if tagIdx == -1 {
+		return content // tag not found, leave unchanged
+	}
+
+	// Check if tag is already right after the target section (within 5 non-blank lines).
+	if isTagNearSection(lines, tagIdx, targetIdx) {
+		return content
+	}
+
+	// Remove tag from current position.
+	without := append(lines[:tagIdx:tagIdx], lines[tagIdx+1:]...)
+
+	// Re-find target section after removal (index may have shifted).
+	newTargetIdx := -1
+	for i, line := range without {
+		if strings.TrimRight(line, " \t") == targetSection {
+			newTargetIdx = i
+			break
+		}
+	}
+	if newTargetIdx == -1 {
+		return content
+	}
+
+	// Insert tag after the section heading (with a blank line before).
+	insertAt := newTargetIdx + 1
+	result := make([]string, 0, len(without)+2)
+	result = append(result, without[:insertAt]...)
+	result = append(result, "")
+	result = append(result, tag)
+	result = append(result, without[insertAt:]...)
+
+	return collapseBlankLines(strings.Join(result, "\n"))
+}
+
+// isTagNearSection returns true if tagIdx is within 5 non-blank lines after sectionIdx.
+func isTagNearSection(lines []string, tagIdx, sectionIdx int) bool {
+	if tagIdx <= sectionIdx {
+		return false
+	}
+	nonBlank := 0
+	for i := sectionIdx + 1; i < tagIdx && i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) != "" {
+			nonBlank++
+		}
+		if nonBlank > 5 {
+			return false
+		}
+	}
+	return nonBlank <= 5
+}
+
+// collapseBlankLines reduces runs of 3+ blank lines to 2.
+func collapseBlankLines(s string) string {
+	for strings.Contains(s, "\n\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n\n", "\n\n\n")
+	}
+	return s
+}
+
 // WriteReview writes flagged decisions to path as curate-review.json.
 func WriteReview(path string, pages []PageDecisions) error {
 	rf := ReviewFile{
