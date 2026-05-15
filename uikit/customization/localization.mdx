@@ -283,7 +283,15 @@ The social.plus UIKit uses a platform-native localization system on each platfor
   <Tab title="Android (Kotlin)">
     ## Overview
 
-    The Android UIKit uses the standard Android resource system. Strings are defined in `strings.xml` files across multiple library modules, all prefixed with `amity_`. Localization works through Android's standard `values-<language-code>/` resource override mechanism — no custom API is needed.
+    The Android UIKit v4 resolves every UI string through a 3-level priority chain. Higher levels win; missing keys fall through to the next level automatically.
+
+    | Priority | Level | Source |
+    |----------|-------|--------|
+    | Highest | 1 | Programmatic key overrides (`setOverrides()`) |
+    | | 2 | Active locale bundle (`setLocale()`) |
+    | Lowest | 3 | Android string resources (`strings.xml` — English default) |
+
+    String resolution is handled by two providers: `DefaultAmitySocialStringProvider` (social strings) and `DefaultAmityCommonStringProvider` (common strings). Both providers are singletons initialized in your `Application.onCreate()`.
 
     ## Built-in Languages
 
@@ -293,77 +301,128 @@ The social.plus UIKit uses a platform-native localization system on each platfor
 
     ## How to Add a New Language
 
-    There are two approaches:
+    ### Option A — Locale bundle via String Provider API (recommended)
 
-    ### Option A — Override in your app (no fork required)
-
-    Android resource merging allows your app to override library string values. Add a `strings.xml` to your app with the translated keys:
+    Provide a `Map<String, String>` of translated keys and register it with the provider. No fork required.
 
     <Steps>
-      <Step title="Create language resource files">
-        In your app module, create `values-<language-code>/strings.xml` files. For Japanese:
+      <Step title="Initialize the providers">
+        Call both providers in your `Application.onCreate()`:
 
-        ```
-        app/src/main/res/
-        ├── values/strings.xml           ← your app's default strings
-        └── values-ja/strings.xml        ← Japanese overrides
+        ```kotlin
+        class MyApplication : Application() {
+            override fun onCreate() {
+                super.onCreate()
+                DefaultAmitySocialStringProvider.initialize(this)
+                DefaultAmityCommonStringProvider.initialize(this)
+            }
+        }
         ```
       </Step>
 
-      <Step title="Translate the UIKit strings">
-        Copy the `amity_` prefixed keys you want to translate and provide the translated values:
+      <Step title="Create a locale bundle">
+        Create a Kotlin object (or a plain `Map<String, String>`) with the translated keys. You only need to include keys you're translating — missing keys fall back to the English `strings.xml` values automatically.
 
-        ```xml
-        <!-- values-ja/strings.xml -->
-        <resources>
-            <string name="amity_cancel">キャンセル</string>
-            <string name="amity_done">完了</string>
-            <string name="amity_general_error_message">エラーが発生しました。もう一度お試しください。</string>
-        </resources>
+        ```kotlin
+        object MyJapaneseStrings {
+            val social: Map<String, String> = mapOf(
+                "amity_social_button_comments" to "コメント",
+                "amity_social_button_delete_comment" to "コメントを削除",
+                "amity_social_button_edit_comment" to "コメントを編集",
+            )
+
+            val common: Map<String, String> = mapOf(
+                "amity_common_button_cancel" to "キャンセル",
+                "amity_common_button_done" to "完了",
+            )
+        }
+        ```
+      </Step>
+
+      <Step title="Register the locale bundle">
+        Call `setLocale()` on both providers — typically in `Application.onCreate()` after initialization, or in response to a user language-switch action:
+
+        ```kotlin
+        DefaultAmitySocialStringProvider.setLocale("ja", MyJapaneseStrings.social)
+        DefaultAmityCommonStringProvider.setLocale("ja", MyJapaneseStrings.common)
         ```
 
-        Android automatically picks the correct file based on the device locale — no code changes needed.
+        To revert to the default English resources:
+
+        ```kotlin
+        DefaultAmitySocialStringProvider.getInstance().clearLocale()
+        DefaultAmityCommonStringProvider.getInstance().clearLocale()
+        ```
       </Step>
     </Steps>
 
-    ### Option B — Fork the UIKit repository
+    ### Option B — Override individual keys
 
-    For complete control, clone the Android UIKit and add `values-<language-code>/` directories inside each module:
+    To replace specific strings without providing a full locale bundle, use `setOverrides()`. Overrides take the highest priority and merge on top of any active locale.
+
+    ```kotlin
+    DefaultAmitySocialStringProvider.setOverrides(mapOf(
+        "amity_social_button_comments" to "Replies",
+        "amity_social_modal_dialog_generic_error" to "Something went wrong. Please try again.",
+    ))
+
+    DefaultAmityCommonStringProvider.setOverrides(mapOf(
+        "amity_common_button_cancel" to "Dismiss",
+    ))
+    ```
+
+    To clear overrides:
+
+    ```kotlin
+    DefaultAmitySocialStringProvider.getInstance().clearOverrides()
+    DefaultAmityCommonStringProvider.getInstance().clearOverrides()
+    ```
+
+    ### Option C — Fork the UIKit repository
+
+    For full static translation using the Android resource system, clone the UIKit and add `values-<language-code>/` resource directories inside each module:
 
     ```
     common/src/main/res/values-ja/strings.xml
     social/src/main/res/values-ja/strings.xml
     social-compose/src/main/res/values-ja/strings.xml
     chat/src/main/res/values-ja/strings.xml
+    chat-compose/src/main/res/values-ja/strings.xml
     ```
 
     ## Translation Key Reference
 
-    All UIKit strings are prefixed with `amity_`. String keys span multiple modules:
+    ### Key naming conventions
 
-    | Module | Resource file | Example key |
-    |--------|---------------|-------------|
-    | `common` | `common/.../values/strings.xml` | `amity_cancel`, `amity_done` |
-    | `social` | `social/.../values/strings.xml` | `amity_view_all_replies`, `amity_remove_follower` |
-    | `social-compose` | `social-compose/.../values/strings.xml` | Compose UI social strings |
-    | `chat` | `chat/.../values/strings.xml` | Chat-specific strings |
+    All UIKit localization keys follow the `amity_<domain>_<category>_<name>` pattern:
+
+    | Prefix | Domain | Example Key | Example Value |
+    |--------|--------|-------------|---------------|
+    | `amity_common_button_*` | Shared buttons | `amity_common_button_cancel` | `"Cancel"` |
+    | `amity_common_time_*` | Relative timestamps | `amity_common_time_time_days_suffix` | `"d"` |
+    | `amity_common_ad_*` | Ad labels | `amity_common_ad_sponsored` | `"Sponsored"` |
+    | `amity_social_button_*` | Social action buttons | `amity_social_button_comments` | `"Comments"` |
+    | `amity_social_label_*` | Social text labels | `amity_social_label_follow_requests` | `"Follow requests (%1$d)"` |
+    | `amity_social_modal_dialog_*` | Modal/dialog text | `amity_social_modal_dialog_generic_error` | `"Oops! something went wrong..."` |
+    | `amity_social_empty_state_*` | Empty state messages | — | — |
 
     ### Format specifiers
 
-    ```xml
-    <!-- String substitution -->
-    <string name="amity_remove_follower">Remove %s from follower?</string>
+    ```kotlin
+    // String substitution
+    "amity_social_label_created_by" to "By %s"
 
-    <!-- Integer substitution -->
-    <string name="amity_view_all_replies">View all %d replies</string>
+    // Integer substitution
+    "amity_social_label_follow_requests" to "Follow requests (%1$d)"
 
-    <!-- Plurals -->
-    <plurals name="amity_number_of_days">
-        <item quantity="one">%d day</item>
-        <item quantity="other">%d days</item>
-    </plurals>
+    // Multiple arguments
+    "amity_social_error_post_text_exceed_error_message" to "Post text exceeds the %1$d characters limit"
     ```
 
-    For the full key list, refer to `strings.xml` in the [Android UIKit source repository](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android).
+    <Note>
+      Keys are shared between `DefaultAmitySocialStringProvider` (social strings, ~1005 keys) and `DefaultAmityCommonStringProvider` (common strings, ~49 keys). Social keys start with `amity_social_`; common keys start with `amity_common_`. When overriding, use the correct provider for each key prefix.
+    </Note>
+
+    For the full key list, refer to `AmitySocialStrings.kt` and `AmityCommonStrings.kt` in the [Android UIKit source repository](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android), or see the sample Thai locale bundle in `sample/src/main/java/.../localization/AmitySocialThaiStrings.kt` as a complete override example.
   </Tab>
 </Tabs>
