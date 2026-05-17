@@ -1,0 +1,26 @@
+{
+  "id": "0024-execute-meeting-rewrites",
+  "tier": "B",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/evals/fabrication-decisions.json",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/ts-accuracy-drift.json"
+  ],
+  "instructions": "Execute the 3 NET-NEW REWRITE_TO decisions from the SDK lead meeting. These are the REWRITE rows in `.docs-ops/evals/fabrication-decisions.json` that were NOT in the auto-filled NAME_DRIFT_TS_RENAMED bucket already executed by task 0021. Identify them by their `decision_notes` containing 'Source-verified' or 'NAME_DRIFT misclassified' — those are SDK-lead-authored, not auto-filled.\n\n**target_files is intentionally empty** — discover from each row's `locations[]` in the decision sheet.\n\n## Rewrite 1 — `import AmityPollRepository` → `import { PollRepository }`\n\nRow ref: `import AmityPollRepository`. Decision: `REWRITE_TO:import { PollRepository } from '@amityco/ts-sdk'`. SDK-lead note: TS SDK DOES export PollRepository as a namespace; the doc was using the wrong name. Pattern is same as 0010 / 0021 — drop the `Amity` prefix.\n\nPer occurrence:\n  1. In `import { ... } from '@amityco/ts-sdk'`: replace `AmityPollRepository` with `PollRepository`.\n  2. In the code block body: replace bare `AmityPollRepository.method(...)` with `PollRepository.method(...)`.\n\n## Rewrite 2 — `CommunityRepository.AmityCommunityMemberStatusFilter.ALL` → `AmityCommunityMemberStatusFilter.ALL`\n\nRow ref: the full dotted path. Decision: `REWRITE_TO:AmityCommunityMemberStatusFilter.ALL`. SDK-lead note: `AmityCommunityMemberStatusFilter` is a const enum exported DIRECTLY at the top level, NOT nested under `CommunityRepository`.\n\nPer occurrence:\n  1. Drop the `CommunityRepository.` prefix wherever `CommunityRepository.AmityCommunityMemberStatusFilter.<Case>` appears — replace with `AmityCommunityMemberStatusFilter.<Case>`.\n  2. Add `AmityCommunityMemberStatusFilter` to the existing `import { ... } from '@amityco/ts-sdk'` named-imports list (verify it's in the surface root_exports first).\n  3. Verify: there are 2 occurrences in the drift report, both `.ALL`. Check the code blocks for OTHER `.<Case>` values (BANNED, MUTED, etc.) that may also need the prefix dropped even if not flagged.\n\n## Rewrite 3 — `InvitationRepository.getMyRoomInvitations(...)` → `InvitationRepository.getInvitations({ targetType: 'room', targetId: '...' })`\n\nRow ref: `InvitationRepository.getMyRoomInvitations`. Decision: full signature change. SDK-lead note: the convenience wrapper was removed; current TS API is the generic `getInvitations({ targetType, targetId })`.\n\nThis is the most delicate of the three — it's a signature change, not just a rename. Per occurrence:\n  1. Locate the call site. The old signature was likely `getMyRoomInvitations(roomId)` or `getMyRoomInvitations({ roomId })`.\n  2. Rewrite to: `InvitationRepository.getInvitations({ targetType: 'room', targetId: <whatever was passed before as room id> })`.\n  3. If the original call passed additional params (limit, cursor, etc.), preserve them by adding them to the new object: `{ targetType: 'room', targetId, limit, cursor }`.\n  4. If you CANNOT confidently map the original arguments to the new shape (e.g., positional vs object, unfamiliar param shape), STOP that occurrence, leave it unedited, and report `needs_signature_review` in notes. Do NOT guess at arg-shape transformations.\n\n## Rules (consistent with 0006 / 0010 / 0017 / 0021)\n\n- Apply only inside ```typescript / ```ts / ```javascript / ```js fenced code blocks.\n- Preserve surrounding code, chained calls, and other arguments verbatim where applicable.\n- Do NOT modify prose, frontmatter, or unrelated code blocks.\n- Watch for indented blocks inside `<Step>`, `<Tab>`, `<Accordion>` — handle manually if FENCE_RE misses them.\n\nReport in `notes`: per file/line, (old, new) replacements; per rewrite, occurrences fixed vs blocked; any `needs_signature_review` cases.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "meeting_rewrites_resolved",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); bad_refs={'CommunityRepository.AmityCommunityMemberStatusFilter.ALL','InvitationRepository.getMyRoomInvitations'}; bad_imports={'AmityPollRepository'}; found=set(); [found.add(i.get('ref')) for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref') in bad_refs]; [found.add(f'import {i[\\\"import_name\\\"]}') for f,iss in r['issues_by_file'].items() for i in iss if i.get('import_name') in bad_imports]; print('FAIL: still flagging '+str(found)) if found else print('OK'); import sys; sys.exit(1 if found else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T14:30:00Z"
+}
