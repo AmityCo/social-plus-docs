@@ -454,18 +454,11 @@ class CommentDiffCallback : DiffUtil.ItemCallback<AmityComment>() {
 
 <Tab title="TypeScript">
 ```typescript
-import { 
-    AmityClient, 
-    CommentRepository, 
-    AmityComment,
-    AmityCommentReferenceType,
-    AmityCommentQuery,
-    AmityCommentSortOption,
-} from '@amityco/ts-sdk';
+import { AmityCommentQuery, AmityCommentSortOption, Client, CommentRepository } from '@amityco/ts-sdk';
 
 interface CommentQueryOptions {
     referenceId: string;
-    referenceType: AmityCommentReferenceType;
+    referenceType: Amity.CommentReferenceType;
     parentId?: string | null;
     includeDeleted?: boolean;
     sortBy?: AmityCommentSortOption;
@@ -479,14 +472,14 @@ class CommentQueryManager {
     private commentRepository: CommentRepository;
     private activeSubscriptions: Map<string, () => void> = new Map();
     
-    constructor(client: AmityClient) {
+    constructor(client: Amity.Client) {
         this.commentRepository = new CommentRepository(client);
     }
     
     // Query all comments with real-time updates
     async queryComments(
         options: CommentQueryOptions,
-        onUpdate: (comments: AmityComment[]) => void,
+        onUpdate: (comments: Amity.Comment[]) => void,
         onError?: (error: Error) => void
     ): Promise<string> {
         const {
@@ -532,8 +525,8 @@ class CommentQueryManager {
     // Query only parent-level comments
     async queryParentComments(
         referenceId: string,
-        referenceType: AmityCommentReferenceType,
-        onUpdate: (comments: AmityComment[]) => void,
+        referenceType: Amity.CommentReferenceType,
+        onUpdate: (comments: Amity.Comment[]) => void,
         onError?: (error: Error) => void,
         pageSize: number = 10
     ): Promise<string> {
@@ -550,8 +543,8 @@ class CommentQueryManager {
     async queryReplies(
         parentCommentId: string,
         referenceId: string,
-        referenceType: AmityCommentReferenceType,
-        onUpdate: (replies: AmityComment[]) => void,
+        referenceType: Amity.CommentReferenceType,
+        onUpdate: (replies: Amity.Comment[]) => void,
         onError?: (error: Error) => void,
         pageSize: number = 5            // Smaller page size recommended for reply threads
     ): Promise<string> {
@@ -567,7 +560,7 @@ class CommentQueryManager {
     // Query with pagination support
     async createPaginatedQuery(
         options: CommentQueryOptions
-    ): Promise<Amity.LiveCollection<AmityComment>> {
+    ): Promise<Amity.LiveCollection<Amity.Comment>> {
         const query: AmityCommentQuery = {
             referenceId: options.referenceId,
             referenceType: options.referenceType,
@@ -581,7 +574,7 @@ class CommentQueryManager {
     }
     
     // Load more comments for pagination
-    async loadMoreComments(liveCollection: Amity.LiveCollection<AmityComment>): Promise<void> {
+    async loadMoreComments(liveCollection: Amity.LiveCollection<Amity.Comment>): Promise<void> {
         await liveCollection.nextPage();
     }
     
@@ -604,19 +597,19 @@ class CommentQueryManager {
 // React hook for comment querying
 function useComments(
     referenceId: string,
-    referenceType: AmityCommentReferenceType,
+    referenceType: Amity.CommentReferenceType,
     options: Partial<CommentQueryOptions> = {}
 ) {
-    const [comments, setComments] = React.useState<AmityComment[]>([]);
+    const [comments, setComments] = React.useState<Amity.Comment[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<Error | null>(null);
     const [hasMore, setHasMore] = React.useState(true);
     
     const queryManagerRef = React.useRef<CommentQueryManager | null>(null);
-    const liveCollectionRef = React.useRef<Amity.LiveCollection<AmityComment> | null>(null);
+    const liveCollectionRef = React.useRef<Amity.LiveCollection<Amity.Comment> | null>(null);
     
     React.useEffect(() => {
-        const client = AmityClient.getInstance();
+        const client = Client.getActiveClient();
         queryManagerRef.current = new CommentQueryManager(client);
         
         const loadComments = async () => {
@@ -679,19 +672,19 @@ function useComments(
 const CommentsSection: React.FC<{ postId: string }> = ({ postId }) => {
     const { comments, loading, error, hasMore, loadMore } = useComments(
         postId,
-        AmityCommentReferenceType.POST,
+        'post',
         { parentId: null, pageSize: 10 } // Only parent comments; 10 per page
     );
     
-    const [repliesMap, setRepliesMap] = React.useState<Map<string, AmityComment[]>>(new Map());
+    const [repliesMap, setRepliesMap] = React.useState<Map<string, Amity.Comment[]>>(new Map());
     
     const loadReplies = async (parentCommentId: string) => {
-        const queryManager = new CommentQueryManager(AmityClient.getInstance());
+        const queryManager = new CommentQueryManager(Client.getActiveClient());
         
         const subscriptionId = await queryManager.queryReplies(
             parentCommentId,
             postId,
-            AmityCommentReferenceType.POST,
+            'post',
             (replies) => {
                 setRepliesMap(prev => new Map(prev.set(parentCommentId, replies)));
             },
@@ -1297,7 +1290,7 @@ Query all comments regardless of hierarchy level. Useful for search or moderatio
 // Query all comments - flat structure
 const allComments = await queryManager.queryComments({
     referenceId: postId,
-    referenceType: AmityCommentReferenceType.POST
+    referenceType: 'post'
     // No parentId specified - returns all levels
 });
 ```
@@ -1310,7 +1303,7 @@ Display parent comments with their immediate replies. Most common pattern for so
 // Step 1: Query parent comments
 const parentComments = await queryManager.queryParentComments(
     postId,
-    AmityCommentReferenceType.POST,
+    'post',
     (comments) => setParentComments(comments)
 );
 
@@ -1319,7 +1312,7 @@ parentComments.forEach(async (comment) => {
     const replies = await queryManager.queryReplies(
         comment.commentId,
         postId,
-        AmityCommentReferenceType.POST,
+        'post',
         (replies) => updateReplies(comment.commentId, replies)
     );
 });
@@ -1335,7 +1328,7 @@ async function loadNestedReplies(parentId: string, level: number = 0) {
     const replies = await queryManager.queryReplies(
         parentId,
         postId,
-        AmityCommentReferenceType.POST
+        'post'
     );
     
     // Recursively load replies to replies
@@ -1369,7 +1362,7 @@ Efficient pagination is crucial for handling large comment threads without perfo
 // React example with virtual scrolling
 import { FixedSizeList as List } from 'react-window';
 
-const VirtualizedComments: React.FC<{ comments: AmityComment[] }> = ({ comments }) => {
+const VirtualizedComments: React.FC<{ comments: Amity.Comment[] }> = ({ comments }) => {
     const Row = ({ index, style }) => (
         <div style={style}>
             <CommentItem comment={comments[index]} />
@@ -1427,10 +1420,10 @@ const useLazyComments = (containerRef: RefObject<HTMLElement>) => {
 ```typescript
 // Comment cache with LRU eviction
 class CommentCache {
-    private cache = new Map<string, AmityComment>();
+    private cache = new Map<string, Amity.Comment>();
     private maxSize = 500;
     
-    set(commentId: string, comment: AmityComment) {
+    set(commentId: string, comment: Amity.Comment) {
         if (this.cache.size >= this.maxSize) {
             // Remove oldest entry
             const firstKey = this.cache.keys().next().value;
@@ -1440,7 +1433,7 @@ class CommentCache {
         this.cache.set(commentId, comment);
     }
     
-    get(commentId: string): AmityComment | undefined {
+    get(commentId: string): Amity.Comment | undefined {
         const comment = this.cache.get(commentId);
         
         if (comment) {
@@ -1474,7 +1467,7 @@ Comments automatically update in real-time through Live Collections, ensuring us
 ```typescript
 // Real-time update handler
 const handleCommentUpdates = (
-    comments: AmityComment[],
+    comments: Amity.Comment[],
     change: CollectionChange,
     error?: Error
 ) => {
