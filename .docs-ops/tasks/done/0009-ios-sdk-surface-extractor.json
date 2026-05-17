@@ -1,0 +1,31 @@
+{
+  "id": "0009-ios-sdk-surface-extractor",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/sdk-surface/ios.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json"
+  ],
+  "instructions": "Write `.docs-ops/extractors/ios-extractor.py` — a regex-based Swift public-API extractor — and run it to produce `.docs-ops/sdk-surface/ios.json`.\n\nMODEL: Mirror `.docs-ops/extractors/typescript-extractor.py` (the existing TypeScript extractor) in approach: pure-Python, no external deps, walks the SDK source, emits a JSON surface. The OUTPUT SCHEMA differs because Swift's shape is different from TS — use the schema below.\n\nSDK ROOT: `AmitySDKIOS/` (sibling of `social-plus-docs/`).\n\nSCOPE — what to scan:\n  - INCLUDE all `.swift` files anywhere under `AmitySDKIOS/EkoChat/`, `AmitySDKIOS/EkoStreamPublisher/`, `AmitySDKIOS/UpstraVideoPlayerKit/` (these are the public SDK modules; AmitySDK is the umbrella product name).\n  - EXCLUDE: anything under `*/External/*` (third-party deps), `*/SDKTests/*`, `*/AmitySDKTests/*`, `*/AmitySDKUnitTests/*`, `*/AmitySDKIntegrationTests/*`, `*/AmitySDKThreadSafetyTests/*`, `*/EkoChatTests/*`, `*/SampleApp/*`, `*/SampleAppLiveVideo/*`, `*/SDKSampleCode/*`, `*/SDKSizeReport/*`, `*/.build/*`, `*/Pods/*`.\n\nWHAT COUNTS AS PUBLIC API:\n  - Only declarations explicitly marked `public` or `open` count.\n  - `internal` (the default), `fileprivate`, and `private` declarations are NOT public — skip them.\n  - `@objc` annotations are interesting but orthogonal to visibility — still need `public`/`open` to count.\n\nDECLARATION KINDS to detect (regex patterns, anchored to start-of-line possibly preceded by leading whitespace):\n\n  Type-level:\n    `public class <Name>` / `open class <Name>`\n    `public struct <Name>`\n    `public protocol <Name>`\n    `public enum <Name>` (including `public indirect enum`)\n    `public extension <Name>` (extensions of existing types)\n    `public typealias <Name>`\n\n  Member-level (inside a type body OR as top-level globals):\n    `public func <name>` / `open func <name>`\n    `public static func <name>`\n    `public var <name>` / `public let <name>`\n    `public init` / `public required init` / `public convenience init`\n    `public subscript`\n    `case <name>` (only inside `public enum` — enum cases inherit the enum's visibility)\n\nHANDLING EXTENSIONS: Swift extensions add members to existing types. Track them as their own entries under the host type's name — i.e., if `AmityClient` has a primary `public class AmityClient` decl AND `public extension AmityClient` blocks elsewhere, all members from both should be aggregated under the `AmityClient` type entry, but each member retains its own `file` + `line` so it's clear where it lives.\n\nNESTING: Swift allows nested types (e.g., `public enum Foo { public struct Bar { ... } }`). Track nested types as sub-types with their fully-qualified path. v1 may flatten with dotted names (e.g., `Foo.Bar`) — full nesting can be a v2 upgrade.\n\nOUTPUT SCHEMA — write to `.docs-ops/sdk-surface/ios.json`:\n\n{\n  \"extractor_version\": \"0.1.0\",\n  \"extractor\": \"ios-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_product\": \"AmitySDK\",\n  \"sdk_source_roots\": [\"AmitySDKIOS/EkoChat\", \"AmitySDKIOS/EkoStreamPublisher\", \"AmitySDKIOS/UpstraVideoPlayerKit\"],\n  \"types\": {\n    \"AmityClient\": {\n      \"kind\": \"class\",\n      \"primary_decl\": { \"file\": \"AmitySDKIOS/EkoChat/.../AmityClient.swift\", \"line\": 42 },\n      \"extensions\": [ { \"file\": \"...\", \"line\": N } ],\n      \"members\": [\n        { \"name\": \"login\", \"kind\": \"func\", \"file\": \"...\", \"line\": N, \"signature_hint\": \"<the raw line, trimmed>\" },\n        { \"name\": \"isConnected\", \"kind\": \"var\", \"file\": \"...\", \"line\": N, \"signature_hint\": \"...\" }\n      ],\n      \"nested_types\": []\n    }\n  },\n  \"global_funcs\": [ { \"name\": \"...\", \"file\": \"...\", \"line\": N, \"signature_hint\": \"...\" } ],\n  \"global_consts\": [ ... ],\n  \"global_typealiases\": [ ... ],\n  \"protocols\": { \"<name>\": { ... same shape as types ... } },\n  \"unhandled\": [],\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"types\": <int>,\n    \"protocols\": <int>,\n    \"members_total\": <int>,\n    \"global_funcs\": <int>,\n    \"global_consts\": <int>,\n    \"unhandled_lines\": <int>\n  }\n}\n\nIMPORTANT — don't over-engineer. v1 is regex-based, captures NAME + KIND + FILE + LINE + raw `signature_hint` line. Full Swift parsing (param types, return types, generic constraints) is OUT OF SCOPE — that's a v2 upgrade with SwiftSyntax. Track edge cases the regex can't handle in `unhandled[]` rather than trying to handle them all.\n\nAfter writing the extractor, RUN it and verify the output is non-empty and roughly the right order of magnitude (expect dozens to hundreds of public types; members should be in the low thousands).\n\nReport in the result's `notes` field: stats from the run, sample of 3-5 well-formed type entries, list of any unhandled patterns encountered.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_runs_and_produces_valid_surface",
+        "command": "python3 .docs-ops/extractors/ios-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/ios.json')); assert 'types' in d and 'stats' in d; assert d['stats']['types']>0 and d['stats']['members_total']>0, f'unexpectedly empty surface: {d[\\\"stats\\\"]}'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/ios.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T11:20:00Z"
+}

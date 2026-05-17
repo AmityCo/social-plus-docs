@@ -1,0 +1,32 @@
+{
+  "id": "0012-ios-accuracy-validator",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/evals/ios-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/evals/ts-accuracy-drift.json"
+  ],
+  "instructions": "Write `.docs-ops/validators/ios-accuracy-validator.py` — a Swift docs-accuracy validator — and run it to produce `.docs-ops/evals/ios-accuracy-drift.json`.\n\nMODEL: Mirror `.docs-ops/validators/ts-accuracy-validator.py` (the TypeScript validator) in structure and conventions: load the SDK surface, walk .mdx files, extract code blocks for the relevant language, find symbol references, diff against surface, emit a drift report.\n\nINPUT SURFACE: `.docs-ops/sdk-surface/ios.json` (written by 0009). Top-level shape:\n  - `types`: {TypeName -> {kind, primary_decl, extensions, members[], nested_types}}\n  - `protocols`: {ProtocolName -> same shape}\n  - `global_funcs`, `global_consts`, `global_typealiases`: flat lists\n\nDETECTION SCOPE (conservative — low false-positive rate is more important than coverage):\n\nScan ```swift fenced code blocks only. Also accept ```objc and ```objective-c (the docs sometimes show Obj-C usage of Swift APIs) but with reduced confidence — flag in a separate severity.\n\nDetect these reference patterns inside each ```swift block:\n\n  1. **Static / type-level access**: `<TypeName>.<member>` where TypeName is in `types` or `protocols`.\n     - Valid if member is in the type's members[] (with kind static_var/static_func/enum_case/class func) OR member is a nested type name.\n     - Invalid otherwise — emit `unknown_type_member` issue.\n\n  2. **Initializer call**: `<TypeName>(...)` where TypeName is in `types`.\n     - Always valid if TypeName exists (Swift auto-generates initializers; we cannot tell from regex which init signature is needed).\n     - Do NOT emit issues for this pattern in v1 — it's noisy.\n\n  3. **Imports**: `import <ModuleName>`. The SDK product is `AmitySDK` (the umbrella product name); the actual built frameworks are `EkoChat`, `EkoStreamPublisher`, `UpstraVideoPlayerKit`. Accept `AmitySDK`, `EkoChat`, `EkoStreamPublisher`, `UpstraVideoPlayerKit` as valid. Flag any other `import` that does NOT match a known third-party (UIKit, Foundation, AVFoundation, Combine, SwiftUI, AmitySDK, etc.) ONLY if it starts with `Amity` or `Eko` — i.e., looks like a misnamed internal module. Conservative.\n\n  4. **Property access on a known type instance** (HARDER): when a code block has `let client = AmityClient(...)` followed by `client.foo`, we can attempt to validate `foo` is in `AmityClient`'s members. v1 OPT: do this ONLY when the local var declaration is on a line in the same block and uses the explicit `let var: AmityType = ...` pattern. If the type isn't explicit, skip — too error-prone.\n\nOUT OF SCOPE for v1:\n  - Signature/param validation (extractor doesn't surface param types).\n  - Inferred-type property access.\n  - Closures, generics, conditional conformance.\n  - SwiftUI-specific patterns.\n\nOUTPUT SCHEMA — write to `.docs-ops/evals/ios-accuracy-drift.json` (parallel to ts-accuracy-drift.json):\n\n{\n  \"generated_at\": \"<iso>\",\n  \"validator\": \"ios-accuracy-validator.py\",\n  \"surface_used\": \".docs-ops/sdk-surface/ios.json\",\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"swift_blocks_scanned\": <int>,\n    \"objc_blocks_scanned\": <int>,\n    \"files_with_issues\": <int>,\n    \"total_issues\": <int>\n  },\n  \"top_missing_refs\": [ {\"ref\": \"AmityClient.foo\", \"doc_occurrences\": <int>} ],\n  \"issues_by_file\": {\n    \"<repo-relative-path>\": [\n      {\n        \"kind\": \"unknown_type_member\" | \"unknown_import\",\n        \"ref\": \"AmityClient.foo\",\n        \"line\": <int>,\n        \"hint_present_at\": [ \"AmityRoom\", ... ]  // other types where the member name exists\n      }\n    ]\n  }\n}\n\nIMPORTANT — file path conventions:\n  - The TS validator uses paths relative to `social-plus-docs/` (the repo root the validator runs in). Match this convention for ios-accuracy-drift.json.\n  - Exclude `.docs-ops/` itself from scan, plus `node_modules/`, `.pytest_cache/`.\n\nAfter writing, RUN it. Expected order of magnitude: similar to TS validator's first run — dozens to low-hundreds of issues. Some will be real iOS-doc drift, some will be extractor blind spots (e.g., extensions / nested types not in v1 surface).\n\nReport in `notes`: stats from the run, top 10 missing refs, and your read on which look like real drift vs likely extractor blind spots (use the hints to judge).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "validator_runs_and_produces_report",
+        "command": "python3 .docs-ops/validators/ios-accuracy-validator.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/evals/ios-accuracy-drift.json')); assert 'stats' in d and 'issues_by_file' in d; assert d['stats']['files_scanned']>0; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/ios-accuracy-drift.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T11:50:00Z"
+}

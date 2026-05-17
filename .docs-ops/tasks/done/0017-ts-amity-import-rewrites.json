@@ -1,0 +1,26 @@
+{
+  "id": "0017-ts-amity-import-rewrites",
+  "tier": "A",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/ts-accuracy-drift.json",
+    ".docs-ops/tasks/done/0010-ts-rename-batch-from-triage.json"
+  ],
+  "instructions": "Rewrite incorrect `import { Amity* }` statements in TS code blocks. These types are NOT exported as named symbols from `@amityco/ts-sdk` — they live in the global `Amity` namespace (declared via `declare global namespace Amity { ... }` in `@types/`). The correct reference form is `Amity.<TypeName>`.\n\nThis is the same pattern as 0010 Group B (which fixed `InvitationTargetType`, `LiveCollection`, `StreamStatus`). It generalizes to the full set: any name N where `Amity.N` exists in the surface but `N` is not a known namespace and not a root export.\n\n**target_files is intentionally empty** — discover the affected files yourself by reading `.docs-ops/evals/ts-accuracy-drift.json`. Collect every issue where:\n  - `kind == 'unknown_import_from_sdk'`, AND\n  - `hint_present_at` includes `'Amity'`.\n\nThe import_name from each such issue is what to rewrite. Expect ~14 occurrences across several files. Common examples (verify with the actual drift report, don't hardcode):\n  - `AmityComment` → use `Amity.AmityComment`\n  - `AmityClient` → use `Amity.AmityClient` (NOTE: this is the global type, NOT the runtime class; the runtime entry point is the `Client` namespace which IS imported normally)\n  - `AmityCommentReferenceType` → use `Amity.AmityCommentReferenceType`\n\nFOR EACH OCCURRENCE:\n\n1. Verify the name actually exists in `surface.namespaces.Amity.members[]` before rewriting. If not, STOP that occurrence, do not edit, and report `not_in_amity_namespace` in notes — it's then a true fabrication candidate, not an import error.\n\n2. Remove the name from the `import { ... } from '@amityco/ts-sdk'` list:\n   - If it was the only name and no other imports needed, remove the entire line.\n   - If other names remain, leave them.\n   - If `Amity` itself is not already imported anywhere in the file and you've removed all other named imports from `@amityco/ts-sdk`, the line can be removed entirely — `Amity` is globally available.\n\n3. Replace bare references in the code block body:\n   - Type annotations: `: AmityComment` → `: Amity.AmityComment`\n   - Generic params: `Promise<AmityComment>` → `Promise<Amity.AmityComment>`\n   - Type casts: `as AmityComment` → `as Amity.AmityComment`\n   - Function params: `(comment: AmityComment) =>` → `(comment: Amity.AmityComment) =>`\n   - Constructor / function calls of the bare name (if any — rare for types): convert to `Amity.AmityComment(...)`. If this looks like a value usage of a type, STOP and flag — types aren't callable; the doc is wrong in a deeper way.\n\nRULES (same as 0006 / 0010):\n  - Apply only inside ```typescript / ```ts / ```javascript / ```js fenced code blocks.\n  - Handle indented blocks inside `<Step>`, `<Tab>`, `<Accordion>` MDX components manually if the FENCE_RE misses them.\n  - Do NOT modify prose or other code blocks.\n  - Do NOT modify the `Client` namespace import (that's a real runtime namespace, not the global Amity type).\n\nReport in `notes`: per file, the list of (line, import_name) rewrites; total occurrences fixed vs blocked; any `not_in_amity_namespace` cases (which become a Tier C task for fabrication review).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "amity_imports_resolved_or_explicitly_blocked",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); s=json.load(open('.docs-ops/sdk-surface/typescript.json')); amity_member_names={m['name'] for m in s['namespaces'].get('Amity',{}).get('members',[])}; still_bad=[]; [still_bad.append(i['import_name']) for f,iss in r['issues_by_file'].items() for i in iss if i.get('kind')=='unknown_import_from_sdk' and i.get('import_name') in amity_member_names]; print('FAIL: still flagging '+str(set(still_bad))) if still_bad else print('OK'); import sys; sys.exit(1 if still_bad else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": ["0015-ts-extractor-amity-global-namespace"],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T12:25:00Z"
+}

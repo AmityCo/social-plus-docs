@@ -1,0 +1,27 @@
+{
+  "id": "0019-ts-extractor-amity-enum-values",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ts-accuracy-drift.json"
+  ],
+  "instructions": "Upgrade `.docs-ops/extractors/typescript-extractor.py` from v1.2 to v1.3 to capture enum members (cases) inside enums declared in the `declare global { namespace Amity { ... } }` blocks.\n\nCONTEXT: v1.2 captures enum DECLARATIONS in the Amity namespace (e.g. `Amity.SessionStates`, `Amity.AdPlacement`, `Amity.StoryItemType`) but does NOT capture the individual enum cases inside them. The current drift report shows refs like `Amity.SessionStates.ESTABLISHED`, `Amity.AdPlacement.FEED`, `Amity.StoryItemType.Hyperlink` getting flagged as unknown because the validator can't see the case names.\n\nWHAT TO ADD: when the extract_amity_namespace() function finds an enum declaration inside the Amity namespace block, it should also walk into the enum body and capture each case as a synthetic member.\n\nSCHEMA SHAPE — extend the existing Amity namespace member entries:\n\n  Existing v1.2 enum entry:\n    { \"name\": \"SessionStates\", \"kind\": \"enum\", \"file\": \"...\", \"line\": N }\n\n  v1.3 should ALSO surface each case as a separate dotted member, like:\n    { \"name\": \"SessionStates.ESTABLISHED\", \"kind\": \"enum_case\", \"file\": \"...\", \"line\": N, \"parent_enum\": \"SessionStates\" }\n\n  OR (alternative cleaner schema): make the enum entry hold a `cases: [...]` sub-array, AND the lookup_path logic in the validator already walks down to multi-level paths so a parallel synthetic entry isn't strictly necessary IF the validator is updated.\n\nPICK ONE approach — either is fine. Prefer the dotted-member approach if it requires no validator changes; prefer the sub-array approach if it's structurally cleaner. Document the choice in `notes`.\n\nIF you choose the dotted-member approach: just add new entries to `members[]` of the Amity namespace with dotted names. The validator's `lookup_path` already supports dotted refs; it would naturally find `Amity.SessionStates.ESTABLISHED` if such a member exists. Verify this works.\n\nIF you choose the sub-array approach: update the validator's `lookup_path` to recognize enum cases — when walking a path and the current node is an enum member with a `cases` array, the next segment may be in that array.\n\nIMPLEMENTATION:\n\n1. In the existing AMITY_NS_DECL_PATTERNS or similar, when the matched declaration kind is `enum` or `const enum`, ALSO parse the body braces to find case names.\n2. Use brace-depth tracking (similar to how the namespace block itself is delimited). Inside the enum body, match patterns:\n   - `<Name>,` — bare enum case (defaulted)\n   - `<Name> = <value>,` — enum case with explicit value\n   - `<Name>,` at end of body (no trailing comma also valid)\n3. Case names are typically `UPPER_SNAKE` or `PascalCase` — don't filter on naming; just capture `[A-Za-z_][A-Za-z0-9_]*` followed by `=` or `,` or `}` (after stripping comments and whitespace).\n4. Skip lines that are clearly NOT case declarations (comments starting with `//` or `/*`, blank lines, multi-line string/expression values that span lines).\n5. Bump extractor_version to `0.1.3`.\n6. Add stat `amity_enum_cases_total`.\n\nAfter the change, RE-RUN the extractor + validator and verify:\n  - `Amity.SessionStates.ESTABLISHED`, `Amity.AdPlacement.FEED`, `Amity.StoryItemType.Hyperlink` (and similar) no longer appear in the drift report.\n  - The total issue count drops by the number of previously-flagged enum-case refs (expect ~6-10 fewer).\n  - No NEW false negatives — refs that should still be flagged still are.\n\nReport in `notes`: which schema approach you picked and why, total enum cases captured across the Amity namespace, before/after drift issue counts, and any edge cases (string-valued enums, computed values, conditional cases via TS spread).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "amity_enum_cases_resolved",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); s=json.load(open('.docs-ops/sdk-surface/typescript.json')); known_enum_cases={'Amity.SessionStates.ESTABLISHED','Amity.AdPlacement.FEED','Amity.StoryItemType.Hyperlink','Amity.InvitationTargetType.Room'}; still=set(); [still.add(i['ref']) for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref') in known_enum_cases]; assert s['extractor_version']=='0.1.3', f'version not bumped: {s[\\\"extractor_version\\\"]}'; print('FAIL: still flagging '+str(still)) if still else print('OK'); import sys; sys.exit(1 if still else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": ["0015-ts-extractor-amity-global-namespace"],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T12:25:00Z"
+}

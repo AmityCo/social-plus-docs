@@ -1,0 +1,30 @@
+{
+  "id": "0007-triage-unhinted-ts-drift",
+  "tier": "B",
+  "type": "drift_triage",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/evals/ts-accuracy-drift-triage.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ts-accuracy-drift.json",
+    ".docs-ops/sdk-surface/typescript.json"
+  ],
+  "instructions": "Triage the 82 occurrences (53 unique refs) of drift issues that have NO hint in `.docs-ops/evals/ts-accuracy-drift.json` — i.e., the validator found a reference that's not in the TS surface AND doesn't appear under any other namespace.\n\nFor each unique ref (53 of them), classify into ONE of four buckets:\n\n1. **EXTRACTOR_BLIND_SPOT** — the symbol DOES exist in the SDK source but the regex extractor missed it. Most common cause: type-only declarations augmented via `declare global namespace Amity { ... }` in `AmityTypescriptSDK/packages/sdk/src/@types/` (these are not prefixed with `export` and are made available through TypeScript module augmentation, not regular exports). `AmityClient`, `AmityComment`, `AmityCommentReferenceType` are all suspected to be in this bucket.\n\n2. **GENUINE_DRIFT** — the symbol does NOT exist anywhere in the SDK source under its current name; a successor likely exists under a different name (e.g., `updatePost` → `editPost`). Find the successor if possible.\n\n3. **DOC_FABRICATION** — the symbol does NOT exist anywhere in the SDK source, and no plausible successor is found. The doc author likely made it up or it was never shipped.\n\n4. **FALSE_POSITIVE** — the regex matched something that wasn't actually meant as an SDK reference (e.g., a doc-local variable that happens to be named like a namespace, a TypeScript type annotation that's structurally similar). Rare but possible.\n\nMethod for each ref:\n\n1. Take the ref (e.g., `PostRepository.updatePost`). The last segment is the member name (e.g., `updatePost`).\n2. Search `AmityTypescriptSDK/packages/sdk/src/` broadly for the member name, including non-export contexts:\n   - `grep -rn \"\\\\b<member>\\\\b\" AmityTypescriptSDK/packages/sdk/src/` — broad textual search\n   - `grep -rn \"^export.*<member>\\\\b\" AmityTypescriptSDK/packages/sdk/src/` — explicit exports\n   - `grep -rn \"<member>\" AmityTypescriptSDK/packages/sdk/src/@types/` — global augmentations\n3. Look at occurrence context in the doc (the validator records `line` per occurrence; read 5 lines of context around it) to confirm it's intended as an SDK reference.\n4. Classify and, if GENUINE_DRIFT, identify the successor name (best effort — look for a similarly-named function in the same domain folder).\n\nOutput shape — write to `.docs-ops/evals/ts-accuracy-drift-triage.json`:\n\n{\n  \"generated_at\": \"<iso>\",\n  \"generated_by\": \"copilot-cli\",\n  \"source_report\": \".docs-ops/evals/ts-accuracy-drift.json\",\n  \"unique_refs_triaged\": <int>,\n  \"buckets\": {\n    \"EXTRACTOR_BLIND_SPOT\":   [ { \"ref\": \"...\", \"occurrences\": <int>, \"evidence\": \"<file:line where it's declared in SDK>\", \"notes\": \"...\" } ],\n    \"GENUINE_DRIFT\":          [ { \"ref\": \"...\", \"occurrences\": <int>, \"proposed_successor\": \"Namespace.newName\" | null, \"evidence\": \"...\", \"notes\": \"...\" } ],\n    \"DOC_FABRICATION\":        [ { \"ref\": \"...\", \"occurrences\": <int>, \"notes\": \"...\" } ],\n    \"FALSE_POSITIVE\":         [ { \"ref\": \"...\", \"occurrences\": <int>, \"reason\": \"...\" } ]\n  },\n  \"summary\": { \"<bucket>\": <count_of_refs> }\n}\n\nDo NOT modify any doc files in this task. Triage-only.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "triage_report_written_and_complete",
+        "command": "python3 -c \"import json; t=json.load(open('.docs-ops/evals/ts-accuracy-drift-triage.json')); r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); unhinted=set(); [unhinted.add(i.get('ref') or f'import {i.get(\\\"import_name\\\")}') for f,iss in r['issues_by_file'].items() for i in iss if not i.get('hint_present_at')]; triaged=set(); [triaged.add(item['ref']) for b in t['buckets'].values() for item in b]; missing=unhinted-triaged; print('OK' if not missing else f'FAIL: {len(missing)} refs not triaged: {sorted(missing)[:5]}...'); import sys; sys.exit(1 if missing else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/ts-accuracy-drift-triage.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T11:20:00Z"
+}

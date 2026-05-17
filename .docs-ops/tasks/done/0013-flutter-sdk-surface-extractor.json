@@ -1,0 +1,34 @@
+{
+  "id": "0013-flutter-sdk-surface-extractor",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/sdk-surface/flutter.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/sdk-surface/android.json"
+  ],
+  "instructions": "Write `.docs-ops/extractors/flutter-extractor.py` — a regex-based Dart public-API extractor — and run it to produce `.docs-ops/sdk-surface/flutter.json`.\n\nMODEL: Mirror the structure and output-schema conventions of `.docs-ops/extractors/android-extractor.py` (the Kotlin/Java extractor written in task 0011). Same approach: pure-Python, no external deps, walks the SDK source, emits a JSON surface.\n\nSDK ROOT: `Amity-Social-Cloud-SDK-Flutter-Internal/` (sibling of `social-plus-docs/`).\n\nSCOPE — what to scan:\n  - INCLUDE all `.dart` files under `lib/` (the standard public source location for a Dart package).\n  - EXCLUDE: `test/`, `example/`, `examples/`, `build/`, `.dart_tool/`, anything under `.git`, generated files (e.g. `*.g.dart`, `*.freezed.dart` if any).\n  - You can use `find Amity-Social-Cloud-SDK-Flutter-Internal/lib -name '*.dart'` filtered with the excludes.\n\nWHAT COUNTS AS PUBLIC API:\n  - **Dart visibility rule**: a name is PRIVATE iff it starts with an underscore (`_Foo`, `_internalMethod`, `_field`). Anything NOT starting with underscore is library-public. There is no `public` / `private` keyword in Dart.\n  - For library-private vs package-public: Dart has 'library private' (the underscore rule), and re-exports via `export 'src/foo.dart'` from the package's main barrel determine what's package-public. v1: capture all underscore-free top-level declarations across `lib/` — the main barrel (probably `lib/amity_sdk.dart` or similar) will narrow this later if needed.\n\nDECLARATION KINDS to detect:\n\n  Type-level:\n    `class <Name>`, `abstract class <Name>`, `mixin <Name>`, `extension <Name> on <T>`, `enum <Name>`, `typedef <Name>` (function type alias)\n  Member-level:\n    Methods: `<ReturnType> methodName(...)`, `void methodName(...)`, `Future<T> methodName(...)`, `Stream<T> methodName(...)`, plus `static` variants and operator overloads\n    Properties: `final <Type> name`, `var <Type>? name`, `<Type> get name`, `set name(<Type>)`, `late final <Type> name`, `static const`\n    Constructors: `ClassName(...)`, `ClassName.namedConstructor(...)`, `factory ClassName(...)`, `const ClassName(...)`\n    Enum values: bare identifiers inside `enum { ... }` body — like Kotlin enum entries.\n  Top-level functions and constants:\n    `<ReturnType> functionName(...)`, `void functionName(...)` at file top level\n    `const <Type> NAME = ...`, `final <Type> name = ...` at file top level\n\nIMPORTANT DART-SPECIFIC NOTES:\n  - Annotations (`@override`, `@deprecated`, `@JsonSerializable()`, `@freezed`, etc.) appear above declarations. Strip them when looking for the visibility/kind keyword.\n  - Dart's `part of` files: a `.dart` file starting with `part of` is a fragment of another library. Still walk these, but record `is_part_of` in the entry for clarity.\n  - Dart extensions: `extension AmityChannelExt on AmityChannel { ... }` — track separately like Swift extensions. Members aggregate into the host type's member list, marked `from_extension=true`, OR if host type is not in the surface, keep as its own entry under `extensions[]`.\n  - Mixins: track as a separate kind, similar to interfaces in Android.\n\nOUTPUT SCHEMA — write to `.docs-ops/sdk-surface/flutter.json`. Follow android.json conventions:\n\n{\n  \"extractor_version\": \"0.1.0\",\n  \"extractor\": \"flutter-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_product\": \"amity_sdk\",\n  \"sdk_source_roots\": [\"Amity-Social-Cloud-SDK-Flutter-Internal/lib\"],\n  \"types\": {\n    \"AmityCoreClient\": {\n      \"kind\": \"class | abstract_class | enum | typedef\",\n      \"primary_decl\": { \"file\": \"...\", \"line\": N },\n      \"members\": [\n        { \"name\": \"setup\", \"kind\": \"func | getter | setter | field | const | constructor | named_constructor | factory | enum_value\", \"file\": \"...\", \"line\": N, \"signature_hint\": \"<raw trimmed line>\", \"from_extension\": false }\n      ],\n      \"extensions\": [ { \"name\": \"AmityCoreClientExt\", \"file\": \"...\", \"line\": N } ]\n    }\n  },\n  \"mixins\": { \"<name>\": { ... same shape ... } },\n  \"global_funcs\": [ ... ],\n  \"global_consts\": [ ... ],\n  \"typedefs\": [ ... ],\n  \"unhandled\": [],\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"part_of_files\": <int>,\n    \"types\": <int>,\n    \"mixins\": <int>,\n    \"members_total\": <int>,\n    \"global_funcs\": <int>,\n    \"global_consts\": <int>,\n    \"unhandled_lines\": <int>\n  }\n}\n\nIMPORTANT — v1 scope is the same restraint as android-extractor.py and ios-extractor.py: capture NAME + KIND + FILE + LINE + raw `signature_hint`. Parameter / return-type parsing is OUT OF SCOPE.\n\nLEARN FROM ANDROID-EXTRACTOR'S PITFALLS:\n  - The Android v1 had inflated `global_funcs` count because the per-line method regex fired on indented class methods. AVOID this in Flutter — only count a method as `global_funcs` if it's at column-0 indentation AND outside any `{...}` brace scope. Track brace depth like ios-extractor.py does.\n\nAfter writing, RUN it. Expected order of magnitude: the Flutter SDK is smaller than iOS/Android — probably hundreds of types, low thousands of members. Verify the output is non-empty and reasonable.\n\nReport in `notes`: stats, 3-5 sample type entries, top 10 types by member count, list of unhandled patterns. Confirm `global_funcs` is NOT inflated (sanity-check: <100 for an SDK of this size is reasonable).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_runs_and_produces_valid_surface",
+        "command": "python3 .docs-ops/extractors/flutter-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/flutter.json')); assert 'types' in d and 'stats' in d; assert d['stats']['types']>0 and d['stats']['members_total']>0, f'unexpectedly empty surface: {d[\\\"stats\\\"]}'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/flutter.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T11:50:00Z"
+}
