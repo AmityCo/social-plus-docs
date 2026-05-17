@@ -1,0 +1,32 @@
+{
+  "id": "0028-android-extractor-v1.1",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/sdk-surface/android.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/tasks/done/0011-android-sdk-surface-extractor.result.json"
+  ],
+  "instructions": "Upgrade `.docs-ops/extractors/android-extractor.py` from v1.0 to v1.1 to close two quality issues from 0011's known limitations.\n\nISSUE 1 — **inflated `global_funcs` count**.\n\nv1 reports `global_funcs: 3873` which is implausibly high for an SDK with ~1381 types. Per 0011's notes: 'the per-line heuristic after annotation-stripping fires on indented class methods too'. So class methods are being double-counted as top-level globals.\n\nFix: only count a method as `global_funcs` if it's at column-0 indentation AND outside any `{ ... }` brace scope. Use the brace-depth tracker that the iOS extractor uses as a reference pattern (ios-extractor.py v1.0 handles this correctly).\n\nVerification: after the fix, `global_funcs` should drop dramatically (expect under 200 for an SDK of this size, possibly under 50 — Kotlin top-level functions are uncommon outside utility files).\n\nISSUE 2 — **internal types leak into the surface**.\n\nThe top 10 types include internal infrastructure: `Builder`, `UserDatabase`, `Entry`, `EkoMessageDao`, etc. These are NOT user-facing public SDK API. Two causes worth distinguishing:\n\n  (a) Inner-class `Builder` types are public (they implement the Builder pattern for public classes) — they ARE technically public, but they're scoped to their containing type. v1 lifts them to top-level which inflates the count and makes them ambiguous.\n\n  (b) Files under `*/internal/*`, `*/impl/*`, `*/dao/*` directories often contain `public class` declarations that are conceptually internal — they're public only because Kotlin/Java can't express 'public within this artifact'. These should be filtered out.\n\nFix:\n\n  For (a) — nested classes: when a `public class Foo { ... public class Bar { ... } }` pattern is detected, emit Bar as a NESTED type under Foo (populate `nested_types` array on Foo), NOT as a top-level entry. Use the same brace-depth tracker logic as iOS extractor v1.1 (task 0027).\n\n  For (b) — internal-by-convention paths: skip files matching these path patterns:\n    - `*/internal/*`\n    - `*/impl/*`\n    - `*/dao/*` (data access objects; not public API)\n    - `*/data/local/*` (Room database internals)\n    - `*/data/remote/*` (Retrofit interfaces)\n    - `*/di/*` (dependency injection setup)\n    - `*/util/internal/*`\n    These patterns are common in Android codebases and the convention is that anything in them is implementation-only.\n\n  Be conservative — if uncertain whether a path is internal, INCLUDE it (false positive is better than false negative for a surface-extraction tool). Flag the inclusion list in stats so it's reviewable.\n\nSCHEMA: bump `extractor_version` to `0.1.1`. Add stats:\n  - `nested_types_total`\n  - `files_excluded_internal` (count of files skipped due to internal-by-convention paths)\n  - `excluded_path_patterns` (list of patterns actually matched)\n\nVERIFY:\n  - `global_funcs` count is now in the dozens, not thousands.\n  - Top 10 types by member count no longer includes `Builder` / `UserDatabase` / `Entry` (these should either be nested under their parents or excluded as internal).\n  - User-facing types like `AmityCoreClient`, `AmityChannel`, `AmityPost` are still present with their member lists intact.\n\nReport in `notes`: before/after stats (especially the global_funcs delta), excluded path patterns matched, top 10 types after the fix, any types that were lost in the cleanup that you suspect SHOULD be public (flag for re-review).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_v1.1_fixes_global_funcs_and_internal_leakage",
+        "command": "python3 .docs-ops/extractors/android-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/android.json')); assert d['extractor_version']=='0.1.1', f'version not bumped: {d[\\\"extractor_version\\\"]}'; assert d['stats']['global_funcs']<500, f'global_funcs still inflated: {d[\\\"stats\\\"][\\\"global_funcs\\\"]}'; assert d['stats'].get('nested_types_total',0)>=0; ac=d['types'].get('AmityCoreClient'); assert ac and len(ac.get('members',[]))>10, 'AmityCoreClient must still be present with members'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/android.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:00:00Z"
+}

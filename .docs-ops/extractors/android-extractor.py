@@ -25,7 +25,17 @@ REPO_ROOT = SCRIPT_DIR.parent.parent.parent  # extractors/ → .docs-ops/ → so
 SDK_ROOT = REPO_ROOT / "Amity-Social-Cloud-SDK-Android"
 OUTPUT = SCRIPT_DIR.parent / "sdk-surface" / "android.json"
 
-EXTRACTOR_VERSION = "0.1.0"
+EXTRACTOR_VERSION = "0.1.2"
+
+INTERNAL_EXCLUDE_PATTERNS = {
+    "/internal/",
+    "/impl/",
+    "/dao/",
+    "/data/local/",
+    "/data/remote/",
+    "/di/",
+    "/util/internal/",
+}
 
 EXCLUDE_PATTERNS = {
     "/src/test/",
@@ -41,6 +51,7 @@ EXCLUDE_PATTERNS = {
     "/amity-sample-app/",
     "/amity-sample-code/",
     "/amity-test-kit/",
+    *INTERNAL_EXCLUDE_PATTERNS,
 }
 
 # ---------------------------------------------------------------------------
@@ -162,8 +173,10 @@ def process_kotlin_file(filepath: str, content: str, types: dict, interfaces: di
             types.setdefault(name, entry)
 
     # ---- Detect top-level functions (file-level, not inside a class) ----
-    # A simple heuristic: fun declarations with no leading indent are top-level
+    # Only consider declarations at column 0 — indented members are not top-level
     for i, line in enumerate(lines, 1):
+        if not line or line[0] in (' ', '\t'):
+            continue
         stripped = strip_kt_annotations(line)
         if stripped.startswith('fun ') or re.match(r'^(?:suspend\s+|inline\s+|operator\s+|infix\s+)*fun\s+', stripped):
             m = re.match(r'^(?:(?:suspend|inline|operator|infix|tailrec)\s+)*fun\s+(\w+)', stripped)
@@ -185,44 +198,105 @@ def process_kotlin_file(filepath: str, content: str, types: dict, interfaces: di
                 })
 
     # ---- Detect members inside classes/objects ----
-    # Walk line by line, track brace depth to know which type scope we're in
-    current_type = None
+    # Walk line by line, track nested type scopes using brace depth.
+    # pending_type: (name, entry) for a type whose opening { hasn't been seen yet.
+    # We defer the type_stack push until we find the { that opens the class body.
+    # This correctly handles multi-line declarations (class Foo(\n  params\n) : Base() {).
+    type_stack = []
     brace_depth = 0
-    type_start_depth = {}  # type_name → brace_depth at entry
+    pending_type = None  # (name, entry) waiting for the opening '{'
 
     for i, line in enumerate(lines, 1):
-        # Stripped for matching, but count braces in raw line
         stripped = strip_kt_annotations(line)
-
-        # Update brace depth
         brace_depth += line.count('{') - line.count('}')
 
-        # Check if this line opens a new type (to track scope)
+        # Pop closed scopes ALWAYS — even when a pending type is active.
+        # This ensures that a '}' that closes a parent scope is processed before
+        # the pending-type logic runs, preventing sibling types from being wrongly
+        # nested inside the pending (leaf) type.
+        while type_stack and brace_depth < type_stack[-1]['depth']:
+            type_stack.pop()
+
+        # ---- Handle pending type (awaiting its opening '{') ----
+        if pending_type is not None:
+            pname, pentry = pending_type
+            # Check for a new type declaration on this line FIRST.  If another
+            # public type starts here, the previous pending was a leaf (no body) —
+            # just leave it in nested_types and don't push it.
+            tm_check = KT_TYPE_RE.match(stripped)
+            has_new_type = (
+                tm_check is not None
+                and not KT_NON_PUBLIC.search(tm_check.group('vis') or '')
+            )
+            if has_new_type:
+                # Previous pending was a leaf. Clear it and fall through to
+                # process this new declaration.
+                pending_type = None
+            elif '{' in line:
+                # No new type declaration on this line: the '{' opens the body
+                # of the pending type.
+                type_stack.append({'name': pname, 'entry': pentry, 'depth': brace_depth})
+                pending_type = None
+                # Fall through to normal processing so members/entries on this
+                # same line are handled.
+            else:
+                # Still accumulating the multi-line declaration (constructor
+                # params, supertypes, etc.) — skip member detection.
+                continue
+
         tm = KT_TYPE_RE.match(stripped)
         if tm and not KT_NON_PUBLIC.search(tm.group('vis') or ''):
             name = tm.group('name')
             kind = normalise_kind(tm.group('kind'))
-            if name in types or name in interfaces:
-                current_type = name
-                type_start_depth[name] = brace_depth
+            entry = types.get(name) or interfaces.get(name)
 
-        # Pop type scope when brace depth falls below entry depth
-        if current_type and brace_depth < type_start_depth.get(current_type, 999):
-            current_type = None
+            if type_stack:
+                parent = type_stack[-1]['entry']
+                nested_entry = {
+                    'name': name,
+                    'kind': kind,
+                    'language': 'kotlin',
+                    'primary_decl': {'file': filepath, 'line': i},
+                    'members': [],
+                    'nested_types': [],
+                }
+                existing_nested = next(
+                    (
+                        n for n in parent.get('nested_types', [])
+                        if n.get('name') == name and n.get('kind') == kind
+                        and n.get('primary_decl', {}).get('line') == i
+                    ),
+                    None,
+                )
+                if existing_nested is None:
+                    parent.setdefault('nested_types', []).append(nested_entry)
+                    entry = parent['nested_types'][-1]
+                else:
+                    entry = existing_nested
+                types.pop(name, None)
+                interfaces.pop(name, None)
 
-        if current_type is None:
+            if entry is not None:
+                if '{' in line:
+                    # Body opens on this line — push immediately.
+                    type_stack.append({'name': name, 'entry': entry, 'depth': brace_depth})
+                else:
+                    # No '{' on declaration line: could be a multi-line declaration
+                    # (body on a future line) or a leaf type (no body at all, e.g. a
+                    # sealed class subtype like `class IDLE : Base()`).
+                    # Defer the push until we see the '{'; if another type appears first
+                    # at the same depth, this is a leaf and we never push.
+                    pending_type = (name, entry)
+
+        if not type_stack:
             continue
 
-        target = types.get(current_type) or interfaces.get(current_type)
-        if target is None:
-            continue
+        target = type_stack[-1]['entry']
 
-        # Companion object: mark a flag on type
         if KT_COMPANION_RE.match(line):
             target['_in_companion'] = True
             continue
 
-        # Fun member
         fm = re.match(
             r'^(?P<vis>(?:(?:private|protected|internal|public|override|open|abstract|'
             r'suspend|inline|operator|infix|tailrec|external|actual|expect|final|'
@@ -242,34 +316,39 @@ def process_kotlin_file(filepath: str, content: str, types: dict, interfaces: di
                 })
             continue
 
-        # Val/var property
         pm = KT_PROP_RE.match(stripped)
         if pm and not KT_NON_PUBLIC.search(pm.group('vis') or ''):
             member_name = pm.group('name')
             if not any(m['name'] == member_name for m in target['members']):
                 target['members'].append({
                     'name': member_name,
-                    'kind': pm.group('kind'),  # 'val' or 'var'
+                    'kind': pm.group('kind'),
                     'file': filepath,
                     'line': i,
                     'signature_hint': stripped[:120],
                     'from_companion': target.get('_in_companion', False),
                 })
 
-        # Enum entries (all caps, at class body depth)
         if (target.get('kind') in ('enum_class',) and
-                brace_depth == type_start_depth.get(current_type, 0) + 1):
-            em = KT_ENUM_ENTRY_RE.match(line)
-            if em:
-                entry_name = em.group(1)
-                if not any(m['name'] == entry_name for m in target['members']):
-                    target['members'].append({
-                        'name': entry_name,
-                        'kind': 'enum_entry',
-                        'file': filepath,
-                        'line': i,
-                        'signature_hint': line.strip()[:80],
-                    })
+                brace_depth == type_stack[-1]['depth']):
+            # Skip lines that clearly aren't enum entry lines
+            clean = stripped.split('//')[0].strip()
+            if clean and not re.match(
+                    r'^(?:fun\s|val\s|var\s|class\s|interface\s|object\s|companion\s|'
+                    r'override\s|@|\}|\{|;|private\s|internal\s|protected\s)', clean):
+                # Find all UPPER_SNAKE_CASE identifiers on this line that look like
+                # enum entries (followed by '(', ',', ';', or end-of-line).
+                for em in re.finditer(
+                        r'\b([A-Z][A-Z0-9_]{1,})\b(?=\s*[\(,;]|\s*$)', clean):
+                    entry_name = em.group(1)
+                    if not any(m['name'] == entry_name for m in target['members']):
+                        target['members'].append({
+                            'name': entry_name,
+                            'kind': 'enum_entry',
+                            'file': filepath,
+                            'line': i,
+                            'signature_hint': line.strip()[:80],
+                        })
 
 
 def process_java_file(filepath: str, content: str, types: dict, interfaces: dict,
@@ -311,10 +390,11 @@ def process_java_file(filepath: str, content: str, types: dict, interfaces: dict
         else:
             types.setdefault(name, entry)
 
-    # Public methods/fields
+    # Public methods/fields + Java enum entries
     current_type = None
     brace_depth = 0
     type_start_depth = {}
+    in_enum_entries = {}  # type_name -> True until first ';' after entries
 
     for i, line in enumerate(lines, 1):
         brace_depth += line.count('{') - line.count('}')
@@ -329,6 +409,8 @@ def process_java_file(filepath: str, content: str, types: dict, interfaces: dict
             if name in types or name in interfaces:
                 current_type = name
                 type_start_depth[name] = brace_depth
+                if kind == 'enum_class':
+                    in_enum_entries[name] = True  # enum body starts with entries
 
         if current_type and brace_depth < type_start_depth.get(current_type, 999):
             current_type = None
@@ -338,6 +420,43 @@ def process_java_file(filepath: str, content: str, types: dict, interfaces: dict
 
         target = types.get(current_type) or interfaces.get(current_type)
         if target is None:
+            continue
+
+        # Detect Java enum entries (UPPER_SNAKE or identifier before ( , ;)
+        if in_enum_entries.get(current_type):
+            stripped_line = line.strip()
+            if stripped_line.startswith('}'):
+                in_enum_entries[current_type] = False
+            elif ';' in stripped_line and not stripped_line.startswith('//'):
+                # Semicolon terminates enum constant list
+                in_enum_entries[current_type] = False
+                # Still try to capture entries on this same line before ;
+                entries_part = stripped_line.split(';')[0]
+                for candidate in re.split(r'[,\s]+', entries_part):
+                    candidate = candidate.strip().split('(')[0].strip()
+                    if candidate and re.match(r'^[A-Z][A-Z0-9_]*$', candidate):
+                        if not any(m['name'] == candidate for m in target['members']):
+                            target['members'].append({
+                                'name': candidate,
+                                'kind': 'enum_entry',
+                                'file': filepath,
+                                'line': i,
+                                'signature_hint': line.strip()[:80],
+                            })
+            elif stripped_line and not stripped_line.startswith('//'):
+                # Capture comma-separated enum entries
+                entries_part = stripped_line.split('//')[0]
+                for candidate in re.split(r'[,\s]+', entries_part):
+                    candidate = candidate.strip().split('(')[0].strip()
+                    if candidate and re.match(r'^[A-Z][A-Z0-9_]*$', candidate):
+                        if not any(m['name'] == candidate for m in target['members']):
+                            target['members'].append({
+                                'name': candidate,
+                                'kind': 'enum_entry',
+                                'file': filepath,
+                                'line': i,
+                                'signature_hint': line.strip()[:80],
+                            })
             continue
 
         mm = JAVA_MEMBER_RE.match(line)
@@ -359,27 +478,63 @@ def process_java_file(filepath: str, content: str, types: dict, interfaces: dict
 # Main walker
 # ---------------------------------------------------------------------------
 
+def count_source_files(root_path: str) -> int:
+    count = 0
+    for walk_root, _, walk_files in os.walk(root_path):
+        walk_root_str = str(walk_root)
+        if '/src/main/' not in walk_root_str and '\\src\\main\\' not in walk_root_str:
+            continue
+        for fname in walk_files:
+            if fname.endswith(('.kt', '.java')):
+                count += 1
+    return count
+
+
+
 def collect_files():
-    """Yield (absolute_path_str, relative_path_str, lang) for all source files."""
+    """Return source files plus exclusion metadata."""
+    collected = []
+    files_excluded_internal = 0
+    all_files_seen = set()
+
     for root, dirs, files in os.walk(SDK_ROOT):
-        # Prune excluded dirs in-place
-        dirs[:] = [d for d in dirs if not should_exclude(os.path.join(root, d) + '/')]
         root_str = str(root)
+        all_files_seen.add(root_str + '/')
+
+        kept_dirs = []
+        for d in dirs:
+            dir_path = os.path.join(root, d) + '/'
+            all_files_seen.add(dir_path)
+            if should_exclude(dir_path):
+                if any(pat in dir_path for pat in INTERNAL_EXCLUDE_PATTERNS):
+                    files_excluded_internal += count_source_files(os.path.join(root, d))
+                continue
+            kept_dirs.append(d)
+        dirs[:] = kept_dirs
+
         if should_exclude(root_str + '/'):
             continue
-        # Only process files under src/main/
         if '/src/main/' not in root_str and '\\src\\main\\' not in root_str:
             continue
+
         for fname in files:
+            abs_path = os.path.join(root, fname)
+            all_files_seen.add(abs_path)
+            if any(pat in abs_path for pat in INTERNAL_EXCLUDE_PATTERNS):
+                files_excluded_internal += 1
+                continue
+            if should_exclude(abs_path):
+                continue
             if fname.endswith('.kt'):
                 lang = 'kotlin'
             elif fname.endswith('.java'):
                 lang = 'java'
             else:
                 continue
-            abs_path = os.path.join(root, fname)
             rel_path = os.path.relpath(abs_path, REPO_ROOT)
-            yield abs_path, rel_path, lang
+            collected.append((abs_path, rel_path, lang))
+
+    return collected, files_excluded_internal, all_files_seen
 
 
 def main():
@@ -395,8 +550,9 @@ def main():
     java_files = 0
 
     sdk_source_roots = set()
+    collected_files, files_excluded_internal, all_files_seen = collect_files()
 
-    for abs_path, rel_path, lang in collect_files():
+    for abs_path, rel_path, lang in collected_files:
         files_scanned += 1
         if lang == 'kotlin':
             kt_files += 1
@@ -427,6 +583,14 @@ def main():
 
     members_total = sum(len(t['members']) for t in types.values()) + \
                     sum(len(i['members']) for i in interfaces.values())
+    nested_types_total = sum(
+        len(t.get('nested_types', []))
+        for t in list(types.values()) + list(interfaces.values())
+    )
+    enum_entries_total = sum(
+        sum(1 for m in t.get('members', []) if m.get('kind') == 'enum_entry')
+        for t in list(types.values()) + list(interfaces.values())
+    )
 
     output = {
         'extractor_version': EXTRACTOR_VERSION,
@@ -450,6 +614,13 @@ def main():
             'global_funcs': len(global_funcs),
             'global_consts': len(global_consts),
             'typealiases': len(typealiases),
+            'nested_types_total': nested_types_total,
+            'enum_entries_total': enum_entries_total,
+            'files_excluded_internal': files_excluded_internal,
+            'excluded_path_patterns': [
+                p for p in sorted(EXCLUDE_PATTERNS)
+                if any(p in str(f) for f in all_files_seen)
+            ],
             'unhandled_lines': len(unhandled),
         },
     }

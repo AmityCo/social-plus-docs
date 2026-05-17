@@ -1,0 +1,31 @@
+{
+  "id": "0033-android-extractor-and-validator-v1.2",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/evals/android-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/validators/ts-accuracy-validator.py"
+  ],
+  "instructions": "Upgrade Android extractor v1.1 → v1.2 AND update the Android validator to handle nested types + enum entries. This is the Android analog of the TS extractor v1.2 → v1.3 / validator upgrade work that took TS drift from 113 → 30. Goal: shrink the Android drift from 250 → under 50 by resolving extractor-shape misses, so the remaining issues are real drift worth triaging.\n\n## Part A — Extractor v1.2: capture enum entries\n\nThe top Android drift refs include `AmityStreamBroadcasterState.CONNECTED`, `AmityCommentReferenceType.POST`, `AmityEventOriginType.COMMUNITY`, `AmityEventResponseStatus.GOING`, `AmityPostTargetType.COMMUNITY`, etc. These are enum entries inside Kotlin `enum class` declarations. v1.1 captures the enum types themselves but not the entries.\n\nFix: when inside the body of a `public enum class <Name>` (Kotlin) or `public enum <Name>` (Java), capture each enum entry as a member with `kind=enum_entry`. Use the existing brace-depth tracker to scope detection to inside the enum body.\n\nKotlin enum-entry pattern: bare identifiers (possibly comma-separated, possibly with constructor args), e.g.:\n  ```\n  enum class State { CONNECTED, DISCONNECTED, CONNECTING }\n  enum class Color(val rgb: Int) { RED(0xff0000), GREEN(0x00ff00) }\n  enum class Op { ADD { ... }, SUB { ... } }\n  ```\nMatch `^\\s*([A-Z][A-Z0-9_]*)\\s*(?:\\(|,|\\s+\\{|$)` — captures UPPER_SNAKE_CASE identifiers that look like enum entries. Don't be over-restrictive; some enums use PascalCase too.\n\nJava enum-entry pattern: same as Kotlin essentially, comma-separated bare identifiers terminated by `;` (which separates from any method declarations).\n\nFor entries with constructor args or method overrides, just capture the NAME — argument validation is out of scope.\n\nBump `extractor_version` to `0.1.2`. Add stat `enum_entries_total`.\n\n## Part B — Extractor v1.2: also ensure nested types ARE actually captured as type members\n\nv1.1's notes say `nested_types_total=162` — good, the extractor sees them. But the validator may not be using them. Verify the schema: each entry in `types[]` should have a `nested_types[]` array populated when nested types exist. Spot-check `AmityPostRepository.Builder`, `AmityException.PermissionDenied`, `AmityRoomBroadcastData.CoHosts` — these should appear in their parents' `nested_types[]`. If they don't, that's a bug — fix it.\n\n## Part C — Validator: walk nested_types and enum_entries in lookup\n\nThe Android validator (built in 0030) likely treats `nested_types[]` and enum entries the same way the iOS validator does (i.e., not fully walking them). Update its lookup logic so that:\n\n  - `AmityFoo.NestedBar` validates if `NestedBar` is in `AmityFoo.nested_types[]` (returns kind='nested_type')\n  - `AmityFoo.NestedBar.method` validates if `method` is in `AmityFoo.nested_types[NestedBar].members[]`\n  - `AmityEnum.ENTRY_NAME` validates if `ENTRY_NAME` is in `AmityEnum.members[]` (where kind=enum_entry)\n\nMirror the TS validator's recursive `lookup_path` function — it handles arbitrary nesting depth via dotted-path lookup.\n\n## Verification\n\nAfter both changes, re-run `python3 .docs-ops/extractors/android-extractor.py` AND `python3 .docs-ops/validators/android-accuracy-validator.py`. Check:\n  - Surface stats: `enum_entries_total > 0` (expect dozens to hundreds — Android SDK is enum-heavy)\n  - Drift report: total_issues should drop from 250 to under 50 (target: under 30)\n  - `AmityStreamBroadcasterState.CONNECTED` etc. no longer in drift report\n  - `AmityPostRepository.Builder` etc. no longer in drift report\n  - `AmityCoreClient` and other top-level types are NOT regressed (still have full member lists)\n\nReport in `notes`: before/after drift totals, enum_entries_total stat, top 10 remaining drift refs after the fix (these are the candidates for triage), and any patterns the v1.2 still misses.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "v1.2_resolves_enum_entries_and_nested_types",
+        "command": "python3 .docs-ops/extractors/android-extractor.py > /dev/null && python3 .docs-ops/validators/android-accuracy-validator.py > /dev/null && python3 -c \"import json; s=json.load(open('.docs-ops/sdk-surface/android.json')); r=json.load(open('.docs-ops/evals/android-accuracy-drift.json')); assert s['extractor_version']=='0.1.2', f'version not bumped: {s[\\\"extractor_version\\\"]}'; assert s['stats'].get('enum_entries_total',0)>0, 'no enum entries captured'; assert r['stats']['total_issues']<100, f'drift still too high: {r[\\\"stats\\\"][\\\"total_issues\\\"]} (target: under 50)'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T16:00:00Z"
+}

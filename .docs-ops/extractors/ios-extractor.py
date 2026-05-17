@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-iOS/Swift SDK public API extractor — v0.1.0
+iOS/Swift SDK public API extractor — v0.1.1
 
 Walks AmitySDKIOS/{EkoChat,EkoStreamPublisher,UpstraVideoPlayerKit} and emits
 .docs-ops/sdk-surface/ios.json with the public Swift API surface.
@@ -44,6 +44,7 @@ ATTR_STRIP_RE = re.compile(r'^(?:@\w+(?:\([^)]*\))?\s*)+')
 # Type-level declarations — matched on the attr-stripped line
 TYPE_RE_LIST = [
     ("class",     re.compile(r'^(?:public|open)\s+(?:final\s+)?(?:actor\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)')),
+    ("actor",     re.compile(r'^(?:public|open)\s+(?:final\s+)?actor\s+([A-Za-z_][A-Za-z0-9_]*)')),
     ("struct",    re.compile(r'^(?:public|open)\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)')),
     ("protocol",  re.compile(r'^(?:public|open)\s+protocol\s+([A-Za-z_][A-Za-z0-9_]*)')),
     ("enum",      re.compile(r'^(?:public|open)\s+(?:indirect\s+)?enum\s+([A-Za-z_][A-Za-z0-9_]*)')),
@@ -69,7 +70,13 @@ MEMBER_RE_LIST = [
 ]
 
 # Enum case line (only recognised inside enum context)
-CASE_RE = re.compile(r'^\s*(?:public\s+)?case\s+([A-Za-z_][A-Za-z0-9_]*)')
+CASE_RE = re.compile(r'^\s*(?:public\s+)?case\s+(`?[A-Za-z_][A-Za-z0-9_]*`?)')
+
+# Static/class stored properties inside a public/open type body may omit explicit public.
+STATIC_STORED_RE = re.compile(
+    r'^(?:(?:public|open|internal|private|fileprivate)\s+)?'
+    r'(?:(?:static|class)\s+)(var|let)\s+([A-Za-z_`][A-Za-z0-9_`]*)'
+)
 
 
 def strip_attrs(raw: str) -> str:
@@ -123,7 +130,7 @@ def extract_file(
 
     lines = text.splitlines()
     brace_depth = 0
-    # Each frame: {"name": str, "depth": int (depth when body starts), "kind": str, "is_enum": bool}
+    # Each frame: {"name": str, "depth": int (depth when body starts), "kind": str, "is_enum": bool, "entry": dict | None}
     type_stack: list[dict] = []
 
     def current_type() -> dict | None:
@@ -140,6 +147,17 @@ def extract_file(
                 "nested_types": [],
             }
         return container[name]
+
+    def create_nested_type(parent: dict, name: str, kind: str, lineno: int) -> dict:
+        nested_entry = {
+            "name": name,
+            "kind": kind,
+            "primary_decl": {"file": rel(path), "line": lineno},
+            "members": [],
+            "nested_types": [],
+        }
+        parent["nested_types"].append(nested_entry)
+        return nested_entry
 
     for lineno, raw in enumerate(lines, start=1):
         # Maintain brace depth BEFORE processing (depth entering this line).
@@ -172,10 +190,14 @@ def extract_file(
             if m:
                 name = m.group(1)
                 is_protocol = (kind == "protocol")
-                entry = get_or_create_type(name, kind, lineno, is_protocol)
-                # Mark extensions
-                if "primary_decl" in entry and entry["primary_decl"]["file"] != file_rel:
-                    entry["extensions"].append({"file": file_rel, "line": lineno})
+                parent_type = current_type()
+                if parent_type and parent_type.get("entry") is not None:
+                    entry = create_nested_type(parent_type["entry"], name, kind, lineno)
+                else:
+                    entry = get_or_create_type(name, kind, lineno, is_protocol)
+                    # Mark extensions
+                    if "primary_decl" in entry and entry["primary_decl"]["file"] != file_rel:
+                        entry["extensions"].append({"file": file_rel, "line": lineno})
                 # Push onto stack — depth of body = depth_before + 1 (after we count the `{`)
                 brace_delta = count_brace_delta(raw)
                 brace_depth += brace_delta
@@ -186,6 +208,7 @@ def extract_file(
                         "kind": kind,
                         "is_enum": (kind == "enum"),
                         "is_protocol": is_protocol,
+                        "entry": entry,
                     })
                 matched_type = True
                 break
@@ -216,6 +239,7 @@ def extract_file(
                     "kind": "extension",
                     "is_enum": False,
                     "is_protocol": False,
+                    "entry": entry,
                 })
             continue
 
@@ -223,42 +247,56 @@ def extract_file(
         ct = current_type()
         if ct:
             is_enum = ct.get("is_enum", False)
+            member_target = ct.get("entry")
 
             # Enum cases
             if is_enum:
                 cm = CASE_RE.match(raw)
-                if cm:
-                    case_name = cm.group(1)
-                    container = protocols_out if ct.get("is_protocol") else types_out
-                    if ct["name"] in container:
-                        container[ct["name"]]["members"].append({
-                            "name": case_name,
-                            "kind": "case",
-                            "file": file_rel,
-                            "line": lineno,
-                            "signature_hint": raw.strip(),
-                        })
+                if cm and member_target is not None:
+                    case_name = cm.group(1).strip("`")
+                    member_target["members"].append({
+                        "name": case_name,
+                        "kind": "case",
+                        "file": file_rel,
+                        "line": lineno,
+                        "signature_hint": raw.strip(),
+                    })
 
             # Regular members
+            member_matched = False
             for kind, pat in MEMBER_RE_LIST:
                 m = pat.match(stripped)
                 if m:
+                    member_kind = kind
                     if kind == "var":
                         name = m.group(2)  # group(1) is var|let keyword
+                        if re.match(r'^(?:public|open)\s+(?:private\(set\)\s+|fileprivate\(set\)\s+|internal\(set\)\s+)?(?:(?:static|class)\s+)', stripped):
+                            member_kind = f"static_{m.group(1)}"
                     elif kind in ("init", "subscript"):
                         name = kind  # use kind as the name
                     else:
                         name = m.group(1)
-                    container = protocols_out if ct.get("is_protocol") else types_out
-                    if ct["name"] in container:
-                        container[ct["name"]]["members"].append({
-                            "name": name,
-                            "kind": kind,
+                    if member_target is not None:
+                        member_target["members"].append({
+                            "name": name.strip("`"),
+                            "kind": member_kind,
                             "file": file_rel,
                             "line": lineno,
                             "signature_hint": raw.strip(),
                         })
+                    member_matched = True
                     break
+
+            if not member_matched:
+                sm = STATIC_STORED_RE.match(stripped)
+                if sm and member_target is not None:
+                    member_target["members"].append({
+                        "name": sm.group(2).strip("`"),
+                        "kind": f"static_{sm.group(1)}",
+                        "file": file_rel,
+                        "line": lineno,
+                        "signature_hint": raw.strip(),
+                    })
 
         else:
             # Top-level declarations (global scope)
@@ -282,6 +320,13 @@ def extract_file(
         # Guard against negative depth (mismatched braces in comments/strings)
         if brace_depth < 0:
             brace_depth = 0
+
+
+def walk_type_entries(entry: dict):
+    yield entry
+    for nested in entry.get("nested_types", []):
+        yield from walk_type_entries(nested)
+
 
 
 def main() -> int:
@@ -309,11 +354,22 @@ def main() -> int:
             extract_file(swift_file, types_out, protocols_out,
                          global_funcs, global_consts, global_typealiases, unhandled)
 
-    members_total = sum(len(t["members"]) for t in types_out.values()) \
-                  + sum(len(p["members"]) for p in protocols_out.values())
+    all_entries = [
+        nested_entry
+        for top_level in list(types_out.values()) + list(protocols_out.values())
+        for nested_entry in walk_type_entries(top_level)
+    ]
+    members_total = sum(len(entry["members"]) for entry in all_entries)
+    static_members_total = sum(
+        1
+        for entry in all_entries
+        for member in entry["members"]
+        if member.get("kind") in ("static_var", "static_let")
+    )
+    nested_types_total = sum(len(entry.get("nested_types", [])) for entry in all_entries)
 
     surface = {
-        "extractor_version": "0.1.0",
+        "extractor_version": "0.1.1",
         "extractor": "ios-extractor.py",
         "extracted_at": datetime.now(timezone.utc).isoformat(),
         "sdk_product": "AmitySDK",
@@ -329,6 +385,8 @@ def main() -> int:
             "types": len(types_out),
             "protocols": len(protocols_out),
             "members_total": members_total,
+            "static_members_total": static_members_total,
+            "nested_types_total": nested_types_total,
             "global_funcs": len(global_funcs),
             "global_consts": len(global_consts),
             "unhandled_lines": len(unhandled),

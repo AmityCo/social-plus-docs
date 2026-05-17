@@ -1,0 +1,32 @@
+{
+  "id": "0030-android-accuracy-validator",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/evals/android-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/sdk-surface/android.json"
+  ],
+  "instructions": "Write `.docs-ops/validators/android-accuracy-validator.py` — a Kotlin/Java docs-accuracy validator — and run it to produce `.docs-ops/evals/android-accuracy-drift.json`.\n\nMODEL: Mirror `.docs-ops/validators/ios-accuracy-validator.py` (which itself mirrors the TS validator). Same structure: load surface → walk .mdx files → extract code blocks → find symbol references → diff against surface → emit drift report.\n\nINPUT SURFACE: `.docs-ops/sdk-surface/android.json` (v1.1 from 0028). Top-level shape mirrors iOS: `types`, `interfaces`, `global_funcs`, `global_consts`, `typealiases`. Each type may have `nested_types[]`.\n\nDETECTION SCOPE (conservative — low false-positive bar):\n\nScan ```kotlin and ```java fenced blocks. Also accept ```groovy and ```gradle for build-config snippets (where SDK refs may appear in dependency declarations) but with reduced confidence — flag in a separate severity if you want, or just skip them for v1.\n\nFor v1, focus on ```kotlin and ```java only. Detect:\n\n  1. **Static / companion-object access**: `<TypeName>.<member>` where TypeName is in `types` or `interfaces`.\n     - Valid if member is in the type's members[] (with kind matching companion / static / enum_entry), OR is a nested type name.\n     - Note: Android extractor v1.1 flattens companion-object members into the parent type's members[] with `from_companion=true` flag. So `AmityCoreClient.setup` validates regardless of whether `setup` was declared in the class body or the companion.\n     - Invalid otherwise → emit `unknown_type_member` issue.\n\n  2. **Instance method on declared variable** (best-effort): when a code block has `val client: AmityCoreClient = ...` followed by `client.foo`, validate `foo` against AmityCoreClient's members.\n     - v1: only attempt this when the type annotation is EXPLICIT on the var declaration (`val x: AmityFoo = ...`). Skip type-inferred declarations (`val x = AmityFoo()`).\n\n  3. **Imports**: `import com.amity.<...>.<Name>` — verify the leaf `<Name>` exists in the surface as a type/interface name. For now, only flag imports starting with `com.amity.` (or `co.amity.` if found in source) to keep false-positive rate low — third-party imports (kotlinx, androidx, retrofit, etc.) are ignored.\n\nOUT OF SCOPE for v1:\n  - Signature/param validation.\n  - Generic type parameter validation.\n  - Annotations.\n  - Lambda/coroutine-specific patterns.\n\nOUTPUT SCHEMA — write to `.docs-ops/evals/android-accuracy-drift.json` (parallel to ts/ios drift reports):\n\n{\n  \"generated_at\": \"<iso>\",\n  \"validator\": \"android-accuracy-validator.py\",\n  \"surface_used\": \".docs-ops/sdk-surface/android.json\",\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"kotlin_blocks_scanned\": <int>,\n    \"java_blocks_scanned\": <int>,\n    \"files_with_issues\": <int>,\n    \"total_issues\": <int>\n  },\n  \"top_missing_refs\": [ {\"ref\": \"AmityFoo.bar\", \"doc_occurrences\": <int>} ],\n  \"issues_by_file\": {\n    \"<repo-relative-path>\": [\n      {\n        \"kind\": \"unknown_type_member\" | \"unknown_import\",\n        \"ref\": \"AmityFoo.bar\",\n        \"line\": <int>,\n        \"hint_present_at\": [ \"<other-types-where-bar-exists>\" ]\n      }\n    ]\n  }\n}\n\nFILE PATH CONVENTIONS:\n  - Paths in the report are relative to social-plus-docs/ (the docs repo root).\n  - Exclude `.docs-ops/`, `node_modules/`, `.pytest_cache/` from scan.\n\nAfter writing, RUN it. Expected order of magnitude: similar to TS/iOS first-runs — dozens to low-hundreds of issues. Some will be real drift (great), some will be patterns the conservative detection missed catching (acceptable — false negative is better than false positive).\n\nReport in `notes`: stats, top 10 missing refs, your read on which look like real drift vs likely extractor/validator edge cases (use the hints).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "validator_runs_and_produces_report",
+        "command": "python3 .docs-ops/validators/android-accuracy-validator.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/evals/android-accuracy-drift.json')); assert 'stats' in d and 'issues_by_file' in d; assert d['stats']['files_scanned']>0; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/android-accuracy-drift.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:30:00Z"
+}

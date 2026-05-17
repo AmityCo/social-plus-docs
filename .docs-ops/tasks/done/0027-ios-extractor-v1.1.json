@@ -1,0 +1,33 @@
+{
+  "id": "0027-ios-extractor-v1.1",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/sdk-surface/ios.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/tasks/done/0009-ios-sdk-surface-extractor.result.json",
+    ".docs-ops/tasks/done/0012-ios-accuracy-validator.result.json",
+    ".docs-ops/evals/ios-accuracy-drift.json"
+  ],
+  "instructions": "Upgrade `.docs-ops/extractors/ios-extractor.py` from v1.0 to v1.1 to close two known gaps that produced ~87% false positives in the iOS validator (see 0012's result notes).\n\nGAP 1 — **static stored properties** (the `.shared` singleton blind spot).\n\nThe iOS SDK uses `static var shared` / `static let shared` (and similar static stored properties) pervasively for repository singletons. The v1 extractor's MEMBER patterns capture `public static func` but NOT `public static var` / `public static let`. The validator then flags every doc reference to `AmityEventRepository.shared` / `AmityRoomRepository.shared` / etc. as 'unknown member'.\n\nFix: extend the member-detection patterns to capture:\n  - `public static var <Name>` / `open static var <Name>`\n  - `public static let <Name>` / `open static let <Name>`\n  - `public class var <Name>` / `public class let <Name>` (alternate static-on-class form)\n  - `public lazy var <Name>` is already a regular instance property (not static) — don't conflate.\n\nKind label: use `static_var` or `static_let` accordingly. The validator already accepts these as valid member kinds (it only checks name match).\n\nGAP 2 — **nested types** (the `AmityCommunityMembership.QueryFilter` / `.SearchFilter` blind spot).\n\nSwift allows nested types inside class/struct/enum bodies. The v1 extractor's notes say `nested_types` field is present-but-empty. Doc refs like `AmityCommunityMembership.QueryFilter` get flagged because `QueryFilter` isn't surfaced as a member of `AmityCommunityMembership`.\n\nFix: when inside a type body (using the brace-depth tracker that already exists), detect:\n  - `public class <Name>` / `public struct <Name>` / `public enum <Name>` / `public protocol <Name>` (also `open class` etc.)\n  - Add these as entries in the parent type's `nested_types` array, with the same shape as a top-level type entry: `{ name, kind, primary_decl: { file, line }, members: [], nested_types: [] }`.\n  - Members of nested types should be captured into that nested entry's `members[]`, NOT the parent type's `members[]`. The brace-depth tracker tells you which type's body you're inside at any given line.\n\nValidator integration: the iOS validator's `lookup_path` should already handle the nested case if you populate `nested_types` correctly (same shape as TS's `sub_namespaces`). If not, that's a separate fix flagged for follow-up; don't change the validator in this task.\n\nSCHEMA: bump `extractor_version` to `0.1.1`. Add stats:\n  - `static_members_total` (count across all types)\n  - `nested_types_total` (count of nested type entries created)\n\nVERIFY by running the extractor + iOS validator, then checking:\n  - `Amity*Repository.shared` references (the most common pattern, ~55 occurrences in 0012's drift report) should now validate.\n  - `AmityCommunityMembership.QueryFilter` and `.SearchFilter` should validate.\n  - Overall iOS drift count should drop substantially (target: from 63 to under 15).\n\nDo NOT modify the iOS validator in this task — only the extractor. If the validator needs a follow-up tweak to walk nested_types, flag it in notes.\n\nReport in `notes`: new stats (static_members_total, nested_types_total), before/after iOS drift counts, any unhandled edge cases discovered.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_v1.1_picks_up_shared_and_nested_types",
+        "command": "python3 .docs-ops/extractors/ios-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/ios.json')); assert d['extractor_version']=='0.1.1', f'version not bumped: {d[\\\"extractor_version\\\"]}'; assert d['stats'].get('static_members_total',0)>10, f'too few static members: {d[\\\"stats\\\"].get(\\\"static_members_total\\\")}'; assert d['stats'].get('nested_types_total',0)>0, f'no nested types captured: {d[\\\"stats\\\"].get(\\\"nested_types_total\\\")}'; ac=d['types'].get('AmityClient',{}); shared_member=any(m['name']=='shared' for m in ac.get('members',[])); print('OK') if shared_member or any(m['name']=='shared' for t in d['types'].values() for m in t.get('members',[])) else print('FAIL: no .shared static member found anywhere'); import sys; sys.exit(0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/ios.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:00:00Z"
+}
