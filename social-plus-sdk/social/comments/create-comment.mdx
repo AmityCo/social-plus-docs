@@ -513,6 +513,28 @@ class CommentManager {
   final AmitySDK _amitySDK;
   
   CommentManager(this._amitySDK);
+
+  AmityCommentCreationTarget _createCommentTarget({
+    required String referenceId,
+    required AmityCommentReferenceType referenceType,
+    String? parentId,
+  }) {
+    late final AmityCommentCreationTarget target;
+
+    switch (referenceType) {
+      case AmityCommentReferenceType.POST:
+        target = _amitySDK.commentRepository.createComment().post(referenceId);
+        break;
+      case AmityCommentReferenceType.STORY:
+        target = _amitySDK.commentRepository.createComment().story(referenceId);
+        break;
+      case AmityCommentReferenceType.CONTENT:
+        target = _amitySDK.commentRepository.createComment().content(referenceId);
+        break;
+    }
+
+    return parentId != null ? target.parentId(parentId) : target;
+  }
   
   Future<AmityComment> createTextComment({
     required String referenceId,
@@ -527,19 +549,22 @@ class CommentManager {
       throw Exception('Comment text exceeds 20,000 character limit');
     }
     
-    final commentData = AmityCommentCreationData(
-      text: text,
-      parentId: parentId,
-      mentionUsers: mentionUsers,
-      metadata: metadata,
-    );
-    
     try {
-      final comment = await _amitySDK.commentRepository.createComment(
-        referenceId,
-        referenceType,
-        commentData,
-      );
+      var commentCreator = _createCommentTarget(
+        referenceId: referenceId,
+        referenceType: referenceType,
+        parentId: parentId,
+      ).create().text(text);
+
+      if (mentionUsers.isNotEmpty) {
+        commentCreator = commentCreator.mentionUsers(mentionUsers);
+      }
+
+      if (metadata != null) {
+        commentCreator = commentCreator.metadata(metadata);
+      }
+
+      final comment = await commentCreator.send();
       
       print('Comment created successfully: ${comment.commentId}');
       return comment;
@@ -1389,17 +1414,17 @@ class CommentManager {
     String? caption,
     String? parentId,
   }) async {
-    final commentData = AmityCommentCreationData(
-      fileId: fileId,
-      text: caption,
+    var commentCreator = _createCommentTarget(
+      referenceId: referenceId,
+      referenceType: referenceType,
       parentId: parentId,
-    );
-    
-    return await _amitySDK.commentRepository.createComment(
-      referenceId,
-      referenceType,
-      commentData,
-    );
+    ).create().attachments([CommentImageAttachment(fileId: fileId)]);
+
+    if (caption != null) {
+      commentCreator = commentCreator.text(caption);
+    }
+
+    return await commentCreator.send();
   }
 }
 

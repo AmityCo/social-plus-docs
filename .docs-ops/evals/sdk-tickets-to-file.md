@@ -113,5 +113,77 @@ _Each entry represents a real feature available on ≥1 other SDK platform that 
 
 ---
 
-_Total tickets: 12_
-_Updated: task 0026 execution_
+_Total tickets: 20_
+_Updated: task 0043 execution_
+
+---
+
+## TICKET-ANDROID-001 · `AmityException.StreamLimitReachedException`
+
+**Priority**: P2 (Android parity gap)
+**Affected docs**: `social-plus-sdk/social/posts/create-post/live-stream-post.mdx`
+**Description**: The docs previously referenced a typed `AmityException.StreamLimitReachedException`, but the Android SDK exposes neither that exception nor an equivalent `AmityError` enum entry for stream-limit failures.
+**Suggested API**: Expose `AmityError.STREAM_LIMIT_REACHED` (or equivalent) so apps can handle this condition with the standard `AmityException.code` pattern.
+
+---
+
+## TICKET-ANDROID-002 · `AmityException.QuotaExceeded`
+
+**Priority**: P2 (Android parity gap)
+**Affected docs**: `social-plus-sdk/video-new/broadcasting/create-room.mdx`
+**Description**: Android has no public `AmityException.QuotaExceeded` and no equivalent `AmityError.QUOTA_EXCEEDED` enum value for quota failures documented on other platforms.
+**Suggested API**: Expose a public `AmityError.QUOTA_EXCEEDED` (or equivalent) for quota-related failures.
+
+---
+
+## TICKET-ANDROID-003 · `AmityRoomStatus`
+
+**Priority**: P2 (iOS parity gap)
+**Affected docs**: `social-plus-sdk/video-new/broadcasting/live-viewing.mdx`
+**Description**: iOS exposes a typed `AmityRoomStatus` enum, but Android currently uses raw status strings / stream-status values instead of a dedicated room-status enum.
+**Suggested API**: Expose a typed `AmityRoomStatus` enum in the Android SDK.
+
+---
+
+## TICKET-ANDROID-004 · `AmityVideoPlayer.Builder`
+
+**Priority**: P3 (Android ergonomics gap)
+**Affected docs**: `social-plus-sdk/video-new/platform-specific/android-specific.mdx`
+**Description**: `AmityVideoPlayer` exists in Android, but there is no public `Builder` API matching the docs pattern.
+**Suggested API**: Expose a builder or factory API for `AmityVideoPlayer` setup.
+
+---
+
+## TICKET-FLUTTER-001 · `AmityCommentQuery`
+
+**Priority**: P2 (Android parity gap)
+**Affected docs**: `social-plus-sdk/social/comments/query-comment.mdx`
+**Description**: Android exposes `AmityCommentQuery`, but Flutter does not export an equivalent typed comment query object from the public SDK.
+**Suggested API**: Export a public `AmityCommentQuery` type in Flutter.
+
+---
+
+## TICKET-FLUTTER-002 · `AmityPermission.MUTE_CHANNEL_USER`
+
+**Priority**: P2 (Android parity gap)
+**Affected docs**: `social-plus-sdk/core-concepts/user-management/roles-permissions.mdx`
+**Description**: Flutter exposes related mute permissions, but it does not expose `AmityPermission.MUTE_CHANNEL_USER`, which exists on Android.
+**Suggested API**: Add `AmityPermission.MUTE_CHANNEL_USER` to the Flutter SDK.
+
+---
+
+## TICKET-FLUTTER-003 · `AmityUserQuery`
+
+**Priority**: P2 (Android parity gap)
+**Affected docs**: `social-plus-sdk/social/comments/mention-in-comment.mdx`
+**Description**: Android exposes `AmityUserQuery`, but Flutter does not export an equivalent typed user query object in the public SDK.
+**Suggested API**: Export a public `AmityUserQuery` type in Flutter.
+
+---
+
+## TICKET-FLUTTER-004 · `AmityStreamRepository`
+
+**Priority**: P2 (iOS + Android parity gap)
+**Affected docs**: `social-plus-sdk/social/posts/create-post/live-stream-post.mdx`
+**Description**: iOS and Android expose stream repository APIs directly, but Flutter's stream repository lives behind the video sub-module and is not exported from the main `amity_sdk` barrel.
+**Suggested API**: Export Flutter stream repository APIs from the main `amity_sdk` barrel.

@@ -1,0 +1,26 @@
+{
+  "id": "0040-execute-ios-meeting-rewrites",
+  "tier": "A",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/evals/ios-fabrication-decisions.json",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/evals/ios-accuracy-drift.json"
+  ],
+  "instructions": "Execute the iOS REWRITE_TO decisions from the SDK lead meeting. Six rows / ~50 occurrences. Pattern mirrors TS task 0024.\n\n**target_files is intentionally empty** — discover from each row's `locations[]` in `.docs-ops/evals/ios-fabrication-decisions.json`. Filter to rows where `decision` starts with `REWRITE_TO:`.\n\n## Pattern 1 — `.shared` singleton → `init()` (5 repository rewrites, 50 occurrences total)\n\niOS does NOT expose `.shared` static singletons on these repositories. The correct pattern per the SDK lead (verified against iOS source `public required init()` with no parameters): construct the repository explicitly per use.\n\n| Old ref | New ref | Occurrences |\n|---|---|---|\n| `AmityEventRepository.shared` | `AmityEventRepository()` | 19 |\n| `AmityRoomRepository.shared` | `AmityRoomRepository()` | 17 |\n| `AmityPostRepository.shared` | `AmityPostRepository()` | 6 |\n| `AmityClient.shared` | `AmityClient(apiKey:region:)` | 4 |\n| `AmityFileRepository.shared` | `AmityFileRepository()` | 3 |\n| `AmityStreamRepository.shared` | `AmityStreamRepository()` | 1 |\n\nIMPORTANT — context-aware handling:\n  - For most cases: `AmityFoo.shared.bar(...)` → `AmityFoo().bar(...)`. Note this creates a NEW instance per call site — for examples shown as one-shot calls, this is correct. If the doc shows the repository being held in a variable/property (`let repo = AmityFoo.shared`), instead rewrite as `let repo = AmityFoo()` and leave usages of `repo.bar(...)` unchanged.\n  - For `AmityClient.shared` SPECIFICALLY: the rewrite is `AmityClient(apiKey:region:)` — it requires the apiKey and region parameters. If the doc shows `AmityClient.shared` with no instantiation context (i.e., it's relying on the singleton pattern that doesn't exist), you must INTRODUCE the construction with placeholder values: `AmityClient(apiKey: \"your-api-key\", region: .sg)`. If the doc already has an `AmityClient(...)` construction nearby and is then re-accessing `.shared` to use it, just remove the `.shared` reference and use the existing instance variable.\n\n## Pattern 2 — Enum case rename `AmityViewedType.STORY` → `.story` (1 row, 1 occurrence)\n\niOS source uses lowerCamelCase enum cases. Simple textual substitution.\n\n## Rules (consistent with prior 0024/0037/0038)\n\n- Apply only inside ```swift fenced code blocks. Also accept ```objc / ```objective-c blocks where the .shared pattern may be transliterated (e.g., `[AmityEventRepository shared]` — rewrite to `[[AmityEventRepository alloc] init]`).\n- Preserve all chained method calls, arguments, surrounding code.\n- Do NOT modify prose, frontmatter, or unrelated code blocks.\n- Watch for indented blocks inside MDX components (`<Step>`, `<Tab>`, `<Accordion>`) — handle manually if FENCE_RE misses them.\n- For `AmityClient(apiKey:region:)`: if the surrounding code clearly already shows API key initialization (e.g. earlier in the same code block), don't re-introduce — use the existing instance.\n- If any occurrence doesn't fit cleanly (e.g., the doc holds the singleton as a long-lived property and substituting `init()` would change ownership semantics), STOP that occurrence and report `needs_review` in notes.\n\nAfter your edits, the 6 REWRITE refs should be gone from the iOS drift report. Combined with 0039 (validator KEEP_AS_IS fixes), iOS drift should hit 0.\n\nReport in `notes`: per file/line, (old, new) replacements; per-pattern counts; any `needs_review` cases.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_shared_refs_resolved",
+        "command": "python3 .docs-ops/extractors/ios-extractor.py > /dev/null && python3 .docs-ops/validators/ios-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ios-accuracy-drift.json')); bad_refs={'AmityEventRepository.shared','AmityRoomRepository.shared','AmityPostRepository.shared','AmityClient.shared','AmityFileRepository.shared','AmityStreamRepository.shared','AmityViewedType.STORY'}; found=set(); [found.add(i.get('ref')) for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref') in bad_refs]; print('FAIL: still flagging '+str(found)) if found else print('OK'); import sys; sys.exit(1 if found else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T17:00:00Z"
+}

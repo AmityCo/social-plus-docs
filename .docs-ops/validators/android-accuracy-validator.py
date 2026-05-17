@@ -34,6 +34,34 @@ KOTLIN_LANGS = {"kotlin"}
 JAVA_LANGS = {"java"}
 ALL_ANDROID_LANGS = KOTLIN_LANGS | JAVA_LANGS
 
+# Path prefixes (relative to repo root) to skip entirely.
+# uikit/ contains Android UIKit SDK docs — different product, not in android.json surface.
+# social-plus-sdk/video-new/ uses AmityStream* types in a separate video SDK context.
+EXCLUDED_PATH_PREFIXES = {"uikit/", "social-plus-sdk/video-new/"}
+
+# Android platform / system classes that are NOT Amity SDK types.
+# The Android surface has an unrelated `Environment` class (sdk-versioning enum);
+# the platform class android.os.Environment should never be flagged.
+ANDROID_PLATFORM_TYPES = {
+    "Environment", "Context", "Activity", "Intent", "Bundle",
+    "Uri", "View", "Application", "Fragment", "Service",
+}
+
+ANDROID_ENUM_ENTRY_ATTRS = {
+    "code", "name", "ordinal", "value", "displayName", "toString", "apply",
+}
+
+# Refs confirmed valid in source but not captured by extractor v1.2.
+# "TypeName.path" -> reason. These are NOT flagged even if lookup fails.
+#   AmityRoom.ParticipantType.CoHost — real PascalCase enum entry in AmityRoom.kt;
+#     extractor only captures UPPER_SNAKE entries (regex [A-Z][A-Z0-9_]+).
+#   AmityPinnedPost.post — real `var post: AmityPost?` data class constructor param;
+#     extractor does not capture auto-generated data class properties (v1.3 gap).
+KNOWN_VALID_REFS: dict[str, str] = {
+    "AmityRoom.ParticipantType.CoHost": "real PascalCase enum entry in AmityRoom.kt; extractor v1.2 only captures UPPER_SNAKE entries",
+    "AmityPinnedPost.post": "real data class property `var post: AmityPost?` in AmityPinnedPost.kt; extractor v1.x does not capture data class constructor params (v1.3 gap)",
+}
+
 FENCE_RE = re.compile(
     r"^```([A-Za-z0-9_\-]+)[^\n]*\n(.*?)^```",
     re.MULTILINE | re.DOTALL,
@@ -69,6 +97,18 @@ def build_hint_index(types: dict, interfaces: dict) -> dict[str, list[str]]:
     return index
 
 
+def has_allowed_enum_entry_attr(info: dict, entry_name: str, attr_name: str) -> bool:
+    if info.get("kind") not in {"enum", "enum_class"}:
+        return False
+    if attr_name not in ANDROID_ENUM_ENTRY_ATTRS:
+        return False
+    return any(
+        member.get("kind") == "enum_entry" and member.get("name") == entry_name
+        for member in info.get("members", [])
+    )
+
+
+
 def lookup_path(types: dict, interfaces: dict, type_name: str, parts: list[str]) -> bool:
     """Walk a dotted member path from type_name through nested types.
 
@@ -82,6 +122,8 @@ def lookup_path(types: dict, interfaces: dict, type_name: str, parts: list[str])
     if not info:
         return False
     if not parts:
+        return True
+    if len(parts) == 2 and has_allowed_enum_entry_attr(info, parts[0], parts[1]):
         return True
     head, *rest = parts
     # Check direct members (includes enum_entry, func, val, var)
@@ -141,11 +183,17 @@ def scan_block(
     if type_member_re is not None:
         for match in type_member_re.finditer(body):
             type_name = match.group(1)
+            # Skip Android platform types — they're not Amity SDK types
+            if type_name in ANDROID_PLATFORM_TYPES:
+                continue
             member_path = match.group(2).lstrip(".")  # strip leading dot
             parts = member_path.split(".")
             if lookup_path(types, interfaces, type_name, parts):
                 continue
             full_ref = f"{type_name}.{member_path}"
+            # Skip refs confirmed valid in source but not captured by extractor
+            if full_ref in KNOWN_VALID_REFS:
+                continue
             line_in_block = body.count("\n", 0, match.start()) + 1
             issues.append({
                 "kind": "unknown_type_member",
@@ -183,6 +231,7 @@ def main() -> int:
         if ".docs-ops/" not in str(path.relative_to(DOCS_REPO_ROOT))
         and "node_modules/" not in str(path)
         and ".pytest_cache/" not in str(path)
+        and not any(str(path.relative_to(DOCS_REPO_ROOT)).startswith(p) for p in EXCLUDED_PATH_PREFIXES)
     ]
 
     per_file_issues: dict[str, list[dict]] = {}

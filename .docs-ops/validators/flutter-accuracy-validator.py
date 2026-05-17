@@ -21,6 +21,7 @@ REPORT_PATH = DOCS_OPS_ROOT / "evals" / "flutter-accuracy-drift.json"
 
 DART_LANGS = {"dart", "flutter"}
 BUILTIN_TYPES = {"Future", "Stream", "List", "Map", "Set", "String", "int", "double", "bool", "dynamic"}
+FLUTTER_ENUM_ENTRY_ATTRS = {"name", "index", "toString", "hashCode"}
 
 FENCE_RE = re.compile(
     r"^```([A-Za-z0-9_\-]+)[^\n]*\n(.*?)^```",
@@ -50,11 +51,27 @@ def build_member_index(types: dict, mixins: dict) -> dict[str, list[str]]:
     return index
 
 
-def lookup_member(types: dict, mixins: dict, type_name: str, member_name: str) -> bool:
+def has_allowed_enum_entry_attr(info: dict, entry_name: str, attr_name: str) -> bool:
+    if info.get("kind") != "enum":
+        return False
+    if attr_name not in FLUTTER_ENUM_ENTRY_ATTRS:
+        return False
+    return any(
+        member.get("kind") == "enum_value" and member.get("name") == entry_name
+        for member in info.get("members", [])
+    )
+
+
+
+def lookup_path(types: dict, mixins: dict, type_name: str, parts: list[str]) -> bool:
     info = types.get(type_name) or mixins.get(type_name)
     if not info:
         return False
-    return any(m["name"] == member_name for m in info.get("members", []))
+    if not parts:
+        return True
+    if len(parts) == 2 and has_allowed_enum_entry_attr(info, parts[0], parts[1]):
+        return True
+    return len(parts) == 1 and any(m["name"] == parts[0] for m in info.get("members", []))
 
 
 def find_fenced_blocks(text: str) -> list[tuple[str, str, int]]:
@@ -72,7 +89,8 @@ def compile_type_member_re(type_names: set[str]) -> re.Pattern[str] | None:
         return None
     ordered_names = sorted(type_names, key=lambda n: (-len(n), n))
     return re.compile(
-        r"\b(" + "|".join(re.escape(name) for name in ordered_names) + r")\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)"
+        r"\b(" + "|".join(re.escape(name) for name in ordered_names) + r")"
+        r"((?:[ \t]*\.[ \t]*[A-Za-z_][A-Za-z0-9_]*)+)"
     )
 
 
@@ -94,14 +112,15 @@ def scan_block(
     if type_member_re is not None:
         for match in type_member_re.finditer(body):
             type_name = match.group(1)
-            member_name = match.group(2)
-            if lookup_member(types, mixins, type_name, member_name):
+            member_path = re.sub(r"[ \t]+", "", match.group(2)).lstrip(".")
+            parts = member_path.split(".")
+            if lookup_path(types, mixins, type_name, parts):
                 continue
             issues.append({
                 "kind": "unknown_type_member",
-                "ref": f"{type_name}.{member_name}",
+                "ref": f"{type_name}.{member_path}",
                 "line": line_for_offset(body, match.start(), start_line),
-                "hint_present_at": member_index.get(member_name, []),
+                "hint_present_at": member_index.get(parts[0], []),
             })
 
     for match in TYPE_CTOR_RE.finditer(body):

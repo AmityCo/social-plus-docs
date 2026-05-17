@@ -1,0 +1,31 @@
+{
+  "id": "0039-ios-android-validator-keep-as-is-handling",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/evals/ios-accuracy-drift.json",
+    ".docs-ops/evals/android-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ios-fabrication-decisions.json",
+    ".docs-ops/evals/android-fabrication-decisions.json",
+    ".docs-ops/validators/flutter-accuracy-validator.py"
+  ],
+  "instructions": "Update the iOS and Android validators to silence the KEEP_AS_IS decisions from the SDK lead meetings — these refs ARE valid APIs that the validators currently mis-flag.\n\n## iOS validator changes\n\nFrom `ios-fabrication-decisions.json` KEEP_AS_IS rows (7 rows / 11 occurrences):\n\n1. **Known-imports allowlist additions** — add these to the iOS validator's allowlist of valid `import <Module>` statements (they're real CocoaPods/frameworks, not SDK-internal):\n   - `AmityVideoSDK`\n   - `AmityUIKit`\n   - `AmityUIKit4`\n   - `AmityLiveVideoBroadcastKit`\n\n2. **Walk nested_types properly**: refs like `AmityCommunityMembership.QueryFilter` and `AmityCommunityMembership.SearchFilter` are real public nested enums (per 0027 extractor v1.1 they're in the surface's `nested_types[]`). The validator's lookup needs to descend into `nested_types[]` when matching `TypeName.NestedName` patterns. Mirror the TS validator's `lookup_path` function recursion if not already done.\n\n3. **Static method recognition**: `AmityMentionMapper.metadata` is a real `public class func metadata(from mentions:)` — confirmed in source. The extractor v1.1 captures static members; verify the validator's member-lookup is case-insensitive on member-kind (i.e., doesn't filter to instance-method only).\n\n## Android validator changes\n\nFrom `android-fabrication-decisions.json` KEEP_AS_IS rows (5 rows / 6 occurrences):\n\n1. **UIKit path exclusion**: refs `AmityChatFragment` and `AmityManageProductTagListComponent` come from `uikit/` docs (Android UIKit SDK, not core SDK). The Flutter validator already has `EXCLUDED_PREFIXES` for `uikit/` and `social-plus-sdk/video-new/` per task 0034 — mirror that pattern in the Android validator. Exclude `uikit/` paths from scan.\n\n2. **Android platform-class allowlist**: `Environment.DIRECTORY_DOWNLOADS` is `android.os.Environment` — a standard Android platform class. Add a small allowlist of known Android platform type names that the validator should NOT flag even though they're not in the SDK surface. Minimum set: `Environment`, `Context`, `Activity`, `Intent`, `Bundle`, `Uri`, `View`, `Application`. (Be conservative — only add platform classes that appear in the current drift report.)\n\n3. **Nested enum entry support**: `AmityRoom.ParticipantType.CoHost` is a real nested enum entry per 0033 extractor v1.2 (captures enum_entries). Verify the Android validator's lookup_path descends into `nested_types[].members[]` correctly. This was added in 0033 — verify it works for this specific case.\n\n4. **Data class property support**: `AmityPinnedPost.post` is a real `var post:` property in a Kotlin data class. The Android extractor v1.2 may not capture data class auto-generated properties (only declared `var/val`). Verify if the property IS in the surface; if it isn't, this is an EXTRACTOR gap to be fixed in a future v1.3 (flag in notes, don't fix now); if it IS in the surface, the validator should resolve it.\n\n## Verification\n\nRe-run both validators after the changes. Each KEEP_AS_IS ref from the decision sheets should no longer appear in the corresponding drift report. Specifically check:\n\n  - iOS: `import AmityVideoSDK`, `import AmityUIKit`, `import AmityUIKit4`, `import AmityLiveVideoBroadcastKit`, `AmityCommunityMembership.QueryFilter`, `AmityCommunityMembership.SearchFilter`, `AmityMentionMapper.metadata` — none should appear in the new drift report.\n  - Android: `AmityChatFragment`, `AmityManageProductTagListComponent`, `Environment.DIRECTORY_DOWNLOADS`, `AmityRoom.ParticipantType.CoHost`, `AmityPinnedPost.post` — should be resolved or flagged with an explicit 'extractor v1.3 needed' note if it's the data-class case.\n\nReport in `notes`: each KEEP_AS_IS ref and whether it now resolves; any that don't (extractor-gap candidates).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "keep_as_is_refs_no_longer_flagged",
+        "command": "python3 .docs-ops/extractors/ios-extractor.py > /dev/null && python3 .docs-ops/validators/ios-accuracy-validator.py > /dev/null && python3 .docs-ops/extractors/android-extractor.py > /dev/null && python3 .docs-ops/validators/android-accuracy-validator.py > /dev/null && python3 -c \"import json; ir=json.load(open('.docs-ops/evals/ios-accuracy-drift.json')); ar=json.load(open('.docs-ops/evals/android-accuracy-drift.json')); ios_keep_refs={'AmityCommunityMembership.QueryFilter','AmityCommunityMembership.SearchFilter','AmityMentionMapper.metadata'}; ios_keep_imports={'AmityVideoSDK','AmityUIKit','AmityUIKit4','AmityLiveVideoBroadcastKit'}; android_keep_refs={'Environment.DIRECTORY_DOWNLOADS','AmityRoom.ParticipantType.CoHost'}; android_keep_imports={'AmityChatFragment','AmityManageProductTagListComponent'}; bad=set(); [bad.add(i.get('ref')) for f,iss in ir['issues_by_file'].items() for i in iss if i.get('ref') in ios_keep_refs]; [bad.add(f'iOS import {i[\\\"import_name\\\"]}') for f,iss in ir['issues_by_file'].items() for i in iss if i.get('import_name') in ios_keep_imports]; [bad.add(i.get('ref')) for f,iss in ar['issues_by_file'].items() for i in iss if i.get('ref') in android_keep_refs]; print('FAIL: still flagging '+str(bad)) if bad else print('OK'); import sys; sys.exit(1 if bad else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T17:00:00Z"
+}

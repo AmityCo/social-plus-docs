@@ -1085,6 +1085,10 @@ const CommentsSection: React.FC<{ postId: string }> = ({ postId }) => {
 </Tab>
 
 <Tab title="Flutter">
+<Warning>
+**Flutter SDK gap**: `AmityUserQuery` is not available in the Flutter SDK. Android has `AmityUserQuery` for typed user query builders. Tracking: see `.docs-ops/evals/sdk-tickets-to-file.md`.
+</Warning>
+
 ```dart
 import 'package:amity_sdk/amity_sdk.dart';
 import 'package:flutter/material.dart';
@@ -1117,6 +1121,28 @@ class CommentMentionManager {
   final AmitySDK _amitySDK;
   
   CommentMentionManager(this._amitySDK);
+
+  AmityCommentCreationTarget _createCommentTarget({
+    required String referenceId,
+    required AmityCommentReferenceType referenceType,
+    String? parentId,
+  }) {
+    late final AmityCommentCreationTarget target;
+
+    switch (referenceType) {
+      case AmityCommentReferenceType.POST:
+        target = _amitySDK.commentRepository.createComment().post(referenceId);
+        break;
+      case AmityCommentReferenceType.STORY:
+        target = _amitySDK.commentRepository.createComment().story(referenceId);
+        break;
+      case AmityCommentReferenceType.CONTENT:
+        target = _amitySDK.commentRepository.createComment().content(referenceId);
+        break;
+    }
+
+    return parentId != null ? target.parentId(parentId) : target;
+  }
   
   // Create comment with mentions
   Future<AmityComment> createCommentWithMentions({
@@ -1129,18 +1155,11 @@ class CommentMentionManager {
     final mentionUserIds = mentions.map((m) => m.userId).toList();
     final mentionMetadata = _createMentionMetadata(mentions, text);
     
-    final commentData = AmityCommentCreationData(
-      text: text,
-      mentionUsers: mentionUserIds,
-      metadata: mentionMetadata,
+    return await _createCommentTarget(
+      referenceId: referenceId,
+      referenceType: referenceType,
       parentId: parentId,
-    );
-    
-    return await _amitySDK.commentRepository.createComment(
-      referenceId,
-      referenceType,
-      commentData,
-    );
+    ).create().text(text).mentionUsers(mentionUserIds).metadata(mentionMetadata).send();
   }
   
   // Create mention metadata for proper rendering
@@ -1153,12 +1172,9 @@ class CommentMentionManager {
   
   // Search users for autocomplete
   Future<List<AmityUser>> searchUsers(String query, {int limit = 10}) async {
-    final userQuery = AmityUserQuery(
-      displayName: query,
-      limit: limit,
-    );
-    
-    return await _amitySDK.userRepository.getUsers(userQuery);
+    // (Flutter SDK gap: missing typed user query builder)
+    // final userQuery = /* unavailable in Flutter SDK */;
+    throw UnimplementedError('Typed user query builders are not available in Flutter SDK');
   }
   
   // Update comment with mentions
@@ -1170,14 +1186,12 @@ class CommentMentionManager {
     final mentionUserIds = mentions.map((m) => m.userId).toList();
     final mentionMetadata = _createMentionMetadata(mentions, newText);
     
-    return await _amitySDK.commentRepository.updateComment(
-      commentId,
-      AmityCommentUpdateData(
-        text: newText,
-        mentionUsers: mentionUserIds,
-        metadata: mentionMetadata,
-      ),
-    );
+    return await _amitySDK.commentRepository
+        .updateComment(commentId: commentId)
+        .text(newText)
+        .mentionUsers(mentionUserIds)
+        .metadata(mentionMetadata)
+        .update();
   }
   
   // Remove mentions from comment
@@ -1185,14 +1199,12 @@ class CommentMentionManager {
     String commentId,
     String newText,
   ) async {
-    return await _amitySDK.commentRepository.updateComment(
-      commentId,
-      AmityCommentUpdateData(
-        text: newText,
-        mentionUsers: [],
-        metadata: {},
-      ),
-    );
+    return await _amitySDK.commentRepository
+        .updateComment(commentId: commentId)
+        .text(newText)
+        .mentionUsers([])
+        .metadata({})
+        .update();
   }
   
   // Parse text and extract mention positions

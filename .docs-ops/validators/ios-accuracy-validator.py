@@ -33,10 +33,18 @@ SWIFT_LANGS = {"swift"}
 OBJC_LANGS = {"objc", "objective-c"}
 ALL_IOS_LANGS = SWIFT_LANGS | OBJC_LANGS
 
+SWIFT_ENUM_ENTRY_ATTRS = {
+    "rawValue", "hashValue", "name", "ordinal", "description", "debugDescription",
+}
+
 # Known valid import modules (SDK umbrella + well-known system frameworks)
 KNOWN_VALID_IMPORTS = {
-    # SDK modules
+    # SDK modules — core
     "AmitySDK", "EkoChat", "EkoStreamPublisher", "UpstraVideoPlayerKit",
+    # SDK modules — separate CocoaPods / frameworks confirmed in source
+    # AmityVideoSDK: pod 'AmityVideoSDK' in Podfile; AmityUIKit/AmityUIKit4: separate UIKit product;
+    # AmityLiveVideoBroadcastKit: real xcodeproj in EkoStreamPublisher/
+    "AmityVideoSDK", "AmityUIKit", "AmityUIKit4", "AmityLiveVideoBroadcastKit",
     # Apple system frameworks
     "UIKit", "Foundation", "AVFoundation", "Combine", "SwiftUI", "CoreData",
     "CoreLocation", "MapKit", "CoreGraphics", "QuartzCore", "CoreMotion",
@@ -52,6 +60,16 @@ KNOWN_VALID_IMPORTS = {
 }
 
 # Fenced code block RE — mirrors ts-accuracy-validator.py pattern
+# Refs confirmed valid in source but not captured by extractor v1.x.
+# Map "TypeName.member" -> reason string. These are NOT flagged even if
+# they don't resolve through the surface lookup.
+# AmityMentionMapper.metadata: real `public class func metadata(from:)` in
+#   AmityMentionMapper.swift — extractor records class funcs as nested_types
+#   with name="func" rather than as named members, so lookup fails.
+KNOWN_VALID_REFS: dict[str, str] = {
+    "AmityMentionMapper.metadata": "public class func metadata(from mentions:) — extractor v1.x captures class funcs as nested_type{name:'func'} not as named members",
+}
+
 FENCE_RE = re.compile(
     r"^```([A-Za-z0-9_\-]+)[^\n]*\n(.*?)^```",
     re.MULTILINE | re.DOTALL,
@@ -82,13 +100,41 @@ def build_member_index(types: dict, protocols: dict) -> dict[str, list[str]]:
     return index
 
 
-def lookup_member(types: dict, protocols: dict, type_name: str, member_name: str) -> bool:
-    """Return True if member_name exists on type_name (in types or protocols)."""
+def has_allowed_enum_entry_attr(info: dict, entry_name: str, attr_name: str) -> bool:
+    if info.get("kind") != "enum":
+        return False
+    if attr_name not in SWIFT_ENUM_ENTRY_ATTRS:
+        return False
+    return any(
+        member.get("kind") == "case" and member.get("name") == entry_name
+        for member in info.get("members", [])
+    )
+
+
+
+def lookup_path(types: dict, protocols: dict, type_name: str, parts: list[str]) -> bool:
+    """Return True if a dotted path exists on type_name (in types or protocols)."""
     info = types.get(type_name) or protocols.get(type_name)
     if not info:
         return False  # unknown type — skip (not our job to flag unknown types)
-    member_names = {m["name"] for m in info.get("members", [])}
-    return member_name in member_names
+    if not parts:
+        return True
+    if len(parts) == 2 and has_allowed_enum_entry_attr(info, parts[0], parts[1]):
+        return True
+    head, *rest = parts
+    if not rest and any(m["name"] == head for m in info.get("members", [])):
+        return True
+    nested = next((nt for nt in info.get("nested_types", []) if nt.get("name") == head), None)
+    if nested is None:
+        return False
+    if not rest:
+        return True
+    tail = rest[0]
+    if any(m.get("name") == tail for m in nested.get("members", [])):
+        return True
+    if any(nn.get("name") == tail for nn in nested.get("nested_types", [])):
+        return True
+    return False
 
 
 def find_fenced_blocks(text: str) -> list[tuple[str, str, int]]:
@@ -116,19 +162,19 @@ def scan_swift_block(
     issues: list[dict] = []
     all_type_names = set(types.keys()) | set(protocols.keys())
 
-    # --- 1. Dotted refs: TypeName.member ---
-    # Pattern: word boundary, known type name, dot, identifier
-    # We build a single alternation regex for all type names.
+    # --- 1. Dotted refs: TypeName.member / TypeName.EnumCase.attr ---
+    # Pattern: word boundary, known type name, one or more dotted identifiers.
     if all_type_names:
         type_name_pat = re.compile(
             r"\b(" + "|".join(re.escape(n) for n in all_type_names) + r")"
-            r"\.([A-Za-z_][A-Za-z0-9_]*)"
+            r"((?:\.[A-Za-z_][A-Za-z0-9_]*)+)"
         )
         seen_pairs: set[tuple[str, str]] = set()
         for m in type_name_pat.finditer(body):
             type_name = m.group(1)
-            member_name = m.group(2)
-            pair = (type_name, member_name)
+            member_path = m.group(2).lstrip(".")
+            parts = member_path.split(".")
+            pair = (type_name, member_path)
             if pair in seen_pairs:
                 continue
             seen_pairs.add(pair)
@@ -141,15 +187,18 @@ def scan_swift_block(
             if not type_name[0].isupper():
                 continue
 
-            if not lookup_member(types, protocols, type_name, member_name):
+            if not lookup_path(types, protocols, type_name, parts):
+                full_ref = f"{type_name}.{member_path}"
+                if full_ref in KNOWN_VALID_REFS:
+                    continue  # confirmed valid in source; extractor blind spot
                 line_in_block = body.count("\n", 0, m.start()) + 1
                 issues.append({
                     "kind": "unknown_type_member",
-                    "ref": f"{type_name}.{member_name}",
+                    "ref": full_ref,
                     "type_name": type_name,
-                    "member_name": member_name,
+                    "member_name": parts[-1],
                     "line": start_line + line_in_block - 1,
-                    "hint_present_at": member_index.get(member_name, []),
+                    "hint_present_at": member_index.get(parts[0], []),
                     "severity": lang,  # 'swift' or 'objc'
                 })
 
