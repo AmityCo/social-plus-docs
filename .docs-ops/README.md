@@ -54,3 +54,14 @@ Tiers are defined in `rubric.json` under `fix_tiers`.
 ## Pilot scope
 
 First pilot section: `social-plus-sdk/getting-started/` (7 pages, ~3200 lines). Once the protocol holds up here we generalize.
+
+## CI gate — keeping the cleanup durable
+
+See [CI_GATE.md](CI_GATE.md) for the drift-regression check that gates pushes (and, in a follow-up phase, PRs). One-time contributor setup:
+
+```bash
+pip install pre-commit
+pre-commit install --hook-type pre-push
+```
+
+After that, every `git push` is compared against `origin/main` and blocked if it introduces new (file, API-ref) pairs to the drift report.

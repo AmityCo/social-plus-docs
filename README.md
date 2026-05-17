@@ -129,3 +129,14 @@ Add to your AI tool's config:
 | VS Code + Continue | `.continuerc.json` |
 
 Once connected, skills are discovered automatically — no extra installation needed.
+
+## Docs Quality (`.docs-ops/`)
+
+This repo runs an automated drift-detection gate that compares documentation code samples against the actual TypeScript SDK source, so docs stay in sync with what the SDK ships. Contributors should enable the local pre-push hook once after cloning:
+
+```bash
+pip install pre-commit
+pre-commit install --hook-type pre-push
+```
+
+After that, every `git push` is compared against `origin/main`. If your changes introduce new docs-accuracy issues (stale API names, renamed methods, removed types), the push is blocked with a list of the new issues to fix. See [`.docs-ops/CI_GATE.md`](.docs-ops/CI_GATE.md) for the full system design and [`.docs-ops/README.md`](.docs-ops/README.md) for the multi-agent improvement pipeline behind it.

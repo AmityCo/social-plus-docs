@@ -24,6 +24,7 @@ ts-morph upgrade is tracked as a follow-up task (see .docs-ops/README.md).
 """
 from __future__ import annotations
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -31,7 +32,11 @@ from pathlib import Path
 # Resolve from this script's location: .docs-ops/extractors/ -> repo root is two up
 DOCS_OPS_ROOT = Path(__file__).resolve().parent.parent
 DOCS_REPO_ROOT = DOCS_OPS_ROOT.parent
-SDKS_ROOT = DOCS_REPO_ROOT.parent
+# SDKS_ROOT defaults to the docs repo's parent (sibling layout: sp-sdks/{social-plus-docs,
+# AmityTypescriptSDK,...}). Override with SP_SDKS_ROOT env var when running from a git
+# worktree or any other location where that assumption doesn't hold — the CI gate script
+# (.docs-ops/ci/check-drift.py) sets this when it scores the baseline.
+SDKS_ROOT = Path(os.environ.get("SP_SDKS_ROOT", str(DOCS_REPO_ROOT.parent))).resolve()
 SDK_ROOT = SDKS_ROOT / "AmityTypescriptSDK" / "packages" / "sdk"
 SRC = SDK_ROOT / "src"
 OUTPUT = DOCS_OPS_ROOT / "sdk-surface" / "typescript.json"
