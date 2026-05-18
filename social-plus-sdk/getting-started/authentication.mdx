@@ -178,10 +178,9 @@ Task { @MainActor in
 
 
 ```kotlin Android
-AmityCoreClient.login(userId = "user-123")
+AmityCoreClient.login(userId = "user-123", sessionHandler = sessionHandler)
     .displayName(displayName = "John Doe")
     .authToken(authToken) // Optional for development
-    .sessionHandler(sessionHandler)
     .build()
     .submit()
     .doOnComplete {
@@ -430,28 +429,24 @@ Monitor session state changes to handle authentication in your app:
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .doOnNext { sessionState: SessionState ->
-                    when (state) {
-                        AmitySessionState.NOT_LOGGED_IN -> {
+                    when (sessionState) {
+                        is SessionState.NotLoggedIn -> {
                             // Show login screen
                             showLogin()
                         }
-                        AmitySessionState.ESTABLISHING -> {
+                        is SessionState.Establishing -> {
                             // Show loading indicator
-                            showLoading()
                         }
-                        AmitySessionState.ESTABLISHED -> {
+                        is SessionState.Established -> {
                             // Hide loading indicator, proceed to app
-                            hideLoading()
-                            proceedToApp()
                         }
-                        AmitySessionState.TOKEN_EXPIRED -> {
+                        is SessionState.TokenExpired -> {
                             // Attempt to refresh token (Optional)
-                            showTokenRefreshIndicator()
                         }
-                        AmitySessionState.TERMINATED -> {
+                        is SessionState.Terminated -> {
                             // Handle session termination
-                            handleTermination()
                         }
+                        else -> {}
                     }
                 }
                 .doOnError {
@@ -573,23 +568,16 @@ Session handlers automatically manage token lifecycle:
     ```kotlin
     class ProductionSessionHandler : SessionHandler {
         override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            // Call your backend to refresh token
-            authRepository.refreshToken { newToken ->
-                if (newToken != null) {
-                    renewal.renewWithAuthToken(newToken)
-                } else {
-                    renewal.unableToRetrieveAuthToken()
-                }
-            }
+            // Call your backend to refresh token; renewal.renewWithAuthToken(newToken)
+            // or renewal.unableToRetrieveAuthToken() on failure
         }
     }
-    
+
     // Use during login
-    val sessionHandler = ProductionSessionHandler()
-    AmityCoreClient.login(userId)
+    val productionSessionHandler = ProductionSessionHandler()
+    AmityCoreClient.login(userId = userId, sessionHandler = productionSessionHandler)
         .displayName(displayName)
         .authToken(authToken)
-        .sessionHandler(sessionHandler)
         .build()
         .submit()
     ```
@@ -759,9 +747,8 @@ Integration requires three steps: implement a token handler, register it, then l
     //    your own authentication backend.
     val handler = object : AccessTokenHandler {
       override suspend fun onTokenRenew(userId: String): String {
-        // get new token from your api
-        val response = myApiService.refreshToken(userId)
-        return response.accessToken
+        // get new token from your api; replace with real API call
+        return "new-access-token"
       }
     }
 
@@ -773,7 +760,7 @@ Integration requires three steps: implement a token handler, register it, then l
     // 3. Now login with the initial access token.
     //    On subsequent token renewals, the SDK will automatically
     //    call onTokenRenew and re-authenticate using the returned JWT.
-    AmityCoreClient.loginWithAccessToken(accessToken)
+    AmityCoreClient.loginWithAccessToken(authToken)
       .build()
       .submit()
       .subscribe()
