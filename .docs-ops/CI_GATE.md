@@ -56,7 +56,7 @@ Increase in count → **FAIL** by definition (always includes new pairs).
 
 ## Doc-as-test layer
 
-In addition to the regex-based drift check, the gate runs a **doc-as-test** step that type-checks TypeScript code blocks from the top-traffic doc pages against the real `@amityco/ts-sdk` source using `tsc --noEmit --strict`.
+In addition to the regex-based drift check, the gate runs **doc-as-test** steps that type-check code blocks from the top-traffic doc pages against the real SDK source. Two languages are currently covered: **TypeScript** (via `tsc --noEmit --strict`) and **Flutter/Dart** (via `dart analyze`).
 
 ### What it catches (and what the regex validator misses)
 
@@ -70,9 +70,11 @@ In addition to the regex-based drift check, the gate runs a **doc-as-test** step
 
 ### Gate policy
 
-**Blocks the push** if any failure contains a `TS2xxx` error — these are TypeScript type errors indicating real API drift (wrong property, wrong argument type, incompatible return type).
+**TypeScript** — **Blocks the push** if any failure contains a `TS2xxx` error (type error = real API drift). **Warns but does NOT block** on `TS1xxx`-only errors (parser errors in intentionally partial/illustrative snippets).
 
-**Warns but does NOT block** on `TS1xxx`-only errors — these are parser errors that occur in intentionally partial/illustrative code examples. Keeping these non-blocking prevents the gate from becoming high-friction for pedagogical content.
+**Flutter/Dart** — **Blocks the push** if `dart analyze` reports any `error`-severity issue on a block. **Warns but does NOT block** on `warning`-severity issues. `info`/lint hints are ignored entirely.
+
+Runner crashes (e.g., `dart` CLI not installed) are **non-blocking** — infra failures shouldn't block pushes.
 
 ### Opting out per block
 
@@ -90,19 +92,26 @@ Both HTML comment (`<!-- doc-as-test: skip -->`) and JSX comment (`{/* doc-as-te
 
 ### Scope
 
-- **TypeScript only** (v1) — iOS/Android/Flutter doc-as-test is out of scope until those platforms have comparable coverage.
-- **Top 28 pages** — cohort-balanced selection (chat-heavy Eastern + social-heavy Western customer hot paths), covering ~80% of code-path traffic. Defined in `.docs-ops/integration-tests/pages.json`.
-- **Candidate only** — doc-as-test runs against the current working tree, not a baseline comparison. Any TS2xxx in the candidate blocks, regardless of baseline state.
+- **TypeScript** — 28 pages (cohort-balanced selection covering chat + social hot paths). Defined in `.docs-ops/integration-tests/pages.json`.
+- **Flutter/Dart** — 29 pages (same 28 + `flutter-quick-start.mdx`). Defined in `.docs-ops/integration-tests/flutter/pages.json`.
+- **Candidate only** — both checks run against the current working tree, not a baseline comparison.
+- **Future** — iOS and Android doc-as-test coming once those extractors mature.
 
 ### Running locally
 
 ```bash
-# Full doc-as-test run (extract + type-check):
+# TypeScript doc-as-test (extract + type-check):
 python3 .docs-ops/integration-tests/extract-blocks.py
 python3 .docs-ops/integration-tests/run-tests.py
-
-# Read the report:
 cat .docs-ops/integration-tests/results/latest.json | python3 -m json.tool
+
+# Flutter doc-as-test (extract + analyze):
+cd .docs-ops/integration-tests/flutter
+dart pub get   # once, resolves amity_sdk from local path
+cd -
+python3 .docs-ops/integration-tests/flutter/extract-blocks.py
+python3 .docs-ops/integration-tests/flutter/run-tests.py
+cat .docs-ops/integration-tests/flutter/results/latest.json | python3 -m json.tool
 ```
 
 

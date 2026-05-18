@@ -42,11 +42,17 @@ TS_EXTRACTOR = ".docs-ops/extractors/typescript-extractor.py"
 TS_VALIDATOR = ".docs-ops/validators/ts-accuracy-validator.py"
 TS_DRIFT_REPORT = ".docs-ops/evals/ts-accuracy-drift.json"
 
-# Doc-as-test paths, relative to repo root.
+# Doc-as-test paths (TypeScript), relative to repo root.
 DAT_DIR = REPO_ROOT / ".docs-ops/integration-tests"
 DAT_EXTRACTOR = DAT_DIR / "extract-blocks.py"
 DAT_RUNNER = DAT_DIR / "run-tests.py"
 DAT_REPORT = DAT_DIR / "results" / "latest.json"
+
+# Doc-as-test paths (Flutter), relative to repo root.
+FL_DAT_DIR = REPO_ROOT / ".docs-ops/integration-tests/flutter"
+FL_DAT_EXTRACTOR = FL_DAT_DIR / "extract-blocks.py"
+FL_DAT_RUNNER = FL_DAT_DIR / "run-tests.py"
+FL_DAT_REPORT = FL_DAT_DIR / "results" / "latest.json"
 
 
 class ScriptError(Exception):
@@ -233,6 +239,66 @@ def run_doc_as_test_check() -> dict:
     }
 
 
+def run_flutter_doc_as_test_check() -> dict:
+    """Run Flutter doc-as-test framework on the candidate working tree.
+
+    Returns same schema as run_doc_as_test_check().
+    Blocking = Dart error-severity failures (already filtered in run-tests.py).
+    Warnings  = stats.total_warnings (non-blocking, counted but not per-failure).
+    """
+    if not FL_DAT_EXTRACTOR.exists() or not FL_DAT_RUNNER.exists():
+        return {"available": False, "crashed": False, "crash_reason": "",
+                "stats": {}, "blocking_failures": [], "warning_failures": []}
+
+    env = os.environ.copy()
+    env["SP_SDKS_ROOT"] = str(REPO_ROOT.parent)
+
+    try:
+        run(["python3", str(FL_DAT_EXTRACTOR)], cwd=REPO_ROOT, env=env)
+        run(["python3", str(FL_DAT_RUNNER)], cwd=REPO_ROOT, env=env)
+    except subprocess.CalledProcessError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"runner failed (exit {e.returncode}): {(e.stderr or '').strip()[:200]}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    if not FL_DAT_REPORT.exists():
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": "report not produced after runner completed",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    try:
+        report = json.loads(FL_DAT_REPORT.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"report JSON invalid: {e}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    # Flutter: failures[] only contains error-severity blocks (dart analyze `error`).
+    # Warnings are aggregated in stats.total_warnings, not per-failure.
+    blocking = []
+    for f in report.get("failures", []):
+        blocking.append({
+            "source_page": f.get("source_page", "?"),
+            "source_line_range": f.get("source_line_range", "?"),
+            "errors": f.get("errors", [])[:3],
+        })
+
+    return {
+        "available": True,
+        "crashed": False,
+        "crash_reason": "",
+        "stats": report.get("stats", {}),
+        "blocking_failures": blocking,
+        "warning_failures": [],  # warnings counted in stats.total_warnings
+    }
+
+
 def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) -> dict:
     base_pairs = pair_set(baseline)
     cand_pairs = pair_set(candidate)
@@ -257,7 +323,7 @@ def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) 
     }
 
 
-def print_summary(delta: dict, dat: dict | None = None) -> None:
+def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None) -> None:
     bar = "═" * 60
     print(bar)
     print("  Docs-Ops Drift Check")
@@ -269,22 +335,26 @@ def print_summary(delta: dict, dat: dict | None = None) -> None:
     # Regex drift line
     sign = "+" if delta["delta_total"] > 0 else ""
     drift_status = "✓ No new drift" if not delta["regressed"] else "✗ New drift introduced"
-    print(f"  Regex drift:    baseline={delta['baseline_total']}  candidate={delta['candidate_total']}  "
+    print(f"  Regex drift:           baseline={delta['baseline_total']}  candidate={delta['candidate_total']}  "
           f"delta={sign}{delta['delta_total']}  {drift_status}")
 
-    # Doc-as-test line
-    if dat is None or not dat.get("available"):
-        print("  Doc-as-test:    (not available)")
-    elif dat.get("crashed"):
-        print(f"  Doc-as-test:    ⚠ runner crashed (non-blocking): {dat['crash_reason']}")
-    else:
-        s = dat["stats"]
-        b = len(dat["blocking_failures"])
-        w = len(dat["warning_failures"])
-        status = "✓" if b == 0 else "✗"
-        print(f"  Doc-as-test:    blocks_passed={s.get('blocks_passed',0)}  "
-              f"blocks_skipped={s.get('blocks_skipped',0)}  "
-              f"warnings={w}  blocking={b}  {status}")
+    # Doc-as-test (TS) line
+    def _dat_line(label: str, dat: dict | None) -> None:
+        if dat is None or not dat.get("available"):
+            print(f"  {label}  (not available)")
+        elif dat.get("crashed"):
+            print(f"  {label}  ⚠ runner crashed (non-blocking): {dat['crash_reason']}")
+        else:
+            s = dat["stats"]
+            b = len(dat["blocking_failures"])
+            w = len(dat["warning_failures"]) + s.get("total_warnings", 0)
+            status = "✓" if b == 0 else "✗"
+            print(f"  {label}  passed={s.get('blocks_passed', 0)}  "
+                  f"skipped={s.get('blocks_skipped', 0)}  "
+                  f"warnings={w}  blocking={b}  {status}")
+
+    _dat_line("Doc-as-test (TS):     ", ts_dat)
+    _dat_line("Doc-as-test (Flutter):", fl_dat)
 
     print()
 
@@ -303,22 +373,25 @@ def print_summary(delta: dict, dat: dict | None = None) -> None:
             print(f"    + {p['ref']:50s}  in {p['file']}")
         print()
 
-    # Doc-as-test details
-    if dat and dat.get("available") and not dat.get("crashed"):
+    # Doc-as-test details (TS + Flutter)
+    for label, dat in [("TS", ts_dat), ("Flutter", fl_dat)]:
+        if not dat or not dat.get("available") or dat.get("crashed"):
+            continue
         if dat["blocking_failures"]:
-            print(f"  ✗ DOC-AS-TEST TYPE ERRORS (BLOCKING):")
+            print(f"  ✗ DOC-AS-TEST ({label}) TYPE ERRORS (BLOCKING):")
             for f in dat["blocking_failures"]:
                 page = f["source_page"].split("/")[-1]
                 lr = f["source_line_range"]
                 err = f["errors"][0] if f["errors"] else "?"
                 print(f"    - {page}:{lr}  {err}")
             print()
-            print("  Fix the type errors above. Run locally:")
-            print("    python3 .docs-ops/integration-tests/run-tests.py")
+            runner = "run-tests.py" if label == "TS" else "flutter/run-tests.py"
+            print(f"  Fix the type errors above. Run locally:")
+            print(f"    python3 .docs-ops/integration-tests/{runner}")
             print()
 
         if dat["warning_failures"]:
-            print(f"  ⚠ {len(dat['warning_failures'])} doc-as-test warning(s) (parser-only, non-blocking):")
+            print(f"  ⚠ {len(dat['warning_failures'])} doc-as-test ({label}) warning(s) (parser-only, non-blocking):")
             for f in dat["warning_failures"]:
                 page = f["source_page"].split("/")[-1]
                 lr = f["source_line_range"]
@@ -328,14 +401,17 @@ def print_summary(delta: dict, dat: dict | None = None) -> None:
 
     # Final verdict
     regressed = delta["regressed"]
-    dat_blocking = dat and dat.get("available") and not dat.get("crashed") and len(dat.get("blocking_failures", [])) > 0
-    if regressed or dat_blocking:
+    ts_blocking = ts_dat and ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
+    fl_blocking = fl_dat and fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
+    if regressed or ts_blocking or fl_blocking:
         if regressed:
             print("  FAIL — fix new drift above, or run the validator locally:")
             print(f"           python3 {TS_VALIDATOR}")
             print(f"           jq . {TS_DRIFT_REPORT}")
-        if dat_blocking:
-            print("  FAIL — fix doc-as-test type errors above.")
+        if ts_blocking:
+            print("  FAIL — fix TS doc-as-test type errors above.")
+        if fl_blocking:
+            print("  FAIL — fix Flutter doc-as-test type errors above.")
     else:
         print("  PASS — okay to push.")
     print(bar)
@@ -371,29 +447,35 @@ def main(argv: list[str] | None = None) -> int:
 
     delta = compute_delta(baseline, candidate, base_label)
 
-    # Run doc-as-test on candidate working tree
-    dat = run_doc_as_test_check()
+    # Run doc-as-test on candidate working tree (TS + Flutter)
+    ts_dat = run_doc_as_test_check()
+    fl_dat = run_flutter_doc_as_test_check()
 
-    dat_blocking = dat.get("available") and not dat.get("crashed") and len(dat.get("blocking_failures", [])) > 0
-    overall_fail = delta["regressed"] or dat_blocking
+    ts_blocking = ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
+    fl_blocking = fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
+    overall_fail = delta["regressed"] or ts_blocking or fl_blocking
 
     if args.quiet:
         sign = "+" if delta["delta_total"] > 0 else ""
         verdict = "FAIL" if overall_fail else "PASS"
-        s = dat.get("stats", {})
-        b = len(dat.get("blocking_failures", []))
-        w = len(dat.get("warning_failures", []))
+        ts_s = ts_dat.get("stats", {})
+        fl_s = fl_dat.get("stats", {})
+        ts_b = len(ts_dat.get("blocking_failures", []))
+        fl_b = len(fl_dat.get("blocking_failures", []))
+        ts_w = len(ts_dat.get("warning_failures", []))
+        fl_w = fl_s.get("total_warnings", 0)
         print(f"docs-ops drift: baseline={delta['baseline_total']} candidate={delta['candidate_total']} "
               f"delta={sign}{delta['delta_total']} new_pairs={len(delta['new_pairs'])} "
-              f"dat_passed={s.get('blocks_passed',0)} dat_skipped={s.get('blocks_skipped',0)} "
-              f"dat_blocking={b} dat_warnings={w} verdict={verdict}")
+              f"ts_passed={ts_s.get('blocks_passed', 0)} ts_skipped={ts_s.get('blocks_skipped', 0)} "
+              f"ts_blocking={ts_b} fl_passed={fl_s.get('blocks_passed', 0)} "
+              f"fl_skipped={fl_s.get('blocks_skipped', 0)} fl_blocking={fl_b} verdict={verdict}")
     else:
-        print_summary(delta, dat)
+        print_summary(delta, ts_dat, fl_dat)
 
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        combined = {"drift_delta": delta, "doc_as_test": dat}
+        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat}
         out_path.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
 
     return 1 if overall_fail else 0
