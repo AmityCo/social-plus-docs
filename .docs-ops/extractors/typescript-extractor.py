@@ -137,8 +137,23 @@ def walk_module(file: Path, depth: int = 0, visited: set[str] | None = None) -> 
     except (UnicodeDecodeError, FileNotFoundError):
         return collected, sub_ns
 
+    # Collapse multi-line `export { ... } from '...'` onto a single logical line
+    # so the single-line regex patterns can match them.
+    logical_lines: list[str] = []
+    buffer = ""
     for line in lines:
-        stripped = line.strip()
+        stripped_l = line.strip()
+        if buffer:
+            buffer += " " + stripped_l
+            if "}" in stripped_l:
+                logical_lines.append(buffer)
+                buffer = ""
+        elif stripped_l.startswith("export") and "{" in stripped_l and "}" not in stripped_l:
+            buffer = stripped_l
+        else:
+            logical_lines.append(stripped_l)
+
+    for stripped in logical_lines:
         if not stripped.startswith("export"):
             continue
         if m := RE_NAMESPACE_EXPORT.match(stripped):

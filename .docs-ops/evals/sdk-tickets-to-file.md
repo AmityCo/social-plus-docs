@@ -14,12 +14,9 @@ _Each entry represents a real feature available on ≥1 other SDK platform that 
 
 ---
 
-## TICKET-TS-002 · `ChannelRepository.markAsRead`
+## ~~TICKET-TS-002 · `ChannelRepository.markAsRead`~~ ✅ RESOLVED
 
-**Priority**: P1 (iOS + Android)
-**Affected docs**: `use-cases/chat/unread-counts-and-read-receipts.mdx`
-**Description**: iOS and Android expose `markAsRead(channelId)` to sync the read position. TS uses `Client.markerSync` for a different model but does not have a per-channel mark-as-read that matches the mobile API.
-**Suggested API**: `ChannelRepository.markAsRead(channelId: string): Promise<void>`
+**Resolution**: `channel.markAsRead()` exists on the `Amity.Channel` linked object (`@types/domains/channel.ts`). The `markerSync` concept is sunset. Docs updated to use `await channel.markAsRead()` directly.
 
 ---
 
