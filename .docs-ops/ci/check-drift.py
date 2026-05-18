@@ -42,6 +42,12 @@ TS_EXTRACTOR = ".docs-ops/extractors/typescript-extractor.py"
 TS_VALIDATOR = ".docs-ops/validators/ts-accuracy-validator.py"
 TS_DRIFT_REPORT = ".docs-ops/evals/ts-accuracy-drift.json"
 
+# Doc-as-test paths, relative to repo root.
+DAT_DIR = REPO_ROOT / ".docs-ops/integration-tests"
+DAT_EXTRACTOR = DAT_DIR / "extract-blocks.py"
+DAT_RUNNER = DAT_DIR / "run-tests.py"
+DAT_REPORT = DAT_DIR / "results" / "latest.json"
+
 
 class ScriptError(Exception):
     """Raised for environmental / non-drift failures (exit code 2)."""
@@ -154,6 +160,79 @@ def file_count(report: dict | None) -> int:
     return report.get("stats", {}).get("files_with_issues", 0)
 
 
+def run_doc_as_test_check() -> dict:
+    """Run doc-as-test framework on the candidate working tree.
+
+    Returns:
+      available:          False if the framework isn't set up yet
+      crashed:            True if runner itself threw an error (non-blocking)
+      stats:              raw stats from latest.json
+      blocking_failures:  failures with any TS2xxx error (type drift — BLOCKS)
+      warning_failures:   failures with only TS1xxx errors (parser-only — warns)
+    """
+    if not DAT_EXTRACTOR.exists() or not DAT_RUNNER.exists():
+        return {"available": False, "crashed": False, "crash_reason": "",
+                "stats": {}, "blocking_failures": [], "warning_failures": []}
+
+    env = os.environ.copy()
+    env["SP_SDKS_ROOT"] = str(REPO_ROOT.parent)
+
+    try:
+        run(["python3", str(DAT_EXTRACTOR)], cwd=REPO_ROOT, env=env)
+        run(["python3", str(DAT_RUNNER)], cwd=REPO_ROOT, env=env)
+    except subprocess.CalledProcessError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"runner failed (exit {e.returncode}): {(e.stderr or '').strip()[:200]}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    if not DAT_REPORT.exists():
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": "report not produced after runner completed",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    try:
+        report = json.loads(DAT_REPORT.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"report JSON invalid: {e}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    import re as _re
+    ts2_re = _re.compile(r'\bTS2\d+\b')
+    ts1_re = _re.compile(r'\bTS1\d+\b')
+
+    blocking = []
+    warning = []
+    for f in report.get("failures", []):
+        errors = f.get("errors", [])
+        has_ts2 = any(ts2_re.search(e) for e in errors)
+        has_ts1 = any(ts1_re.search(e) for e in errors)
+        entry = {
+            "source_page": f.get("source_page", "?"),
+            "source_line_range": f.get("source_line_range", "?"),
+            "errors": errors[:3],
+        }
+        if has_ts2:
+            blocking.append(entry)
+        elif has_ts1:
+            warning.append(entry)
+
+    return {
+        "available": True,
+        "crashed": False,
+        "crash_reason": "",
+        "stats": report.get("stats", {}),
+        "blocking_failures": blocking,
+        "warning_failures": warning,
+    }
+
+
 def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) -> dict:
     base_pairs = pair_set(baseline)
     cand_pairs = pair_set(candidate)
@@ -178,7 +257,7 @@ def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) 
     }
 
 
-def print_summary(delta: dict) -> None:
+def print_summary(delta: dict, dat: dict | None = None) -> None:
     bar = "═" * 60
     print(bar)
     print("  Docs-Ops Drift Check")
@@ -186,12 +265,30 @@ def print_summary(delta: dict) -> None:
     print(f"  Base: {delta['base_ref']}")
     if delta["baseline_predates_system"]:
         print("        (baseline predates docs-ops; treated as zero drift)")
-    print(f"  Baseline:  {delta['baseline_total']:4d} issues across {delta['baseline_files']:3d} files")
-    print(f"  Candidate: {delta['candidate_total']:4d} issues across {delta['candidate_files']:3d} files")
+
+    # Regex drift line
     sign = "+" if delta["delta_total"] > 0 else ""
-    print(f"  Delta:     {sign}{delta['delta_total']} issues")
+    drift_status = "✓ No new drift" if not delta["regressed"] else "✗ New drift introduced"
+    print(f"  Regex drift:    baseline={delta['baseline_total']}  candidate={delta['candidate_total']}  "
+          f"delta={sign}{delta['delta_total']}  {drift_status}")
+
+    # Doc-as-test line
+    if dat is None or not dat.get("available"):
+        print("  Doc-as-test:    (not available)")
+    elif dat.get("crashed"):
+        print(f"  Doc-as-test:    ⚠ runner crashed (non-blocking): {dat['crash_reason']}")
+    else:
+        s = dat["stats"]
+        b = len(dat["blocking_failures"])
+        w = len(dat["warning_failures"])
+        status = "✓" if b == 0 else "✗"
+        print(f"  Doc-as-test:    blocks_passed={s.get('blocks_passed',0)}  "
+              f"blocks_skipped={s.get('blocks_skipped',0)}  "
+              f"warnings={w}  blocking={b}  {status}")
+
     print()
 
+    # Regex drift details
     if delta["resolved_pairs"]:
         print(f"  Resolved ({len(delta['resolved_pairs'])}):")
         for p in delta["resolved_pairs"][:10]:
@@ -205,13 +302,41 @@ def print_summary(delta: dict) -> None:
         for p in delta["new_pairs"]:
             print(f"    + {p['ref']:50s}  in {p['file']}")
         print()
-        print("  FAIL — see new issues above. Fix them, or run the validator")
-        print("         locally for full context:")
-        print(f"           python3 {TS_VALIDATOR}")
-        print(f"           jq . {TS_DRIFT_REPORT}")
+
+    # Doc-as-test details
+    if dat and dat.get("available") and not dat.get("crashed"):
+        if dat["blocking_failures"]:
+            print(f"  ✗ DOC-AS-TEST TYPE ERRORS (BLOCKING):")
+            for f in dat["blocking_failures"]:
+                page = f["source_page"].split("/")[-1]
+                lr = f["source_line_range"]
+                err = f["errors"][0] if f["errors"] else "?"
+                print(f"    - {page}:{lr}  {err}")
+            print()
+            print("  Fix the type errors above. Run locally:")
+            print("    python3 .docs-ops/integration-tests/run-tests.py")
+            print()
+
+        if dat["warning_failures"]:
+            print(f"  ⚠ {len(dat['warning_failures'])} doc-as-test warning(s) (parser-only, non-blocking):")
+            for f in dat["warning_failures"]:
+                page = f["source_page"].split("/")[-1]
+                lr = f["source_line_range"]
+                errs = ", ".join(e.split(":")[0] for e in f["errors"][:2])
+                print(f"    - {page}:{lr} ({errs})")
+            print()
+
+    # Final verdict
+    regressed = delta["regressed"]
+    dat_blocking = dat and dat.get("available") and not dat.get("crashed") and len(dat.get("blocking_failures", [])) > 0
+    if regressed or dat_blocking:
+        if regressed:
+            print("  FAIL — fix new drift above, or run the validator locally:")
+            print(f"           python3 {TS_VALIDATOR}")
+            print(f"           jq . {TS_DRIFT_REPORT}")
+        if dat_blocking:
+            print("  FAIL — fix doc-as-test type errors above.")
     else:
-        print("  ✓ No new drift introduced.")
-        print()
         print("  PASS — okay to push.")
     print(bar)
 
@@ -246,20 +371,32 @@ def main(argv: list[str] | None = None) -> int:
 
     delta = compute_delta(baseline, candidate, base_label)
 
+    # Run doc-as-test on candidate working tree
+    dat = run_doc_as_test_check()
+
+    dat_blocking = dat.get("available") and not dat.get("crashed") and len(dat.get("blocking_failures", [])) > 0
+    overall_fail = delta["regressed"] or dat_blocking
+
     if args.quiet:
         sign = "+" if delta["delta_total"] > 0 else ""
-        verdict = "FAIL" if delta["regressed"] else "PASS"
+        verdict = "FAIL" if overall_fail else "PASS"
+        s = dat.get("stats", {})
+        b = len(dat.get("blocking_failures", []))
+        w = len(dat.get("warning_failures", []))
         print(f"docs-ops drift: baseline={delta['baseline_total']} candidate={delta['candidate_total']} "
-              f"delta={sign}{delta['delta_total']} new_pairs={len(delta['new_pairs'])} verdict={verdict}")
+              f"delta={sign}{delta['delta_total']} new_pairs={len(delta['new_pairs'])} "
+              f"dat_passed={s.get('blocks_passed',0)} dat_skipped={s.get('blocks_skipped',0)} "
+              f"dat_blocking={b} dat_warnings={w} verdict={verdict}")
     else:
-        print_summary(delta)
+        print_summary(delta, dat)
 
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(delta, indent=2) + "\n", encoding="utf-8")
+        combined = {"drift_delta": delta, "doc_as_test": dat}
+        out_path.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
 
-    return 1 if delta["regressed"] else 0
+    return 1 if overall_fail else 0
 
 
 if __name__ == "__main__":

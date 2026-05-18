@@ -54,6 +54,58 @@ Increase in count → **FAIL** by definition (always includes new pairs).
 - **Prose, structure, IA**: the gate is API-accuracy-only. The 6-dimension rubric is broader; per-PR scoring is a future addition.
 - **SDK changes**: the gate compares docs against the SDK surface AS COMMITTED in this repo. When the upstream SDK changes, someone must re-run the extractor and commit the new `sdk-surface/*.json`. A separate workflow (TBD) will detect SDK changes and open docs PRs to update.
 
+## Doc-as-test layer
+
+In addition to the regex-based drift check, the gate runs a **doc-as-test** step that type-checks TypeScript code blocks from the top-traffic doc pages against the real `@amityco/ts-sdk` source using `tsc --noEmit --strict`.
+
+### What it catches (and what the regex validator misses)
+
+| Problem type | Regex validator | Doc-as-test |
+|---|---|---|
+| Stale API name (renamed method) | ✓ catches | ✓ catches |
+| Wrong argument type | ✗ misses | ✓ catches |
+| Missing required argument | ✗ misses | ✓ catches |
+| Wrong async/await pattern | ✗ misses | ✓ catches |
+| Broken syntax (copy-paste error) | ✗ misses | ✓ catches |
+
+### Gate policy
+
+**Blocks the push** if any failure contains a `TS2xxx` error — these are TypeScript type errors indicating real API drift (wrong property, wrong argument type, incompatible return type).
+
+**Warns but does NOT block** on `TS1xxx`-only errors — these are parser errors that occur in intentionally partial/illustrative code examples. Keeping these non-blocking prevents the gate from becoming high-friction for pedagogical content.
+
+### Opting out per block
+
+If a code block is intentionally illustrative (e.g., a class method body shown without its class shell), add a skip marker on the line **immediately before** the opening fence:
+
+```mdx
+{/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
+```typescript
+async myMethod() {
+  // ...
+}
+```
+
+Both HTML comment (`<!-- doc-as-test: skip -->`) and JSX comment (`{/* doc-as-test: skip */}`) styles are supported. An optional parenthetical reason is captured in the manifest for auditability.
+
+### Scope
+
+- **TypeScript only** (v1) — iOS/Android/Flutter doc-as-test is out of scope until those platforms have comparable coverage.
+- **Top 28 pages** — cohort-balanced selection (chat-heavy Eastern + social-heavy Western customer hot paths), covering ~80% of code-path traffic. Defined in `.docs-ops/integration-tests/pages.json`.
+- **Candidate only** — doc-as-test runs against the current working tree, not a baseline comparison. Any TS2xxx in the candidate blocks, regardless of baseline state.
+
+### Running locally
+
+```bash
+# Full doc-as-test run (extract + type-check):
+python3 .docs-ops/integration-tests/extract-blocks.py
+python3 .docs-ops/integration-tests/run-tests.py
+
+# Read the report:
+cat .docs-ops/integration-tests/results/latest.json | python3 -m json.tool
+```
+
+
 ## Layers of enforcement
 
 The same `check-drift.py` script powers three layers — each one is independent, each one increases assurance:
