@@ -88,36 +88,31 @@ pollRepository.createPoll(with: pollBuilder) { result in
 </Tab>
 
 <Tab title="Android">
-Create polls and poll posts using repository builders.
-
 ```kotlin
-// Step 1: Create poll
-val pollRepository = AmityPollRepository(client)
-val pollBuilder = AmityPoll.PollCreateBuilder()
-    .question("What's your favorite programming language?")
-    .answers(listOf("Swift", "Kotlin", "TypeScript", "Dart"))
-    .timeToClosePoll(86400) // 24 hours
-    .isMultipleVoting(false)
+val postRepository = AmitySocialClient.newPostRepository()
+val pollRepository = AmitySocialClient.newPollRepository()
+val target = AmityPost.Target.COMMUNITY.create(communityId = "communityId")
 
-pollRepository.createPoll(pollBuilder).subscribe { poll ->
-    // Step 2: Create poll post
-    val postRepository = AmityPostRepository(client)
-    val postBuilder = AmityPost.PostCreateBuilder()
-        .setTitle("Tech Stack Decision")
-        .setText("🗳️ Help us choose our next tech stack!")
-        .setPollId(poll.getPollId())
-        .setTargetType(AmityPost.TargetType.COMMUNITY)
-        .setTargetId("dev_community")
-        .setTags(listOf("poll", "tech", "discussion"))
-        .setMetadata(mapOf("category" to "development"))
-
-    postRepository.createPost(postBuilder).subscribe(
-        { post -> println("Poll post created: ${post.getPostId()}") },
-        { error -> println("Post error: ${error.message}") }
-    )
-}
+pollRepository.createPoll(question = "What's your favorite option?")
+    .answers(answers = listOf(
+        AmityPollAnswer.Data.TEXT("Option A"),
+        AmityPollAnswer.Data.TEXT("Option B")
+    ))
+    .answerType(answerType = AmityPoll.AnswerType.SINGLE)
+    .closedIn(closedIn = 24 * 60 * 60 * 1000L)
+    .build()
+    .create()
+    .flatMap { pollId: String ->
+        postRepository.createPollPost(
+            target = target,
+            pollId = pollId,
+            text = "Vote now!"
+        )
+    }
+    .doOnSuccess { post: AmityPost -> println("Poll post created: ${post.getPostId()}") }
+    .doOnError { error -> println("Error: ${error.message}") }
+    .subscribe()
 ```
-
 </Tab>
 
 <Tab title="TypeScript">
@@ -160,27 +155,28 @@ Create polls and poll posts using async/await with proper error handling.
 
 ```dart
 // Step 1: Create poll
-final pollRepository = AmityPollRepository(client: client);
-final pollBuilder = AmityPollCreationBuilder()
-    ..question = "What's your favorite programming language?"
-    ..answers = ["Swift", "Kotlin", "TypeScript", "Dart"]
-    ..timeToClosePoll = 86400 // 24 hours
-    ..isMultipleVoting = false;
-
 try {
-    final poll = await pollRepository.createPoll(pollBuilder);
+    final poll = await AmitySocialClient.newPollRepository()
+        .createPoll(question: "What's your favorite programming language?")
+        .answers([
+          AmityPollAnswer.text('Swift'),
+          AmityPollAnswer.text('Kotlin'),
+          AmityPollAnswer.text('TypeScript'),
+          AmityPollAnswer.text('Dart'),
+        ])
+        .answerType(AmityPollAnswerType.SINGLE)
+        .closedIn(closedIn: const Duration(hours: 24))
+        .create();
 
     // Step 2: Create poll post
-    final postRepository = AmityPostRepository(client: client);
-    final postBuilder = AmityPostCreateBuilder()
-        ..title = 'Tech Stack Decision'
-        ..text = '🗳️ Help us choose our next tech stack!'
-        ..pollId = poll.pollId
-        ..targetType = AmityPostTargetType.COMMUNITY
-        ..targetId = 'dev_community'
-        ..metadata = {'category': 'development'};
+    final post = await AmitySocialClient.newPostRepository()
+        .createPost()
+        .targetCommunity('dev_community')
+        .poll(poll.pollId)
+        .text('🗳️ Help us choose our next tech stack!')
+        .metadata({'category': 'development'})
+        .post();
 
-    final post = await postRepository.createPost(postBuilder);
     print('Poll post created: ${post.postId}');
 } catch (error) {
     print('Error: $error');
@@ -231,29 +227,34 @@ func handlePollError(_ error: Error) {
 
 <Tab title="Android">
 ```kotlin
-// Comprehensive error handling
-pollRepository.createPoll(pollBuilder).subscribe(
-    { poll ->
-        postRepository.createPost(postBuilder).subscribe(
-            { post -> println("Success: ${post.getPostId()}") },
-            { error -> handlePostError(error) }
+val postRepository = AmitySocialClient.newPostRepository()
+val pollRepository = AmitySocialClient.newPollRepository()
+val target = AmityPost.Target.COMMUNITY.create(communityId = "communityId")
+
+pollRepository.createPoll(question = "What's your favorite option?")
+    .answers(answers = listOf(
+        AmityPollAnswer.Data.TEXT("Option A"),
+        AmityPollAnswer.Data.TEXT("Option B")
+    ))
+    .answerType(answerType = AmityPoll.AnswerType.SINGLE)
+    .closedIn(closedIn = 24 * 60 * 60 * 1000L)
+    .build()
+    .create()
+    .flatMap { pollId: String ->
+        postRepository.createPollPost(
+            target = target,
+            pollId = pollId,
+            text = "Vote now!"
         )
-    },
-    { error -> handlePollError(error) }
-)
+    }
+    .doOnSuccess { post: AmityPost -> println("Success: ${post.getPostId()}") }
+    .doOnError { error -> handlePollError(error) }
+    .subscribe()
 
 fun handlePollError(error: Throwable) {
-    when (error) {
-        is AmityException.InvalidPollQuestionException ->
-            println("Poll question is invalid")
-        is AmityException.TooManyAnswersException ->
-            println("Too many answer options")
-        is AmityException.InvalidTimeLimitException ->
-            println("Invalid time limit")
-        else -> println("Poll error: ${error.message}")
-    }
+    println("Poll error: ${error.message}")
 }
-````
+```
 
 </Tab>
 
@@ -338,27 +339,6 @@ let postBuilder = AmityPostCreateBuilder()
     .setTitle("Team Meeting Schedule")
     .setText("🕐 Let's find the perfect meeting time! Vote for all times that work for you.")
     .setTags(["meeting", "schedule", "team"])
-```
-</Accordion>
-
-<Accordion title="Product Feedback Collection">
-```kotlin
-// Android: Feature priority poll
-val pollBuilder = AmityPoll.PollCreateBuilder()
-    .question("Which feature should we prioritize next?")
-    .answers(listOf(
-        "Dark mode theme",
-        "Push notifications",
-        "File sharing",
-        "Video calls"
-    ))
-    .timeToClosePoll(604800) // 1 week
-    .isMultipleVoting(false)
-
-val postBuilder = AmityPost.PostCreateBuilder()
-    .setTitle("Product Roadmap Priority")
-    .setText("🚀 Help shape our roadmap! Your vote matters.")
-    .setTags(listOf("roadmap", "features", "feedback"))
 ```
 </Accordion>
 

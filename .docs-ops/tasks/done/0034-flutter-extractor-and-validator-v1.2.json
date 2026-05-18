@@ -1,0 +1,31 @@
+{
+  "id": "0034-flutter-extractor-and-validator-v1.2",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/validators/flutter-accuracy-validator.py",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/evals/flutter-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/validators/ts-accuracy-validator.py"
+  ],
+  "instructions": "Upgrade Flutter extractor v1.1 → v1.2 AND update the Flutter validator to handle the top remaining drift causes. Goal: shrink Flutter drift from 159 → under 50.\n\n## Part A — Investigate and fix missing Repository types\n\nTop drift refs include `AmityPostRepository` (14×) and `AmityUserRepository` (4×) as RAW TYPE NAMES. These almost certainly exist in the Flutter SDK and should be in the surface. v1.1 filters to barrel-reachable files; if these aren't reachable from `lib/amity_sdk.dart`, the barrel may be incomplete — investigate which file declares them and trace re-exports.\n\nPossibilities:\n  (a) The types ARE declared but not re-exported from `lib/amity_sdk.dart` — fix by either following implicit conventions (auto-include `lib/src/public/**/*.dart` if barrel is sparse) OR documenting this as a real gap in the SDK barrel and flagging for SDK team.\n  (b) The types are declared under names like `PostRepository` (without `Amity` prefix) and the doc is using the wrong name — verify with grep on the SDK source.\n  (c) The types are accessed via factory methods on `AmityCoreClient` (e.g. `client.newPostRepository()`) rather than direct construction, and the doc pattern is wrong — verify against `AmityCoreClient.newAdRepository`/`newUserRepository`/`newFileRepository` which DO appear in the surface.\n\nDo the investigation FIRST. If (c) is the case (most likely given the existing factory methods), no extractor change is needed — those refs are real DOC DRIFT to be triaged. If (a) or (b), fix the extractor.\n\n## Part B — Capture enum entries (mirror Android v1.2 / TS v1.3)\n\nTop drift includes `AmityCommentReferenceType.post`, `AmityPostTargetType.COMMUNITY`, `AmityAdPlacement.FEED`. These are Dart enum entries. The Flutter extractor v1.1 captures `enum` declarations but not the entries inside the body.\n\nDart enum patterns:\n  ```dart\n  enum AdPlacement { feed, story, profile }\n  enum Color { red(0xff0000), green(0x00ff00); final int rgb; const Color(this.rgb); }\n  ```\n\nCapture bare identifiers inside enum bodies. Add as members with `kind=enum_value` (consistent with the TS extractor's naming for enum entries).\n\nNOTE on Dart casing: Dart enum values are conventionally lowerCamelCase (`post`, `story`, `community`) — but some Dart enums use UPPER_SNAKE for compatibility. The validator should be case-sensitive (a doc using `.POST` against an enum that has `.post` is real drift). Just capture whatever's in the source.\n\nBump `extractor_version` to `0.1.2`. Add stat `enum_values_total`.\n\n## Part C — Validator: walk nested types, extensions, enum values\n\nFlutter extractor v1 aggregates extension members into the host type's `members[]` with `from_extension=true`. The validator should treat those as valid members regardless of the flag.\n\nUpdate the Flutter validator's lookup so that:\n  - `AmityEnum.entryName` validates if `entryName` is in `AmityEnum.members[]` (kind=enum_value)\n  - `AmityType.method` validates if `method` is in members[] (from_extension or not — same)\n  - `AmityType.NestedType` validates if there's a nested type by that name (consistent with how iOS/Android validators handle nested_types if they have a nested_types[] field)\n\nMirror the TS validator's recursive `lookup_path` function for arbitrary nesting depth.\n\n## Verification\n\nAfter both changes, re-run `python3 .docs-ops/extractors/flutter-extractor.py` AND `python3 .docs-ops/validators/flutter-accuracy-validator.py`. Check:\n  - Surface stats: `enum_values_total > 0`\n  - Drift report: total_issues should drop from 159 to under 50\n  - `AmityCommentReferenceType.post`, `AmityPostTargetType.COMMUNITY`, `AmityAdPlacement.FEED` should no longer appear if those enum values match the source\n  - `AmityPostRepository` raw-type investigation: report your finding in notes — if it's drift (case c above), the validator should STILL flag it; if it's an extractor gap (a/b), it should resolve\n\nReport in `notes`: investigation outcome for AmityPostRepository / AmityUserRepository (was it (a), (b), or (c)?); before/after drift; enum_values_total stat; top 10 remaining drift refs (these are triage candidates).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "v1.2_resolves_enum_values_and_drift_drops",
+        "command": "python3 .docs-ops/extractors/flutter-extractor.py > /dev/null && python3 .docs-ops/validators/flutter-accuracy-validator.py > /dev/null && python3 -c \"import json; s=json.load(open('.docs-ops/sdk-surface/flutter.json')); r=json.load(open('.docs-ops/evals/flutter-accuracy-drift.json')); assert s['extractor_version']=='0.1.2', f'version not bumped: {s[\\\"extractor_version\\\"]}'; assert s['stats'].get('enum_values_total',0)>0, 'no enum values captured'; assert r['stats']['total_issues']<80, f'drift still high: {r[\\\"stats\\\"][\\\"total_issues\\\"]}'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T16:00:00Z"
+}

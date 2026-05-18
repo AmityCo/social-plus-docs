@@ -309,7 +309,7 @@ class CommentActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        editingManager = CommentEditingManager(AmityCommentRepository.get())
+        editingManager = CommentEditingManager(AmityCommentRepository.getComment())
         
         saveButton.setOnClickListener {
             val newText = commentEditText.text.toString()
@@ -350,7 +350,7 @@ class CommentActivity : AppCompatActivity() {
 
 <Tab title="TypeScript">
 ```typescript
-import { CommentRepository, AmityComment } from '@amityco/ts-sdk';
+import { CommentRepository } from '@amityco/ts-sdk';
 
 interface CommentEditOptions {
   commentId: string;
@@ -362,7 +362,7 @@ interface CommentEditOptions {
 
 interface CommentEditResult {
   success: boolean;
-  comment?: AmityComment;
+  comment?: Amity.Comment;
   error?: string;
 }
 
@@ -371,7 +371,7 @@ class CommentEditingService {
   private readonly editTimeWindow: number = 24 * 60 * 60 * 1000; // 24 hours
   
   // Basic text editing
-  async updateCommentText(commentId: string, newText: string): Promise<AmityComment> {
+  async updateCommentText(commentId: string, newText: string): Promise<Amity.Comment> {
     try {
       const updatedComment = await CommentRepository.updateComment(commentId, newText);
       return updatedComment;
@@ -381,7 +381,7 @@ class CommentEditingService {
   }
   
   // Permission validation
-  canEditComment(comment: AmityComment, userId: string): boolean {
+  canEditComment(comment: Amity.Comment, userId: string): boolean {
     // Check ownership
     if (comment.userId !== userId) return false;
     
@@ -576,17 +576,16 @@ function formatRelativeTime(date: Date): string {
 import 'package:amity_sdk/amity_sdk.dart';
 
 class CommentEditingService {
-  final AmitySocialClient _socialClient;
+  final CommentRepository _commentRepository;
   static const int maxCommentLength = 2048;
   static const Duration editTimeWindow = Duration(hours: 24);
   
-  CommentEditingService(this._socialClient);
+  CommentEditingService(this._commentRepository);
   
   // Basic text editing
   Future<AmityComment> updateCommentText(String commentId, String newText) async {
     try {
-      final updatedComment = await _socialClient
-          .newCommentRepository()
+      final updatedComment = await _commentRepository
           .updateComment(commentId: commentId, text: newText);
       return updatedComment;
     } catch (error) {
@@ -642,8 +641,7 @@ class CommentEditingService {
       
       // Permission validation if requested
       if (validatePermissions) {
-        final currentComment = await _socialClient
-            .newCommentRepository()
+        final currentComment = await _commentRepository
             .getComment(commentId: commentId);
         if (!canEditComment(currentComment, userId)) {
           return CommentEditResult.error('You do not have permission to edit this comment');
@@ -755,7 +753,7 @@ class _CommentEditWidgetState extends State<CommentEditWidget> {
   void initState() {
     super.initState();
     _textController = TextEditingController(text: widget.comment.text);
-    _editingService = CommentEditingService(AmityCoreClient.newClient());
+    _editingService = CommentEditingService(AmitySocialClient.newCommentRepository());
   }
   
   @override
@@ -1232,8 +1230,8 @@ class CommentEditActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         imageEditingManager = ImageCommentEditingManager(
-            AmityCommentRepository.get(),
-            AmityFileRepository.get()
+            AmityCommentRepository.getComment(),
+            AmityFileRepository.getFile()
         )
         
         findViewById<Button>(R.id.addImagesButton).setOnClickListener {
@@ -1291,7 +1289,7 @@ class ImageCommentEditingService extends CommentEditingService {
   private readonly maxImagesPerComment = 10;
   
   // Update comment with images
-  async updateCommentWithImages(options: ImageEditOptions): Promise<AmityComment> {
+  async updateCommentWithImages(options: ImageEditOptions): Promise<Amity.Comment> {
     const { commentId, text, imageFileIds, preserveExistingImages = false } = options;
     
     let finalImageIds = imageFileIds;
@@ -1310,7 +1308,7 @@ class ImageCommentEditingService extends CommentEditingService {
   }
   
   // Add images to existing comment
-  async addImagesToComment(commentId: string, newImageFileIds: string[]): Promise<AmityComment> {
+  async addImagesToComment(commentId: string, newImageFileIds: string[]): Promise<Amity.Comment> {
     const currentComment = await CommentRepository.getComment(commentId);
     const existingImageIds = currentComment.images?.map(img => img.fileId) || [];
     const allImageIds = [...existingImageIds, ...newImageFileIds];
@@ -1323,7 +1321,7 @@ class ImageCommentEditingService extends CommentEditingService {
   }
   
   // Remove specific images from comment
-  async removeImagesFromComment(commentId: string, imageIdsToRemove: string[]): Promise<AmityComment> {
+  async removeImagesFromComment(commentId: string, imageIdsToRemove: string[]): Promise<Amity.Comment> {
     const currentComment = await CommentRepository.getComment(commentId);
     const existingImageIds = currentComment.images?.map(img => img.fileId) || [];
     const remainingImageIds = existingImageIds.filter(id => !imageIdsToRemove.includes(id));
@@ -1336,7 +1334,7 @@ class ImageCommentEditingService extends CommentEditingService {
     commentId: string,
     imageFiles: File[],
     onProgress?: (completed: number, total: number) => void
-  ): Promise<AmityComment> {
+  ): Promise<Amity.Comment> {
     
     // Upload images
     const uploadResults = await this.uploadImages(imageFiles, onProgress);
@@ -1385,7 +1383,7 @@ class ImageCommentEditingService extends CommentEditingService {
   }
   
   // Replace all images in comment
-  async replaceCommentImages(commentId: string, newImageFileIds: string[]): Promise<AmityComment> {
+  async replaceCommentImages(commentId: string, newImageFileIds: string[]): Promise<Amity.Comment> {
     if (newImageFileIds.length > this.maxImagesPerComment) {
       throw new Error(`Maximum ${this.maxImagesPerComment} images allowed per comment`);
     }
@@ -1484,8 +1482,7 @@ extension ImageCommentEditing on CommentEditingService {
     List<String> finalImageIds = imageFileIds;
     
     if (preserveExistingImages) {
-      final currentComment = await _socialClient
-          .newCommentRepository()
+      final currentComment = await _commentRepository
           .getComment(commentId: commentId);
       
       final existingImageIds = currentComment.images
@@ -1501,7 +1498,7 @@ extension ImageCommentEditing on CommentEditingService {
       throw Exception('Maximum $maxImagesPerComment images allowed per comment');
     }
     
-    return await _socialClient.newCommentRepository().updateComment(
+    return await _commentRepository.updateComment(
       commentId: commentId,
       text: text,
       fileIds: finalImageIds,
@@ -1513,8 +1510,7 @@ extension ImageCommentEditing on CommentEditingService {
     required String commentId,
     required List<String> newImageFileIds,
   }) async {
-    final currentComment = await _socialClient
-        .newCommentRepository()
+    final currentComment = await _commentRepository
         .getComment(commentId: commentId);
     
     final existingImageIds = currentComment.images
@@ -1529,7 +1525,7 @@ extension ImageCommentEditing on CommentEditingService {
       throw Exception('Maximum $maxImagesPerComment images allowed per comment');
     }
     
-    return await _socialClient.newCommentRepository().updateComment(
+    return await _commentRepository.updateComment(
       commentId: commentId,
       text: currentComment.text,
       fileIds: allImageIds,
@@ -1541,8 +1537,7 @@ extension ImageCommentEditing on CommentEditingService {
     required String commentId,
     required List<String> imageIdsToRemove,
   }) async {
-    final currentComment = await _socialClient
-        .newCommentRepository()
+    final currentComment = await _commentRepository
         .getComment(commentId: commentId);
     
     final existingImageIds = currentComment.images
@@ -1555,7 +1550,7 @@ extension ImageCommentEditing on CommentEditingService {
         .where((id) => !imageIdsToRemove.contains(id))
         .toList();
     
-    return await _socialClient.newCommentRepository().updateComment(
+    return await _commentRepository.updateComment(
       commentId: commentId,
       text: currentComment.text,
       fileIds: remainingImageIds,
@@ -1626,7 +1621,7 @@ extension ImageCommentEditing on CommentEditingService {
   
   Future<String> _uploadSingleImage(File file) async {
     // Upload using Amity file upload
-    final uploadResult = await _socialClient
+    final uploadResult = await AmityCoreClient
         .newFileRepository()
         .uploadImage(file);
     
@@ -1642,11 +1637,10 @@ extension ImageCommentEditing on CommentEditingService {
       throw Exception('Maximum $maxImagesPerComment images allowed per comment');
     }
     
-    final currentComment = await _socialClient
-        .newCommentRepository()
+    final currentComment = await _commentRepository
         .getComment(commentId: commentId);
     
-    return await _socialClient.newCommentRepository().updateComment(
+    return await _commentRepository.updateComment(
       commentId: commentId,
       text: currentComment.text,
       fileIds: newImageFileIds,
@@ -1679,7 +1673,7 @@ class _ImageCommentEditorState extends State<ImageCommentEditor> {
   @override
   void initState() {
     super.initState();
-    _editingService = CommentEditingService(AmityCoreClient.newClient());
+    _editingService = CommentEditingService(AmitySocialClient.newCommentRepository());
   }
   
   Future<void> _pickAndAddImages() async {

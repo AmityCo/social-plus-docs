@@ -1,0 +1,27 @@
+{
+  "id": "0015-ts-extractor-amity-global-namespace",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ts-accuracy-drift-triage.json"
+  ],
+  "instructions": "Upgrade `.docs-ops/extractors/typescript-extractor.py` from v1.1 to v1.2 to capture types declared inside `declare global { namespace Amity { ... } }` blocks in the SDK's `@types/` directory.\n\nCONTEXT: The TS SDK has a pattern where many types (e.g., `AmityClient`, `AmityComment`, `AmityCommentReferenceType`, `InvitationTargetType`, `LiveCollection`, `StreamStatus`) are NOT exported through the barrel (`packages/sdk/src/index.ts`) — they're declared as members of a global `Amity` namespace via TypeScript module augmentation in files under `packages/sdk/src/@types/`. These types ARE part of the public API but are referenced as `Amity.XxxType` rather than imported by name.\n\nThe triage report (`.docs-ops/evals/ts-accuracy-drift-triage.json`) flagged 1 EXTRACTOR_BLIND_SPOT and several `import Amity*` items in GENUINE_DRIFT and DOC_FABRICATION that are likely false positives caused by this gap. After this upgrade, those should resolve naturally.\n\nWHAT TO ADD: a parser pass that walks every `.ts` file under `AmityTypescriptSDK/packages/sdk/src/@types/` and:\n\n1. Finds `declare global { namespace Amity { ... } }` blocks (also accept `declare global { namespace Amity {`, `declare global { \\n namespace Amity {`, and other whitespace/newline variants — common Prettier outputs).\n2. Within each Amity-namespace block, captures top-level declarations. Use a brace-depth tracker rooted at the opening `{` of the `namespace Amity` block so nested blocks (interface bodies, function-type braces) don't terminate it early.\n3. Captures these declaration kinds inside the namespace body:\n   - `type <Name> = ...` → kind=`type`\n   - `interface <Name> ...` → kind=`interface`\n   - `const <Name> ...` or `const enum <Name> ...` → kind=`const` or `enum`\n   - `enum <Name> ...` → kind=`enum`\n   - `function <Name>(...)` → kind=`function`\n   - `class <Name> ...` → kind=`class`\n   - Note: declarations inside `declare global { namespace Amity { ... } }` do NOT need an `export` keyword to be part of the namespace's public surface — they are public BY VIRTUE of being inside it.\n4. Adds a synthetic top-level namespace entry `Amity` to the surface JSON, parallel to the existing 24 namespaces. Members are the declarations captured. Include `source_module` (use the @types subdirectory or a list of contributing files), `member_count`, `members[]`, and an empty `sub_namespaces` (Amity may have nested namespaces but v1.2 can flatten — note this in unhandled[] if encountered).\n\nMERGING ACROSS FILES: multiple @types files may each contribute declarations to `namespace Amity`. The extractor must AGGREGATE — collect declarations from all files into a single `Amity` namespace entry, deduping by name (if a name appears in multiple files, keep both as separate members — they're augmenting the same type — and note this in `notes` of the result).\n\nBUMP `extractor_version` to `0.1.2`.\n\nDo NOT change existing namespace/root-export logic. Add the `@types/` Amity-namespace pass as a new step that runs after the barrel walk and writes its result into `surface['namespaces']['Amity']`.\n\nUPDATE `stats`: add a separate stat `amity_global_members` so it's distinguishable. The existing `namespaced_members_total` should include them (sum of all namespace member_counts).\n\nAfter the extractor upgrade, RE-RUN the validator and check:\n  - References like `Amity.LiveCollection`, `Amity.InvitationTargetType`, `Amity.StreamStatus` now validate as known.\n  - The 4× `import AmityClient`, 6× `import AmityComment`, 4× `import AmityCommentReferenceType` drift items either disappear or change shape (they were flagged because the bare-name import isn't valid — the correct ref is `Amity.AmityClient` etc.). The DRIFT they represent (wrong import syntax) is now MORE actionable, not less: the validator should now show that the type IS in `Amity.*` so a rename task can fix the import.\n\nReport in `notes`: number of @types files scanned, total members added to `Amity` namespace, new total namespaced_members count vs the previous 378, and how the drift report changed (before/after total issue counts).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "amity_namespace_present_with_members",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 -c \"import json; s=json.load(open('.docs-ops/sdk-surface/typescript.json')); assert 'Amity' in s['namespaces'], 'Amity namespace not in surface'; assert s['namespaces']['Amity']['member_count'] > 10, f'unexpectedly few Amity members: {s[\\\"namespaces\\\"][\\\"Amity\\\"][\\\"member_count\\\"]}'; assert s['extractor_version']=='0.1.2', f'version not bumped: {s[\\\"extractor_version\\\"]}'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T12:05:00Z"
+}

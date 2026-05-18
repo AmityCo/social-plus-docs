@@ -1,0 +1,34 @@
+{
+  "id": "0032-ios-cross-platform-fabrication-retriage",
+  "tier": "B",
+  "type": "drift_triage",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/evals/ios-fabrication-decisions.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ios-accuracy-drift.json",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/evals/fabrication-decisions.json"
+  ],
+  "instructions": "Produce a cross-platform iOS fabrication decision sheet at `.docs-ops/evals/ios-fabrication-decisions.json` — the iOS equivalent of `.docs-ops/evals/fabrication-decisions.json` (which we built for TS in task 0020). This is input to a CTO + iOS-SDK-lead meeting; your job is evidence and a recommended action per ref; the humans fill the final decision per row.\n\nINPUT: every issue still in `.docs-ops/evals/ios-accuracy-drift.json` after extractor v1.1 (task 0027). RE-RUN the iOS validator first to get fresh numbers if the report is stale. Group by unique ref. Expect ~30-50 unique refs (iOS reported 62 occurrences across 17 files post-v1.1; many are repeats of the same ref).\n\nFOR EACH UNIQUE REF (mirror 0020's approach):\n\n1. **Collect occurrence evidence**: list every (file, line) where the ref appears in the current iOS drift report; total occurrence count.\n\n2. **Cross-platform existence check** — for each of the 4 SDK surfaces (typescript.json, ios.json, android.json, flutter.json), determine whether the ref maps to a known API. Apply name-normalization heuristics:\n\n   - Ref last segment = member name; preceding = containing type.\n   - Search each surface for:\n     a. Exact member name match anywhere in surface (all types, namespaces, sub-namespaces, members, global funcs, nested_types).\n     b. With `Amity` prefix stripped (e.g., `AmityClient` → `Client`).\n     c. With `Amity` prefix added.\n     d. Containing type with `Amity` prefix stripped/added.\n   - For each match, record (surface, full_path_in_surface, file:line).\n\n3. **Classify by evidence pattern** (same buckets as 0020):\n   - **IOS_EXTRACTOR_BLIND_SPOT** — found in iOS surface under a path the validator didn't catch (rare after v1.1; flag for v1.2 work).\n   - **IOS_GAP_OTHER_PLATFORMS_HAVE** — not in iOS surface; IS in TS/Android/Flutter. SDK gap candidate.\n   - **TRUE_FABRICATION_NOWHERE** — not anywhere under any naming variant. Doc invention.\n   - **NAME_DRIFT_IOS_RENAMED** — found in iOS surface under a different name. Suggest the successor.\n   - **AMBIGUOUS** — mixed/unclear.\n\n4. **Recommended action** with one-sentence reasoning.\n\nKEY HYPOTHESIS TO VALIDATE: 0027's notes flagged that `AmityEventRepository.shared`, `AmityRoomRepository.shared`, `AmityPostRepository.shared`, `AmityClient.shared`, `AmityFileRepository.shared` are FABRICATIONS (these specific types don't have `.shared` static properties — the SDK uses a different pattern). The triage should confirm this with cross-platform evidence and recommend either DELETE or REWRITE_TO:<the-real-iOS-pattern>.\n\nThe real iOS singleton pattern is likely something like `AmityClient(...)` instance + `client.repository.fooManager` — but VERIFY by searching the iOS source. If you find that all Repository types have a constructor `init(client: AmityClient)`, the doc fix is to construct the repo explicitly, not access a singleton.\n\nOUTPUT SCHEMA — write to `.docs-ops/evals/ios-fabrication-decisions.json` (mirror fabrication-decisions.json structure):\n\n{\n  \"generated_at\": \"<iso>\",\n  \"generated_by\": \"copilot-cli\",\n  \"source_drift_report\": \".docs-ops/evals/ios-accuracy-drift.json\",\n  \"surfaces_checked\": [\"typescript.json\", \"ios.json\", \"android.json\", \"flutter.json\"],\n  \"reviewers\": [\"CTO\", \"iOS_SDK_lead\"],\n  \"default_action_for_ios_gap\": \"FLAG_FOR_SDK\",\n  \"rows\": [\n    {\n      \"ref\": \"AmityEventRepository.shared\",\n      \"occurrences\": 19,\n      \"locations\": [{\"file\": \"...\", \"line\": N}, ...],\n      \"surface_evidence\": {\n        \"typescript\": { \"found\": false, \"matches\": [] },\n        \"ios\":        { \"found\": false, \"matches\": [] },\n        \"android\":    { \"found\": <bool>, \"matches\": [...] },\n        \"flutter\":    { \"found\": <bool>, \"matches\": [...] }\n      },\n      \"classification\": \"TRUE_FABRICATION_NOWHERE\" | \"IOS_GAP_OTHER_PLATFORMS_HAVE\" | ...,\n      \"recommended_action\": \"DELETE\" | \"FLAG_FOR_SDK\" | \"REWRITE_TO:<target>\" | \"HUMAN_DECIDE\",\n      \"reasoning\": \"<one sentence>\",\n      \"decision\": null,\n      \"decision_notes\": null\n    }\n  ],\n  \"summary_by_classification\": { ... }\n}\n\nThe `decision` and `decision_notes` fields are LEFT NULL for the human review meeting to fill.\n\nDo NOT modify any doc files in this task. Triage and evidence only.\n\nReport in `notes`: total unique refs triaged, summary by classification, the `.shared` pattern verdict (fabrication vs real but extractor-missed), and any especially interesting findings (e.g., refs that exist on 3+ other platforms — strong SDK gap signal).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_decision_sheet_written_with_evidence",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/evals/ios-fabrication-decisions.json')); assert 'rows' in d and len(d['rows'])>0; assert all('surface_evidence' in r and len(r['surface_evidence'])==4 for r in d['rows']); assert all('classification' in r and 'recommended_action' in r and 'reasoning' in r for r in d['rows']); assert 'summary_by_classification' in d; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/ios-fabrication-decisions.json"
+  },
+  "blocked_by": ["0027-ios-extractor-v1.1"],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:30:00Z"
+}

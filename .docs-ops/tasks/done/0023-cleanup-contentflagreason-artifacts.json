@@ -1,0 +1,25 @@
+{
+  "id": "0023-cleanup-contentflagreason-artifacts",
+  "tier": "A",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/ts-accuracy-drift.json"
+  ],
+  "instructions": "Fix the two remaining `Amity.ContentFlagReason.*` mechanical artifacts. Same root cause as 0022 (PascalCase enum-style dot-access against what's actually a string-literal union type), but the correct replacement is NOT a string literal — there IS a real exported enum for these reasons.\n\n**SDK source** (`AmityTypescriptSDK/packages/sdk/src/@types/domains/content.ts`):\n\n```ts\nexport enum ContentFlagReasonEnum {\n  CommunityGuidelines = 'Against community guidelines',\n  HarassmentOrBullying = 'Harassment or bullying',\n  SelfHarmOrSuicide = 'Self-harm or suicide',\n  ViolenceOrThreateningContent = 'Violence or threatening content',\n  SellingRestrictedItems = 'Selling and promoting restricted items',\n  SexualContentOrNudity = 'Sexual content or nudity',\n  SpamOrScams = 'Spam or scams',\n  FalseInformation = 'False information or misinformation',\n  Others = 'Others',\n}\n\ntype ContentFlagReason =\n  | Exclude<`${ContentFlagReasonEnum}`, `${ContentFlagReasonEnum.Others}`>\n  | (string & {});\n```\n\nKey facts:\n  - `ContentFlagReasonEnum` is a regular exported enum with PascalCase keys that evaluate to descriptive string values. It IS a root export of `@amityco/ts-sdk` (verify in `.docs-ops/sdk-surface/typescript.json` under `root_exports[]`).\n  - `Amity.ContentFlagReason` is a TYPE (a string union with `Others` explicitly excluded). You cannot dot-access it.\n  - The runtime value to pass for a 'CommunityGuidelines' reason is the STRING `'Against community guidelines'` — accessing `ContentFlagReasonEnum.CommunityGuidelines` resolves to exactly that string at runtime.\n\n**target_files is intentionally empty** — discover from `.docs-ops/evals/ts-accuracy-drift.json`. Look for issues where `ref` starts with `Amity.ContentFlagReason.`. Expect 2 occurrences (top-of-report: `Amity.ContentFlagReason.Others` × 1, `Amity.ContentFlagReason.CommunityGuidelines` × 1). Also check for additional reasons (`Amity.ContentFlagReason.HarassmentOrBullying`, etc.) that may have been hidden under those in earlier reports.\n\n**Fix**:\n  1. Replace `Amity.ContentFlagReason.<Case>` with `ContentFlagReasonEnum.<Case>` (PascalCase key stays the same — the source enum uses the same casing as the docs were already using).\n  2. Add `ContentFlagReasonEnum` to the existing `import { ... } from '@amityco/ts-sdk'` line in that file. If no such import exists, add a new import line.\n  3. Type ANNOTATIONS using `Amity.ContentFlagReason` (e.g., `reason: Amity.ContentFlagReason`) are STILL CORRECT — leave them alone.\n  4. NOTE on `Others`: the `Amity.ContentFlagReason` union TYPE explicitly excludes `Others`, so if the doc passes `ContentFlagReasonEnum.Others` to an API parameter typed as `Amity.ContentFlagReason`, that's a TYPE ERROR. If you see this, STOP that occurrence and report `type_conflict_others_excluded` in notes — the doc is showing a usage the SDK doesn't actually allow.\n\n**Rules** (consistent with prior tasks):\n  - Apply only inside ```typescript / ```ts / ```javascript / ```js fenced code blocks.\n  - Preserve all arguments, chained calls, surrounding code verbatim.\n  - Do NOT modify prose, frontmatter, or other code blocks.\n  - If a call site doesn't fit cleanly, STOP and report `needs_review` in notes.\n\nReport in `notes`: per file, the (line, old, new) replacements; any `type_conflict_others_excluded` cases; any additional ContentFlagReason cases discovered beyond the 2 in the top-of-report.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "contentflagreason_artifacts_gone",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); bad=[i.get('ref') for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref','').startswith('Amity.ContentFlagReason.')]; print('FAIL: still flagging '+str(set(bad))) if bad else print('OK'); import sys; sys.exit(1 if bad else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": ["0022-cleanup-0021-rewrite-artifacts"],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T13:55:00Z"
+}

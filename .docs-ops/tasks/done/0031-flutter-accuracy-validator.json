@@ -1,0 +1,32 @@
+{
+  "id": "0031-flutter-accuracy-validator",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/flutter-accuracy-validator.py",
+    ".docs-ops/evals/flutter-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/sdk-surface/flutter.json"
+  ],
+  "instructions": "Write `.docs-ops/validators/flutter-accuracy-validator.py` — a Dart docs-accuracy validator — and run it to produce `.docs-ops/evals/flutter-accuracy-drift.json`.\n\nMODEL: Mirror `.docs-ops/validators/ts-accuracy-validator.py` and `.docs-ops/validators/ios-accuracy-validator.py`. Same shape: load surface → walk .mdx → extract code blocks → find symbol refs → diff → emit report.\n\nINPUT SURFACE: `.docs-ops/sdk-surface/flutter.json` (v1.1 from 0029). Top-level shape: `types`, `mixins`, `global_funcs`, `global_consts`, `typedefs`. Types may have `members[]` (with `from_extension=true` flag on some) and `extensions[]`.\n\nDETECTION SCOPE (conservative):\n\nScan ```dart fenced blocks only (and ```flutter as an alias if you encounter it). Detect:\n\n  1. **Static / class-level access**: `<TypeName>.<member>` where TypeName is in `types`.\n     - Valid if member is in the type's members[]. For Dart, common static-accessible patterns are constructor calls (TypeName()), named constructors (TypeName.named()), factory constructors, static getters/methods, and enum values.\n     - The flutter extractor flags enum_value members with `kind: enum_value`, so `MyEnum.MyCase` validates if `MyCase` is in `MyEnum.members[]`.\n     - Invalid → emit `unknown_type_member` issue.\n\n  2. **Constructor calls**: `TypeName()` or `TypeName.namedConstructor()` — for v1, only flag if TypeName doesn't exist at all (a typo'd type name). Don't validate constructor argument shape.\n\n  3. **Instance method on declared variable** (best-effort): same as Android validator — only attempt when type is EXPLICIT on the declaration (`final AmityCoreClient client = ...`). Skip inferred types.\n\n  4. **Imports**: `import 'package:amity_sdk/<...>'` — verify the import path is under `package:amity_sdk/` (the SDK's pubspec name per surface metadata's `sdk_product`). For now, only flag imports of `package:amity_sdk/<X>` where X doesn't match any known re-exported sub-module — that's likely beyond v1's scope. SKIP import validation in v1; just count import statements for stats.\n\nOUT OF SCOPE for v1:\n  - Signature/param validation.\n  - Generic types / Future<T> / Stream<T> shape validation.\n  - Async/await flow analysis.\n  - Riverpod / provider patterns specific to Flutter integration.\n\nOUTPUT SCHEMA — write to `.docs-ops/evals/flutter-accuracy-drift.json` (parallel to ts/ios/android drift reports):\n\n{\n  \"generated_at\": \"<iso>\",\n  \"validator\": \"flutter-accuracy-validator.py\",\n  \"surface_used\": \".docs-ops/sdk-surface/flutter.json\",\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"dart_blocks_scanned\": <int>,\n    \"files_with_issues\": <int>,\n    \"total_issues\": <int>\n  },\n  \"top_missing_refs\": [ {\"ref\": \"AmityFoo.bar\", \"doc_occurrences\": <int>} ],\n  \"issues_by_file\": {\n    \"<repo-relative-path>\": [\n      {\n        \"kind\": \"unknown_type_member\",\n        \"ref\": \"AmityFoo.bar\",\n        \"line\": <int>,\n        \"hint_present_at\": [ \"<other-types-where-bar-exists>\" ]\n      }\n    ]\n  }\n}\n\nFILE PATH CONVENTIONS:\n  - Paths in the report are relative to social-plus-docs/.\n  - Exclude `.docs-ops/`, `node_modules/`, `.pytest_cache/` from scan.\n\nAfter writing, RUN it. Flutter docs surface area is smaller than iOS/Android; expect dozens of issues, not hundreds.\n\nReport in `notes`: stats, top 10 missing refs, your read on real-drift vs validator edge cases, and any Dart-specific patterns you noticed needing future v2 work (extension method calls, named arg validation, mixin-on-class refs).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "validator_runs_and_produces_report",
+        "command": "python3 .docs-ops/validators/flutter-accuracy-validator.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/evals/flutter-accuracy-drift.json')); assert 'stats' in d and 'issues_by_file' in d; assert d['stats']['files_scanned']>0; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/flutter-accuracy-drift.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:30:00Z"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "0022-cleanup-0021-rewrite-artifacts",
+  "tier": "A",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/ts-accuracy-drift.json"
+  ],
+  "instructions": "Fix two mechanical artifacts introduced by task 0021's rewrites. Both are confirmed against the SDK source.\n\n**target_files is intentionally empty** — discover by re-reading `.docs-ops/evals/ts-accuracy-drift.json` for occurrences of the refs below.\n\n## Fix 1 — `Amity.Client.getInstance` → `Client.getActiveClient()`\n\n**Why**: `Amity.Client` is a TYPE (declared as `type Client = { ... }` in `@types/domains/client.ts`). Types have no static methods. The original docs used `AmityClient.getInstance()` (a singleton pattern lifted from iOS/Android docs) and 0021 mechanically converted the type ref to `Amity.Client`, producing the invalid `Amity.Client.getInstance()`. The actual TS API to get the active client instance is `Client.getActiveClient()` from the runtime `Client` namespace (NOT the `Amity.Client` type).\n\n**Per occurrence**:\n  1. Replace `Amity.Client.getInstance()` with `Client.getActiveClient()`. Preserve any chained calls (`Amity.Client.getInstance().login(...)` → `Client.getActiveClient().login(...)`).\n  2. If `Client` is NOT already imported in the file's import list for `@amityco/ts-sdk`, add it: change `import { ... } from '@amityco/ts-sdk'` to include `Client`.\n  3. Type annotations using `Amity.Client` as the variable type are STILL CORRECT and should not be modified (only the invalid `.getInstance()` access).\n\n## Fix 2 — `Amity.CommentReferenceType.POST` → `'post'`\n\n**Why**: `CommentReferenceType` is a string-literal union type in the SDK source: `type CommentReferenceType = 'content' | 'post' | 'story'`. You cannot dot-access members of a union type, and the valid values are lowercase strings, not uppercase identifiers. The original docs likely had `AmityCommentReferenceType.POST` (an enum access pattern from iOS/Android), which 0021 mechanically rewrote to `Amity.CommentReferenceType.POST` — invalid TS.\n\n**Per occurrence**:\n  1. Replace `Amity.CommentReferenceType.POST` with the string literal `'post'`.\n  2. ALSO check for `.STORY` (→ `'story'`) and `.CONTENT` (→ `'content'`) in the same code blocks even if not currently flagged — they would have the same bug. The drift report only catches what doesn't validate, but if any of these were uppercase and got missed for any reason, fix them.\n  3. Type ANNOTATIONS using `Amity.CommentReferenceType` (e.g., `referenceType: Amity.CommentReferenceType`) are STILL CORRECT — only the dot-access expressions are wrong.\n  4. If the code declares a variable typed as `Amity.CommentReferenceType` and then assigns it from one of these, the type annotation stays — just the assigned VALUE becomes the string literal.\n\n## Rules\n\n- Apply only inside ```typescript / ```ts / ```javascript / ```js fenced code blocks.\n- Preserve all argument lists, chained calls, surrounding code verbatim.\n- Do NOT modify prose, frontmatter, or any other code blocks on the same page.\n- If a call site doesn't fit the pattern cleanly, STOP that occurrence and report `needs_review` in notes.\n\nReport in `notes`: per file, the list of (line, old, new) replacements; total per fix; any cases skipped with reason.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "artifacts_gone_from_drift_report",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); bad_refs={'Amity.Client.getInstance','Amity.CommentReferenceType.POST','Amity.CommentReferenceType.STORY','Amity.CommentReferenceType.CONTENT'}; found=set(); [found.add(i.get('ref')) for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref') in bad_refs]; print('FAIL: still flagging '+str(found)) if found else print('OK'); import sys; sys.exit(1 if found else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": ["0021-execute-name-drift-rewrites"],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T13:40:00Z"
+}

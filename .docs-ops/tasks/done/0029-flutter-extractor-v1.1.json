@@ -1,0 +1,33 @@
+{
+  "id": "0029-flutter-extractor-v1.1",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/sdk-surface/flutter.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/tasks/done/0013-flutter-sdk-surface-extractor.result.json"
+  ],
+  "instructions": "Upgrade `.docs-ops/extractors/flutter-extractor.py` from v1.0 to v1.1 to filter the surface to types actually re-exported from the package's main barrel (`lib/amity_sdk.dart` or whichever file is the package entry point).\n\nWHY THIS MATTERS: Dart has no `public` keyword — visibility is determined by (a) underscore-prefix convention (`_Foo` is library-private) AND (b) what's actually exported from the package's barrel via `export 'src/foo.dart';` directives. The v1 extractor captures all underscore-free top-level declarations from anywhere under `lib/`, which includes 1172 types — but only a fraction of those are actually reachable from the package's public entry point. The current top types include internal infrastructure like `DbAdapterRepo`, `ChannelRepo`, `*Response` — confirmed not public per 0013's notes.\n\nFIX:\n\n1. Identify the package barrel. Default location: `Amity-Social-Cloud-SDK-Flutter-Internal/lib/amity_sdk.dart`. If not present, walk `lib/*.dart` (one level under `lib/`, no recursion) and pick the file with the most `export '...'` directives. Log which file was picked.\n\n2. Walk the barrel's `export 'src/foo.dart';` directives recursively (a re-export file can itself re-export from other files). Build a set of files that are part of the public API surface.\n\n3. Apply the existing extraction logic ONLY to files in that public set. Files NOT in the public set are skipped (their declarations don't appear in `types[]` / `mixins[]` / `global_funcs[]`).\n\n4. Handle `show` / `hide` clauses in export directives — these restrict what's re-exported:\n   - `export 'src/foo.dart' show A, B;` — only `A` and `B` from foo.dart are public.\n   - `export 'src/foo.dart' hide C;` — everything except `C` from foo.dart is public.\n   - For v1.1, you can simplify: if any `show` clause is present on an export, only include the listed names; if any `hide` is present, exclude the listed names; otherwise include everything from the file.\n\n5. Files transitively re-exported (file A exports file B which exports file C) → C's contents are part of the surface, scoped by any show/hide chain.\n\nSCHEMA: bump `extractor_version` to `0.1.1`. Add stats:\n  - `barrel_path` (which file was picked as the entry point)\n  - `public_files_count` (count of files reachable from the barrel after show/hide resolution)\n  - `files_excluded_not_in_barrel` (count of .dart files under lib/ that were skipped because they aren't re-exported)\n\nFALLBACK: if no barrel is found OR the barrel is empty of export directives, fall back to v1 behavior (include all underscore-free declarations) and log a warning in the surface JSON under `unhandled`. Don't fail outright — the surface should still produce something usable.\n\nVERIFY:\n  - Total `types` count should drop substantially (target: from 1172 to under 300, probably under 150).\n  - Top types by member count should NO LONGER include internal infrastructure (`DbAdapterRepo`, `ChannelRepo`, `*Response`, `DbAdapter*`).\n  - User-facing types like `AmityCoreClient`, `AmityChannel`, `AmityPost`, `AmityCommunity` SHOULD still be present.\n  - `AmityCoreClient` member count should INCREASE from the v1 value of 4 (v1 only saw the directly-declared class body; v1.1 should also pick up members from extension methods declared in re-exported files).\n\nReport in `notes`: barrel file picked, public_files_count vs total files under lib/, before/after type count, top 10 types after the fix, any types lost that you suspect SHOULD be public (flag for re-review), any unresolved show/hide clauses.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_v1.1_filters_to_public_barrel",
+        "command": "python3 .docs-ops/extractors/flutter-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/flutter.json')); assert d['extractor_version']=='0.1.1', f'version not bumped: {d[\\\"extractor_version\\\"]}'; assert d['stats']['types']<400, f'types still too many: {d[\\\"stats\\\"][\\\"types\\\"]}'; assert d['stats'].get('barrel_path'), 'barrel_path stat missing'; ac=d['types'].get('AmityCoreClient'); assert ac, 'AmityCoreClient must still be present after barrel filtering'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/flutter.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T15:00:00Z"
+}

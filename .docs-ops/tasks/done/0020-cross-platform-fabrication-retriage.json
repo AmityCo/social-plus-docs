@@ -1,0 +1,33 @@
+{
+  "id": "0020-cross-platform-fabrication-retriage",
+  "tier": "B",
+  "type": "drift_triage",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/evals/fabrication-decisions.json"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ts-accuracy-drift.json",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/sdk-surface/flutter.json"
+  ],
+  "instructions": "Produce a cross-platform fabrication decision sheet at `.docs-ops/evals/fabrication-decisions.json`. This is the input to a human review meeting between the CTO and the SDK lead — your output is evidence and a recommended action per ref; the human fills the final decision per row.\n\nINPUT: every issue still in `.docs-ops/evals/ts-accuracy-drift.json` after the prior auto-fix passes. Group by unique ref (combining `ref` and `import_name` issues). Expect ~30-40 unique refs.\n\nFOR EACH UNIQUE REF:\n\n1. **Collect occurrence evidence**:\n   - List every (file, line) where the ref appears in the current drift report.\n   - Total occurrence count.\n\n2. **Cross-platform existence check** — for each of the 4 SDK surfaces (typescript.json, ios.json, android.json, flutter.json), determine whether the ref maps to a known API. Apply these name-normalization heuristics — Copilot, exercise judgment:\n\n   - The ref's LAST SEGMENT is the member name (e.g., for `PostRepository.createPollPost`, the member is `createPollPost`; for `import AmityComment`, the member is `AmityComment`).\n   - The ref's CONTAINING TYPE is the segment(s) before (e.g., `PostRepository`, `Amity` if it's an Amity.X ref, or empty for bare imports).\n   - Search heuristics per surface (apply ALL, record any matches):\n     a. Exact member name match anywhere in the surface (search all types, namespaces, sub-namespaces, members, global funcs).\n     b. Member name match with `Amity` prefix stripped (e.g., `AmityClient` → search for `Client`).\n     c. Member name match with `Amity` prefix added (e.g., `Client` → search for `AmityClient`). iOS / Android use `AmityXxx`; TS uses `Xxx` under a namespace or `Amity.Xxx` in the global namespace.\n     d. Containing type with `Amity` prefix stripped/added (e.g., `AmityPostRepository` ↔ `PostRepository` / `postRepository`).\n     e. For each match, record the (surface, full_path_in_surface, file:line) as evidence.\n\n3. **Classify by evidence pattern**:\n\n   - **TS_EXTRACTOR_BLIND_SPOT** — found in TypeScript surface under a path the validator's regex didn't catch (rare at this point; flag for extractor v1.4 work).\n   - **TS_GAP_OTHER_PLATFORMS_HAVE** — not in TS surface; IS in at least one of (iOS, Android, Flutter). Recommended action: FLAG_FOR_SDK. Body of the future doc callout should reference the platforms where the API does exist.\n   - **TRUE_FABRICATION_NOWHERE** — not found in any of the 4 surfaces under any naming variant. Recommended action: DELETE_OR_REWRITE (human picks per case).\n   - **NAME_DRIFT_TS_RENAMED** — found in TS under a different name (e.g., docs say `createPollPost`, TS has `createPost` with a polls parameter). Recommended action: TS_API_RENAME (becomes a Tier A task once the human confirms the mapping).\n   - **AMBIGUOUS** — evidence is mixed or unclear. Recommended action: HUMAN_DECIDE.\n\n4. **Recommended action with reasoning** — one short sentence per ref explaining why you picked the action.\n\nOUTPUT SCHEMA — write to `.docs-ops/evals/fabrication-decisions.json`:\n\n{\n  \"generated_at\": \"<iso>\",\n  \"generated_by\": \"copilot-cli\",\n  \"source_drift_report\": \".docs-ops/evals/ts-accuracy-drift.json\",\n  \"surfaces_checked\": [\"typescript.json\", \"ios.json\", \"android.json\", \"flutter.json\"],\n  \"reviewers\": [\"CTO\", \"SDK_lead\"],\n  \"default_action_for_ts_gap\": \"FLAG_FOR_SDK\",\n  \"rows\": [\n    {\n      \"ref\": \"PostRepository.createPollPost\",\n      \"occurrences\": 3,\n      \"locations\": [{\"file\": \"...\", \"line\": N}, ...],\n      \"surface_evidence\": {\n        \"typescript\": { \"found\": false, \"matches\": [] },\n        \"ios\":        { \"found\": true,  \"matches\": [{\"path\": \"AmityPostRepository.createPollPost\", \"file\": \"...\", \"line\": N}] },\n        \"android\":    { \"found\": true,  \"matches\": [{\"path\": \"AmityPostRepository.createPollPost\", \"file\": \"...\", \"line\": N}] },\n        \"flutter\":    { \"found\": false, \"matches\": [] }\n      },\n      \"classification\": \"TS_GAP_OTHER_PLATFORMS_HAVE\",\n      \"recommended_action\": \"FLAG_FOR_SDK\",\n      \"reasoning\": \"API exists on iOS + Android but not TS or Flutter. Likely a real customer need on the TS path; file SDK ticket and add a <Warning> callout pointing to the iOS/Android equivalents.\",\n      \"decision\": null,\n      \"decision_notes\": null\n    }\n  ],\n  \"summary_by_classification\": {\n    \"TS_EXTRACTOR_BLIND_SPOT\": <int>,\n    \"TS_GAP_OTHER_PLATFORMS_HAVE\": <int>,\n    \"TRUE_FABRICATION_NOWHERE\": <int>,\n    \"NAME_DRIFT_TS_RENAMED\": <int>,\n    \"AMBIGUOUS\": <int>\n  }\n}\n\nThe `decision` and `decision_notes` fields are LEFT NULL for the human review meeting to fill. Allowed decision values (for reference, not enforced in this task): `FLAG_FOR_SDK`, `DELETE`, `REWRITE_TO:<new_ref>`, `KEEP_AS_IS`, `DEFER`.\n\nIMPORTANT — do NOT modify any doc files. Triage and evidence only.\n\nReport in `notes`: total unique refs triaged, summary by classification, and any especially interesting findings (e.g. APIs that exist on 3 platforms but not TS — strong signal of a real SDK gap).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "decision_sheet_written_with_evidence",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/evals/fabrication-decisions.json')); assert 'rows' in d and len(d['rows'])>0; assert all('surface_evidence' in r and len(r['surface_evidence'])==4 for r in d['rows']), 'every row needs evidence from all 4 surfaces'; assert all('classification' in r and 'recommended_action' in r and 'reasoning' in r for r in d['rows']); assert 'summary_by_classification' in d; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/fabrication-decisions.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T13:00:00Z"
+}

@@ -1,0 +1,26 @@
+{
+  "id": "0014-ts-validator-jest-fp-fix",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py"
+  ],
+  "context_files": [
+    ".docs-ops/evals/ts-accuracy-drift-triage.json"
+  ],
+  "instructions": "Fix the false-positive captured in `.docs-ops/evals/ts-accuracy-drift-triage.json` under the `FALSE_POSITIVE` bucket — the validator currently flags Jest mock methods like `.mockResolvedValue` and `.mockRejectedValue` as if they were SDK references when they appear in TS code blocks. They are not — they're Jest methods on a mock object.\n\nROOT CAUSE: The validator's `ns_pat` regex matches `<KnownNamespace>.<member>` patterns. When a code block does e.g. `(ChannelRepository.queryChannels as jest.Mock).mockResolvedValue(...)`, the regex matches `jest.Mock` (where `jest` isn't a known namespace so it's ignored), but it also greedily matches subsequent dotted patterns when there are multiple chained calls.\n\nLook at the specific occurrences flagged in the triage report under the FALSE_POSITIVE bucket to confirm the failure mode, then apply ONE of these fixes (your choice — pick whichever is cleanest):\n\nOption A — Exclusion list: maintain a hardcoded set of known non-SDK suffix patterns to ignore: `mockResolvedValue`, `mockRejectedValue`, `mockImplementation`, `mockReturnValue`, `mockReset`, `mockClear`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toBe`, `toEqual`, etc. If the final member in a matched dotted ref is in this set, skip it.\n\nOption B — Context disqualification: if the matched ref is preceded on the same line by `jest.`, `expect(`, or `as jest.Mock`, skip it.\n\nOption C — Combine both for robustness.\n\nDo NOT introduce new dependencies or rewrite the validator's structure. Minimum-change fix.\n\nAfter applying the fix, re-run the extractor + validator end-to-end and verify:\n  - The FALSE_POSITIVE refs from the triage report (specifically `mockResolvedValue` and `mockRejectedValue` and any others in that bucket) no longer appear in the new drift report.\n  - The total issue count drops by at least 2 (the previously-flagged FPs).\n  - No new false negatives are introduced — re-check that all the GENUINE_DRIFT refs from the triage report that were still pending (those NOT yet renamed by 0006 or 0010) are still being flagged.\n\nReport in `notes`: which option you picked, the diff size (lines changed), the new drift count vs the previous 66.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "jest_mocks_no_longer_flagged",
+        "command": "python3 .docs-ops/extractors/typescript-extractor.py > /dev/null && python3 .docs-ops/validators/ts-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/ts-accuracy-drift.json')); fp_refs={'mockResolvedValue','mockRejectedValue'}; found=set(); [found.add(i.get('ref','').split('.')[-1]) for f,iss in r['issues_by_file'].items() for i in iss]; bad=fp_refs & found; print('FAIL: still flagging '+str(bad)) if bad else print('OK'); import sys; sys.exit(1 if bad else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T12:05:00Z"
+}

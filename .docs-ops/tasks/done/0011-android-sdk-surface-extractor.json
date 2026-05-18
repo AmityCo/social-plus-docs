@@ -1,0 +1,33 @@
+{
+  "id": "0011-android-sdk-surface-extractor",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/sdk-surface/android.json"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/sdk-surface/ios.json"
+  ],
+  "instructions": "Write `.docs-ops/extractors/android-extractor.py` — a regex-based Kotlin/Java public-API extractor — and run it to produce `.docs-ops/sdk-surface/android.json`.\n\nMODEL: Mirror the structure and conventions of `.docs-ops/extractors/ios-extractor.py` (the iOS extractor written in task 0009). Same approach: pure-Python, no external deps, walks the SDK source, emits a JSON surface with the same OUTPUT SHAPE conventions (types/protocols-like containers with members, plus globals).\n\nSDK ROOT: `Amity-Social-Cloud-SDK-Android/` (sibling of `social-plus-docs/`).\n\nSCOPE — what to scan:\n  - INCLUDE all `.kt` and `.java` files under the SDK module source roots (usually `*/src/main/java/` and `*/src/main/kotlin/`). Walk all gradle modules in the repo — typically there are several (sdk, chat, social, etc.).\n  - EXCLUDE: anything under `*/src/test/*`, `*/src/androidTest/*`, `*/build/*`, `*/.gradle/*`, `*/sample/*`, `*/samples/*`, `*/example/*`, `*/external/*`, `*/.cxx/*`, `*/generated/*`.\n  - You can use `find Amity-Social-Cloud-SDK-Android -name '*.kt' -o -name '*.java'` filtered with the excludes above.\n\nWHAT COUNTS AS PUBLIC API:\n  - **Kotlin**: public is the default visibility. Anything NOT marked `internal`, `private`, or `protected` counts as public. `@Suppress(...)` is orthogonal — still counts. Companion object members are public if the companion itself is public (which is the default).\n  - **Java**: only declarations explicitly marked `public` count. `protected`, package-private (no modifier), and `private` are NOT public.\n\nDECLARATION KINDS to detect:\n\n  **Kotlin**:\n    Type-level: `class`, `abstract class`, `open class`, `sealed class`, `data class`, `object`, `interface`, `enum class`, `annotation class`, `typealias`\n    Member-level: `fun` (including `suspend fun`), `val`, `var`, `companion object`, enum entries\n    Watch for: `inline fun`, `operator fun`, `infix fun`, `tailrec fun`, `override fun`\n\n  **Java**:\n    Type-level: `public class`, `public interface`, `public enum`, `public @interface` (annotation)\n    Member-level: `public <return-type> methodName(...)`, `public static`, `public final`, fields\n\nVISIBILITY DETECTION:\n  - Kotlin: a declaration is public unless the line contains `internal `, `private `, or `protected ` before the kind keyword. Watch for visibility on the line above (rare but possible).\n  - Java: line must contain `public ` before the kind keyword.\n  - Strip Kotlin annotations (`@JvmStatic`, `@JvmField`, `@JvmOverloads`, `@Deprecated`, `@Suppress(...)`, etc.) and Java annotations similarly before visibility-keyword matching.\n\nOUTPUT SCHEMA — write to `.docs-ops/sdk-surface/android.json`. Follow ios.json conventions as closely as possible:\n\n{\n  \"extractor_version\": \"0.1.0\",\n  \"extractor\": \"android-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_product\": \"AmityAndroidSDK\",\n  \"sdk_source_roots\": [\"Amity-Social-Cloud-SDK-Android/...\"],\n  \"types\": {\n    \"AmityCoreClient\": {\n      \"kind\": \"class | object | interface | enum | annotation | data_class | sealed_class\",\n      \"language\": \"kotlin | java\",\n      \"primary_decl\": { \"file\": \"...\", \"line\": N },\n      \"members\": [\n        { \"name\": \"setup\", \"kind\": \"func\", \"file\": \"...\", \"line\": N, \"signature_hint\": \"<raw trimmed line>\" }\n      ],\n      \"nested_types\": []\n    }\n  },\n  \"interfaces\": { \"<name>\": { ... same shape ... } },\n  \"global_funcs\": [ ... ],\n  \"global_consts\": [ ... ],\n  \"typealiases\": [ ... ],\n  \"unhandled\": [],\n  \"stats\": {\n    \"files_scanned\": <int>,\n    \"kotlin_files\": <int>,\n    \"java_files\": <int>,\n    \"types\": <int>,\n    \"interfaces\": <int>,\n    \"members_total\": <int>,\n    \"global_funcs\": <int>,\n    \"global_consts\": <int>,\n    \"unhandled_lines\": <int>\n  }\n}\n\nKEY DIFFERENCES FROM SWIFT:\n  - Kotlin file may contain MULTIPLE top-level types (vs Swift's usual 1-per-file).\n  - Kotlin's default visibility is public — invert the iOS logic.\n  - Kotlin has companion objects — their members are statically accessible on the parent class; track them but flatten into the parent type's members with `from_companion=true`.\n  - Java uses explicit `public` like Swift's `public`.\n\nIMPORTANT — v1 scope:\n  - Capture NAME + KIND + FILE + LINE + raw `signature_hint` line.\n  - Skip param-type / return-type parsing for now (v2 with Kotlin compiler / JavaParser).\n  - Track edge cases the regex can't handle in `unhandled[]`.\n\nAfter writing, RUN it. Expected order of magnitude: hundreds of public types, thousands of members (Android SDK is comparable to iOS in surface area).\n\nReport in `notes`: stats, 3-5 sample type entries, list of unhandled patterns. Flag any Kotlin-specific edge cases that look interesting (e.g., sealed-class hierarchies, inline classes, value classes).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "extractor_runs_and_produces_valid_surface",
+        "command": "python3 .docs-ops/extractors/android-extractor.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/android.json')); assert 'types' in d and 'stats' in d; assert d['stats']['types']>0 and d['stats']['members_total']>0, f'unexpectedly empty surface: {d[\\\"stats\\\"]}'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/android.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T11:35:00Z"
+}

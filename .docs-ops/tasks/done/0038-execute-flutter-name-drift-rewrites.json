@@ -1,0 +1,26 @@
+{
+  "id": "0038-execute-flutter-name-drift-rewrites",
+  "tier": "A",
+  "type": "sdk_signature_diff",
+  "owner_hint": "copilot",
+  "target_files": [],
+  "context_files": [
+    ".docs-ops/evals/flutter-fabrication-decisions.json",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/evals/flutter-accuracy-drift.json"
+  ],
+  "instructions": "Execute the auto-fixable rewrites identified in `.docs-ops/evals/flutter-fabrication-decisions.json` — analog of 0021 (TS) and 0037 (Android) for Flutter.\n\nONLY act on rows where `classification == \"NAME_DRIFT_FLUTTER_RENAMED\"`. Use the `recommended_action` field as authoritative — targets are surface-verified by 0036's triage. Do NOT act on TRUE_FABRICATION_NOWHERE or FLUTTER_GAP_OTHER_PLATFORMS_HAVE rows.\n\n**target_files is intentionally empty** — discover from each row's `locations[]`.\n\nExpected 24 rows. Multiple patterns:\n\n**Pattern 1 — Repository name drop the `Amity` prefix** (the big one — ~18 occurrences):\n  - `AmityPostRepository` → `PostRepository` (~14 occurrences). The Flutter SDK uses bare `PostRepository`; docs lifted the Amity-prefixed name from iOS/Android.\n  - `AmityUserRepository` → `UserRepository` (~4 occurrences).\n  - Also: `AmityPollRepository` → `AmitySocialClient.newPollRepository()` — note this is a FACTORY pattern, not a direct rename. The Flutter SDK accesses some repositories via `AmitySocialClient.newXxxRepository()` factory methods. Verify on each occurrence: if the doc shows a `new AmityPollRepository(client)` or static `AmityPollRepository.method(...)` pattern, rewrite to use the factory.\n  - Two further repo refs use the factory pattern per 0036's notes: `AmityCoreClient.newUserRepository()` (alternative to direct `UserRepository`), `AmitySocialClient.newPostRepository()`. Per-occurrence judgment: if the surrounding code calls a method that requires an instance, use the factory; if it's a static method, use the type directly.\n\n**Pattern 2 — Enum case mismatches (the second big one — ~21 occurrences across 4 enums)**:\n  Dart uses lowerCamelCase enum values by convention, but the docs use UPPER_SNAKE or other casings inherited from other platforms. Per decision sheet:\n  - `AmityCommentReferenceType.post` → `.POST` (×8) — surprisingly upper here per Flutter SDK.\n  - `AmityImageSize.{small, medium, large, full}` → `{SMALL, MEDIUM, LARGE, FULL}` (×7).\n  - `AmityDataType.{image, file, video, liveStream, poll}` → `{IMAGE, FILE, VIDEO, LIVESTREAM, POLL}` (×5).\n  - `AmityStreamStatus.{LIVE, RECORDED, ENDED}` → `{live, recorded, ended}` (×3) — opposite direction here.\n  Trust the `recommended_action` field on each row — it specifies the exact target.\n\n**Pattern 3 — `AmityContentFlagReason.<X>` case rewrites (×9 occurrences)** — Dart static const members on the class:\n  - The Flutter SDK exposes `ContentFlagReason` (or similar) values as `lowerCamelCase` static consts. Per decision sheet, each occurrence rewrites to `AmityContentFlagReason.<lowerCamelCaseName>` (e.g. `COMMUNITY_GUIDELINES` → `communityGuidelines`).\n\n**Pattern 4 — Single method rename**: `AmityCoreClient.getCurrentUserId` → `AmityCoreClient.getUserId` (×1).\n\n**Rules** (consistent with prior 0021/0037 tasks):\n  - Apply only inside ```dart fenced code blocks.\n  - Preserve all arguments, named parameters, generic params, surrounding code verbatim.\n  - Watch for indented blocks inside MDX components (`<Step>`, `<Tab>`, `<Accordion>`) — handle manually if FENCE_RE misses them.\n  - Do NOT modify prose, frontmatter, or unrelated code blocks.\n  - Do NOT touch rows that aren't `NAME_DRIFT_FLUTTER_RENAMED`.\n  - For the factory-pattern Repository rewrites (Pattern 1 last bullet, AmityPollRepository → AmitySocialClient.newPollRepository()), VERIFY against the surface that `AmitySocialClient.newPollRepository` actually exists — if it doesn't, STOP that occurrence and report `needs_signature_review`.\n  - If any rewrite produces code that doesn't compile in your mental model (e.g. enum case truly missing), STOP and report.\n\nAfter your edits, re-run the Flutter validator. The 24 NAME_DRIFT refs should NO LONGER appear in the drift report. The 13 DELETE + 4 FLAG_FOR_SDK decisions remain held for the meeting.\n\nReport in `notes`: per-file (line, old, new) replacements; per-row occurrences fixed vs blocked; any `needs_signature_review` cases.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "flutter_name_drift_refs_gone",
+        "command": "python3 .docs-ops/extractors/flutter-extractor.py > /dev/null && python3 .docs-ops/validators/flutter-accuracy-validator.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/evals/flutter-fabrication-decisions.json')); r=json.load(open('.docs-ops/evals/flutter-accuracy-drift.json')); name_drift_refs={row['ref'] for row in d['rows'] if row['classification']=='NAME_DRIFT_FLUTTER_RENAMED'}; flagged={i.get('ref') for f,iss in r['issues_by_file'].items() for i in iss if i.get('ref') in name_drift_refs}; print('FAIL: still flagging '+str(flagged)) if flagged else print('OK'); import sys; sys.exit(1 if flagged else 0)\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-17T16:30:00Z"
+}
