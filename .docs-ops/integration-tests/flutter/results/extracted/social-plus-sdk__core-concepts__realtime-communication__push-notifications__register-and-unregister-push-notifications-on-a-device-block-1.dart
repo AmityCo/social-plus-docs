@@ -1,0 +1,51 @@
+// source: social-plus-sdk/core-concepts/realtime-communication/push-notifications/register-and-unregister-push-notifications-on-a-device.mdx:80-100
+// ignore_for_file: unused_local_variable, unused_import, dead_code
+import 'package:amity_sdk/amity_sdk.dart';
+
+// Stub functions for illustrative UI pseudocode in doc snippets
+void showLoginScreen() {}
+void showLoadingIndicator() {}
+void hideLoadingIndicator() {}
+void proceedToApp() {}
+void showTokenRefreshIndicator() {}
+void handleSessionTermination() {}
+void showError(Object e) {}
+
+Future<void> docSnippet({
+  String apiKey = 'key',
+  String region = 'sg',
+  String userId = 'user-id',
+  String displayName = 'User',
+  String authToken = 'token',
+  String channelId = 'channel-id',
+  String subChannelId = 'sub-channel-id',
+  String messageId = 'message-id',
+  String postId = 'post-id',
+  String communityId = 'community-id',
+  String commentId = 'comment-id',
+  String pollId = 'poll-id',
+  String fileId = 'file-id',
+  String targetUserId = 'target-user-id',
+}) async {
+  void registerNotification(String fcmToken) {
+    /* 
+    ************ IMPORTANT ************
+    Example of getting token from firebase.
+    Please check the platform before getting the token and send token as per platform. 
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      if (Platform.isIOS) {
+        final fcmToken = await messaging.getAPNSToken();
+      } else {
+        final fcmToken = await messaging.getToken();
+      }
+
+    */
+    AmityCoreClient.registerDeviceNotification(fcmToken)
+        .then((value) => {
+              //success
+            })
+        .onError((error, stackTrace) => {
+              //handle error
+            });
+  }
+}

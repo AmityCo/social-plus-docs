@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/chat/messaging-features/messages/flag-unflag-a-message.mdx:1360-1375
+// source: social-plus-sdk/chat/messaging-features/messages/flag-unflag-a-message.mdx:1363-1378
 
     // Example flag confirmation dialog
     function showFlagConfirmation(messageId, reason) {
