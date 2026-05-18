@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/social/content-management/posts/retrieval/viewing-content.mdx:386-426
+// source: social-plus-sdk/social/content-management/posts/retrieval/viewing-content.mdx:387-427
 
 import { FileRepository, PostRepository } from '@amityco/ts-sdk';
 

@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages.mdx:365-390
+// source: social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages.mdx:366-391
 
     import { MessageRepository } from '@amityco/ts-sdk';
     import { useEffect, useState } from 'react';

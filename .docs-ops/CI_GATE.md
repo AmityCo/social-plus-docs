@@ -56,7 +56,7 @@ Increase in count → **FAIL** by definition (always includes new pairs).
 
 ## Doc-as-test layer
 
-In addition to the regex-based drift check, the gate runs **doc-as-test** steps that type-check code blocks from the top-traffic doc pages against the real SDK source. Two languages are currently covered: **TypeScript** (via `tsc --noEmit --strict`) and **Flutter/Dart** (via `dart analyze`).
+In addition to the regex-based drift check, the gate runs **doc-as-test** steps that type-check code blocks from the top-traffic doc pages against the real SDK source. Three languages are currently covered: **TypeScript** (via `tsc --noEmit --strict`), **Flutter/Dart** (via `dart analyze`), and **Android/Kotlin** (via `kotlinc`).
 
 ### What it catches (and what the regex validator misses)
 
@@ -74,7 +74,9 @@ In addition to the regex-based drift check, the gate runs **doc-as-test** steps 
 
 **Flutter/Dart** — **Blocks the push** if `dart analyze` reports any `error`-severity issue on a block. **Warns but does NOT block** on `warning`-severity issues. `info`/lint hints are ignored entirely.
 
-Runner crashes (e.g., `dart` CLI not installed) are **non-blocking** — infra failures shouldn't block pushes.
+**Android/Kotlin** — **Blocks the push** if `kotlinc` reports any error-severity compile failure on a block. Warnings (e.g., deprecation notices) are counted but do NOT block.
+
+Runner crashes (e.g., `dart` CLI not installed, Kotlin compiler not found) are **non-blocking** — infra failures shouldn't block pushes.
 
 ### Opting out per block
 
@@ -94,8 +96,9 @@ Both HTML comment (`<!-- doc-as-test: skip -->`) and JSX comment (`{/* doc-as-te
 
 - **TypeScript** — 28 pages (cohort-balanced selection covering chat + social hot paths). Defined in `.docs-ops/integration-tests/pages.json`.
 - **Flutter/Dart** — 29 pages (same 28 + `flutter-quick-start.mdx`). Defined in `.docs-ops/integration-tests/flutter/pages.json`.
-- **Candidate only** — both checks run against the current working tree, not a baseline comparison.
-- **Future** — iOS and Android doc-as-test coming once those extractors mature.
+- **Android/Kotlin** — 29 pages (same coverage as Flutter). Defined in `.docs-ops/integration-tests/android/pages.json`.
+- **iOS** — the remaining platform; doc-as-test coming once the Swift/Obj-C extractor matures.
+- **Candidate only** — all checks run against the current working tree, not a baseline comparison.
 
 ### Running locally
 
@@ -112,6 +115,11 @@ cd -
 python3 .docs-ops/integration-tests/flutter/extract-blocks.py
 python3 .docs-ops/integration-tests/flutter/run-tests.py
 cat .docs-ops/integration-tests/flutter/results/latest.json | python3 -m json.tool
+
+# Android doc-as-test (extract + compile):
+python3 .docs-ops/integration-tests/android/extract-blocks.py
+python3 .docs-ops/integration-tests/android/run-tests.py
+cat .docs-ops/integration-tests/android/results/latest.json | python3 -m json.tool
 ```
 
 

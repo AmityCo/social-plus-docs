@@ -54,6 +54,12 @@ FL_DAT_EXTRACTOR = FL_DAT_DIR / "extract-blocks.py"
 FL_DAT_RUNNER = FL_DAT_DIR / "run-tests.py"
 FL_DAT_REPORT = FL_DAT_DIR / "results" / "latest.json"
 
+# Doc-as-test paths (Android), relative to repo root.
+AN_DAT_DIR = REPO_ROOT / ".docs-ops/integration-tests/android"
+AN_DAT_EXTRACTOR = AN_DAT_DIR / "extract-blocks.py"
+AN_DAT_RUNNER = AN_DAT_DIR / "run-tests.py"
+AN_DAT_REPORT = AN_DAT_DIR / "results" / "latest.json"
+
 
 class ScriptError(Exception):
     """Raised for environmental / non-drift failures (exit code 2)."""
@@ -299,6 +305,66 @@ def run_flutter_doc_as_test_check() -> dict:
     }
 
 
+def run_android_doc_as_test_check() -> dict:
+    """Run Android doc-as-test framework on the candidate working tree.
+
+    Returns same schema as run_flutter_doc_as_test_check().
+    Blocking = Kotlin compiler error-severity failures.
+    Warnings  = stats.blocks_warned (non-blocking).
+    """
+    if not AN_DAT_EXTRACTOR.exists() or not AN_DAT_RUNNER.exists():
+        return {"available": False, "crashed": False, "crash_reason": "",
+                "stats": {}, "blocking_failures": [], "warning_failures": []}
+
+    env = os.environ.copy()
+    env["SP_SDKS_ROOT"] = str(REPO_ROOT.parent)
+
+    try:
+        run(["python3", str(AN_DAT_EXTRACTOR)], cwd=REPO_ROOT, env=env)
+        run(["python3", str(AN_DAT_RUNNER)], cwd=REPO_ROOT, env=env)
+    except subprocess.CalledProcessError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"runner failed (exit {e.returncode}): {(e.stderr or '').strip()[:200]}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    if not AN_DAT_REPORT.exists():
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": "report not produced after runner completed",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    try:
+        report = json.loads(AN_DAT_REPORT.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return {
+            "available": True, "crashed": True,
+            "crash_reason": f"report JSON invalid: {e}",
+            "stats": {}, "blocking_failures": [], "warning_failures": [],
+        }
+
+    # Android: failures[] only contains error-severity blocks (Kotlin compiler errors).
+    # Warnings are aggregated in stats.blocks_warned, not per-failure.
+    blocking = []
+    for f in report.get("failures", []):
+        blocking.append({
+            "source_page": f.get("source_page", "?"),
+            "source_line_range": f.get("source_line_range", "?"),
+            "errors": f.get("errors", [])[:3],
+        })
+
+    return {
+        "available": True,
+        "crashed": False,
+        "crash_reason": "",
+        "stats": report.get("stats", {}),
+        "blocking_failures": blocking,
+        "warning_failures": [],  # warnings counted in stats.blocks_warned
+    }
+
+
 def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) -> dict:
     base_pairs = pair_set(baseline)
     cand_pairs = pair_set(candidate)
@@ -323,7 +389,7 @@ def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) 
     }
 
 
-def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None) -> None:
+def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None, an_dat: dict | None = None) -> None:
     bar = "═" * 60
     print(bar)
     print("  Docs-Ops Drift Check")
@@ -355,6 +421,7 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
 
     _dat_line("Doc-as-test (TS):     ", ts_dat)
     _dat_line("Doc-as-test (Flutter):", fl_dat)
+    _dat_line("Doc-as-test (Android):", an_dat)
 
     print()
 
@@ -373,8 +440,8 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
             print(f"    + {p['ref']:50s}  in {p['file']}")
         print()
 
-    # Doc-as-test details (TS + Flutter)
-    for label, dat in [("TS", ts_dat), ("Flutter", fl_dat)]:
+    # Doc-as-test details (TS + Flutter + Android)
+    for label, dat in [("TS", ts_dat), ("Flutter", fl_dat), ("Android", an_dat)]:
         if not dat or not dat.get("available") or dat.get("crashed"):
             continue
         if dat["blocking_failures"]:
@@ -385,7 +452,7 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
                 err = f["errors"][0] if f["errors"] else "?"
                 print(f"    - {page}:{lr}  {err}")
             print()
-            runner = "run-tests.py" if label == "TS" else "flutter/run-tests.py"
+            runner = "run-tests.py" if label == "TS" else f"{label.lower()}/run-tests.py"
             print(f"  Fix the type errors above. Run locally:")
             print(f"    python3 .docs-ops/integration-tests/{runner}")
             print()
@@ -403,7 +470,8 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
     regressed = delta["regressed"]
     ts_blocking = ts_dat and ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
     fl_blocking = fl_dat and fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
-    if regressed or ts_blocking or fl_blocking:
+    an_blocking = an_dat and an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
+    if regressed or ts_blocking or fl_blocking or an_blocking:
         if regressed:
             print("  FAIL — fix new drift above, or run the validator locally:")
             print(f"           python3 {TS_VALIDATOR}")
@@ -412,6 +480,8 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
             print("  FAIL — fix TS doc-as-test type errors above.")
         if fl_blocking:
             print("  FAIL — fix Flutter doc-as-test type errors above.")
+        if an_blocking:
+            print("  FAIL — fix Android doc-as-test compile errors above.")
     else:
         print("  PASS — okay to push.")
     print(bar)
@@ -447,35 +517,42 @@ def main(argv: list[str] | None = None) -> int:
 
     delta = compute_delta(baseline, candidate, base_label)
 
-    # Run doc-as-test on candidate working tree (TS + Flutter)
+    # Run doc-as-test on candidate working tree (TS + Flutter + Android)
     ts_dat = run_doc_as_test_check()
     fl_dat = run_flutter_doc_as_test_check()
+    an_dat = run_android_doc_as_test_check()
 
     ts_blocking = ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
     fl_blocking = fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
-    overall_fail = delta["regressed"] or ts_blocking or fl_blocking
+    an_blocking = an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
+    overall_fail = delta["regressed"] or ts_blocking or fl_blocking or an_blocking
 
     if args.quiet:
         sign = "+" if delta["delta_total"] > 0 else ""
         verdict = "FAIL" if overall_fail else "PASS"
         ts_s = ts_dat.get("stats", {})
         fl_s = fl_dat.get("stats", {})
+        an_s = an_dat.get("stats", {})
         ts_b = len(ts_dat.get("blocking_failures", []))
         fl_b = len(fl_dat.get("blocking_failures", []))
+        an_b = len(an_dat.get("blocking_failures", []))
         ts_w = len(ts_dat.get("warning_failures", []))
         fl_w = fl_s.get("total_warnings", 0)
+        an_w = an_s.get("blocks_warned", 0)
         print(f"docs-ops drift: baseline={delta['baseline_total']} candidate={delta['candidate_total']} "
               f"delta={sign}{delta['delta_total']} new_pairs={len(delta['new_pairs'])} "
               f"ts_passed={ts_s.get('blocks_passed', 0)} ts_skipped={ts_s.get('blocks_skipped', 0)} "
               f"ts_blocking={ts_b} fl_passed={fl_s.get('blocks_passed', 0)} "
-              f"fl_skipped={fl_s.get('blocks_skipped', 0)} fl_blocking={fl_b} verdict={verdict}")
+              f"fl_skipped={fl_s.get('blocks_skipped', 0)} fl_blocking={fl_b} "
+              f"an_passed={an_s.get('blocks_passed', 0)} an_skipped={an_s.get('blocks_skipped', 0)} "
+              f"an_blocking={an_b} verdict={verdict}")
     else:
-        print_summary(delta, ts_dat, fl_dat)
+        print_summary(delta, ts_dat, fl_dat, an_dat)
 
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat}
+        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat, "doc_as_test_android": an_dat}
         out_path.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
 
     return 1 if overall_fail else 0
