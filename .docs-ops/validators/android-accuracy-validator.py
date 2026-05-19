@@ -60,6 +60,8 @@ ANDROID_ENUM_ENTRY_ATTRS = {
 KNOWN_VALID_REFS: dict[str, str] = {
     "AmityRoom.ParticipantType.CoHost": "real PascalCase enum entry in AmityRoom.kt; extractor v1.2 only captures UPPER_SNAKE entries",
     "AmityPinnedPost.post": "real data class property `var post: AmityPost?` in AmityPinnedPost.kt; extractor v1.x does not capture data class constructor params (v1.3 gap)",
+    "AmityFcm": "Firebase push notification helper class in separate :amity-push-fcm Gradle module; not in :amity-sdk Dokka scope",
+    "AmityBaidu": "Baidu push notification helper class in separate :amity-push-baidu Gradle module; not in :amity-sdk Dokka scope",
 }
 
 FENCE_RE = re.compile(
@@ -207,6 +209,8 @@ def scan_block(
         if not (leaf_name.startswith("Amity") or leaf_name.startswith("Eko")):
             continue
         if leaf_name in types or leaf_name in interfaces:
+            continue
+        if leaf_name in KNOWN_VALID_REFS:
             continue
         line_in_block = body.count("\n", 0, match.start()) + 1
         issues.append({

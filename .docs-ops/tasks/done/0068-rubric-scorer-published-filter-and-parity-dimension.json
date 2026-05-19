@@ -1,0 +1,40 @@
+{
+  "id": "0068-rubric-scorer-published-filter-and-parity-dimension",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/rubric-scorer/prepare.py",
+    ".docs-ops/rubric-scorer/pages-pilot.json",
+    ".docs-ops/rubric-scorer/prompts/parity.md",
+    ".docs-ops/rubric-scorer/results/clarity-latest.json",
+    ".docs-ops/rubric-scorer/results/clarity-latest-report.md",
+    ".docs-ops/rubric-scorer/results/parity-latest.json",
+    ".docs-ops/rubric-scorer/results/parity-latest-report.md"
+  ],
+  "context_files": [
+    ".docs-ops/rubric.json",
+    "docs.json",
+    ".docs-ops/rubric-scorer/prompts/clarity.md",
+    ".docs-ops/rubric-scorer/collect.py",
+    ".docs-ops/rubric-scorer/render-report.py",
+    ".docs-ops/evals/parity-matrix-quickstarts.json"
+  ],
+  "instructions": "Two changes bundled because they're tightly coupled:\n\n  1. Add a `docs.json`-aware filter to the rubric-scorer so it only scores PUBLISHED pages (Mintlify's source-of-truth navigation). Currently `pages-pilot.json` includes pages that may not be in docs.json (legacy, WIP, internal). The user CTO confirmed this constraint while reviewing 0067's Clarity results.\n  2. Add the next dimension — Cross-platform parity — using the same agent-as-judge harness.\n\n## Part A — docs.json filter\n\n1. In `prepare.py`, add a helper `is_published(page_path) -> bool` that returns True iff the page path appears anywhere in `docs.json` (recursive — `docs.json` has nested `groups` / `pages` arrays per Mintlify's schema). Match exactly on the path string after stripping `.mdx` extension if needed (Mintlify uses extensionless paths in navigation).\n2. Add a `--respect-docs-json` flag (default: True). When true, prepare.py skips any page that fails `is_published()` and logs the skip with a `skipped_unpublished` counter at the end.\n3. Update `pages-pilot.json` if needed: cross-check each pilot page against docs.json. If any pages are NOT in docs.json, REPLACE them with similarly-positioned published pages (preserve the cohort balance — same Eastern/Western/Shared distribution).\n4. Re-run Clarity with the filter to confirm scope. If the 10 original pilot pages were all published, the re-run produces identical results; document this in notes. If any were unpublished, report which were swapped and the re-run is the new baseline.\n\n## Part B — Cross-platform parity dimension\n\nAdd `prompts/parity.md` mirroring the structure of `prompts/clarity.md`. The parity rubric definition is in `.docs-ops/rubric.json` under `dimensions.cross_platform_parity.levels` — quote the 5 levels verbatim.\n\nv1 scoring approach (single-page input — keep harness simple):\n\nThe prompt asks the agent to assess this page's parity character on its own:\n  - Does it explicitly mention platform variants (TS / iOS / Android / Flutter)?\n  - Is the section structure such that platform-specific subsections could plug in equivalently?\n  - Are terminology and concept-naming consistent with how the same feature would be discussed for other platforms?\n  - If the page is one platform's variant of a multi-platform feature, does it match conventional naming (e.g., 'iOS quickstart' shape vs 'TS quickstart' shape)?\n\nSpecifically NOT in v1: cross-page comparison (where the agent would need to read sibling pages to score). v2 can add that — but pilot v1 stays single-page for harness simplicity. Note in `prompts/parity.md` that v1 is single-page-judgment; v2 multi-file is a planned follow-up if scoring proves too imprecise.\n\nPrompt skeleton (Copilot, iterate on this):\n\n```\nYou are scoring a documentation page on the CROSS-PLATFORM PARITY dimension.\n\nThis is social.plus docs — features generally span 4 SDK platforms (TypeScript, iOS, Android, Flutter). Parity means: when a feature is documented, all 4 platforms get equivalent coverage in equivalent structure with equivalent terminology.\n\nRubric (verbatim from .docs-ops/rubric.json):\n  Level 1: <text>\n  Level 2: <text>\n  ...\n  Level 5: <text>\n\nv1 scoring scope: judge THIS page on parity character only (single-page input). If this page is one platform's variant, judge it against conventional cross-platform doc structure. If this page covers a feature for multiple platforms in tabs/sections, judge whether those sections appear equivalent.\n\nPAGE:\n---\n{page_content}\n---\n\nRespond JSON only:\n\n{\n  \"score\": <int 1-5>,\n  \"rationale\": \"<one sentence with specific evidence>\",\n  \"confidence\": \"low|medium|high\",\n  \"suggestions\": [\"<concrete>\", ...]  // omit if score == 5\n}\n```\n\nRun the parity scorer on the same 10 pilot pages (now filtered to published-only). Emit `results/parity-latest.json` + `results/parity-latest-report.md`.\n\n## Part C — Update collect.py + render-report.py for multi-dimension\n\nIf collect.py / render-report.py are currently dimension-specific, refactor minimally so they take a `--dimension` arg and the same code handles any dimension's scored files. This is a tiny refactor — `clarity-*` paths become `<dimension>-*` paths.\n\n## Out of scope\n\n- The other 3 dimensions (Completeness / Examples / AI-consumability) — same pattern, separate tasks.\n- v2 multi-file parity scoring — pilot v1 first.\n- Calibration against human judgment (CTO already spot-checked Clarity scores in 0067 — fair scoring confirmed; parity will need similar spot-check after this lands).\n- Cross-dimension aggregation / overall rubric score — that's a future task once all 5 dimensions are running.\n\n## Success criteria (LOOSE)\n\n- prepare.py recognizes docs.json and filters; documented in notes which pages were swapped.\n- All 10 pilot pages (post-filter) have a valid Clarity score AND a valid parity score.\n- Parity report renders cleanly.\n\nReport in `notes`: which (if any) pilot pages were unpublished and swapped; new Clarity averages (if changed); Parity scoring distribution; honest read on whether parity scoring looks fair or noisy/wishy-washy (if noisy, v2 multi-file is the fix).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "parity_dimension_scored_and_published_filter_works",
+        "command": "test -f .docs-ops/rubric-scorer/results/parity-latest.json && python3 -c \"import json; p=json.load(open('.docs-ops/rubric-scorer/results/parity-latest.json')); c=json.load(open('.docs-ops/rubric-scorer/results/clarity-latest.json')); assert p.get('dimension')=='cross_platform_parity' or p.get('dimension')=='parity'; assert p.get('pages_scored',0)>=8; assert c.get('pages_scored',0)>=8; assert all(1<=x.get('score',0)<=5 for x in p.get('by_page',[])); print('OK clarity_pages={} parity_pages={}'.format(c.get('pages_scored'),p.get('pages_scored')))\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/rubric-scorer/results/parity-latest-report.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T16:00:00Z"
+}

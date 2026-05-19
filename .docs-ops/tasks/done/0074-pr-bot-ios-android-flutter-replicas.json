@@ -1,0 +1,36 @@
+{
+  "id": "0074-pr-bot-ios-android-flutter-replicas",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".github/workflows/sdk-drift-watcher.yml",
+    ".docs-ops/pr-bot/auto-update-from-sdk.py",
+    ".docs-ops/pr-bot/README.md"
+  ],
+  "context_files": [
+    ".github/workflows/sdk-drift-watcher.yml",
+    ".docs-ops/pr-bot/auto-update-from-sdk.py",
+    ".docs-ops/pr-bot/render-pr-comment.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/sdk-surface/flutter.json"
+  ],
+  "instructions": "Replicate the TS PR-bot (0073) for iOS / Android / Flutter. Same daily GH Action; same auto-update-from-sdk.py script; same draft-PR flow. Just three more platforms wired in. Mechanical replication — pattern already proven on TS.\n\n## Part A — Convert workflow to matrix strategy\n\nUpdate `.github/workflows/sdk-drift-watcher.yml` to run against all 4 platforms via GH Actions matrix. One workflow file; runs in parallel against each platform.\n\nMatrix entries need (per platform):\n  - `platform` — the --platform arg name (typescript / ios / android / flutter)\n  - `repo` — the SDK source repo (likely AmityCo/AmityTypescriptSDK, AmityCo/AmitySDKIOS, AmityCo/Amity-Social-Cloud-SDK-Android, AmityCo/Amity-Social-Cloud-SDK-Flutter-Internal — VERIFY exact names by checking the local clones if accessible)\n  - `checkout_path` — where to clone (sibling of docs repo per SP_SDKS_ROOT convention)\n\nAuth: all 4 SDK repos are likely private. The workflow needs a PAT with read access to all 4. Document this in the README — repo admin needs to add a secret (e.g., `SDK_READONLY_PAT`) before the matrix can run. Without it, the TS-only path keeps working (use built-in GITHUB_TOKEN as fallback for TS if its repo is public, else also gated on the PAT).\n\nMatrix `fail-fast: false` so one platform's failure doesn't kill the others. Each platform's run is independent and produces its own PR.\n\nDaily cron stays at 8am UTC. workflow_dispatch input could optionally allow selecting a single platform for ad-hoc runs.\n\n## Part B — Script extensions in `auto-update-from-sdk.py`\n\nThe script already takes `--platform typescript`. Extend to also handle `--platform ios`, `--platform android`, `--platform flutter`. Per platform:\n\n  - Invoke the right extractor (`.docs-ops/extractors/<platform>-extractor.py`)\n  - Read the right baseline surface (`.docs-ops/sdk-surface/<platform>.json`)\n  - Apply the platform's language-appropriate auto-rewrite logic (TS pattern adapts naturally — text substitution inside the platform's code-fence language)\n  - Open a platform-tagged PR branch: `bot/sdk-update-<platform>-<YYYY-MM-DD>`\n\nKey nuances per platform:\n  - **iOS**: extractor runs against the live source (not the binary xcframework used in doc-as-test). Same as how the local iOS extractor works.\n  - **Android**: extractor reads Kotlin + Java files; auto-rewrites need to handle ```kotlin and ```java code blocks.\n  - **Flutter**: extractor uses the main barrel filter; auto-rewrites work in ```dart blocks.\n  - All platforms benefit from the `<!-- doc-as-test: skip -->` markers already in the docs — don't try to auto-rewrite skipped blocks.\n\n## Part C — Append-to-existing-PR per platform\n\nThe append-to-existing logic from 0073 is per-platform. If a Flutter bot PR is open, the next Flutter run appends to it — but iOS gets its own PR. Branch naming with platform suffix (`bot/sdk-update-<platform>-*`) makes this query simple.\n\n## Part D — README updates\n\nDocument:\n  - Required secret: `SDK_READONLY_PAT` (or whatever name) with read on all 4 SDK repos\n  - How to disable a single platform temporarily (comment out its matrix entry)\n  - How to manually trigger per-platform via workflow_dispatch\n  - Expected behavior: most days, no PRs (SDKs don't change daily); when an SDK does change, a single draft PR per affected platform\n\n## Out of scope (deferred from this task)\n\n- iOS-specific complications around xcframework vs source — keep using live source via the SDK repo clone, same as the existing iOS extractor does. If this turns out wrong (e.g., extractor needs the built artifact, not source), flag in notes for follow-up.\n- Cross-platform deduplication — if TWO platforms have the same drift simultaneously (rare), they get two separate PRs. That's fine for v1.\n- Per-platform notification differences — Q4 from the design conversation was 'no notifications'. Holds across all platforms.\n\n## Success criteria (LOOSE — CI infrastructure)\n\n- Workflow file uses matrix strategy with all 4 platforms.\n- Each platform entry has its SDK repo + checkout path defined.\n- `auto-update-from-sdk.py --platform <name> --dry-run` works for all 4 platforms locally (clean exit when no SDK changes, since baseline surfaces are current).\n- README documents the PAT requirement.\n\nReport in `notes`: any SDK repo name corrections you discovered; whether iOS-extractor against live source works fine in this context (it does locally — should also work in CI); any platform-specific quirks worth flagging.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "all_4_platforms_dry_run_cleanly",
+        "command": "python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform typescript --dry-run > /tmp/ts.out 2>&1 && python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform ios --dry-run > /tmp/ios.out 2>&1 && python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform android --dry-run > /tmp/android.out 2>&1 && python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform flutter --dry-run > /tmp/flutter.out 2>&1 && grep -q 'matrix\\|platform:' .github/workflows/sdk-drift-watcher.yml && echo OK",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T22:00:00Z"
+}

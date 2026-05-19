@@ -1,0 +1,77 @@
+name: SDK Drift Watcher
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # daily 8am UTC
+  workflow_dispatch:        # also manually triggerable
+    inputs:
+      platform:
+        description: 'Platform to check (leave blank for all)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - typescript
+          - ios
+          - android
+          - flutter
+
+concurrency:
+  group: sdk-drift-watcher-${{ matrix.platform }}
+  cancel-in-progress: false  # don't stomp on a running bot
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'schedule' ||
+      github.event.inputs.platform == '' ||
+      github.event.inputs.platform == matrix.platform
+    strategy:
+      fail-fast: false   # one platform's failure doesn't kill the others
+      matrix:
+        include:
+          - platform: typescript
+            sdk_repo: AmityCo/AmityTypescriptSDK
+            checkout_path: ../AmityTypescriptSDK
+
+          - platform: ios
+            sdk_repo: AmityCo/AmitySDKIOS
+            checkout_path: ../AmitySDKIOS
+
+          - platform: android
+            sdk_repo: AmityCo/Amity-Social-Cloud-SDK-Android
+            checkout_path: ../Amity-Social-Cloud-SDK-Android
+
+          - platform: flutter
+            sdk_repo: AmityCo/Amity-Social-Cloud-SDK-Flutter-Internal
+            checkout_path: ../Amity-Social-Cloud-SDK-Flutter-Internal
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout ${{ matrix.sdk_repo }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.sdk_repo }}
+          path: ${{ matrix.checkout_path }}
+          token: ${{ secrets.SDK_READONLY_PAT }}   # needs read access to all 4 SDK repos
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run PR-bot (${{ matrix.platform }})
+        env:
+          # Points extractors at the checked-out SDK siblings
+          SP_SDKS_ROOT: ${{ github.workspace }}/..
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform ${{ matrix.platform }}

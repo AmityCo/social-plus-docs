@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED — superseded by ios-docc-extractor.py (ABI-based, task 0076).
+# Retained as a fallback reference. Do not use as primary source.
+# Primary surface source is now .docs-ops/sdk-surface/ios.json produced by ios-docc-extractor.py.
 """
 iOS/Swift SDK public API extractor — v0.1.1
 

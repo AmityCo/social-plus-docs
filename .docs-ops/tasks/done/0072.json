@@ -1,0 +1,39 @@
+{
+  "id": "0072-rubric-scorer-cross-dimension-aggregation",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/rubric-scorer/aggregate.py",
+    ".docs-ops/rubric-scorer/results/overall-latest.json",
+    ".docs-ops/rubric-scorer/results/overall-latest-report.md"
+  ],
+  "context_files": [
+    ".docs-ops/rubric.json",
+    ".docs-ops/rubric-scorer/results/clarity-latest.json",
+    ".docs-ops/rubric-scorer/results/parity-latest.json",
+    ".docs-ops/rubric-scorer/results/completeness-latest.json",
+    ".docs-ops/rubric-scorer/results/examples-latest.json",
+    ".docs-ops/rubric-scorer/results/ai-consumability-latest.json",
+    ".docs-ops/evals/ts-accuracy-drift.json",
+    ".docs-ops/integration-tests/results/latest.json"
+  ],
+  "context_files_note": "Accuracy dimension is NOT scored by an LLM — it's derived from the regex validator + doc-as-test results we already produce. See Part B.",
+  "instructions": "Combine the 5 LLM-judge dimension scores + the accuracy dimension (derived from regex+doc-as-test, no LLM needed) into a per-page weighted overall score. Pure math + rendering — no LLM call.\n\n## Part A — Aggregation script (`aggregate.py`)\n\nReads all 5 `<dimension>-latest.json` files from `results/`. For each page common to all five, computes an overall score as a weighted sum per `.docs-ops/rubric.json` `dimensions.<dim>.weight`:\n\n  accuracy:              0.25\n  completeness:          0.15\n  cross_platform_parity: 0.20\n  examples:              0.15\n  clarity:               0.10\n  ai_consumability:      0.15\n  ---------------------  ----\n  total:                 1.00\n\n## Part B — Accuracy dimension (derived, not LLM-scored)\n\nThe accuracy dimension is the regex validator + doc-as-test output we already produce. Derive a per-page accuracy score (1-5) per these rules:\n\n  - Start at 5.\n  - Subtract 2 if the page appears in any regex drift report (`.docs-ops/evals/*-accuracy-drift.json`) with any flagged issue.\n  - Subtract 2 if the page has any blocking failure in any doc-as-test report (`.docs-ops/integration-tests/*/results/latest.json`).\n  - Subtract 1 if the page has any warning in doc-as-test reports.\n  - Floor at 1.\n\nCurrent state: all 4 platforms at regex drift=0 and doc-as-test 100% pass+skip, so most pages will score 5 on accuracy. Pages with warnings (iOS doc-as-test has 66 warnings, mostly preamble-style) drop to 4. Good ground-truth zero point.\n\n## Part C — Per-page overall record schema\n\n`results/overall-latest.json`:\n\n```json\n{\n  \"generated_at\": \"<iso>\",\n  \"rubric_version\": \"0.1.0\",\n  \"weights\": { \"accuracy\": 0.25, \"completeness\": 0.15, \"cross_platform_parity\": 0.20, \"examples\": 0.15, \"clarity\": 0.10, \"ai_consumability\": 0.15 },\n  \"pages_scored\": 10,\n  \"avg_overall\": 3.91,\n  \"distribution\": { \"1\": 0, \"2\": 0, \"3\": 2, \"4\": 7, \"5\": 1 },\n  \"by_page\": [\n    {\n      \"page\": \"social-plus-sdk/getting-started/authentication.mdx\",\n      \"overall\": 3.65,\n      \"per_dimension\": {\n        \"accuracy\": { \"score\": 5, \"source\": \"derived\" },\n        \"clarity\": { \"score\": 3, \"source\": \"llm-judge\" },\n        \"cross_platform_parity\": { \"score\": 3, \"source\": \"llm-judge\" },\n        \"completeness\": { \"score\": 3, \"source\": \"llm-judge\" },\n        \"examples\": { \"score\": 4, \"source\": \"llm-judge\" },\n        \"ai_consumability\": { \"score\": 3, \"source\": \"llm-judge\" }\n      }\n    }\n  ]\n}\n```\n\nRound `overall` to 2 decimal places. Show floor of overall as the integer-distribution bucket.\n\n## Part D — Renderer (`render-report.py` extension)\n\nExtend the existing render-report.py with `--overall` mode that reads `overall-latest.json` and produces `results/overall-latest-report.md`:\n\n  - Headline: avg overall + distribution histogram\n  - Per-page table sorted by overall ascending (worst first)\n  - Per-dimension column showing each score per page (heat-map-style ASCII: ✓ for 4-5, ~ for 3, ✗ for 1-2)\n  - 'Action priority' section: top-3 pages by lowest overall, with dimension-breakdown so you know WHERE to invest per page\n\nKeep it plain markdown.\n\n## Part E — First run + sanity check\n\nRun aggregate.py. Verify:\n  - All 10 pilot pages have valid overall scores in [1.0, 5.0]\n  - Weights sum to 1.00\n  - Accuracy derivation matches expectation (most pages = 5, iOS pages = 4 if they have doc-as-test warnings)\n  - Overall scores roughly track per-dimension weighted average\n\nReport in `notes`: per-page overall scores sorted worst-first; the 3 worst pages and their per-dimension breakdowns; any pages where the overall score surprised you given the per-dimension scores (e.g., one dimension dominating).\n\n## Out of scope\n\n- CI gate integration of overall scores — much later.\n- Cross-page LLM 'should this page even exist' meta-judgment — different problem.\n- Trend tracking — that's a dashboards extension (after this, can extend the dashboards layer to show overall-score trends).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "aggregate_runs_and_produces_overall_report",
+        "command": "test -f .docs-ops/rubric-scorer/results/overall-latest.json && python3 -c \"import json; d=json.load(open('.docs-ops/rubric-scorer/results/overall-latest.json')); assert d.get('pages_scored',0)>=8; assert all(1.0<=p.get('overall',0)<=5.0 for p in d.get('by_page',[])); ws=d.get('weights',{}); assert abs(sum(ws.values())-1.0)<0.001, f'weights must sum to 1.00, got {sum(ws.values())}'; print(f'OK pages={d.get(\\\"pages_scored\\\")} avg_overall={d.get(\\\"avg_overall\\\"):.2f}')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/rubric-scorer/results/overall-latest-report.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T20:00:00Z"
+}

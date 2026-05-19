@@ -1,0 +1,35 @@
+{
+  "id": "0079-android-dokka-swap-completion",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/extractors/README.md",
+    ".docs-ops/extractors/android-extractor.py"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/android-dokka-extractor.py",
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/sdk-surface/android-from-dokka.json",
+    ".docs-ops/evals/android-surface-comparison.md",
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/tasks/done/0076-ios-docc-swap-completion.json"
+  ],
+  "instructions": "Complete the Android Dokka swap. Shorter than the iOS equivalent (0076) because 0078's comparison artifact already triaged the regex-only items into clean categories (vendor code, suppressed internals, legacy ekoapp). The triage concluded all regex-only items are EXTRACTOR_OVERREACH or correctly-suppressed — no real public API is being dropped by Dokka.\n\n## Part A — Final sanity check\n\nBefore swapping, do one last verification:\n\n1. Re-read `.docs-ops/evals/android-surface-comparison.md` section 3 (in regex, not in Dokka). Spot-check 5-10 randomly-selected refs. Confirm each is either:\n   - Vendor code (third-party lib under amity.* namespace)\n   - Suppressed internal package\n   - Legacy ekoapp namespace\n   - Otherwise clearly not public API\n2. If ANY ref looks like real public API the SDK team intends to expose, STOP and report `unexpected_public_api:<ref>` — don't swap; flag for human review.\n\nExpected outcome: triage holds; swap proceeds.\n\n## Part B — Swap android.json source\n\n1. Replace the contents of `.docs-ops/sdk-surface/android.json` with the output of `android-dokka-extractor.py` (schema-compatible output mode — same shape as the regex extractor's output).\n2. Mark `android-extractor.py` (the regex one) as DEPRECATED with a header comment — mirror what 0076 did for `ios-extractor.py`. Keep in tree as fallback.\n\n## Part C — Re-validate downstream\n\n1. Re-run the Android accuracy validator: `python3 .docs-ops/validators/android-accuracy-validator.py`. Verify drift is still 0 (or DROPS because false positives from the old surface are gone).\n2. Re-run Android doc-as-test: `python3 .docs-ops/integration-tests/android/extract-blocks.py && python3 .docs-ops/integration-tests/android/run-tests.py`. Verify 100% pass+skip still holds.\n3. If either gate reports new false positives (mirroring iOS's `String.self` artifact from 0076), apply a small allowlist fix INLINE — same pattern as 0077 did for iOS. Common candidates for Android: Kotlin stdlib (`String`, `Int`, `List`, `Map`, `Result`), Android platform classes (already mostly allowlisted; verify nothing new appears), Java stdlib (`String`, `Optional`, `Throwable`).\n4. Run the full local CI gate: `python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch`. All 6 checks must remain green.\n\n## Part D — Documentation\n\nUpdate `.docs-ops/extractors/README.md`:\n  - Document the Android migration outcome (mirror the iOS section)\n  - Note Android source is now Dokka GFM output (running from `dokkaHtml` task variant; document if a `dokkaJson` task gets added later)\n  - Two of four platforms now on Option-2 sources (iOS = ABI, Android = Dokka)\n  - TS / Flutter still on regex — sequenced for future migrations\n\n## Out of scope\n\n- TS / Flutter migrations — separate tasks.\n- Wiring Dokka task into CI artifact publishing on the SDK side — that's an SDK-team conversation, not docs-ops scope.\n- Updating doc-as-test to USE the new signature data — separate future task.\n- Schema extension to surface the new richness (parameters, generics) for downstream consumers — separate future task.\n\n## Success criteria\n\n- `android.json` is the Dokka-sourced output.\n- Android validator reports `total_issues: 0`.\n- Android doc-as-test reports `blocks_failed: 0`.\n- Full local CI gate ends in PASS.\n- Old `android-extractor.py` is in the tree with a DEPRECATED header comment.\n\nReport in `notes`: the spot-check results from Part A (refs sampled + their classifications); any inline allowlist additions needed in Part C; the before/after Android validator + doc-as-test stats; any cross-platform-portable lessons (e.g., 'expect vendor-code-overreach class to be the dominant Dokka-vs-regex delta — likely same pattern for any platform with regex extractors').",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "android_swap_complete_and_gates_green",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/android.json')); assert d.get('extractor','').startswith('android-dokka'), f'android.json not swapped: extractor={d.get(\\\"extractor\\\")}'; print('source ok')\" && python3 .docs-ops/extractors/android-dokka-extractor.py > /dev/null 2>&1 && python3 .docs-ops/validators/android-accuracy-validator.py > /dev/null && python3 -c \"import json; r=json.load(open('.docs-ops/evals/android-accuracy-drift.json')); assert r['stats']['total_issues']==0, f'android drift now {r[\\\"stats\\\"][\\\"total_issues\\\"]}; expected 0'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T10:00:00Z"
+}

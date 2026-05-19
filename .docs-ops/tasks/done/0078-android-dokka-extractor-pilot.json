@@ -1,0 +1,35 @@
+{
+  "id": "0078-android-dokka-extractor-pilot",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/android-dokka-extractor.py",
+    ".docs-ops/sdk-surface/android-from-dokka.json",
+    ".docs-ops/evals/android-surface-comparison.md",
+    ".docs-ops/extractors/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/android-extractor.py",
+    ".docs-ops/extractors/ios-docc-extractor.py",
+    ".docs-ops/sdk-surface/android.json",
+    ".docs-ops/evals/ios-surface-comparison.md"
+  ],
+  "instructions": "Second Phase 4 migration. Same pattern as the iOS DocC pilot (0075) — produce a PARALLEL extractor + comparison artifact; don't swap android.json yet. Swap follows in a separate task after the comparison is reviewed.\n\n**Why Android next**: per the CTO's research, the Android SDK already has Dokka wired in `amity-sdk/build.gradle` (`org.jetbrains.dokka:1.9.10`) with explicit `perPackageOption` suppress rules for internal packages. The public/private API boundary is already encoded by the SDK team — Dokka JSON gives us that surface for free.\n\n## Part A — Locate or generate Dokka JSON output\n\nThe Android SDK's existing Dokka config may or may not be wired to produce JSON output specifically. Try these in order:\n\n  1. Check if there's a `dokkaJson` Gradle task in the SDK: `cd ../Amity-Social-Cloud-SDK-Android && ./gradlew tasks --all | grep -i dokka`. If `:amity-sdk:dokkaJson` (or similar) exists, run it: `./gradlew :amity-sdk:dokkaJson`. Output typically at `amity-sdk/build/dokka/json/`.\n  2. If only `dokkaHtml` or `dokkaGfm` tasks exist, check the existing config and ADD a `dokkaJson` block (Dokka supports JSON output via `org.jetbrains.dokka:dokka-base`). Minimal config addition; document the diff in your notes.\n  3. If running Dokka takes too long for a pilot iteration, document that and try `dokkaHtml` instead — its HTML output includes structured data attributes we can parse, though JSON is preferred.\n\nDocument which approach worked in the extractor's docstring + the README.\n\n## Part B — Build the Dokka-based extractor\n\nWrite `.docs-ops/extractors/android-dokka-extractor.py`. Input: path to Dokka's output directory (or specific JSON file). Output: `.docs-ops/sdk-surface/android-from-dokka.json` matching the SAME SCHEMA as the current `android.json` (so downstream validators don't break).\n\nSchema (mirror `android.json` shape):\n\n```json\n{\n  \"extractor_version\": \"0.2.0-dokka\",\n  \"extractor\": \"android-dokka-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_product\": \"AmityAndroidSDK\",\n  \"sdk_dokka_source\": \"<path or build artifact>\",\n  \"types\": { \"<TypeName>\": { ... same shape as current android.json types ... } },\n  \"interfaces\": { ... },\n  \"global_funcs\": [...],\n  \"global_consts\": [...],\n  \"typealiases\": [...],\n  \"stats\": { ... }\n}\n```\n\nMapping from Dokka JSON to our schema:\n  - `class` / `object` / `interface` / `enum class` / `annotation class` → corresponding entries in `types` or `interfaces`\n  - Members of types → captured into the type's `members[]` array (same field shape as current android.json)\n  - Companion-object members → flattened into parent type with `from_companion=true` (same convention as current android-extractor.py)\n  - The `perPackageOption suppress` rules in build.gradle mean Dokka already filters internal packages — we should INHERIT that filter (don't re-filter at extractor time).\n\nBONUS — capture FULL SIGNATURES in optional schema fields (same as iOS DocC pilot did with `signature: {parameters, returns}`). Dokka JSON has `parameters[].type`, `receiver`, `returnType` — capture these under each member's `signature` field. Schema-compatible (extra fields ignored by current downstream).\n\n## Part C — Side-by-side comparison artifact\n\nProduce `.docs-ops/evals/android-surface-comparison.md` — exact same shape as the iOS one. Sections:\n\n1. **Stats delta** — type/interface/member counts; how many were filtered by Dokka's perPackageOption rules vs our regex extractor's path exclusions\n2. **In Dokka, not in regex** — symbols Dokka catches that regex missed (the win case — expect protocol/interface inheritance, generic type params, etc.)\n3. **In regex, not in Dokka** — symbols regex had that Dokka doesn't. Investigate per case: false positives in regex? Or Dokka filter dropping things we want?\n4. **Same name, different shape** — types both extractors found but with different metadata\n5. **Coverage analysis** — Android doc-as-test currently runs clean (no signature findings to compare against, unlike iOS). So instead: would Dokka catch the kind of issues the iOS migration caught (Combine publishers analog → Flow / LiveData analog; protocol members → interface members)?\n6. **Recommendation** — based on the diff, should we swap or hold\n\n## Part D — Update extractors README\n\nAdd a new section to `.docs-ops/extractors/README.md`:\n  - Android Dokka migration in progress\n  - regex `android-extractor.py` still primary; Dokka `android-dokka-extractor.py` is pilot\n  - How to run both and compare\n\n## Out of scope\n\n- Swapping `android.json` as source of truth — pending comparison review (follow-up task 0079).\n- Wiring `dokkaJson` task into the Android SDK build's CI (if it's not already) — that's an SDK-side conversation, not docs-ops scope.\n- TS / Flutter migrations — sequenced after Android.\n- CI integration of the Dokka extractor — currently runs on demand.\n\n## Success criteria (LOOSE — exploratory pilot)\n\n- `android-from-dokka.json` produced with the same schema shape as `android.json`.\n- `android-surface-comparison.md` exists with all 6 sections populated.\n- Per-section findings name specific symbols (not 'looks similar').\n- Recommendation in section 6 is clear and justified.\n\nReport in `notes`: which Dokka invocation approach worked (existing task vs added config); stats delta; honest read on whether Dokka catches things our regex missed AND whether it drops things our regex correctly caught (the iOS migration had both — bonus wins + 52 refs to triage).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "dokka_pilot_produces_parallel_surface_and_comparison",
+        "command": "test -f .docs-ops/sdk-surface/android-from-dokka.json && test -f .docs-ops/evals/android-surface-comparison.md && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/android-from-dokka.json')); assert d.get('extractor','').startswith('android-dokka'); assert 'types' in d and len(d['types']) > 50, f'expected dozens-plus types, got {len(d.get(\\\"types\\\",{}))}'; print(f'OK types={len(d[\\\"types\\\"])} interfaces={len(d.get(\\\"interfaces\\\",{}))}')\"",
+        "expect_in_stdout": "OK types="
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/android-surface-comparison.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T09:00:00Z"
+}
