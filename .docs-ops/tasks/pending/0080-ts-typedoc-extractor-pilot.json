@@ -1,0 +1,37 @@
+{
+  "id": "0080-ts-typedoc-extractor-pilot",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/typescript-typedoc-extractor.py",
+    ".docs-ops/sdk-surface/typescript-from-typedoc.json",
+    ".docs-ops/evals/typescript-surface-comparison.md",
+    ".docs-ops/extractors/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/extractors/ios-docc-extractor.py",
+    ".docs-ops/extractors/android-dokka-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/ios-surface-comparison.md",
+    ".docs-ops/evals/android-surface-comparison.md"
+  ],
+  "instructions": "Third Phase 4 migration pilot. Same pattern as iOS DocC (0075) and Android Dokka (0078) — produce a PARALLEL extractor + comparison artifact; don't swap typescript.json yet. Swap follows in a separate task after the comparison is reviewed.\n\n**Why TS next**: most mature regex baseline (extractor went through v1.0 → v1.1 → v1.2 → v1.3 across the project), largest surface (~1300 namespaced members + 946 Amity globals + 252 enum cases). Sharpest empirical test of whether TypeDoc catches things 4 rounds of regex refinement missed.\n\n## Part A — Run TypeDoc against the TS SDK\n\nTypeDoc is the official TS API doc generator. Runs without SDK-side changes — install via npm and point at the SDK source.\n\n1. From the cloned TS SDK at `AmityTypescriptSDK/` (sibling of social-plus-docs, per `SP_SDKS_ROOT`), run:\n   ```\n   cd AmityTypescriptSDK && npm install --no-save typedoc && npx typedoc --json /tmp/typedoc-output.json src/index.ts\n   ```\n   (Verify the entry point — it may be `packages/sdk/src/index.ts` if the SDK is a monorepo.)\n2. If TypeDoc can't resolve the SDK's tsconfig automatically, point it at the SDK's `tsconfig.json` via `--tsconfig`.\n3. If the SDK's `dist/index.d.ts` is more reliable than parsing source, use that: `npx typedoc --json /tmp/typedoc-output.json dist/index.d.ts`. The `.d.ts` is post-compile so it's authoritative on what's actually exported.\n\nDocument which approach worked in the extractor's docstring + the README.\n\n## Part B — Build the TypeDoc-based extractor\n\nWrite `.docs-ops/extractors/typescript-typedoc-extractor.py`. Input: path to TypeDoc JSON output. Output: `.docs-ops/sdk-surface/typescript-from-typedoc.json` matching the SAME SCHEMA as the current `typescript.json` (so downstream validators don't break).\n\nSchema (mirror current typescript.json shape):\n\n```json\n{\n  \"extractor_version\": \"0.2.0-typedoc\",\n  \"extractor\": \"typescript-typedoc-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_package\": \"@amityco/ts-sdk\",\n  \"sdk_typedoc_source\": \"<path or version>\",\n  \"namespaces\": { ... same shape, with nested sub_namespaces ... },\n  \"root_exports\": [ ... ],\n  \"stats\": { ... }\n}\n```\n\nKey mappings from TypeDoc JSON:\n  - `kind: 'Module'` or `kind: 'Namespace'` → namespace entry\n  - `kind: 'Class' | 'Interface' | 'Enum' | 'TypeAlias' | 'Variable' | 'Function'` → member of containing namespace\n  - `kind: 'Method' | 'Property' | 'EnumMember'` → member of containing type\n  - TypeDoc represents `export * as Sub from '...'` as a Module/Namespace reference; preserve as `sub_namespaces` (same shape as current extractor)\n  - The current regex extractor specifically captures `declare global namespace Amity { ... }` from `@types/` files; verify TypeDoc captures these too. If not (TypeDoc may or may not pick up ambient module augmentations), document the gap.\n\nBONUS — capture FULL SIGNATURES in optional schema fields (same as iOS DocC / Android Dokka pilots). TypeDoc has `signatures[].parameters[].type`, `signatures[].type` (return), `typeParameters[]` (generics). Capture under each member's `signature` field. Schema-compatible (extra fields ignored).\n\n## Part C — Side-by-side comparison artifact\n\nProduce `.docs-ops/evals/typescript-surface-comparison.md`. Same 6 sections as iOS/Android comparisons:\n\n1. **Stats delta** — namespace counts, namespaced member totals, root export counts, etc.\n2. **In TypeDoc, not in regex** — symbols TypeDoc catches that the 1.3-version regex extractor missed. Specifically check: did regex's `Amity` global namespace pass miss anything that TypeDoc's full type resolution captures? Did the 3 unhandled cases in regex (named re-exports through multi-level barrels) get resolved by TypeDoc?\n3. **In regex, not in TypeDoc** — symbols regex had that TypeDoc doesn't. Investigate per case: regex over-counting? Or TypeDoc filtering correctly?\n4. **Same name, different shape** — types both extractors found but with different kind/path metadata\n5. **Coverage analysis** — TS regex extractor went through 4 versions of refinement and has been the most mature. The question is: does TypeDoc catch anything that survived ALL that refinement? If yes → strong case for migration. If no → regex was actually sufficient for TS.\n6. **Recommendation** — based on the diff, should we swap or hold (or keep regex as primary if TypeDoc has gaps that survived all refinement)\n\n## Part D — Update extractors README\n\nAdd a section noting TS Dokka migration pilot in progress. Update the platform-status summary table at the top — TS Phase 4 status shifts from 'pending' to 'pilot in progress'.\n\n## Out of scope\n\n- Swapping `typescript.json` as source of truth — pending comparison review (follow-up task 0081).\n- Wiring TypeDoc into the TS SDK build's CI to publish JSON artifacts on release — separate SDK-team conversation.\n- Flutter dart doc migration — sequenced after TS proves the pattern.\n- Updating downstream consumers (regex validator, doc-as-test) to use the new signature richness — separate future task.\n\n## Success criteria (LOOSE — exploratory pilot)\n\n- `typescript-from-typedoc.json` produced with the same schema shape as `typescript.json`.\n- `typescript-surface-comparison.md` exists with all 6 sections populated.\n- Per-section findings name specific symbols.\n- Recommendation in section 6 is clear and justified.\n\nReport in `notes`: which TypeDoc invocation worked (source vs .d.ts); stats delta; honest read on whether TypeDoc caught anything that survived 4 rounds of regex refinement — if not, the migration is more about removing technical debt than catching bugs (still worthwhile, but the framing is different from iOS/Android).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "typedoc_pilot_produces_parallel_surface_and_comparison",
+        "command": "test -f .docs-ops/sdk-surface/typescript-from-typedoc.json && test -f .docs-ops/evals/typescript-surface-comparison.md && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/typescript-from-typedoc.json')); assert d.get('extractor','').startswith('typescript-typedoc'); assert 'namespaces' in d and len(d['namespaces']) > 10, f'expected many namespaces, got {len(d.get(\\\"namespaces\\\",{}))}'; print(f'OK namespaces={len(d[\\\"namespaces\\\"])} root_exports={len(d.get(\\\"root_exports\\\",[]))}')\"",
+        "expect_in_stdout": "OK namespaces="
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/typescript-surface-comparison.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T11:00:00Z"
+}
