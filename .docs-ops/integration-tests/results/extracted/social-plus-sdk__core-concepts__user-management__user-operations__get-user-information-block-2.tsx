@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/core-concepts/user-management/user-operations/get-user-information.mdx:161-219
+// source: social-plus-sdk/core-concepts/user-management/user-operations/get-user-information.mdx:146-204
 
 import { UserRepository } from '@amityco/ts-sdk';
 
