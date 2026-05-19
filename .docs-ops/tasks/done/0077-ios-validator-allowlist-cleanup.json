@@ -1,0 +1,30 @@
+{
+  "id": "0077-ios-validator-allowlist-cleanup",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/evals/ios-accuracy-drift.json"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ios-accuracy-validator.py",
+    ".docs-ops/validators/android-accuracy-validator.py",
+    ".docs-ops/validators/flutter-accuracy-validator.py",
+    ".docs-ops/evals/ios-accuracy-drift.json"
+  ],
+  "instructions": "Two false positives appeared in the iOS validator after the 0076 surface swap (more comprehensive ABI surface revealed validator-side matching gaps). Both are validator-side, not surface-side. Two small fixes:\n\n## Fix 1: Swift stdlib + Foundation allowlist\n\n`String.self` was flagged in edit-comment.mdx. `String` is Swift standard library, not AmitySDK. The Android validator has analogous `Environment`/`Context`/etc. allowlist for platform classes (per task 0039). Mirror that pattern for iOS.\n\nAdd a SWIFT_PLATFORM_ALLOWLIST to ios-accuracy-validator.py covering common Swift stdlib + Foundation + UIKit + SwiftUI types that may appear in iOS doc code blocks but aren't AmitySDK refs. Minimum set:\n\n  String, Int, Double, Float, Bool, Array, Dictionary, Set, Optional,  // stdlib\n  Bundle, URL, Data, Date, FileManager, NotificationCenter, UserDefaults,  // Foundation\n  UIView, UIViewController, UIImage, UIColor, UIApplication,  // UIKit\n  View, Text, Image, Button, NavigationView,  // SwiftUI\n  Result, Error, Task, MainActor  // common Swift concurrency\n\nWhen a ref's top-level type matches an allowlist entry, skip the validation (treat as valid platform-class reference). Keep the allowlist tight — only add classes that DO appear in the current drift report or are universally common.\n\n## Fix 2: uikit/ path exclusion\n\n`Bundle.main.path` was flagged from `uikit/customization/component-styling.mdx` — that's the UIKit SDK docs path, not the core iOS SDK. The Flutter validator has `EXCLUDED_PREFIXES` covering `uikit/` and `social-plus-sdk/video-new/` per task 0034 — mirror that for iOS.\n\nAdd EXCLUDED_PREFIXES to ios-accuracy-validator.py:\n  - `uikit/` (Amity UIKit iOS SDK docs — separate from core)\n  - `social-plus-sdk/video-new/` (Live Streaming SDK)\n\nWhen a page path starts with one of these prefixes, skip it during scan.\n\n## Verification\n\nAfter both fixes, re-run the iOS validator. The 2 false positives should be gone (`total_issues: 0`). Make sure no LEGITIMATE drift is newly hidden — spot-check the allowlist isn't too broad (e.g., `String.specificAmityMethod` would still be flagged because `specificAmityMethod` wouldn't be in the surface).\n\n## Out of scope\n\n- Swift compiler-level recognition of imported modules (too complex for v1; the allowlist is fine).\n- Same allowlist for Android/Flutter (already done in those validators in earlier rounds).\n\n## Success criteria\n\n- iOS validator reports `total_issues: 0` after the fixes.\n- The allowlist + EXCLUDED_PREFIXES are documented in the file with comments explaining why each entry is included.\n\nReport in `notes`: the exact allowlist + EXCLUDED_PREFIXES values added; any other refs in the current drift report that LOOK like they should be allowlist candidates (so we don't ship a too-narrow allowlist that breaks on the next surface bump).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_validator_clean_after_allowlist",
+        "command": "python3 .docs-ops/extractors/ios-docc-extractor.py > /dev/null && python3 .docs-ops/validators/ios-accuracy-validator.py > /dev/null && python3 -c \"import json; d=json.load(open('.docs-ops/evals/ios-accuracy-drift.json')); s=d['stats']; print(f'iOS drift: {s.get(\\\"total_issues\\\",0)}'); assert s.get('total_issues',1) == 0, f'expected 0, got {s.get(\\\"total_issues\\\")}'\"",
+        "expect_in_stdout": "iOS drift: 0"
+      }
+    ],
+    "rubric_must_not_regress": true
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T23:45:00Z"
+}

@@ -37,6 +37,36 @@ SWIFT_ENUM_ENTRY_ATTRS = {
     "rawValue", "hashValue", "name", "ordinal", "description", "debugDescription",
 }
 
+# Path prefixes (relative to repo root) to skip entirely.
+# uikit/ — Amity UIKit iOS SDK docs, a separate product not in ios.json surface.
+# social-plus-sdk/video-new/ — Live Streaming SDK (EkoStreamPublisher scope).
+EXCLUDED_PATH_PREFIXES = ("uikit/", "social-plus-sdk/video-new/")
+
+# Swift stdlib / Foundation / UIKit / SwiftUI types that may appear in iOS doc
+# code blocks but are NOT AmitySDK types.  When a dotted ref's type_name matches
+# one of these, skip the ref entirely — it's a platform call, not an SDK call.
+# Keep tight: only types that have appeared in drift reports or are universally
+# common in iOS sample code.
+SWIFT_PLATFORM_TYPES = {
+    # Swift stdlib
+    "String", "Int", "Double", "Float", "Bool",
+    "Array", "Dictionary", "Set", "Optional",
+    # Foundation
+    "Bundle", "URL", "Data", "Date",
+    "FileManager", "NotificationCenter", "UserDefaults",
+    "DispatchQueue", "OperationQueue", "Timer",
+    "JSONDecoder", "JSONEncoder",
+    # UIKit
+    "UIView", "UIViewController", "UIImage", "UIColor",
+    "UIApplication", "UINavigationController", "UITableView",
+    "UICollectionView", "UILabel", "UIButton",
+    # SwiftUI
+    "View", "Text", "Image", "Button", "NavigationView",
+    "List", "VStack", "HStack", "ZStack",
+    # Swift concurrency / error handling
+    "Result", "Error", "Task", "MainActor",
+}
+
 # Known valid import modules (SDK umbrella + well-known system frameworks)
 KNOWN_VALID_IMPORTS = {
     # SDK modules — core
@@ -191,6 +221,8 @@ def scan_swift_block(
                 full_ref = f"{type_name}.{member_path}"
                 if full_ref in KNOWN_VALID_REFS:
                     continue  # confirmed valid in source; extractor blind spot
+                if type_name in SWIFT_PLATFORM_TYPES:
+                    continue  # Swift stdlib/Foundation/UIKit/SwiftUI — not Amity SDK
                 line_in_block = body.count("\n", 0, m.start()) + 1
                 issues.append({
                     "kind": "unknown_type_member",
@@ -234,6 +266,7 @@ def main() -> int:
         if ".docs-ops/" not in str(f.relative_to(DOCS_REPO_ROOT))
         and "node_modules/" not in str(f)
         and ".pytest_cache/" not in str(f)
+        and not str(f.relative_to(DOCS_REPO_ROOT)).startswith(EXCLUDED_PATH_PREFIXES)
     ]
 
     per_file_issues: dict[str, list[dict]] = {}
