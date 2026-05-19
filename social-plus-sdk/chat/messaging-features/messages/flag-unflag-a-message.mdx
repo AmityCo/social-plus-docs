@@ -113,68 +113,33 @@ Report inappropriate messages to help maintain community safety and compliance w
         private let messageRepository: AmityMessageRepository
         
         init() {
-            self.messageRepository = AmityMessageRepository(client: AmityUIKitManagerInternal.shared.client)
+            self.messageRepository = AmityMessageRepository()
         }
         
         func flagMessage(
             messageId: String,
-            reason: AmityContentFlagReason,
-            customReason: String? = nil
-        ) {
-            // Create flag request
-            var flagBuilder = messageRepository.flag(messageId: messageId)
-                .reason(reason)
-            
-            // Add custom reason for "Others" category
-            if reason == .others, let customText = customReason {
-                flagBuilder = flagBuilder.customReason(customText)
-            }
-            
-            // Submit flag
-            flagBuilder.flag { [weak self] result in
-                switch result {
-                case .success:
-                    self?.handleFlagSuccess(messageId: messageId, reason: reason)
-                case .failure(let error):
-                    self?.handleFlagError(error: error, messageId: messageId)
-                }
-            }
-        }
-        
-        private func handleFlagSuccess(messageId: String, reason: AmityContentFlagReason) {
-            print("Message \(messageId) flagged successfully with reason: \(reason)")
-            
-            DispatchQueue.main.async {
-                // Update UI to show flagged state
-                self.showFlagSuccessMessage()
-                self.updateMessageUI(messageId: messageId, isFlagged: true)
-            }
-        }
-        
-        private func handleFlagError(error: AmityError, messageId: String) {
-            print("Failed to flag message \(messageId): \(error.localizedDescription)")
-            
-            DispatchQueue.main.async {
-                // Show error message to user
-                self.showErrorAlert(
-                    title: "Flag Failed",
-                    message: "Unable to flag this message. Please try again."
-                )
+            reason: AmityContentFlagReason
+        ) async {
+            do {
+                try await messageRepository.flagMessage(withId: messageId, reason: reason)
+                print("Message \(messageId) flagged successfully with reason: \(reason.description)")
+            } catch {
+                print("Failed to flag message \(messageId): \(error.localizedDescription)")
             }
         }
         
         // Convenience method for common flag reasons
-        func flagForHarassment(messageId: String) {
-            flagMessage(messageId: messageId, reason: .harassmentOrBullying)
+        func flagForHarassment(messageId: String) async {
+            await flagMessage(messageId: messageId, reason: .harassmentOrBullying)
         }
         
-        func flagForSpam(messageId: String) {
-            flagMessage(messageId: messageId, reason: .spamOrScams)
+        func flagForSpam(messageId: String) async {
+            await flagMessage(messageId: messageId, reason: .spamOrScams)
         }
         
-        func flagWithCustomReason(messageId: String, reason: String) {
+        func flagWithCustomReason(messageId: String, reason: String) async {
             let trimmedReason = String(reason.prefix(300)) // Limit to 300 chars
-            flagMessage(messageId: messageId, reason: .others, customReason: trimmedReason)
+            await flagMessage(messageId: messageId, reason: .others(trimmedReason))
         }
     }
     ```
@@ -1417,18 +1382,21 @@ Flagged messages appear in the admin console for review and moderation actions b
     - **User Feedback**: Provide clear error messages and recovery options
     
     ```swift
-    func handleFlagError(_ error: AmityError) {
-        switch error.code {
-        case .networkError:
+    func handleFlagError(_ error: Error) {
+        let nsError = error as NSError
+        guard let errorCode = AmityErrorCode(rawValue: nsError.code) else {
+            showErrorMessage("Unable to flag message. Please try again.")
+            return
+        }
+        switch errorCode {
+        case .connectionError:
             showRetryOption("Network error. Please check your connection.")
         case .permissionDenied:
-            showError("You don't have permission to flag this message.")
-        case .rateLimitExceeded:
-            showError("Too many requests. Please try again later.")
-        case .alreadyFlagged:
-            showInfo("You have already flagged this message.")
+            showErrorMessage("You don't have permission to flag this message.")
+        case .rateLimit:
+            showErrorMessage("Too many requests. Please try again later.")
         default:
-            showError("Unable to flag message. Please try again.")
+            showErrorMessage("Unable to flag message. Please try again.")
         }
     }
     ```
