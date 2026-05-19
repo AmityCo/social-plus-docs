@@ -1,0 +1,33 @@
+{
+  "id": "0059-ios-doc-as-test-cleanup-to-95-percent",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/integration-tests/ios/preamble.swift",
+    ".docs-ops/integration-tests/ios/extract-blocks.py",
+    ".docs-ops/integration-tests/ios/run-tests.py",
+    ".docs-ops/integration-tests/ios/results/latest.json"
+  ],
+  "context_files": [
+    ".docs-ops/integration-tests/ios/results/latest.json",
+    ".docs-ops/integration-tests/ios/README.md",
+    ".docs-ops/integration-tests/ios/preamble.swift",
+    ".docs-ops/integration-tests/flutter/preamble.dart",
+    ".docs-ops/integration-tests/android/preamble.kt"
+  ],
+  "instructions": "Drive the iOS doc-as-test pass+skip rate from 10% → ≥95%. First-run report shows 74 blocks extracted, only 7 passed, 67 failed. The iOS framework was built in 0058 using Option C (swiftc -typecheck against published xcframework v8.1.1).\n\n## Part A — Diagnose first (don't blindly skip everything)\n\nRead `.docs-ops/integration-tests/ios/results/latest.json` and categorize ALL 67 failures by failure pattern. Common Swift compiler error classes to bucket by:\n\n  - `cannot find 'X' in scope` — preamble gap (X is a context var or SDK type not declared) OR docs reference a real undefined symbol\n  - `cannot find type 'X' in scope` — preamble missing a type declaration OR docs use a fabricated type\n  - `value of type 'X' has no member 'Y'` — REAL DRIFT (X exists, Y doesn't — would have type-errored for a copy-pasting developer)\n  - `extra argument` / `missing argument` — REAL DRIFT (signature mismatch)\n  - `cannot convert value of type` — REAL DRIFT (wrong arg type)\n  - parse errors (`expected expression`, `expected '}'`) — illustrative pseudocode, skip-marker candidate\n  - `module 'X' not found` — toolchain issue (an import doesn't resolve against the v8.1.1 xcframework). Could mean: docs reference a sub-module the binary doesn't expose, OR docs reference a version-mismatched API.\n\nWrite the bucket counts to your `notes` field. This is the most important deliverable of this task — it tells the next iteration whether to invest in preamble expansion vs SDK-version alignment vs doc fixes.\n\n## Part B — Version skew check\n\nBefore any other fix, determine: does the docs corpus reference a different AmitySDK version than v8.1.1 (what 0058 downloaded)?\n\n  1. Check `social-plus-sdk/getting-started/platform-setup/mobile/ios-quick-start.mdx` and `social-plus-sdk/getting-started/authentication.mdx` for any version strings.\n  2. Check if the iOS SDK source repo at `AmitySDKIOS/` indicates a different version (look for VERSION file, podspec, README).\n  3. If there's a meaningful version gap (e.g., docs target v9.x but framework is v8.1.1), STOP and report `version_skew_blocking`. Don't try to fix individual failures — the right move is to download a newer xcframework first. This may need its own follow-up task.\n\n## Part C — Preamble expansion (if version is fine)\n\nIf version is current, most 'cannot find X in scope' failures are probably preamble gaps. Compare to the TS preamble (which has Amity.Comment, Amity.Post, etc.) and the Android preamble (which has AmityChannel, AmityMessage). The iOS preamble likely needs more types declared. Common iOS types that may be missing:\n\n  - `AmityCommunityRepository`, `AmityPostRepository`, `AmityCommentRepository`, `AmityChannelRepository`, `AmityUserRepository`, `AmityFileRepository` (as instances, not statics — iOS uses init())\n  - `AmityCollection<T>` — common generic return type\n  - `AmityNotificationToken` — common subscription handle\n  - Helper types like `AmityPostBuilder`, `AmityCommentBuilder`\n\nAdd as `let` declarations or `inout` params. Verify each name exists in `.docs-ops/sdk-surface/ios.json` before adding — don't fabricate.\n\n## Part D — Skip-marker per illustrative block\n\nFor blocks that are genuinely illustrative pseudocode (UIKit view scaffolds, SwiftUI snippets, abbreviated `// ...` blocks), add the `<!-- doc-as-test: skip (reason) -->` marker per the established pattern. Same skip-marker syntax as TS/Flutter/Android.\n\n## Part E — Flag real bugs (don't auto-fix)\n\nFor blocks that fail with `has no member` / `extra argument` / `missing argument` errors (REAL DRIFT class), do NOT auto-fix the doc. Report each in `notes` as `needs_doc_fix` with the file:line, error, and likely correction (per the iOS SDK surface). These become a separate triage task — same pattern as the Flutter cleanup that found 2 real bugs (0053, 0054).\n\n## Part F — Re-run and report\n\nAfter Parts A-E, re-extract + re-run. Target metrics:\n  - pass+skip rate ≥ 95%\n  - Any remaining failures are either `needs_doc_fix` (real bugs, flagged for separate task) OR `version_skew` (toolchain issue, flagged)\n  - blocks_failed where fix path is unclear: 0 ideally, single digits acceptable\n\n## Rules\n\n- Don't modify the SDK source.\n- Don't modify doc CODE silently — only adding skip-marker comments is allowed.\n- Don't expand preamble with fabricated types.\n- If you discover the toolchain choice (Option C) is fundamentally limiting (e.g., binary xcframework doesn't expose enough symbols for the docs to type-check), report `toolchain_change_needed` in notes — better to surface than to paper over.\n\nReport in `notes`: bucket counts from Part A; version skew status from Part B; preamble additions from Part C; per-block skip decisions from Part D; per-block real-bug findings from Part E; final pass+skip rate; recommended next task (cleanup is enough OR toolchain change OR real-bug-fix follow-up).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_pass_or_skip_rate_above_95_or_diagnostic_complete",
+        "command": "test -f .docs-ops/integration-tests/ios/results/latest.json && python3 -c \"import json; d=json.load(open('.docs-ops/integration-tests/ios/results/latest.json')); s=d['stats']; passed=s.get('blocks_passed',0); skipped=s.get('blocks_skipped',0); extracted=s.get('blocks_extracted',0); rate=(passed+skipped)/max(extracted,1); print(f'pass+skip rate: {rate:.1%} ({passed}+{skipped}/{extracted})'); ok = (rate >= 0.95) or (s.get('blocks_failed',0) < 10); assert ok, f'rate too low and too many failures remain: {rate:.1%}, failed={s.get(\\\"blocks_failed\\\")}'\"",
+        "expect_in_stdout": "pass+skip rate"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T09:00:00Z"
+}
