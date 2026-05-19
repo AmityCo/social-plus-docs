@@ -1,23 +1,35 @@
-# SDK Drift Watcher — PR-bot for TypeScript
+# SDK Drift Watcher — PR-bot (all 4 platforms)
 
-Automatically detects surface changes in AmityTypescriptSDK and opens a draft PR in this docs repo with auto-applied renames.
+Automatically detects surface changes in all 4 Amity SDK repos and opens a draft PR in this docs repo with auto-applied renames. Runs daily as a 4-platform matrix GH Action.
+
+## Supported platforms
+
+| Platform | SDK repo | Surface file |
+|---|---|---|
+| TypeScript | `AmityCo/AmityTypescriptSDK` | `sdk-surface/typescript.json` |
+| iOS | `AmityCo/AmitySDKIOS` | `sdk-surface/ios.json` |
+| Android | `AmityCo/Amity-Social-Cloud-SDK-Android` | `sdk-surface/android.json` |
+| Flutter | `AmityCo/Amity-Social-Cloud-SDK-Flutter-Internal` | `sdk-surface/flutter.json` |
 
 ## How it works
 
 ```
 Daily 8am UTC (or workflow_dispatch)
   │
-  ├─ Clone AmityTypescriptSDK @ HEAD
-  ├─ Re-run TS extractor → candidate surface
-  ├─ Diff candidate vs committed sdk-surface/typescript.json
+  ├─ [Matrix: typescript / ios / android / flutter — runs in parallel]
   │
-  ├─ No diff? → exit cleanly (no PR created — most days)
+  ├─ Clone SDK repo @ HEAD
+  ├─ Re-run platform extractor → candidate surface
+  ├─ Diff candidate vs committed sdk-surface/<platform>.json
+  │
+  ├─ No diff? → exit cleanly (no PR — most days)
   │
   └─ Diff found?
        ├─ Classify: ADDED / REMOVED / RENAMED
-       ├─ Apply auto-renames to .mdx code blocks (conservative: same file:line OR Levenshtein < 0.3)
-       ├─ Update sdk-surface/typescript.json to new candidate
-       ├─ Commit + push to branch bot/sdk-update-YYYY-MM-DD
+       ├─ Apply auto-renames to .mdx code blocks
+       │   (conservative: same file:line OR Levenshtein < 0.30)
+       ├─ Update sdk-surface/<platform>.json to new candidate
+       ├─ Commit + push to branch bot/sdk-update-<platform>-YYYY-MM-DD
        └─ Open (or update existing) draft PR with structured comment
 ```
 
@@ -26,17 +38,28 @@ Daily 8am UTC (or workflow_dispatch)
 | File | Purpose |
 |---|---|
 | `auto-update-from-sdk.py` | Main bot script — extract, diff, rename, PR |
-| `render-pr-comment.py` | Render `pr-comment-data.json` → markdown comment |
-| `results/pr-comment-data.json` | Last run's diff data (gitignored) |
-| `results/pr-comment.md` | Last run's rendered comment (gitignored) |
-| `.github/workflows/sdk-drift-watcher.yml` | Daily GH Action |
+| `render-pr-comment.py` | Render `pr-comment-data-<platform>.json` → markdown comment |
+| `results/pr-comment-data-<platform>.json` | Last run's diff data (gitignored) |
+| `results/pr-comment-<platform>.md` | Last run's rendered comment (gitignored) |
+| `.github/workflows/sdk-drift-watcher.yml` | Daily GH Action (matrix) |
+
+## Required secrets
+
+All 4 SDK repos are private. The workflow needs:
+
+| Secret | Value |
+|---|---|
+| `SDK_READONLY_PAT` | GitHub PAT with `contents: read` on all 4 SDK repos |
+
+Create the PAT under the bot account or a service account. Set it in **Settings → Secrets → Actions → New repository secret**.
 
 ## Manually triggering
 
-Go to **Actions → SDK Drift Watcher → Run workflow** in the GitHub UI, or:
+Go to **Actions → SDK Drift Watcher → Run workflow** in the GitHub UI. You can optionally pick a single platform from the dropdown (leave blank for all 4), or use:
 
 ```sh
-gh workflow run sdk-drift-watcher.yml
+gh workflow run sdk-drift-watcher.yml                       # all 4 platforms
+gh workflow run sdk-drift-watcher.yml -f platform=ios       # one platform
 ```
 
 ## When a draft PR appears
@@ -48,20 +71,32 @@ gh workflow run sdk-drift-watcher.yml
 
 ## Local dry-run
 
-```sh
-# Ensure AmityTypescriptSDK is cloned as a sibling:
-# sp-sdks/AmityTypescriptSDK
-# sp-sdks/social-plus-docs
+All 4 SDK repos must be cloned as siblings of `social-plus-docs/`:
 
-cd social-plus-docs
-python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform typescript --dry-run
+```
+sp-sdks/
+  social-plus-docs/          ← this repo
+  AmityTypescriptSDK/
+  AmitySDKIOS/
+  Amity-Social-Cloud-SDK-Android/
+  Amity-Social-Cloud-SDK-Flutter-Internal/
 ```
 
-The dry-run logs what would change but makes no commits and opens no PR.
+Then:
 
-## Disabling temporarily
+```sh
+cd social-plus-docs
+python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform typescript --dry-run
+python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform ios --dry-run
+python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform android --dry-run
+python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform flutter --dry-run
+```
 
-Comment out the `cron:` line in `.github/workflows/sdk-drift-watcher.yml`. The `workflow_dispatch:` trigger still works for manual runs.
+Each dry-run logs what would change but makes no commits and opens no PR.
+
+## Disabling a platform temporarily
+
+To skip one platform, comment out its entry in the `matrix.include` list in `.github/workflows/sdk-drift-watcher.yml`. The other platforms continue to run unaffected.
 
 ## Rename heuristic
 
@@ -73,14 +108,7 @@ When uncertain, the bot leaves the ref as REMOVED (in "Needs your review") rathe
 
 ## When this WON'T work
 
-- **SDK repo goes private**: add a `token: ${{ secrets.SDK_READ_PAT }}` to the checkout step and create a PAT with `contents: read` on the SDK repo
-- **SDK repo moves**: update `repository: AmityCo/AmityTypescriptSDK` in the workflow
-- **Extractor breaks on a new SDK barrel pattern**: the extractor may need updating before the bot can diff correctly — check `.docs-ops/extractors/typescript-extractor.py`
+- **`SDK_READONLY_PAT` missing or expired**: workflow will fail at the SDK checkout step — renew the PAT and update the secret
+- **SDK repo moves**: update the `sdk_repo` value in the relevant matrix entry in the workflow
+- **Extractor breaks on a new SDK pattern**: the per-platform extractor may need updating — check `.docs-ops/extractors/<platform>-extractor.py`
 - **`GITHUB_TOKEN` lacks PR-write scope**: check the `permissions:` block in the workflow; the token needs `contents: write` + `pull-requests: write`
-
-## Platform expansion
-
-iOS / Android / Flutter bots follow the same shape. After TS proves the pattern, replicate:
-1. Add `--platform <platform>` branch to `auto-update-from-sdk.py`
-2. Add a job to `sdk-drift-watcher.yml` (or a new workflow per platform)
-3. Each platform needs its own extractor and SDK checkout path
