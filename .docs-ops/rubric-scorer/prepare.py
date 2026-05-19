@@ -137,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
 
         content = full_path.read_text(encoding="utf-8")
         prompt = template.replace("{page_content}", content)
+        # Substitute any extra placeholders (e.g. {llms_txt} for ai-consumability)
+        llms_txt_path = REPO_ROOT / "llms.txt"
+        if "{llms_txt}" in prompt and llms_txt_path.exists():
+            prompt = prompt.replace("{llms_txt}", llms_txt_path.read_text(encoding="utf-8"))
         prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
         slug = page_slug(page_path)
