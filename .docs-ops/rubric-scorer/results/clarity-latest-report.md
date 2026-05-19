@@ -1,6 +1,6 @@
 # Rubric Scorer — Clarity Dimension
 
-_Generated: 2026-05-19T06:17:32Z · model: ? · rubric: v0.1.0_
+_Generated: 2026-05-19T07:12:15Z · model: ? · rubric: v0.1.0_
 
 ## Headline
 
@@ -20,7 +20,7 @@ _Generated: 2026-05-19T06:17:32Z · model: ? · rubric: v0.1.0_
 
 | Page | Cohort | Score | Confidence | Rationale |
 |---|---|---|---|---|
-| `chat/messaging-features/messages/flag-unflag-a-message.mdx` | eastern | 🟠 2 | high | Opens with 'Empower your community with robust content moderation' — marketing register; at 1527 lines mixes conceptual … |
+| `chat/messaging-features/message-flagging.mdx` | eastern | 🟠 2 | high | Opens with an Info block reading 'Empower your community to self-moderate by providing robust flagging tools that integr… |
 | `core-concepts/content-handling/files-images-and-videos/file.mdx` | western | 🟡 3 | high | Opening sentence uses 'robust' and 'seamless' (marketing adjectives); reader must scan two paragraphs of feature asserti… |
 | `core-concepts/content-handling/files-images-and-videos/image-handling.mdx` | western | 🟡 3 | high | Same structural pattern as file.mdx: 'comprehensive image handling capabilities' opener followed by a 'Key Features' Car… |
 | `getting-started/authentication.mdx` | shared | 🟡 3 | high | At 950 lines includes both conceptual prose and full SDK setup code for 4 platforms; no one-sentence summary after the t… |
@@ -33,14 +33,14 @@ _Generated: 2026-05-19T06:17:32Z · model: ? · rubric: v0.1.0_
 
 ## Immediate action items (score ≤ 3)
 
-### `chat/messaging-features/messages/flag-unflag-a-message.mdx` — score 2
+### `chat/messaging-features/message-flagging.mdx` — score 2
 
-**Rationale:** Opens with 'Empower your community with robust content moderation' — marketing register; at 1527 lines mixes conceptual motivation, API reference, and workflow prose without clear sectioning.
+**Rationale:** Opens with an Info block reading 'Empower your community to self-moderate by providing robust flagging tools that integrate seamlessly' — marketing register; at 587 lines the 'Feature Overview' CardGroup, conceptual moderation workflow, and API reference are interspersed without clear separation.
 
 **Suggestions:**
-- Replace opening paragraph: 'Flag a message to report it for moderation; unflag to retract a report. Covers iOS, Android, Flutter, and TypeScript.'
-- Add top-level ## Flag Messages / ## Unflag Messages structure so readers can jump directly.
-- Audit for repeated code patterns across platforms that could be collapsed into a single CodeGroup.
+- Replace the opening Info block: 'Flag a message to report it for moderation; unflag to retract a report.'
+- Move the 'Feature Overview' CardGroup to a collapsible section or remove it — it duplicates the section headings below.
+- Separate conceptual content (what flagging is) from reference content (how to call the API) into distinct sections.
 
 ### `core-concepts/content-handling/files-images-and-videos/file.mdx` — score 3
 
@@ -98,9 +98,9 @@ _Generated: 2026-05-19T06:17:32Z · model: ? · rubric: v0.1.0_
 
 ## Top suggestions across all pages
 
-- Replace opening paragraph: 'Flag a message to report it for moderation; unflag to retract a report. Covers iOS, Android, Flutter, and TypeScript.'
-- Add top-level ## Flag Messages / ## Unflag Messages structure so readers can jump directly.
-- Audit for repeated code patterns across platforms that could be collapsed into a single CodeGroup.
+- Replace the opening Info block: 'Flag a message to report it for moderation; unflag to retract a report.'
+- Move the 'Feature Overview' CardGroup to a collapsible section or remove it — it duplicates the section headings below.
+- Separate conceptual content (what flagging is) from reference content (how to call the API) into distinct sections.
 - Cut both opening paragraphs to one sentence: 'Upload, download, and manage files up to 1 GB using the FileRepository.'
 - Remove the 'Key Features' CardGroup — it duplicates section headings and the Note at the top.
 - The 'Enterprise-grade security' and 'Optimized global delivery' icon cards read as marketing copy — replace with technical facts.
@@ -111,10 +111,10 @@ _Generated: 2026-05-19T06:17:32Z · model: ? · rubric: v0.1.0_
 
 ## Detailed suggestions by page
 
-**`chat/messaging-features/messages/flag-unflag-a-message.mdx`** (score 2, high confidence)
-- Replace opening paragraph: 'Flag a message to report it for moderation; unflag to retract a report. Covers iOS, Android, Flutter, and TypeScript.'
-- Add top-level ## Flag Messages / ## Unflag Messages structure so readers can jump directly.
-- Audit for repeated code patterns across platforms that could be collapsed into a single CodeGroup.
+**`chat/messaging-features/message-flagging.mdx`** (score 2, high confidence)
+- Replace the opening Info block: 'Flag a message to report it for moderation; unflag to retract a report.'
+- Move the 'Feature Overview' CardGroup to a collapsible section or remove it — it duplicates the section headings below.
+- Separate conceptual content (what flagging is) from reference content (how to call the API) into distinct sections.
 
 **`core-concepts/content-handling/files-images-and-videos/file.mdx`** (score 3, high confidence)
 - Cut both opening paragraphs to one sentence: 'Upload, download, and manage files up to 1 GB using the FileRepository.'
