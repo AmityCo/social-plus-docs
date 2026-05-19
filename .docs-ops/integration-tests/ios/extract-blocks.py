@@ -78,6 +78,11 @@ func showRetryOption(_ msg: String) {}
 func updateUIForSyncState(_ state: Any) {}
 func displayUserList(_ users: Any) {}
 func fetchNewTokenFromBackend(userId: String) async throws -> String { return "" }
+
+// ── Upload placeholder stubs (edit-post doc snippets) ────────────────────────
+let yourFile = AmityUploadableFile(fileData: Data(), fileName: nil)
+let yourImage = UIImage()
+let yourVideo = URL(fileURLWithPath: "")
 """
 
 
