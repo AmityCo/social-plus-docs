@@ -132,9 +132,15 @@ def _build_member_entry(node: dict) -> dict:
     return entry
 
 
-def _is_internal_name(name: str) -> bool:
-    """Heuristic: names starting with _ or containing 'Internal'/'Private' are non-public."""
-    return name.startswith("_") or "Internal" in name or "Private" in name
+def _is_internal_type_name(name: str) -> bool:
+    """
+    Filter heuristic for TOP-LEVEL type names only.
+    Names starting with _ are compiler-internal (e.g. _ConcreteTypeBox).
+    Note: we do NOT filter 'Internal'/'Private' substrings from member names —
+    the ABI JSON only surfaces public/open declarations, so any member that
+    appears in the ABI is public regardless of what its name contains.
+    """
+    return name.startswith("_")
 
 
 def extract(abi_json_path: Path) -> dict:
@@ -155,7 +161,7 @@ def extract(abi_json_path: Path) -> dict:
 
         if not name or decl_kind == "Import":
             continue
-        if _is_internal_name(name):
+        if _is_internal_type_name(name):
             continue
 
         if decl_kind in TYPE_DECL_KINDS:
@@ -165,7 +171,10 @@ def extract(abi_json_path: Path) -> dict:
             for child in node.get("children", []):
                 child_kind = child.get("declKind", "")
                 child_name = child.get("name", "")
-                if not child_name or _is_internal_name(child_name):
+                if not child_name:
+                    continue
+                # For nested type names, apply the type-name filter; members are always public in ABI
+                if child_kind in TYPE_DECL_KINDS and _is_internal_type_name(child_name):
                     continue
 
                 if child_kind in MEMBER_DECL_KINDS:
@@ -180,7 +189,6 @@ def extract(abi_json_path: Path) -> dict:
                             _build_member_entry(m)
                             for m in child.get("children", [])
                             if m.get("declKind") in MEMBER_DECL_KINDS
-                            and not _is_internal_name(m.get("name", ""))
                         ],
                     })
 

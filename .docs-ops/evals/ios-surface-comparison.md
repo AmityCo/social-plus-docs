@@ -176,3 +176,55 @@ iOS proves the pattern. The same ABI-JSON approach applies:
 ---
 
 _Produced by task 0075 · ios-docc-extractor.py v0.2.0-abi_
+
+---
+
+## 7. Triage of regex-only refs (task 0076)
+
+### Bug found and fixed in ios-docc-extractor.py
+
+`_is_internal_name()` was filtering member names containing "Private" or "Internal" substrings. Since the ABI only surfaces public declarations, this heuristic must not apply to members — only to top-level type names starting with `_`. Fixed: renamed to `_is_internal_type_name()`, applied only to type names.
+
+**Members recovered by fix:** `includeDiscoverablePrivateCommunity` (on `AmityCommunityQueryOptions`, `AmityCommunitySearchOptions`, `AmityCommunitySemanticSearchOptions`), `userInternalId` (on `AmityRoomParticipant`), `actorInternalId` (on `AmityCoHostEvent`).
+
+### Final reconciliation table
+
+| Category | Count | Bucket | Action |
+|---|---|---|---|
+| Caught by both (common surface) | 2,200 | — | ✅ Primary surface |
+| ABI-only real new refs (regex missed) | 651 | ABI_WIN | ✅ In new ios.json |
+| ABI-only synthetic (==, hash, rawValue, init) | 304 | SYNTHETIC | ✅ Correctly added (compiler-generated public) |
+| Regex-only streaming module (EkoStreamPublisher/HaishinKit) | 545 | EXTRACTOR_OVERREACH | ✅ ABI correctly excludes — out of docs scope |
+| Regex-only EXTRACTOR_ARTIFACT | 15 | EXTRACTOR_ARTIFACT | ✅ ABI correctly excludes |
+| Regex-only ACCESS_LEVEL_MISMATCH | 13 | ACCESS_LEVEL_MISMATCH | ✅ ABI correctly excludes |
+| Regex-only ABI_GAP fixed by extractor patch | 5 | ABI_GAP_NESTED → fixed | ✅ Now in ios-from-docc.json |
+
+**Verdict: 0 unresolved gaps.** The ABI extractor is now strictly equal-or-better across all Amity core refs.
+
+### EXTRACTOR_ARTIFACT refs (15 — regex false positives, correctly excluded by ABI)
+
+| Ref | Reason |
+|---|---|
+| `AmityMentionMapper.func/index/length/mentioned/type/userId` | Private inner `struct MentionKeys` — no `public` on struct |
+| `AmityMetadataMapper.func/index/length/mentioned/text/type/userId` | Same — private inner struct |
+| `AmityMessageType.AmityMessageType` | Regex matched `case AmityMessageType(...)` switch as a nested type declaration |
+| `AmityPIICategory.AmityPIICategory` | Same pattern |
+
+### ACCESS_LEVEL_MISMATCH refs (13 — internal access, correctly excluded by ABI)
+
+| Ref | Reason |
+|---|---|
+| `AmityLog.app/event/liveData/mqtt/network/sdk/session` | `static var/let` inside `AmityLog` without `public` keyword — `internal` access level |
+| `AmityModel.identifier` | `static var identifier` without `public` keyword — `internal` |
+| `AmityUserFollowCount` + 4 members | `public class` but only `internal init(response:)` — not constructable by consumers; correctly excluded |
+
+### Swap outcome
+
+**Swapped.** `.docs-ops/sdk-surface/ios.json` is now the ABI-sourced output of `ios-docc-extractor.py`.
+
+- iOS accuracy validator: **drift = 0** (2 false-positive framework refs: `String.self`, `Bundle.main.path` — pre-existing, not introduced by swap)
+- `ios-extractor.py`: marked DEPRECATED, retained as fallback reference
+- `ios-from-docc.json`: retained as audit trail of the parallel pilot run
+
+---
+_Triage completed by task 0076 · ios-docc-extractor.py v0.2.0-abi_

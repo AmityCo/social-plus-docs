@@ -7,10 +7,10 @@ Each extractor walks its platform's SDK source (or compiled artifact) and emits 
 | File | Platform | Source | Output |
 |---|---|---|---|
 | `typescript-extractor.py` | TypeScript | `AmityTypescriptSDK` barrel + nested namespaces | `sdk-surface/typescript.json` |
-| `ios-extractor.py` | iOS | Swift source (regex + brace-depth) | `sdk-surface/ios.json` |
+| `ios-docc-extractor.py` | iOS | Compiled `.abi.json` from xcframework (**primary**) | `sdk-surface/ios.json` |
+| `ios-extractor.py` | iOS | Swift source regex (**DEPRECATED**) | _(retired)_ |
 | `android-extractor.py` | Android | Kotlin/Java source | `sdk-surface/android.json` |
 | `flutter-extractor.py` | Flutter | Dart barrel re-exports | `sdk-surface/flutter.json` |
-| `ios-docc-extractor.py` | iOS (pilot) | Compiled `.abi.json` from xcframework | `sdk-surface/ios-from-docc.json` |
 
 ## Running extractors
 
@@ -18,10 +18,7 @@ Each extractor walks its platform's SDK source (or compiled artifact) and emits 
 # TypeScript (SP_SDKS_ROOT must point to sp-sdks/ parent)
 python3 .docs-ops/extractors/typescript-extractor.py
 
-# iOS (regex, current primary)
-python3 .docs-ops/extractors/ios-extractor.py
-
-# iOS (ABI/DocC pilot — uses vendor xcframework, no SDK clone needed)
+# iOS (ABI — no SDK clone needed, reads vendor xcframework)
 python3 .docs-ops/extractors/ios-docc-extractor.py
 
 # Android
@@ -31,23 +28,18 @@ python3 .docs-ops/extractors/android-extractor.py
 python3 .docs-ops/extractors/flutter-extractor.py
 ```
 
-## iOS migration in progress
+## iOS migration: complete (task 0076)
 
-**Current primary**: `ios-extractor.py` (regex) → `sdk-surface/ios.json`  
-**Pilot**: `ios-docc-extractor.py` (ABI JSON) → `sdk-surface/ios-from-docc.json`
+**Primary**: `ios-docc-extractor.py` (ABI JSON) → `sdk-surface/ios.json`  
+**Retired**: `ios-extractor.py` (regex, DEPRECATED, retained for reference only)
 
 The ABI-based extractor reads the compiled `.abi.json` embedded in `AmitySDK.xcframework`'s `.swiftmodule` — the same xcframework used by the iOS doc-as-test suite. No additional SDK repo access or build step required.
 
-See `.docs-ops/evals/ios-surface-comparison.md` for the full side-by-side comparison and migration recommendation.
-
-**To compare both surfaces:**
-```sh
-python3 .docs-ops/extractors/ios-extractor.py
-python3 .docs-ops/extractors/ios-docc-extractor.py
-# Then review: .docs-ops/evals/ios-surface-comparison.md
-```
-
-**Decision to swap** `ios.json` → `ios-from-docc.json` as primary is pending resolution of ~52 "regex-only, non-streaming" refs documented in Section 3 of the comparison report.
+Migration outcome (see `.docs-ops/evals/ios-surface-comparison.md` for full details):
+- ABI catches all 26 SIGNATURE_CHANGE + 4 REMOVED_API doc-as-test findings at extract time
+- 651 real new refs surfaced (previously missed by regex)
+- 573 regex-only refs correctly excluded (545 streaming lib over-reach + 15 extractor artifacts + 13 access-level mismatches)
+- Drift validator: 0 issues after swap
 
 ## Surface JSON schema
 

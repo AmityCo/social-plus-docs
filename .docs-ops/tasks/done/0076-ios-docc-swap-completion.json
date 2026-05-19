@@ -1,0 +1,34 @@
+{
+  "id": "0076-ios-docc-swap-completion",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/ios-docc-extractor.py",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/extractors/README.md",
+    ".docs-ops/evals/ios-surface-comparison.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/ios-docc-extractor.py",
+    ".docs-ops/extractors/ios-extractor.py",
+    ".docs-ops/sdk-surface/ios.json",
+    ".docs-ops/sdk-surface/ios-from-docc.json",
+    ".docs-ops/evals/ios-surface-comparison.md",
+    ".docs-ops/validators/ios-accuracy-validator.py"
+  ],
+  "instructions": "Resolve the 52 'regex-only, non-streaming' refs identified in 0075's comparison artifact, then complete the iOS extractor swap from regex source to ABI source. This is the final step for the iOS half of the architect's Option-2 migration.\n\n## Part A — Triage the 52 refs\n\nFor each of the 52 'in regex, not in DocC, non-streaming' refs from `.docs-ops/evals/ios-surface-comparison.md`:\n\n1. Classify into ONE bucket:\n   - **EXTRACTOR_ARTIFACT** — the ref is a regex false positive (e.g., 'AmityMessageType.AmityMessageType' enum-constructor noise where the regex matched a Swift `case foo(...)` pattern as if it were a nested type). DROP — don't add to the DocC extractor.\n   - **ABI_GAP_NESTED** — the ref is real but DocC dropped it because of how nested types are reported in `.abi.json`. Investigate the DocC mapping logic. If fixable, extend `ios-docc-extractor.py` to capture this case. If fundamentally not in ABI (rare), document why and accept the gap.\n   - **ACCESS_LEVEL_MISMATCH** — the ref is real but DocC excluded it because its access level didn't match our filter. Verify it's actually `public`/`open`; if so, fix the access-level check. If it's `internal`, it shouldn't have been in the regex extract either — keep DocC's exclusion.\n   - **OTHER** — anything else, with a one-line description.\n\n2. Write the bucket classification per-ref into a triage section appended to `.docs-ops/evals/ios-surface-comparison.md`.\n\n3. Fix every ABI_GAP_NESTED and ACCESS_LEVEL_MISMATCH by extending the DocC extractor. Re-run; verify the resolved refs now appear in `ios-from-docc.json`.\n\n## Part B — Final reconciliation\n\nAfter Part A's fixes, the DocC extractor's output should EITHER:\n  - Match the regex extractor's output for legitimate refs (and exclude the EXTRACTOR_ARTIFACT noise + 149 streaming refs), OR\n  - Have a small documented set of remaining gaps with explicit reasons\n\nProduce a summary table in `ios-surface-comparison.md`:\n\n| Category | Count | Action |\n|---|---|---|\n| Caught by both | <n> | (the common surface) |\n| ABI-only (regex missed) | <n> | included in new ios.json |\n| Regex-only EXTRACTOR_ARTIFACT | <n> | dropped (regex bugs) |\n| Regex-only streaming module | 149 | dropped (out of docs scope) |\n| Regex-only ABI_GAP_NESTED, now fixed | <n> | now caught by DocC extractor |\n| Regex-only ACCESS_LEVEL_MISMATCH | <n> | excluded — wasn't actually public |\n| Regex-only DOCUMENTED_GAP | <n> | known limitation, kept regex fallback or noted |\n\n## Part C — Swap ios.json to ABI source\n\nIF Part A's review concludes that DocC extraction is now equal-or-better than regex (almost certainly the case given 0075's findings + Part A's fixes):\n\n1. Replace the contents of `.docs-ops/sdk-surface/ios.json` with the output of `ios-docc-extractor.py` (use the schema-compatible output mode — same shape as the current regex output, so downstream validators don't need changes).\n2. Re-run the iOS accuracy validator (`.docs-ops/validators/ios-accuracy-validator.py`) against the new surface — verify drift is still 0 (or the new surface fixed previously-flagged refs).\n3. Re-run the iOS doc-as-test framework — verify 100% pass+skip holds.\n4. The old regex-based `ios-extractor.py` STAYS in the tree but is no longer the primary. Add a header comment marking it as DEPRECATED, fallback only.\n\nIF Part A's review identifies real gaps where regex catches things DocC doesn't:\n\n- DON'T swap. Document the gaps in `extractors/README.md`. Use regex as primary until the gaps are resolved in a future round.\n\n## Part D — Documentation\n\nUpdate `.docs-ops/extractors/README.md`:\n  - Document the migration outcome for iOS\n  - Note the source for iOS surface is now `.abi.json` (no extra tooling needed)\n  - Mention this validates the architect's Option-2 approach and unblocks similar migrations for Android (Dokka), TS (TypeDoc), Flutter (dart doc) — but those are separate follow-up tasks\n\n## Out of scope\n\n- TS / Android / Flutter migrations — separate tasks per platform, queued after iOS proves the swap is durable.\n- Updating iOS doc-as-test to USE the new signature data (could obsolete signature-only checks; just leave for compile-only checks) — separate task.\n- CI workflow updates (no CI gating depends on which extractor is used; both produce ios.json).\n\n## Success criteria\n\n- 52 refs are explicitly classified.\n- If swapping: `ios.json` is the DocC-sourced output, iOS validator still reports drift=0, iOS doc-as-test still 100% pass+skip.\n- If not swapping: gaps are documented; status quo preserved.\n\nReport in `notes`: bucket counts for the 52; whether the swap happened; if not, why; before/after iOS validator + doc-as-test stats; any platform-portable lessons learned (e.g., 'expect EXTRACTOR_ARTIFACT class on Android too' — useful for sequencing later platform migrations).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "triage_complete_and_outcome_recorded",
+        "command": "test -f .docs-ops/evals/ios-surface-comparison.md && grep -q 'EXTRACTOR_ARTIFACT\\|ABI_GAP_NESTED\\|ACCESS_LEVEL_MISMATCH' .docs-ops/evals/ios-surface-comparison.md && echo OK",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T23:30:00Z"
+}
