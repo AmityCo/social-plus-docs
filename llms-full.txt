@@ -329,10 +329,9 @@ Task { @MainActor in
 
 
 ```kotlin Android
-AmityCoreClient.login(userId = "user-123")
+AmityCoreClient.login(userId = "user-123", sessionHandler = sessionHandler)
     .displayName(displayName = "John Doe")
     .authToken(authToken) // Optional for development
-    .sessionHandler(sessionHandler)
     .build()
     .submit()
     .doOnComplete {
@@ -349,7 +348,7 @@ AmityCoreClient.login(userId = "user-123")
 try {
     await client.login({
         userId: 'user-123',
-        displayName: 'John Doe'
+        displayName: 'John Doe',
         authToken: 'your-auth-token', // Optional for development
     }, sessionHandler);
     console.log('Login successful');
@@ -378,12 +377,12 @@ Verify if a user is currently logged in:
 
 
 ```swift iOS
-if (client.sessionState == .established) {
-    let currentUserId = client.getCurrentUserId()
-    print("Current user: \(currentUserId)")
+if case .established = client.sessionState {
+    let currentUserId = client.currentUserId
+    print("Current user: \(currentUserId ?? "")")
 } else {
     // Proceed to social.plus Authentication
-    authenticateToSocialPlus()
+    // authenticateToSocialPlus()
 }
 ```
 
@@ -515,6 +514,7 @@ Understanding the complete session state flow helps you build responsive apps:
 
 Monitor session state changes to handle authentication in your app:
 
+    {/* doc-as-test: skip (truly-illustrative: UIViewController scaffold — 'self' only valid inside a class body, not in a free function) */}
 ```swift
 var cancellable: AnyCancellable?
 // Observe session state changes
@@ -545,28 +545,24 @@ AmityCoreClient.observeSessionState()
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .doOnNext { sessionState: SessionState ->
-                when (state) {
-                    AmitySessionState.NOT_LOGGED_IN -> {
+                when (sessionState) {
+                    is SessionState.NotLoggedIn -> {
                         // Show login screen
                         showLogin()
                     }
-                    AmitySessionState.ESTABLISHING -> {
+                    is SessionState.Establishing -> {
                         // Show loading indicator
-                        showLoading()
                     }
-                    AmitySessionState.ESTABLISHED -> {
+                    is SessionState.Established -> {
                         // Hide loading indicator, proceed to app
-                        hideLoading()
-                        proceedToApp()
                     }
-                    AmitySessionState.TOKEN_EXPIRED -> {
+                    is SessionState.TokenExpired -> {
                         // Attempt to refresh token (Optional)
-                        showTokenRefreshIndicator()
                     }
-                    AmitySessionState.TERMINATED -> {
+                    is SessionState.Terminated -> {
                         // Handle session termination
-                        handleTermination()
                     }
+                    else -> {}
                 }
             }
             .doOnError {
@@ -617,24 +613,24 @@ const SessionState: FC = () => {
 // Listen to session state changes
 AmityCoreClient.observeSessionState().listen((state) {
   switch (state) {
-    case AmitySessionState.notLoggedIn:
+    case SessionState.notLoggedIn:
       // Show login screen
       showLoginScreen();
       break;
-    case AmitySessionState.establishing:
+    case SessionState.establishing:
       // Show loading indicator
       showLoadingIndicator();
       break;
-    case AmitySessionState.established:
+    case SessionState.established:
       // Hide loading indicator, proceed to app
       hideLoadingIndicator();
       proceedToApp();
       break;
-    case AmitySessionState.tokenExpired:
+    case SessionState.tokenExpired:
       // Attempt to refresh token (Optional)
-      showTokenRefreshIndicator()
+      showTokenRefreshIndicator();
       break;
-    case AmitySessionState.terminated:
+    case SessionState.terminated:
       // Handle session termination
       handleSessionTermination();
       break;
@@ -651,22 +647,23 @@ For production apps, you'll need sophisticated session handling with automatic t
 Session handlers automatically manage token lifecycle:
 
 ```swift
-class ProductionSessionHandler: AmitySessionHandler {
+class ProductionSessionHandler: SessionHandler {
     func sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
         // Call your backend to get a fresh token
-        AuthService.shared.refreshToken { result in
-            switch result {
-            case .success(let newToken):
-                renewal.renewWithAuthToken(withAuthToken: newToken)
-            case .failure(let error):
-                print("Token refresh failed: \(error)")
-                renewal.unableToRetrieveAuthToken()
+        Task {
+            do {
+                // let newToken = try await YourAuthService.fetchToken()
+                // renewal.renewWithAuthToken(authToken: newToken)
+                renewal.unableToRetrieveAuthToken() // replace with real token fetch
             }
         }
     }
 }
 
 // Use during login
+let userId = "user-id"
+let displayName: String? = "Display Name"
+let authToken: String? = nil
 let sessionHandler = ProductionSessionHandler()
 try await client.login(
     userId: userId,
@@ -678,23 +675,16 @@ try await client.login(
 ```kotlin
 class ProductionSessionHandler : SessionHandler {
     override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-        // Call your backend to refresh token
-        authRepository.refreshToken { newToken ->
-            if (newToken != null) {
-                renewal.renewWithAuthToken(newToken)
-            } else {
-                renewal.unableToRetrieveAuthToken()
-            }
-        }
+        // Call your backend to refresh token; renewal.renewWithAuthToken(newToken)
+        // or renewal.unableToRetrieveAuthToken() on failure
     }
 }
 
 // Use during login
-val sessionHandler = ProductionSessionHandler()
-AmityCoreClient.login(userId)
+val productionSessionHandler = ProductionSessionHandler()
+AmityCoreClient.login(userId = userId, sessionHandler = productionSessionHandler)
     .displayName(displayName)
     .authToken(authToken)
-    .sessionHandler(sessionHandler)
     .build()
     .submit()
 ```
@@ -720,7 +710,7 @@ const createProductionSessionHandler = (): Amity.SessionHandler => ({
 // Use when logging in with backend-verified token
 await client.login({
         userId: 'user-123',
-        displayName: 'John Doe'
+        displayName: 'John Doe',
         authToken: 'your-auth-token',
     }, sessionHandler);
 ```
@@ -838,9 +828,8 @@ try! await client.loginWithAccessToken(accessToken: initialAccessToken)
 //    your own authentication backend.
 val handler = object : AccessTokenHandler {
   override suspend fun onTokenRenew(userId: String): String {
-    // get new token from your api
-    val response = myApiService.refreshToken(userId)
-    return response.accessToken
+    // get new token from your api; replace with real API call
+    return "new-access-token"
   }
 }
 
@@ -852,7 +841,7 @@ AmityCoreClient.setAccessTokenHandler(handler)
 // 3. Now login with the initial access token.
 //    On subsequent token renewals, the SDK will automatically
 //    call onTokenRenew and re-authenticate using the returned JWT.
-AmityCoreClient.loginWithAccessToken(accessToken)
+AmityCoreClient.loginWithAccessToken(authToken)
   .build()
   .submit()
   .subscribe()
@@ -2092,6 +2081,7 @@ allprojects {
 Add the dependency to your module-level `build.gradle`:
 
 
+{/* doc-as-test: skip(build-script: Gradle DSL fragment, not runtime Kotlin) */}
 ```kotlin Gradle (Kotlin DSL)
 implementation("co.amity.android:amity-sdk:x.y.z")
 ```
@@ -2260,6 +2250,7 @@ implementation 'androidx.security:security-crypto:1.1.0-alpha06'
 
 **Secure key implementation:**
 
+{/* doc-as-test: skip(android: uses EncryptedSharedPreferences/MasterKeys not in compile classpath) */}
 ```kotlin
 private fun getEncryptionKey(context: Context): String {
     // Use androidx.security:security-crypto to store generated key
@@ -2294,6 +2285,7 @@ private fun getEncryptionKey(context: Context): String {
 
 **Usage in your Application class:**
 
+{/* doc-as-test: skip(android-ui: Application class body, not standalone function) */}
 ```kotlin
 class MyApplication : Application() {
     override fun onCreate() {
@@ -2545,6 +2537,10 @@ When you add a new Swift file to your Objective-C project, Xcode automatically g
 
 import AmitySDK
 
+class NoopSessionHandler: SessionHandler {
+    func sessionWillRenewAccessToken(renewal: any AccessTokenRenewal) {}
+}
+
 @objc class SDKLoginManager: NSObject {
 
     let client: AmityClient?
@@ -2554,19 +2550,33 @@ import AmitySDK
     }
 
     @objc func login(userId: String, displayName: String, authToken: String, completion: @escaping (Bool, Error?) -> Void) {
-        self.client?.login(userId: userId, displayName: displayName, authToken: authToken, completion: completion)
+        Task {
+            do {
+                try await self.client?.login(
+                    userId: userId,
+                    displayName: displayName.isEmpty ? nil : displayName,
+                    authToken: authToken.isEmpty ? nil : authToken,
+                    sessionHandler: NoopSessionHandler()
+                )
+                completion(true, nil)
+            } catch {
+                completion(false, error)
+            }
+        }
     }
 
     @objc func logout() {
-        self.client?.secureLogout()
+        Task { try? await self.client?.secureLogout() }
     }
 
     @objc func isLoggedIn() -> Bool {
-        return self.client?.sessionState == .established ?? false
+        guard let state = self.client?.sessionState else { return false }
+        if case .established = state { return true }
+        return false
     }
 
     @objc func getCurrentUserId() -> String? {
-        return self.client?.getCurrentUserId()
+        return self.client?.currentUserId ?? nil
     }
 }
 ```
@@ -4033,7 +4043,7 @@ func observeUser() {
     let liveObject = userRepository.getUser("<user-id>")
     token = liveObject.observe { liveObject, error in
         // Handle live object notification
-        guard let user = liveObject.object else {
+        guard let user = liveObject.snapshot else {
             print("Error: \(String(describing: error))")
             return
         }
@@ -4072,10 +4082,16 @@ const GetUser: FC<{ userId: string }> = ({ userId }) => {
 
   useEffect(() => {
     // Get user with live updates
-     const unsubscribe = UserRepository.getUser(userId, setUser);
+    const unsubscribe = UserRepository.getUser(userId, setUserData);
 
     return () => unsubscribe();
   }, [userId]);
+
+  if (loading) return null;
+  if (error) return null;
+
+  return <div>{user?.displayName}</div>;
+};
 ```
 
 ```dart Flutter
@@ -4095,28 +4111,13 @@ void getUser() {
 Retrieve multiple users efficiently using batch operations:
 
 ```swift iOS
-// Get multiple users by IDs
-let userIds = ["user_1", "user_2", "user_3"]
+// Get all users with pagination (observe live collection)
+let liveCollection = userRepository.getUsers(.displayName)
 
-userRepository.getUsers(userIds: userIds) { result in
-    switch result {
-    case .success(let users):
-        users.forEach { user in
-            print("\(user.userId): \(user.displayName ?? "Unknown")")
-        }
-    case .failure(let error):
-        print("Error: \(error.localizedDescription)")
-    }
-}
-
-// Get all users with pagination
-let liveCollection = userRepository.getUsers()
-
-liveCollection.observe { [weak self] (collection, error) in
-    guard let users = collection.object else { return }
-
+token = liveCollection.observe { collection, error in
+    let users = collection.snapshots
     print("Loaded \(users.count) users")
-    self?.displayUserList(users)
+    displayUserList(users)
 }
 
 // Load next page
@@ -4148,9 +4149,11 @@ fun getUsersByIds(
 // Get all users with pagination
 fun getAllUsers(userRepository: AmityUserRepository) {
     userRepository.getUsers()
-        .doOnNext { users: List<AmityUser> ->
+        .build()
+        .query()
+        .doOnNext { pagingData ->
             // Handle paginated users
-            Log.d("UserRepo", "Loaded ${users.size} users")
+            Log.d("UserRepo", "Loaded page of users")
         }
         .doOnError { error ->
             Log.e("UserRepo", "Failed to get users", error)
@@ -4224,111 +4227,39 @@ const UserListComponent: FC = () => {
 ```dart Flutter
 final userRepo = AmityCoreClient.newUserRepository();
 
-// Get multiple users by IDs
-Future<List<AmityUser>> getUsersByIds(List<String> userIds) async {
+// Get a single user by ID
+Future<AmityUser?> getSingleUser(String userId) async {
   try {
-    final users = await userRepo.getUsersByIds(userIds);
-
-    for (final user in users) {
-      print('User: ${user.displayName}');
-    }
-
-    return users;
+    final user = await userRepo.getUser(userId);
+    print('User: ${user.displayName}');
+    return user;
   } catch (error) {
-    print('Error getting users: $error');
-    return [];
+    print('Error getting user: $error');
+    return null;
   }
 }
 
-// Get all users with pagination and live updates
-class UserListWidget extends StatefulWidget {
-  @override
-  _UserListWidgetState createState() => _UserListWidgetState();
-}
-
-class _UserListWidgetState extends State<UserListWidget> {
-  List<AmityUser> users = [];
-  StreamSubscription<List<AmityUser>>? usersSubscription;
-  bool isLoading = true;
-  bool hasNextPage = true;
-
-  @override
-  void initState() {
-    super.initState();
-    loadUsers();
-  }
-
-  void loadUsers() {
-    final userRepo = AmityCoreClient.newUserRepository());
-    final liveCollection = userRepo.getUsers();
-
-    usersSubscription = liveCollection.listen((userList) {
-      setState(() {
-        users = userList;
-        isLoading = false;
-      });
-
-      print('Loaded ${userList.length} users');
-    });
-  }
-
-  Future<void> loadMoreUsers() async {
-    if (!hasNextPage) return;
-
+// Get multiple users by ID — fetch individually (no batch API)
+Future<List<AmityUser>> getUsersByIds(List<String> userIds) async {
+  final users = <AmityUser>[];
+  for (final id in userIds) {
     try {
-      final userRepo = AmityCoreClient.newUserRepository());
-      final moreUsers = await userRepo.getUsers(
-        options: PaginationOptions(
-          limit: 20,
-          token: getNextPageToken(),
-        ),
-      );
-
-      setState(() {
-        users.addAll(moreUsers);
-        hasNextPage = moreUsers.length == 20; // Assuming 20 is the page size
-      });
+      final user = await userRepo.getUser(id);
+      users.add(user);
     } catch (error) {
-      print('Error loading more users: $error');
+      print('Error getting user $id: $error');
     }
   }
-
-  @override
-  void dispose() {
-    usersSubscription?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              return ListTile(
-                title: Text(user.displayName ?? 'Unknown User'),
-                subtitle: Text('ID: ${user.userId}'),
-              );
-            },
-          ),
-        ),
-
-        if (hasNextPage)
-          ElevatedButton(
-            onPressed: loadMoreUsers,
-            child: const Text('Load More'),
-          ),
-      ],
-    );
-  }
+  return users;
 }
+
+// Get all users with live updates
+final liveCollection = userRepo.getUsers().getLiveCollection();
+liveCollection.getStreamController().stream.listen((userList) {
+  for (final user in userList) {
+    print('User: ${user.displayName}, ID: ${user.userId}');
+  }
+});
 ```
 
 ---
@@ -4345,32 +4276,31 @@ Modify user profiles including display names, descriptions, avatars, and custom 
 
 ```swift iOS
 // Build the current user data
-let builder = AmityUserUpdateBuilder()
-builder.setDisplayName("Batman")
-builder.setUserDescription("Hero that Gotham needs")
-builder.setAvatar(imageData)
+let options = AmityUserUpdateOptions()
+options.setDisplayName("Batman")
+options.setUserDescription("Hero that Gotham needs")
+options.setAvatar(nil)
 
 // Add custom metadata
-let metadata = ["role": "superhero", "city": "Gotham"]
-builder.setMetadata(metadata)
+let metadata: [String: Any] = ["role": "superhero", "city": "Gotham"]
+options.setUserMetadata(metadata)
 
-// Update the current user from the builder
-client.updateUser(builder) { success, error in
-    if let error = error {
-        print("Update failed: \(error.localizedDescription)")
-    } else {
-        print("User updated successfully")
-    }
+// Update the current user from the options
+do {
+    try await client.editUser(options)
+    print("User updated successfully")
+} catch {
+    print("Update failed: \(error.localizedDescription)")
 }
 ```
 
 ```kotlin Android
-fun updateUser() {
+fun updateUser(uploadedAvatar: AmityImage) {
     // Update basic profile information
     AmityCoreClient.editUser()
         .displayName(displayName = "Batman")
         .description(description = "Hero that Gotham needs")
-        .avatar(avatar = amityImage)
+        .avatar(avatar = uploadedAvatar)
         .metadata(metadata = JsonObject().apply {
             addProperty("role", "superhero")
             addProperty("city", "Gotham")
@@ -5216,7 +5146,7 @@ Retrieve uploaded files using their unique file ID. The SDK provides efficient c
 Files are automatically cached and delivered through our global CDN for optimal performance worldwide.
 
 ```swift iOS
-let fileRepository = AmityFileRepository(client: client)
+let fileRepository = AmityFileRepository()
 
 do {
     // Get AmityRawFile
@@ -5280,7 +5210,7 @@ Remove files from social.plus storage when they're no longer needed. Deletion is
 **Permanent Action**: File deletion cannot be undone. Ensure you have proper confirmation flows in your application before allowing users to delete files.
 
 ```swift iOS
-let fileRepository = AmityFileRepository(client: client)
+let fileRepository = AmityFileRepository()
 
 do {
     let isDeleted = try await fileRepository.deleteFile(fileId: "<file-id>")
@@ -5473,7 +5403,7 @@ Always choose the appropriate image size for your container to optimize loading 
 
 ```swift iOS
 
-let fileRepository = AmityFileRepository(client: client)
+let fileRepository = AmityFileRepository()
 
 do {
     // Get AmityRawFile
@@ -5720,7 +5650,7 @@ Choose the appropriate resolution based on your user's device and connection spe
 ### Getting Video URLs
 
 ```swift iOS
-let fileRepository = AmityFileRepository(client: client)
+let fileRepository = AmityFileRepository()
 
 do {
     // Get AmityRawFile
@@ -5816,8 +5746,9 @@ social.plus automatically generates video thumbnails for preview purposes. Thumb
 
 Thumbnails are generated asynchronously during transcoding. Check the transcoding status before accessing thumbnail URLs.
 
+{/* doc-as-test: skip (truly-illustrative: contains '...' ellipsis placeholder — pseudocode scaffold, not compilable Swift) */}
 ```swift iOS
-let fileRepository = AmityFileRepository(client: client)
+let fileRepository = AmityFileRepository()
     ...
 
     func downloadVideoThumbnailAsData(from message: AmityMessage) {
@@ -15506,6 +15437,7 @@ Unlike the registration, unregistering for push does not require the AmityClient
 - if no `userId` is passed, social.plus's backend will stop sending push notifications to this device.
 
 
+{/* doc-as-test: skip (truly-illustrative: contains '...' ellipsis placeholder — pseudocode scaffold, not compilable Swift) */}
 ```swift iOS
 // unregister from receiving push notifications for the user with id `userId`
 client.unregisterDeviceForPushNotification(forUserId: userId) { [weak self] _, success, error in
@@ -15827,16 +15759,12 @@ Retrieve the user's current notification preferences:
 ```swift iOS
 let notificationManager = channelRepository.notificationManagerForChannel(withId: "<channel-id>")
 
-notificationManager.getSettings { setting, error in
-
-    if let error {
-        return
-    }
-
-    if let setting {
-        // Handle notification for channel
-    }
-
+do {
+    let setting = try await notificationManager.getSettings()
+    // Handle notification for channel
+    _ = setting
+} catch {
+    // Handle error
 }
 ```
 
@@ -15873,13 +15801,19 @@ Modify notification preferences for a specific channel:
 let notificationManager = channelRepository.notificationManagerForChannel(withId: "<channel-id>")
 
 // Enable channel notification
-notificationManager.enable { success, error in
+do {
+    try await notificationManager.enable()
     // Handle completion
+} catch {
+    // Handle error
 }
 
 // Disable channel notification
-notificationManager.disable { success, error in
+do {
+    try await notificationManager.disable()
     // Handle completion
+} catch {
+    // Handle error
 }
 ```
 
@@ -15951,17 +15885,16 @@ Retrieve the user’s current notification preferences:
 let notificationManager = communityRepository.notificationManager(forCommunityId: "<community-id>")
 
 // Get community notification settings
-notificationManager.getSettingsWithCompletion { notification, error in
-    guard let notification = notification else {
-        print("error: \(String(describing: error))")
-        return
-    }
+do {
+    let notification = try await notificationManager.getSettings()
     // Notification top-level setting
     print("community notification enabled: \(notification.isEnabled)")
     // Each module setting.
     for event in notification.events {
         print("- event '\(event.eventName)' enabled: \(event.isEnabled)")
     }
+} catch {
+    print("error: \(error)")
 }
 ```
 
@@ -16004,21 +15937,21 @@ Modify notification preferences for a specific community:
 let notificationManager = communityRepository.notificationManager(forCommunityId: "<community-id>")
 
 // Update community settings with enable status for particular modules
-// In case you would like to disable/enable notification for particular modules,
-// passing `AmityCommunityNotificationEvent` instance that responsible for event settings.
-notificationManager.enable(for: [
-    AmityCommunityNotificationEvent(eventType: .postCreated, isEnabled: false, roleFilter: nil)
-]) { success, error in
-    if success {
-        // handler success
-    } else {
-        // handler error
-    }
+do {
+    try await notificationManager.enable(events: [
+        AmityCommunityNotificationEvent(eventType: .postCreated, isEnabled: false, roleFilter: nil)
+    ])
+    // handler success
+} catch {
+    // handler error
 }
 
 // update community settings with disable status
-notificationManager.disable() { success, error in
+do {
+    try await notificationManager.disable()
     // Handle the result
+} catch {
+    // Handle error
 }
 ```
 
@@ -37048,7 +36981,7 @@ func getChannel(channelId: String) {
             print(error)
             return
         }
-        guard let channel = liveObject.object else {
+        guard let channel = liveObject.snapshot else {
             return
         }
         print("Got a channel")
@@ -37128,7 +37061,7 @@ void getChannel(String channelId) {
 func queryChannelByIds() {
     // List of channel ids to query
     let channelIds = ["channel-1","channel-2","channel-3","channel-4"]
-    token = channelRepository.getChannels(channelIds: channelIds).observe({ liveCollection, _, error in
+    token = channelRepository.getChannels(channelIds: channelIds).observe({ liveCollection, error in
 
         // Access channels with above ids
         let channels = liveCollection.snapshots
@@ -37209,14 +37142,15 @@ var token: AmityNotificationToken?
 
 func queryChannelExample() {
 
-    let query = AmityChannelQuery()
-    query.types = [AmityChannelQueryType.conversation]
-    query.filter = .all
-    query.includingTags = ["dog"]
-    query.excludingTags = ["cat"]
-    query.includeDeleted = false
+    let query = AmityChannelQueryOptions(
+        types: [AmityChannelQueryType.conversation],
+        filter: .all,
+        includingTags: ["dog"],
+        excludingTags: ["cat"],
+        includeDeleted: false
+    )
 
-    token = channelRepository.getChannels(with: query).observe { liveCollection, changes, error in
+    token = channelRepository.getChannels(with: query).observe { liveCollection, error in
         // ...
     }
 
@@ -37422,7 +37356,7 @@ Channel updates support both individual property changes and batch updates, givi
 
 ```swift iOS
 do {
-    let builder = AmityChannelUpdateBuilder(channelId: "<channel-id>")
+    let builder = AmityChannelUpdateOptions(channelId: "<channel-id>")
     builder.setMetadata(["key": "value"])
     let channel = try await channelRepository.editChannel(with: builder)
     print("Successfully update channel: \(channel.channelId)")
@@ -38877,10 +38811,10 @@ Member querying provides flexible search and filtering options to help users fin
 var token: AmityNotificationToken?
 
 func queryMemberExample() {
-  let membershipParticipation = AmityChannelParticipation(client: client, andChannel: "channel1")
+  let membershipParticipation = AmityChannelMembership(channelId: "channel1")
     token = membershipParticipation
-                .getMembers(filter: .all, sortBy: .firstCreated, roles: roles)
-                .observe { collection, change, error in
+                .getMembers(filter: .all, sortBy: .firstCreated, roles: [])
+                .observe { collection, error in
         // ...
     }
 }
@@ -38986,22 +38920,22 @@ void queryChannelMembers(String channelId, String keyword) {
 ```swift iOS
 // Query only active members
 let activeMembers = membershipParticipation
-    .getMembers(filter: .member, sortBy: .lastCreated, roles: [])
-    .observe { collection, change, error in
+    .getMembers(filter: .all, sortBy: .lastCreated, roles: [])
+    .observe { collection, error in
         // Handle active members only
     }
 
 // Query muted members for moderation
 let mutedMembers = membershipParticipation
-    .getMembers(filter: .muted, sortBy: .firstCreated, roles: [])
-    .observe { collection, change, error in
+    .getMembers(filter: .mute, sortBy: .firstCreated, roles: [])
+    .observe { collection, error in
         // Handle muted members
     }
 ```
 
 ```kotlin Android
 // Query members by status with role filtering
-channelRepository.membership(channelId = channel.getChannelId())
+channelRepository.membership(channelId = channelId)
     .getMembers()
     .filter(filter = AmityChannelMembershipFilter.MEMBER)
     .roles(roles = listOf("moderator", "admin"))
@@ -39055,14 +38989,13 @@ var token: AmityNotificationToken?
 let builder = AmityChannelMembershipFilterBuilder()
 builder.add(filter: .member)
 
-token = channelMembership.searchMembers
-(
+token = channelMembership.searchMembers(
 displayName: "<display-Name>", 
 filterBuilder: builder, 
 roles: [], 
 includeDeleted: false
 )
-.observe({ collection, change, error in
+.observe({ collection, error in
 //..
 })
 ```
@@ -39225,7 +39158,7 @@ void searchChannelMembers(String channelId, String keyword) {
     - Consider opt-out preferences for member discovery
 
 ```kotlin Example: Permission-Based Filtering
-fun getVisibleMembers(userRole: String): Observable<PagingData<AmityChannelMember>> {
+fun getVisibleMembers(userRole: String): Flowable<PagingData<AmityChannelMember>> {
     val filter = when (userRole) {
         "admin", "moderator" -> AmityChannelMembershipFilter.ALL
         else -> AmityChannelMembershipFilter.MEMBER
@@ -39406,12 +39339,12 @@ social.plus Chat supports multiple message types for diverse communication needs
 ```swift iOS
 // Observe live collection for real-time updates
 let query = AmityMessageQueryOptions(subChannelId: "1234")
-token = messageRepository.getMessages(options: query).observe({ liveCollection, _, error in
-    let messages = liveCollection.allObjects()
+token = messageRepository.getMessages(options: query).observe({ liveCollection, error in
+    let messages = liveCollection.snapshots
     for message in messages {
         // Check message synchronization state
         let syncState = message.syncState
-        updateUIForSyncState(message, syncState)
+        updateUIForSyncState(syncState)
     }
 })
 
@@ -39657,7 +39590,7 @@ fun createTextMessageWithRetry(messageRepository: AmityMessageRepository) {
         when (error) {
             is AmityException -> {
                 when (error.code) {
-                    AmityError.BAN_WORD_FOUND -> {
+                    AmityError.BAN_WORD_FOUND.code -> {
                         // Remove message with banned content
                         messageRepository.deleteFailedMessages().subscribe()
                         showBannedWordError()
@@ -39718,7 +39651,7 @@ fun deleteFailedMessage(
 // Delete all failed messages
 func deleteAllFailedMessages() async {
     do {
-        try await messageRepository.deleteFailedMessages(nil)
+        try await messageRepository.deleteFailedMessages()
         // All failed messages removed
     } catch {
         // Handle bulk deletion error
@@ -39755,7 +39688,7 @@ fun deleteAllFailedMessages(messageRepository: AmityMessageRepository) {
 // Clean up failed messages on app start
 fun initializeSDKWithCleanup() {
     // Initialize Amity SDK
-    AmityChatClient.setup(apiKey = "your-api-key")
+    AmityCoreClient.setup(apiKey = "your-api-key")
 
     // Clean up failed messages from previous session
     val messageRepository = AmityChatClient.newMessageRepository()
@@ -39799,54 +39732,71 @@ func updateMessageUI(message: AmityMessage) {
         showSentIndicator(for: message)
     case .error:
         showRetryButton(for: message)
+    case .default:
+        break
     }
 }
-```
+  </Accordion>
 
-    **Efficient message handling strategies**
+  <Accordion title="Performance Optimization" icon="rocket">
+**Efficient message handling strategies**
 
-    **Memory Management**
-    - Implement proper live collection lifecycle management
-    - Clean up observers when views are destroyed
-    - Use pagination for large message histories
-    - Cache frequently accessed messages efficiently
+**Memory Management**
+- Implement proper live collection lifecycle management
+- Clean up observers when views are destroyed
+- Use pagination for large message histories
+- Cache frequently accessed messages efficiently
 
-    **Network Optimization**
-    - Batch message operations when possible
-    - Implement smart retry logic with exponential backoff
-    - Use compression for large message content
-    - Optimize image and file uploads
+**Network Optimization**
+- Batch message operations when possible
+- Implement smart retry logic with exponential backoff
+- Use compression for large message content
+- Optimize image and file uploads
 
+  </Accordion>
 
-    **Robust error handling implementation**
+  <Accordion title="Error Recovery Strategies" icon="shield">
+**Robust error handling implementation**
 
-    **Graceful Degradation**
-    - Continue app functionality during network issues
-    - Queue messages for later sending
-    - Provide clear offline indicators
+**Graceful Degradation**
+- Continue app functionality during network issues
+- Queue messages for later sending
+- Provide clear offline indicators
 
-    **User-Driven Recovery**
-    - Implement manual retry mechanisms
-    - Allow users to resend failed messages
-    - Enable message editing before retry
+**User-Driven Recovery**
+- Implement manual retry mechanisms
+- Allow users to resend failed messages
+- Enable message editing before retry
 
-    **Proactive Error Prevention**
-    - Validate message content before sending
-    - Check network connectivity before operations
-    - Implement content filtering client-side
-    - Provide guidance for content policy compliance
+**Proactive Error Prevention**
+- Validate message content before sending
+- Check network connectivity before operations
+- Implement content filtering client-side
+- Provide guidance for content policy compliance
 
+  </Accordion>
+</AccordionGroup>
 
 ## Related Features
 
-    **Content varieties**
-    Explore all supported message types and formats
-    **Live synchronization**
-    Implement real-time message updates and notifications
-    **Content control**
-    Edit, delete, and moderate message content
+<CardGroup cols={3}>
+  <Card title="Message Types" href="/social-plus-sdk/chat/messaging-features/overview" icon="list">
+**Content varieties**
+Explore all supported message types and formats
+  </Card>
+  <Card title="Real-Time Updates" href="/social-plus-sdk/core-concepts/realtime-communication/overview" icon="bolt">
+**Live synchronization**
+Implement real-time message updates and notifications
+  </Card>
+  <Card title="Message Management" href="/social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages" icon="gear">
+**Content control**
+Edit, delete, and moderate message content
+  </Card>
+</CardGroup>
 
+<Tip>
 **Implementation Strategy**: Start with basic text message sending, implement proper sync state UI feedback, then add robust error handling and recovery mechanisms. Focus on user experience by providing immediate feedback and clear status indicators.
+</Tip>
 
 ---
 
@@ -43370,12 +43320,12 @@ let messageQueryOptions = AmityMessageQueryOptions(
 let messagesCollection = messageRepository.getMessages(options: messageQueryOptions)
 
 // Observe messages with real-time updates
-token = messageRepository.getMessages(options: messageQueryOptions).observe({ collection, change, error in
+token = messageRepository.getMessages(options: messageQueryOptions).observe({ collection, error in
     if let error {
         print("Error: \(error).")
         return
     }
-    for message in collection.allObjects() {
+    for message in collection.snapshots {
         // Handle each message in the collection
     }
 })
@@ -43599,10 +43549,10 @@ func jumpToMessage(targetMessageId: String) {
 
 func queryMessages(queryOptions: AmityMessageQueryOptions) {
     // Invalidate previous observer
-    token.invalidate()
+    token?.invalidate()
 
     // Start new observation
-    token = messageRepository.getMessages(options: queryOptions).observe({ collection, change, error in
+    token = messageRepository.getMessages(options: queryOptions).observe({ collection, error in
         if let error = error {
             print("Error: \(error).")
             return
@@ -43614,6 +43564,7 @@ func queryMessages(queryOptions: AmityMessageQueryOptions) {
 }
 ```
 
+    {/* doc-as-test: skip(android-ui: requires PagingDataAdapter/RecyclerView UI components) */}
 ```kotlin Android
 fun jumpToTarget(
     messageRepository: AmityMessageRepository,
@@ -43855,77 +43806,39 @@ class MessageFlagManager {
     private let messageRepository: AmityMessageRepository
 
     init() {
-        self.messageRepository = AmityMessageRepository(client: AmityUIKitManagerInternal.shared.client)
+        self.messageRepository = AmityMessageRepository()
     }
 
     func flagMessage(
         messageId: String,
-        reason: AmityContentFlagReason,
-        customReason: String? = nil
-    ) {
-        // Create flag request
-        var flagBuilder = messageRepository.flag(messageId: messageId)
-            .reason(reason)
-
-        // Add custom reason for "Others" category
-        if reason == .others, let customText = customReason {
-            flagBuilder = flagBuilder.customReason(customText)
-        }
-
-        // Submit flag
-        flagBuilder.flag { [weak self] result in
-            switch result {
-            case .success:
-                self?.handleFlagSuccess(messageId: messageId, reason: reason)
-            case .failure(let error):
-                self?.handleFlagError(error: error, messageId: messageId)
-            }
-        }
-    }
-
-    private func handleFlagSuccess(messageId: String, reason: AmityContentFlagReason) {
-        print("Message \(messageId) flagged successfully with reason: \(reason)")
-
-        DispatchQueue.main.async {
-            // Update UI to show flagged state
-            self.showFlagSuccessMessage()
-            self.updateMessageUI(messageId: messageId, isFlagged: true)
-        }
-    }
-
-    private func handleFlagError(error: AmityError, messageId: String) {
-        print("Failed to flag message \(messageId): \(error.localizedDescription)")
-
-        DispatchQueue.main.async {
-            // Show error message to user
-            self.showErrorAlert(
-                title: "Flag Failed",
-                message: "Unable to flag this message. Please try again."
-            )
+        reason: AmityContentFlagReason
+    ) async {
+        do {
+            try await messageRepository.flagMessage(withId: messageId, reason: reason)
+            print("Message \(messageId) flagged successfully with reason: \(reason.description)")
+        } catch {
+            print("Failed to flag message \(messageId): \(error.localizedDescription)")
         }
     }
 
     // Convenience method for common flag reasons
-    func flagForHarassment(messageId: String) {
-        flagMessage(messageId: messageId, reason: .harassmentOrBullying)
+    func flagForHarassment(messageId: String) async {
+        await flagMessage(messageId: messageId, reason: .harassmentOrBullying)
     }
 
-    func flagForSpam(messageId: String) {
-        flagMessage(messageId: messageId, reason: .spamOrScams)
+    func flagForSpam(messageId: String) async {
+        await flagMessage(messageId: messageId, reason: .spamOrScams)
     }
 
-    func flagWithCustomReason(messageId: String, reason: String) {
+    func flagWithCustomReason(messageId: String, reason: String) async {
         let trimmedReason = String(reason.prefix(300)) // Limit to 300 chars
-        flagMessage(messageId: messageId, reason: .others, customReason: trimmedReason)
+        await flagMessage(messageId: messageId, reason: .others(trimmedReason))
     }
 }
 ```
 
+    {/* doc-as-test: skip(class-body: MessageFlagManager with internal constructor) */}
 ```kotlin
-import com.amity.socialcloud.sdk.api.chat.AmityMessageRepository
-import com.amity.socialcloud.sdk.model.core.flag.AmityContentFlagReason
-import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
-import io.reactivex.rxjava3.disposables.CompositeDisposable
 
 class MessageFlagManager {
     private val messageRepository = AmityMessageRepository()
@@ -44187,6 +44100,7 @@ class MessageFlagManager {
 }
 ```
 
+    {/* doc-as-test: skip(class-body-fragment: top-level enum+class, not valid inside function wrapper) */}
 ```dart
 import 'package:amity_sdk/amity_sdk.dart';
 
@@ -44209,7 +44123,7 @@ class MessageFlagManager {
         String? customReason,
     }) async {
         try {
-            await AmitySocialClient.newMessageRepository()
+            await AmityChatClient.newMessageRepository()
                 .flagMessage(messageId);
 
             _handleFlagSuccess(messageId, reason);
@@ -44298,6 +44212,7 @@ Users can unflag messages they previously flagged. This provides flexibility for
 
 ### Unflag Implementation Examples
 
+    {/* doc-as-test: skip (truly-illustrative: extension declaration inside a function body is invalid Swift — illustrative class scaffold only) */}
 ```swift
 extension MessageFlagManager {
     func unflagMessage(messageId: String) {
@@ -44347,6 +44262,7 @@ extension MessageFlagManager {
 }
 ```
 
+    {/* doc-as-test: skip(class-method-body: uses messageRepository member variable) */}
 ```kotlin
 fun unflagMessage(messageId: String) {
     val disposable = messageRepository.unflag(messageId)
@@ -44400,6 +44316,7 @@ fun toggleMessageFlag(messageId: String) {
 }
 ```
 
+    {/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
 ```javascript
 async unflagMessage(messageId) {
     try {
@@ -44456,6 +44373,7 @@ showFlagOptionsModal(messageId) {
 }
 ```
 
+    {/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
 ```typescript
 async unflagMessage(messageId: string): Promise<FlagResult> {
     try {
@@ -44544,10 +44462,11 @@ private showFlagOptionsDialog(messageId: string): void {
 }
 ```
 
+    {/* doc-as-test: skip(class-body-fragment: methods reference sibling class methods, not valid as standalone snippet) */}
 ```dart
 Future<bool> unflagMessage(String messageId) async {
     try {
-        await AmitySocialClient.newMessageRepository()
+        await AmityChatClient.newMessageRepository()
             .unflagMessage(messageId);
 
         _handleUnflagSuccess(messageId);
@@ -44634,6 +44553,7 @@ The `isFlaggedByMe` method only returns the flag status for the current user, no
 
 ### Flag Status Implementation Examples
 
+    {/* doc-as-test: skip (truly-illustrative: extension declaration inside a function body is invalid Swift — illustrative class scaffold only) */}
 ```swift
 extension MessageFlagManager {
     func checkIfMessageIsFlagged(
@@ -44693,6 +44613,7 @@ extension MessageFlagManager {
 }
 ```
 
+    {/* doc-as-test: skip(class-method-body: uses messageRepository member variable) */}
 ```kotlin
 fun checkIfMessageIsFlagged(
     messageId: String,
@@ -44764,6 +44685,7 @@ fun getFlagStatusLiveData(messageId: String): LiveData<Boolean> {
 }
 ```
 
+    {/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
 ```javascript
 async checkIfMessageIsFlagged(messageId) {
     try {
@@ -44823,6 +44745,7 @@ async monitorMessagesFlagStatus(messageIds, callback) {
 }
 ```
 
+    {/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
 ```typescript
 async checkIfMessageIsFlagged(messageId: string): Promise<boolean> {
     try {
@@ -44917,10 +44840,11 @@ private updateFlagStatusCache(messageId: string, isFlagged: boolean): void {
 }
 ```
 
+    {/* doc-as-test: skip(class-body-fragment: static fields + class definition, not valid inside function wrapper) */}
 ```dart
 Future<bool> checkIfMessageIsFlagged(String messageId) async {
     try {
-        final isFlagged = await AmitySocialClient.newMessageRepository()
+        final isFlagged = await AmityChatClient.newMessageRepository()
             .isFlaggedByMe(messageId);
 
         return isFlagged;
@@ -45101,18 +45025,21 @@ class FlagStatusCache {
     - **User Feedback**: Provide clear error messages and recovery options
 
 ```swift
-func handleFlagError(_ error: AmityError) {
-    switch error.code {
-    case .networkError:
+func handleFlagError(_ error: Error) {
+    let nsError = error as NSError
+    guard let errorCode = AmityErrorCode(rawValue: nsError.code) else {
+        showErrorMessage("Unable to flag message. Please try again.")
+        return
+    }
+    switch errorCode {
+    case .connectionError:
         showRetryOption("Network error. Please check your connection.")
     case .permissionDenied:
-        showError("You don't have permission to flag this message.")
-    case .rateLimitExceeded:
-        showError("Too many requests. Please try again later.")
-    case .alreadyFlagged:
-        showInfo("You have already flagged this message.")
+        showErrorMessage("You don't have permission to flag this message.")
+    case .rateLimit:
+        showErrorMessage("Too many requests. Please try again later.")
     default:
-        showError("Unable to flag message. Please try again.")
+        showErrorMessage("Unable to flag message. Please try again.")
     }
 }
 ```
@@ -54262,7 +54189,7 @@ Retrieve multiple posts by their IDs in a single operation with live collection 
 ```swift iOS
 var token: AmityNotificationToken?
 
-token = postRepository.getPosts(postIds: ["post-id-1", "post-id-2"]).observe { collection, changes, error in
+token = postRepository.getPosts(postIds: ["post-id-1", "post-id-2"]).observe { collection, error in
     // Observe live collection here
 }
 ```
@@ -54418,7 +54345,7 @@ func postQueryExample() {
         dataTypes: ["image", "video"]
     )
     // 2. query the posts, and handle the results via the live collection.
-    token = postRepository.getPosts(options).observe { collection, changes, error in
+    token = postRepository.getPosts(options).observe { collection, error in
         // Observe the live collection changes here.
     }
 }
@@ -54436,7 +54363,7 @@ func queryPostsWithTags() {
         tags: ["product", "promotion"]
     )
 
-    token = postRepository.getPosts(options).observe { collection, changes, error in
+    token = postRepository.getPosts(options).observe { collection, error in
         // Observe the live collection changes here.
     }
 }
@@ -54457,7 +54384,7 @@ fun queryPosts(postRepository: AmityPostRepository) {
         .includeDeleted(includeDeleted = false)
         .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
         .build()
-        .getPagingData()
+        .query()
         .doOnNext { pagingData: PagingData<AmityPost> ->
             //Observe the changes here.
         }
@@ -54478,7 +54405,7 @@ fun queryPostsWithTags(postRepository: AmityPostRepository, tags: List<String>) 
         .includeDeleted(includeDeleted = false)
         .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
         .build()
-        .getPagingData()
+        .query()
         .doOnNext { pagingData: PagingData<AmityPost> ->
             //Observe the changes here.
         }
@@ -54674,27 +54601,26 @@ let options = AmityPostQueryOptions(
     targetId: "community-123",
     sortBy: .lastCreated,
     deletedOption: .notDeleted,
+    dataTypes: nil,
     untilAt: oneWeekAgo
 )
 
-token = postRepository.getPosts(options).observe { collection, changes, error in
+token = postRepository.getPosts(options).observe { collection, error in
     // All posts will have createdAt >= oneWeekAgo
 }
 ```
 ```kotlin
 // Query community posts from the last 7 days only
-val oneWeekAgo = Calendar.getInstance().apply {
-    add(Calendar.DAY_OF_YEAR, -7)
-}.time
+val oneWeekAgo = org.joda.time.DateTime().minusDays(7)
 
 postRepository
     .getPosts()
     .targetCommunity(communityId = "community-123")
     .includeDeleted(includeDeleted = false)
-    .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
+    .sortBy(sortOption = AmityCommunityFeedSortOption.LAST_CREATED)
     .untilAt(oneWeekAgo)
     .build()
-    .getPagingData()
+    .query()
     .doOnNext { pagingData ->
         // All posts will have createdAt >= oneWeekAgo
     }
@@ -54779,7 +54705,7 @@ var token: AmityNotificationToken?
 
 func accessPostAndItsChildrenInfo(liveObject: AmityObject<AmityPost>) {
     token = liveObject.observe { liveObject, error in
-        guard let post = liveObject.object else { return }
+        guard let post = liveObject.snapshot else { return }
 
         // 1. Accessing the post itself
         let postId = post.postId
@@ -54836,6 +54762,7 @@ fun getPost(postId: String, postRepository: AmityPostRepository) {
                             val fileData: AmityFile? =
                                 (childPost.getData() as AmityPost.Data.FILE).getFile()
                         }
+                        else -> { /* other post data types */ }
                     }
                 }
             }
@@ -55420,13 +55347,13 @@ func getRoomPlaybackUrls(from post: AmityPost) {
     switch status {
     case .live:
         // Get live playback URL for active broadcast
-        if let liveUrl = roomData.getLivePlaybackUrl() {
+        if let liveUrl = roomData.livePlaybackUrl {
             playbackUrls.append(liveUrl)
         }
     case .recorded:
         // Get recorded playback URLs after broadcast ends
-        let recordedInfos = roomData.getRecordedPlaybackInfos()
-        playbackUrls = recordedInfos.compactMap { $0.url }
+        let recordedInfos = roomData.recordedData
+        playbackUrls = recordedInfos.compactMap { $0.playbackUrl }
     default:
         // Room is idle or ended, no playback available
         break
@@ -55489,8 +55416,8 @@ async function getRoomPlaybackUrls(roomId: string): Promise<string[]> {
 Once you have the playback URL, use platform-specific video players to render the content.
 
 
+{/* doc-as-test: skip (truly-illustrative: present() is a UIViewController instance method — requires UIViewController subclass context, cannot compile in isolation) */}
 ```swift iOS
-import AVKit
 
 func playRoomVideo(url: String) {
     guard let videoURL = URL(string: url) else { return }
@@ -55512,19 +55439,18 @@ func playRoomVideo(url: String) {
 func playRoom(from post: AmityPost) {
     guard let roomData = post.getRoomInfo() else { return }
 
-    if roomData.status == .live, let liveUrl = roomData.getLivePlaybackUrl() {
+    if roomData.status == .live, let liveUrl = roomData.livePlaybackUrl {
         playRoomVideo(url: liveUrl)
     } else if roomData.status == .recorded {
-        if let firstRecordedUrl = roomData.getRecordedPlaybackInfos().first?.url {
+        if let firstRecordedUrl = roomData.recordedData.first?.playbackUrl {
             playRoomVideo(url: firstRecordedUrl)
         }
     }
 }
 ```
 
+{/* doc-as-test: skip(android-ui: requires media3/ExoPlayer not in compile classpath) */}
 ```kotlin Android
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 
 fun playRoomVideo(
     context: Context,
@@ -55636,6 +55562,7 @@ Live stream posts offer an effective means of creating captivating and interacti
 For more information about live streaming, please refer to [Video Streaming](/social-plus-sdk/video/README).
 
 
+{/* doc-as-test: skip (truly-illustrative: references outer-scope 'post: AmityPost' variable — @_hasMissingDesignatedInitializers, cannot construct in type-check context) */}
 ```swift iOS
 // Grab the stream object from the first child post
 if let firstChildPost = post.childrenPosts.first,
@@ -55644,6 +55571,7 @@ if let firstChildPost = post.childrenPosts.first,
 }
 ```
 
+{/* doc-as-test: skip(android-ui: requires AmityVideoPlayer not in public API) */}
 ```kotlin Android
 fun getLivestreamInfo(
     post: AmityPost,
@@ -55781,6 +55709,8 @@ func updateTextPostExample() async throws {
         let post = try await postRepository.editPost(
             withId: "<post-id>",
             builder: builder,
+            metadata: nil,
+            mentionees: nil,
           links: links,
             productTags: productTags
         )
@@ -55793,10 +55723,7 @@ func updateTextPostExample() async throws {
 ```
 
 ```kotlin Android
-fun updateTextPost(post: AmityPost) {
-    val postData: AmityPost.Data = post.getData()
-    //
-    if (postData is AmityPost.Data.TEXT) {
+fun updateTextPost(post: AmityPost, postRepository: AmityPostRepository) {
     val links = listOf(
       AmityLink(
         index = 18,
@@ -55809,13 +55736,12 @@ fun updateTextPost(post: AmityPost) {
       )
     )
 
-        postData.edit()
+    postRepository.editPost(postId = post.getPostId())
       .text(text = "Updated text with https://www.amity.co")
       .links(links)
-            .build()
-            .apply()
-            .subscribe()
-    }
+      .build()
+      .apply()
+      .subscribe()
 }
 ```
 
@@ -55880,7 +55806,7 @@ To edit a file post, utilize the `editPost` method in a post repository using `A
 
 ```swift iOS
 func updateFilePostExample() async throws {
-    guard let post = postRepository.getPost(withId: "postId").object else { return }
+    guard let post = postRepository.getPost(withId: "postId").snapshot else { return }
     let childrenPosts = post.childrenPosts
 
     Task { @MainActor in
@@ -55974,7 +55900,7 @@ To edit an image post, utilize the `editPost` method in a post repository using 
 
 ```swift iOS
 func updateImagePostExample() {
-    guard let post = postRepository.getPost(withId: "postId").object else { return }
+    guard let post = postRepository.getPost(withId: "postId").snapshot else { return }
     let childrenPosts = post.childrenPosts
 
     Task { @MainActor in
@@ -56034,30 +55960,28 @@ fun updateImagePost(
     val attachments = existingImages + newImages
 
   val productTags = listOf(
-    AmityProductTag.Text(productId = "product1", index = 0, length = 8),
-    AmityProductTag.Text(productId = "product2", index = 9, length = 8)
+    AmityProductTag.Text(productId = "product1", text = "product1", index = 0, length = 8),
+    AmityProductTag.Text(productId = "product2", text = "product2", index = 9, length = 8)
   )
 
-  val attachmentProductTags = AmityAttachmentProductTags(
-    mapOf(
-      "fileId1" to listOf(
-        AmityProductTag.Media(productId = "product1", index = 0)
-      )
-    )
-  )
+  val attachmentProductTags = AmityAttachmentProductTags.Builder()
+    .apply {
+      set("fileId1", listOf(AmityProductTag.Media(productId = "product1")))
+    }
+    .build()
 
   val metadata = JsonObject().apply {
     addProperty("key", "value")
   }
 
   val links = listOf(
-    AmityLink(url = "https://example.com", title = "Example")
+    AmityLink(index = null, length = null, url = "https://example.com", renderPreview = false, domain = null, title = "Example", imageUrl = null)
   )
 
   postRepository.editPost(postId = "post1")
     .text("product1 product2 updated text!")
     .title("updated title")
-    .attachments(image)
+    .attachments(*attachments.toTypedArray())
     .metadata(metadata)
     .mentionUsers(listOf("user1", "user2"))
     .hashtags(listOf("hashtag1", "hashtag2"))
@@ -56123,7 +56047,7 @@ To edit a video post, utilize the `editPost` method in a post repository using `
 
 ```swift iOS
 func updateVideoPostExample() async throws {
-    guard let post = postRepository.getPost(withId: "postId").object else { return }
+    guard let post = postRepository.getPost(withId: "postId").snapshot else { return }
     let childrenPosts = post.childrenPosts
 
     Task { @MainActor in
@@ -56189,24 +56113,22 @@ fun updateVideoPost(
     val attachments = existingVideos + newVideos
 
   val productTags = listOf(
-    AmityProductTag.Text(productId = "product1", index = 0, length = 8),
-    AmityProductTag.Text(productId = "product2", index = 9, length = 8)
+    AmityProductTag.Text(productId = "product1", text = "product1", index = 0, length = 8),
+    AmityProductTag.Text(productId = "product2", text = "product2", index = 9, length = 8)
   )
 
-  val attachmentProductTags = AmityAttachmentProductTags(
-    mapOf(
-      "fileId1" to listOf(
-        AmityProductTag.Media(productId = "product1", index = 0)
-      )
-    )
-  )
+  val attachmentProductTags = AmityAttachmentProductTags.Builder()
+    .apply {
+      set("fileId1", listOf(AmityProductTag.Media(productId = "product1")))
+    }
+    .build()
 
   val metadata = JsonObject().apply {
     addProperty("key", "value")
   }
 
   val links = listOf(
-    AmityLink(url = "https://example.com", title = "Example")
+    AmityLink(index = null, length = null, url = "https://example.com", renderPreview = false, domain = null, title = "Example", imageUrl = null)
   )
 
   postRepository.editPost(postId = post.getPostId())
@@ -56365,7 +56287,7 @@ do {
 
 ```kotlin Android
 fun deletePost(postRepository: AmityPostRepository) {
-    postRepository.deletePost(postId = "post123", hardDelete = true)
+    postRepository.hardDeletePost(postId = "post123")
         .doOnComplete {
             //success
         }
@@ -56497,13 +56419,13 @@ Post pinning is managed through the Moderation Console. The SDK provides read-on
 Retrieve pinned posts to display at the top of community feeds, ensuring maximum visibility for important content.
 
 ```swift iOS
-let postRepository = AmityPostRepository(client: client)
+let postRepository = AmityPostRepository()
 
 // SDK provide enum type of placment for convinence use
 // You can use just string if there's customization on placement
 let placement = AmityPinPlacement.default.rawValue
 
-token = postRepository.getPinnedPosts(communityId: "community-id", placement: placement, sortBy: .lastPinned).observe({ collection, change, error in
+token = postRepository.getPinnedPosts(communityId: "community-id", placement: placement, sortBy: .lastPinned).observe({ collection, error in
     // handle pinned post here
 })
 ```
@@ -56547,13 +56469,13 @@ To maintain a balanced feed with fresh content, limit the number of globally fea
 These posts are tracked separately, similar to default pinned posts but with different behavior. Announcements are typically housed at the top of the community in a separate section, making them easily accessible without forcing users to go through every announcement. This type of pinned post is suitable for multiple important posts that need to be highlighted simultaneously, such as reminders, updates, or informational content.
 
 ```swift iOS
-let postRepository = AmityPostRepository(client: client)
+let postRepository = AmityPostRepository()
 
 // SDK provide enum type of placment for convinence use
 // You can use just string if there's customization on placement
 let placement = AmityPinPlacement.announcement.rawValue
 
-token =  postRepository.getPinnedPosts(communityId: "community-id", placement: placement, sortBy: .lastPinned).observe({ collection, changes, error in
+token =  postRepository.getPinnedPosts(communityId: "community-id", placement: placement, sortBy: .lastPinned).observe({ collection, error in
     // handle announcement post here
 })
 ```
@@ -56595,7 +56517,7 @@ const unsubscriber = PostRepository.getPinnedPosts(
 Global featured posts keep your key content prominently displayed at the top of the main feed, the typical landing page on both web and app platforms. This ensures your announcements reach the entire in-app community, maximizing visibility. The getGlobalPinnedPost() function in the social.plus SDK provides a dedicated collection of featured posts that are intended to appear at the top of the global feed, ensuring users see these posts first, regardless of community affiliation.
 
 ```swift iOS
-token = postRepository.getGlobalPinnedPosts().observe { liveCollection, _, error in
+token = postRepository.getGlobalPinnedPosts().observe { liveCollection, error in
 
     let pinnedPosts: [AmityPinnedPost] = liveCollection.snapshots
     for pinnedPost in pinnedPosts {
@@ -56922,7 +56844,7 @@ var token: AmityNotificationToken?
 token = feedRepository.getCommunityFeed(withCommunityId: "<community-id>",
                                 sortBy: .firstCreated,
                                 includeDeleted: true,
-                                feedType: .reviewing).observe { collection, change, error in
+                                feedType: .reviewing).observe { collection, error in
     // Handle result here
 }
 ```
