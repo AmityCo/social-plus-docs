@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -440,6 +441,61 @@ def run_ios_doc_as_test_check() -> dict:
     }
 
 
+def run_mdx_structure_check() -> dict:
+    """Scan all MDX files for HTML comments (<!-- -->) inside JSX component context.
+
+    HTML comments are invalid JSX syntax. Inside components like <CodeGroup>,
+    <Tabs>, <Tab>, <Accordion> etc. they cause MDX parse errors that break page
+    rendering entirely. The correct form is {/* JSX comment */}.
+
+    Returns:
+        violations: list of {file, line, content} dicts
+        blocking: True if any violations found
+    """
+    JSX_OPEN_RE = re.compile(
+        r"<(Tabs|Tab|CodeGroup|CardGroup|Card|Accordion|AccordionGroup|Info|Warning|Note|Callout)[> /]"
+    )
+    JSX_CLOSE_RE = re.compile(
+        r"</(Tabs|Tab|CodeGroup|CardGroup|Card|Accordion|AccordionGroup|Info|Warning|Note|Callout)>"
+    )
+    HTML_COMMENT_RE = re.compile(r"<!--")
+    FENCE_RE = re.compile(r"^```")
+
+    violations = []
+    mdx_root = REPO_ROOT / "social-plus-sdk"
+    if not mdx_root.exists():
+        mdx_root = REPO_ROOT  # fallback
+
+    for mdx_path in sorted(mdx_root.rglob("*.mdx")):
+        try:
+            lines = mdx_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        depth = 0
+        in_fence = False
+        for lineno, line in enumerate(lines, 1):
+            if FENCE_RE.match(line):
+                in_fence = not in_fence
+            if in_fence:
+                continue  # code fence content is safe — <!-- is just code text
+            if JSX_OPEN_RE.search(line):
+                depth += 1
+            if JSX_CLOSE_RE.search(line):
+                depth -= 1
+            if depth > 0 and HTML_COMMENT_RE.search(line):
+                violations.append({
+                    "file": str(mdx_path.relative_to(REPO_ROOT)),
+                    "line": lineno,
+                    "content": line.strip()[:120],
+                })
+
+    return {
+        "violations": violations,
+        "blocking": len(violations) > 0,
+        "files_scanned": sum(1 for _ in mdx_root.rglob("*.mdx")),
+    }
+
+
 def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) -> dict:
     base_pairs = pair_set(baseline)
     cand_pairs = pair_set(candidate)
@@ -464,7 +520,7 @@ def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) 
     }
 
 
-def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None, an_dat: dict | None = None, ios_dat: dict | None = None) -> None:
+def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None, an_dat: dict | None = None, ios_dat: dict | None = None, mdx_chk: dict | None = None) -> None:
     bar = "═" * 60
     print(bar)
     print("  Docs-Ops Drift Check")
@@ -502,6 +558,13 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
     _dat_line("Doc-as-test (Flutter):", fl_dat)
     _dat_line("Doc-as-test (Android):", an_dat)
     _dat_line("Doc-as-test (iOS):    ", ios_dat)
+
+    # MDX structure line
+    if mdx_chk is not None:
+        n = len(mdx_chk["violations"])
+        scanned = mdx_chk["files_scanned"]
+        status = "✓" if n == 0 else "✗"
+        print(f"  MDX structure:         files_scanned={scanned}  html_comments_in_jsx={n}  {status}")
 
     print()
 
@@ -546,13 +609,24 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
                 print(f"    - {page}:{lr} ({errs})")
             print()
 
+    # MDX structure violation details
+    if mdx_chk and mdx_chk["violations"]:
+        print(f"  ✗ MDX STRUCTURE VIOLATIONS (BLOCKING) — {len(mdx_chk['violations'])} HTML comment(s) inside JSX:")
+        for v in mdx_chk["violations"]:
+            print(f"    - {v['file']}:{v['line']}  {v['content'][:80]}")
+        print()
+        print("  HTML comments (<!-- -->) inside JSX components break MDX rendering.")
+        print("  Replace with JSX comments: {/* your comment */}")
+        print()
+
     # Final verdict
     regressed = delta["regressed"]
     ts_blocking = ts_dat and ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
     fl_blocking = fl_dat and fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
     an_blocking = an_dat and an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
     ios_blocking = ios_dat and ios_dat.get("available") and not ios_dat.get("crashed") and len(ios_dat.get("blocking_failures", [])) > 0
-    if regressed or ts_blocking or fl_blocking or an_blocking or ios_blocking:
+    mdx_blocking = mdx_chk and mdx_chk["blocking"]
+    if regressed or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking:
         if regressed:
             print("  FAIL — fix new drift above, or run the validator locally:")
             print(f"           python3 {TS_VALIDATOR}")
@@ -565,6 +639,8 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
             print("  FAIL — fix Android doc-as-test compile errors above.")
         if ios_blocking:
             print("  FAIL — fix iOS doc-as-test compile errors above.")
+        if mdx_blocking:
+            print("  FAIL — fix MDX structure violations above (<!-- --> → {/* */} inside JSX).")
     else:
         print("  PASS — okay to push.")
     print(bar)
@@ -605,12 +681,14 @@ def main(argv: list[str] | None = None) -> int:
     fl_dat = run_flutter_doc_as_test_check()
     an_dat = run_android_doc_as_test_check()
     ios_dat = run_ios_doc_as_test_check()
+    mdx_chk = run_mdx_structure_check()
 
     ts_blocking = ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
     fl_blocking = fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
     an_blocking = an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
     ios_blocking = ios_dat.get("available") and not ios_dat.get("crashed") and len(ios_dat.get("blocking_failures", [])) > 0
-    overall_fail = delta["regressed"] or ts_blocking or fl_blocking or an_blocking or ios_blocking
+    mdx_blocking = mdx_chk["blocking"]
+    overall_fail = delta["regressed"] or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking
 
     if args.quiet:
         sign = "+" if delta["delta_total"] > 0 else ""
@@ -635,14 +713,16 @@ def main(argv: list[str] | None = None) -> int:
               f"an_passed={an_s.get('blocks_passed', 0)} an_skipped={an_s.get('blocks_skipped', 0)} "
               f"an_blocking={an_b} "
               f"ios_passed={ios_s.get('blocks_passed', 0)} ios_skipped={ios_s.get('blocks_skipped', 0)} "
-              f"ios_blocking={ios_b} verdict={verdict}")
+              f"ios_blocking={ios_b} "
+              f"mdx_html_comments_in_jsx={len(mdx_chk['violations'])} mdx_blocking={int(mdx_blocking)} "
+              f"verdict={verdict}")
     else:
-        print_summary(delta, ts_dat, fl_dat, an_dat, ios_dat)
+        print_summary(delta, ts_dat, fl_dat, an_dat, ios_dat, mdx_chk)
 
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat, "doc_as_test_android": an_dat, "doc_as_test_ios": ios_dat}
+        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat, "doc_as_test_android": an_dat, "doc_as_test_ios": ios_dat, "mdx_structure": mdx_chk}
         out_path.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
 
     return 1 if overall_fail else 0
