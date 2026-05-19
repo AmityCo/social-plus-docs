@@ -95,7 +95,7 @@ TABLE_ROW_RE = re.compile(
 # Declaration line following [androidJvm]
 DECL_KINDS_RE = re.compile(
     r"^(data class|sealed class|abstract class|open class|enum class|"
-    r"annotation class|class|interface|object|companion object|typealias|fun)\b"
+    r"annotation class|class|interface|object|companion object|typealias|fun|enum)\b"
 )
 # Strip markdown links from signatures: [Text](url) → Text
 STRIP_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
@@ -212,8 +212,8 @@ def _parse_type_index(index_path: Path) -> dict | None:
     current_section: str | None = None
     for ln in lines:
         stripped = ln.strip()
-        if stripped in ("## Functions", "## Properties", "## Entries", "## Constructors"):
-            current_section = stripped[3:]  # "Functions" / "Properties" / ...
+        if stripped in ("## Functions", "## Properties", "## Entries", "## Constructors", "## Types"):
+            current_section = stripped[3:]  # "Functions" / "Properties" / "Types" / ...
             continue
         if stripped.startswith("## "):
             current_section = None
@@ -240,6 +240,8 @@ def _parse_type_index(index_path: Path) -> dict | None:
             kind = "enum_entry"
         elif current_section == "Constructors":
             kind = "constructor"
+        elif current_section == "Types":
+            kind = "nested_type"   # sealed subclasses / objects listed as Types
         else:
             kind = "unknown"
 
@@ -351,11 +353,29 @@ def extract() -> dict:
                     continue
                 nested_entry = _parse_type_index(nested_index)
                 if nested_entry:
+                    # Flatten Companion object members into the parent type so that
+                    # TypeName.companionMethod references resolve correctly (idiomatic Kotlin).
+                    if nested_entry["name"] == "Companion":
+                        for cm in nested_entry["members"]:
+                            cm = dict(cm, from_companion=True)
+                            members.append(cm)
+                        continue
+                    # Flatten Companion object members into the nested type so
+                    # NestedType.companionMethod references resolve correctly.
+                    companion_dir = nested_dir / "-companion"
+                    companion_index = companion_dir / "index.md"
+                    if companion_index.exists():
+                        comp_entry = _parse_type_index(companion_index)
+                        if comp_entry:
+                            for cm in comp_entry["members"]:
+                                nested_entry["members"].append(dict(cm, from_companion=True))
+
                     nested_types.append({
                         "name": nested_entry["name"],
                         "kind": nested_entry["kind"],
                         "primary_decl": {"file": str(nested_index.relative_to(SDK_ROOT.parent)), "line": None},
                         "members": nested_entry["members"],
+                        "nested_types": [],  # depth limited to 2 levels
                     })
 
             surface_entry = {

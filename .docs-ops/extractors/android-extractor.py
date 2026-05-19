@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED — superseded by android-dokka-extractor.py (Dokka GFM-based, task 0079).
+# Retained as a fallback reference. Do not use as primary source.
+# Primary surface source is now .docs-ops/sdk-surface/android.json produced by android-dokka-extractor.py.
 """
 Android SDK surface extractor (v0.1.0)
 Regex-based Kotlin/Java public-API extractor.
