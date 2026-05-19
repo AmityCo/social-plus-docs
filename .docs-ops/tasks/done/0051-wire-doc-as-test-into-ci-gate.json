@@ -1,0 +1,29 @@
+{
+  "id": "0051-wire-doc-as-test-into-ci-gate",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/ci/check-drift.py",
+    ".docs-ops/CI_GATE.md"
+  ],
+  "context_files": [
+    ".docs-ops/integration-tests/run-tests.py",
+    ".docs-ops/integration-tests/results/latest.json",
+    ".docs-ops/integration-tests/README.md"
+  ],
+  "instructions": "Extend the local CI gate (`.docs-ops/ci/check-drift.py`) to also run the doc-as-test framework as a second check. This is independent of task 0050 (which chases the last 3 failures) — even if 0050 hasn't landed, this gate works correctly because of the strict TS2xxx-only enforcement policy below.\n\n## Gate policy (this is the key design decision)\n\n**Block the push** if doc-as-test reports any TS2xxx error (type errors — these are real API drift).\n\n**Warn but don't block** on TS1xxx errors (parser-only errors — common in illustrative pseudocode; tolerating these keeps the gate from becoming high-friction).\n\nRationale: the framework's value is catching API SIGNATURE drift that the regex validator misses. Type errors (TS2xxx) are exactly that. Parser errors (TS1xxx) include intentional partial-code patterns we shouldn't fight.\n\n## Implementation\n\nIn `check-drift.py`, add a new function `run_doc_as_test_check()` that runs AFTER the existing drift comparison:\n\n  1. Invoke `python3 .docs-ops/integration-tests/extract-blocks.py` (refresh extractions from current working tree)\n  2. Invoke `python3 .docs-ops/integration-tests/run-tests.py`\n  3. Read `.docs-ops/integration-tests/results/latest.json`\n  4. Categorize each failure's errors by error code prefix:\n     - Any error matching `TS2\\d+` → type error → BLOCKING\n     - All errors matching `TS1\\d+` only → parser error → WARNING\n     - Mixed (some TS1xxx + some TS2xxx) → BLOCKING (the TS2xxx wins)\n  5. Return a structured result: `{ blocking_failures: [...], warning_failures: [...], stats }`\n\nIn `main()`, after computing the existing drift delta, run the doc-as-test check. Combine the gate verdict:\n\n  - `regression OR blocking_failures` → exit 1 (FAIL)\n  - else → exit 0 (PASS), but print warnings\n\nUpdate the printed summary to show both signals — existing regex-drift delta AND doc-as-test pass/warn/fail counts. Example layout:\n\n```\n═══════════════════════════════════════════════════════════\n  Docs-Ops Drift Check\n═══════════════════════════════════════════════════════════\n  Base: origin/main (abc12345)\n  Regex drift:    baseline=0  candidate=0  delta=0  ✓ No new drift\n  Doc-as-test:    blocks_passed=69  blocks_skipped=4  warnings=3  blocking=0\n\n  ⚠ 3 doc-as-test warnings (parser-only, non-blocking):\n    - get-user-information.mdx:54-66 (TS1005)\n    - authentication.mdx:198-207 (TS1005)\n    - authentication.mdx:599-622 (TS1005)\n\n  PASS — okay to push.\n═══════════════════════════════════════════════════════════\n```\n\nOn a blocking failure:\n\n```\n  ✗ DOC-AS-TEST TYPE ERRORS (BLOCKING):\n    - <page>:<lines> (TS2339): Property 'foo' does not exist on type 'X'\n    - ...\n\n  FAIL — fix the type errors above. Run locally:\n    python3 .docs-ops/integration-tests/run-tests.py\n```\n\n## Update CI_GATE.md\n\nAdd a new section describing the doc-as-test layer:\n  - What it checks (type-correctness of code blocks in the top-traffic pages)\n  - Why it's separate from the regex validator (catches signature drift, not just name drift)\n  - What blocks vs what warns (TS2xxx blocks; TS1xxx warns)\n  - How to opt out per-block (`<!-- doc-as-test: skip -->`)\n  - Scope is currently TS only / top-24 pages\n\n## Env / worktree handling\n\nThe doc-as-test runner currently runs in-place on the working tree. The drift check uses a `git worktree` for baseline comparison. For v1, run doc-as-test ONLY on the candidate (current working tree) — do NOT run a baseline comparison. The doc-as-test gate is 'block any new TS2xxx in the candidate', not 'block regression vs baseline'. This is simpler and matches the design philosophy (any TS2xxx is bad, baseline or not).\n\nFuture v2 could add baseline comparison if false positives become an issue.\n\n## Out of scope\n\n- iOS / Android / Flutter doc-as-test gating — TS only still.\n- Phase 2.2 GitHub Action — that's the follow-up that wraps the now-richer local gate.\n- Per-PR pass-rate trending dashboards — would be nice; not v1.\n\n## Success criteria\n\n  - `check-drift.py` runs end-to-end with both checks. On a no-op (HEAD vs HEAD), it must exit 0.\n  - When run against current HEAD, the output shows both gates and ends with PASS (assuming 0050 hasn't landed yet — the 3 TS1xxx will show as warnings, not failures).\n  - CI_GATE.md updated.\n\nReport in `notes`: example output from a successful run; example output simulated for a TS2xxx-blocking scenario (you can construct one by temporarily breaking a snippet, running the gate, then reverting); any edge cases discovered (e.g., what happens if the doc-as-test runner itself crashes).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "gate_runs_both_checks_and_blocks_correctly",
+        "command": "python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --quiet 2>&1 | tail -5 | grep -E 'PASS|verdict=PASS' && grep -q 'doc-as-test' .docs-ops/CI_GATE.md && echo OK",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-18T13:30:00Z"
+}

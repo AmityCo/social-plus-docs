@@ -90,6 +90,10 @@ When you add a new Swift file to your Objective-C project, Xcode automatically g
     
     import AmitySDK
     
+    class NoopSessionHandler: SessionHandler {
+        func sessionWillRenewAccessToken(renewal: any AccessTokenRenewal) {}
+    }
+    
     @objc class SDKLoginManager: NSObject {
         
         let client: AmityClient?
@@ -99,19 +103,33 @@ When you add a new Swift file to your Objective-C project, Xcode automatically g
         }
         
         @objc func login(userId: String, displayName: String, authToken: String, completion: @escaping (Bool, Error?) -> Void) {
-            self.client?.login(userId: userId, displayName: displayName, authToken: authToken, completion: completion)
+            Task {
+                do {
+                    try await self.client?.login(
+                        userId: userId,
+                        displayName: displayName.isEmpty ? nil : displayName,
+                        authToken: authToken.isEmpty ? nil : authToken,
+                        sessionHandler: NoopSessionHandler()
+                    )
+                    completion(true, nil)
+                } catch {
+                    completion(false, error)
+                }
+            }
         }
         
         @objc func logout() {
-            self.client?.secureLogout()
+            Task { try? await self.client?.secureLogout() }
         }
         
         @objc func isLoggedIn() -> Bool {
-            return self.client?.sessionState == .established ?? false
+            guard let state = self.client?.sessionState else { return false }
+            if case .established = state { return true }
+            return false
         }
         
         @objc func getCurrentUserId() -> String? {
-            return self.client?.getCurrentUserId()
+            return self.client?.currentUserId ?? nil
         }
     }
     ```

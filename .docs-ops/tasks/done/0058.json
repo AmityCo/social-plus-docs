@@ -1,0 +1,41 @@
+{
+  "id": "0058-ios-doc-as-test-framework",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/integration-tests/ios/README.md",
+    ".docs-ops/integration-tests/ios/Package.swift",
+    ".docs-ops/integration-tests/ios/preamble.swift",
+    ".docs-ops/integration-tests/ios/pages.json",
+    ".docs-ops/integration-tests/ios/extract-blocks.py",
+    ".docs-ops/integration-tests/ios/run-tests.py",
+    ".docs-ops/integration-tests/ios/results/latest.json"
+  ],
+  "context_files": [
+    ".docs-ops/integration-tests/android/build.gradle.kts",
+    ".docs-ops/integration-tests/android/preamble.kt",
+    ".docs-ops/integration-tests/android/extract-blocks.py",
+    ".docs-ops/integration-tests/android/run-tests.py",
+    ".docs-ops/integration-tests/android/README.md",
+    ".docs-ops/integration-tests/flutter/pages.json",
+    ".docs-ops/sdk-surface/ios.json"
+  ],
+  "instructions": "Build the iOS analog of the TS / Flutter / Android doc-as-test frameworks. Final platform of the four. Same value model: extract ```swift code blocks from high-traffic docs, type-check against the real AmitySDK iOS source, report pass/fail/skip.\n\nNew subdirectory: `.docs-ops/integration-tests/ios/` (sibling to ts/flutter/android frameworks).\n\n## Part A — Pick the simplest toolchain\n\nFour real options; pick whichever Copilot can get working fastest. Document the choice + tradeoff in README. The host machine (per env) is darwin so swiftc is available — assume macOS is acceptable for v1; CI considerations are a follow-up.\n\n  **Option A (preferred — Swift Package Manager + local path)**: a minimal `Package.swift` declaring AmitySDK as a binary target via the AmitySDK xcframework at `AmitySDKIOS/AmitySDK.xcframework` (or wherever it lives — investigate the SDK repo layout). Use `swift build --target docs-ops-snippets` to type-check.\n\n  **Option B (cleanest if SPM is hard — official SwiftPM repo)**: Package.swift depending on the published SwiftPM repo `https://github.com/AmityCo/Amity-Social-Cloud-SDK-iOS-SwiftPM` (referenced in the iOS quickstart doc). This means testing against the PUBLISHED SDK rather than the live source. Acceptable for v1.\n\n  **Option C (lightest manual — `swiftc -typecheck`)**: build the SDK once to get module files, then `swiftc -typecheck -I <module-path> -F <framework-path> file.swift` per block. Faster per-run but more fiddly setup.\n\n  **Option D (last resort — Xcode project)**: full xcodebuild against an xcframework-linked project. Slowest, most fragile. Only if A/B/C all fail.\n\n## Part B — Preamble: wrap each block as a function body\n\nSwift allows top-level functions in scripts (`main.swift`) but library targets require a containing scope. Wrap each block in a global function:\n\n```swift\n// preamble.swift — context for doc snippets. The extractor wraps each block in\n// a function with these parameters in scope.\nimport AmitySDK\n\n@available(iOS 14.0, *)\nfunc docSnippet(\n    apiKey: String = \"\",\n    region: AmityRegion = .sg,\n    userId: String = \"\",\n    displayName: String = \"\",\n    channelId: String = \"\",\n    subChannelId: String = \"\",\n    messageId: String = \"\",\n    postId: String = \"\",\n    communityId: String = \"\",\n    commentId: String = \"\",\n    pollId: String = \"\",\n    fileId: String = \"\",\n    client: AmityClient? = nil,\n    channel: AmityChannel? = nil,\n    message: AmityMessage? = nil,\n    post: AmityPost? = nil,\n    comment: AmityComment? = nil,\n    community: AmityCommunity? = nil\n) async throws {\n    // <SNIPPET_BODY> (extractor inserts each block here)\n}\n```\n\nVerify each type against `.docs-ops/sdk-surface/ios.json` before declaring. If a type isn't there (e.g., the iOS SDK uses a different name), drop it from the preamble and note in the run report. Conservative > false-negative.\n\nThe `async throws` wrapper handles the most common iOS pattern (async APIs that can throw). Snippets that don't use async/throw will still compile inside an async-throwing context.\n\n## Part C — Page list (`pages.json`)\n\nReuse the same high-traffic page set as Flutter/Android. Add `ios-quick-start.mdx` to a `ios_specific` section since it's the iOS entry point. Resolve `enumerate:` entries at extract time.\n\n## Part D — Block extractor (`extract-blocks.py`)\n\nMirror Flutter/Android extractor structure. Differences:\n  - Extract ```swift blocks only (not ```objc / ```objective-c in v1 — handle later if needed).\n  - For each block, wrap in the `docSnippet` async throws function with context vars in scope.\n  - Honor `<!-- doc-as-test: skip -->` markers.\n  - Naming: `<page-slug>-block-<N>.swift`.\n\n## Part E — Test runner (`run-tests.py`)\n\nDepending on toolchain chosen in Part A:\n  - SPM: `swift build --target docs-ops-snippets 2>&1`, parse errors.\n  - swiftc: `swiftc -typecheck -I <module-path> <file>.swift`, capture stderr per file.\n  - Either way: errors mapped to source blocks via the file naming.\n\nGate policy mirrors prior platforms:\n  - severity=error → BLOCKING\n  - severity=warning → WARNING (non-blocking)\n  - note/remark → ignore\n\nSwift compiler errors look like: `error: cannot find 'foo' in scope`, `error: extra argument 'bar' in call`, etc. Capture both the error code (if present) and the message.\n\nEmit `results/latest.json` with the same schema as TS/Flutter/Android doc-as-test.\n\n## Part F — README + .gitignore + first run\n\n`README.md`: brief — which toolchain you picked + why, host requirements (macOS for swiftc), how to run locally, where the report lives, note that CI may need Mac runners for this to work in GitHub Actions later.\n\nProactively update top-level `.gitignore` to ignore generated artifacts (avoid the leak that happened with Flutter + Android):\n```\n# iOS doc-as-test generated files\n.docs-ops/integration-tests/ios/results/extracted/*.swift\n.docs-ops/integration-tests/ios/results/extracted/_manifest.json\n.docs-ops/integration-tests/ios/.build/\n.docs-ops/integration-tests/ios/.swiftpm/\n.docs-ops/integration-tests/ios/Package.resolved\n```\n\nKeep `.docs-ops/integration-tests/ios/results/extracted/.gitkeep` so the directory persists.\n\nRUN the framework end-to-end. Expected first-run pass rate: 60-85% (similar to Flutter/Android). Don't fix failures in this task; report them in notes.\n\n## Out of scope\n\n- Wiring into `check-drift.py` — separate follow-up (0059, same shape as 0055/0057 wired Flutter/Android).\n- Fixing failing blocks — iterative cleanup is a follow-up task.\n- Objective-C blocks — TS only in v1 (sorry — they're rare in social.plus docs anyway).\n- CI / Mac-runner setup — Phase 2.2 territory.\n\n## Success criteria (LOOSE — framework build, not a quality gate)\n\n- Framework runs end-to-end on this Mac.\n- `results/latest.json` produced with valid schema.\n- At least 30 Swift blocks extracted.\n- At least one block PASSES.\n\nReport in `notes`: which toolchain you picked + why; first-run stats; top failure reasons; preamble gaps vs real doc drift estimate; any iOS-specific quirks (e.g., MainActor isolation, Combine vs async/await mixing, ObjC interop in Swift blocks).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_framework_runs_and_produces_valid_report",
+        "command": "test -f .docs-ops/integration-tests/ios/results/latest.json && python3 -c \"import json; d=json.load(open('.docs-ops/integration-tests/ios/results/latest.json')); assert 'stats' in d and 'failures' in d; assert d['stats'].get('blocks_extracted',0)>=30, f'too few blocks: {d[\\\"stats\\\"].get(\\\"blocks_extracted\\\")}'; assert d['stats'].get('blocks_passed',0)>=1, 'zero blocks passed — toolchain likely broken'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/integration-tests/ios/results/latest.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-18T16:30:00Z"
+}

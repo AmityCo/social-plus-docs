@@ -1,0 +1,30 @@
+{
+  "id": "0057-wire-android-doc-as-test-into-gate",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/ci/check-drift.py",
+    ".docs-ops/CI_GATE.md",
+    ".gitignore"
+  ],
+  "context_files": [
+    ".docs-ops/ci/check-drift.py",
+    ".docs-ops/integration-tests/android/run-tests.py",
+    ".docs-ops/integration-tests/android/results/latest.json"
+  ],
+  "instructions": "Extend the local CI gate to also run Android doc-as-test (4th check alongside regex drift + TS + Flutter doc-as-test). Mirror exactly what 0055 did for Flutter — same shape, same pattern.\n\n## Part A — Gitignore preempt\n\nProactively add Android generated artifacts to `.gitignore` BEFORE wiring the gate, to avoid the leak that happened with Flutter:\n\n```\n# Android doc-as-test generated files\n.docs-ops/integration-tests/android/results/extracted/*.kt\n.docs-ops/integration-tests/android/results/extracted/*.java\n.docs-ops/integration-tests/android/results/extracted/_manifest.json\n.docs-ops/integration-tests/android/.gradle/\n.docs-ops/integration-tests/android/build/\n.docs-ops/integration-tests/android/local.properties\n```\n\nThe 0056 commit may have already leaked some — if so, untrack them via `git rm -rf --cached` and ensure `.docs-ops/integration-tests/android/results/extracted/.gitkeep` is preserved so the directory persists in fresh clones.\n\n## Part B — Extend `check-drift.py` with Android check\n\nAdd `run_android_doc_as_test_check()` parallel to the existing TS and Flutter functions. Same shape: skip-if-unavailable, set SP_SDKS_ROOT env, invoke extractor + runner, read latest.json, classify severity. Return same schema as the other two.\n\nIn `main()`, after the Flutter check, call the Android check. Combined verdict: ANY blocking failure on any of TS / Flutter / Android fails the gate.\n\nUpdate the printed summary to show all four signals symmetrically:\n\n```\n  Regex drift:           baseline=0  candidate=0  delta=0  ✓\n  Doc-as-test (TS):       passed=72  skipped=4  warnings=0  blocking=0  ✓\n  Doc-as-test (Flutter):  passed=41  skipped=3  warnings=0  blocking=0  ✓\n  Doc-as-test (Android):  passed=70  skipped=9  warnings=4  blocking=0  ✓\n  PASS — okay to push.\n```\n\nExtend `--quiet` one-liner with `an_*` fields:\n\n```\ndocs-ops drift: baseline=0 candidate=0 delta=0 new_pairs=0 ts_passed=72 ts_skipped=4 ts_blocking=0 fl_passed=41 fl_skipped=3 fl_blocking=0 an_passed=70 an_skipped=9 an_blocking=0 verdict=PASS\n```\n\n## Part C — Update CI_GATE.md\n\nUpdate the Doc-as-test section: three languages covered (TS + Flutter + Android), same gate policy applies per platform, per-platform scope notes. Add a line in the 'Scope' subsection: iOS is the remaining platform.\n\n## Verification\n\nAfter the changes, run `python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch`. Verify:\n  - Output shows ALL FOUR signals (Regex, TS, Flutter, Android)\n  - Each green (drift=0, all doc-as-test platforms pass+skip 100%)\n  - Exit code 0\n  - The `--quiet` one-liner shows all `ts_*`, `fl_*`, `an_*` fields\n  - `.gitignore` covers Android extracted artifacts (verify `git status` clean after a framework re-run)\n\nReport in `notes`: confirmation gitignore is clean; output of a successful gate run; any quirks (e.g., if `kotlinc` isn't installed on the system, runner crash should be reported as 'unavailable', not as a blocking failure).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "gate_runs_all_four_checks_and_gitignore_clean",
+        "command": "python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch 2>&1 | tee /tmp/gate.out | tail -12 && grep -q 'Android' /tmp/gate.out && grep -q 'Flutter' /tmp/gate.out && grep -q 'PASS' /tmp/gate.out && grep -q 'android/results/extracted/\\*\\.kt' .gitignore && echo OK",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-18T16:00:00Z"
+}

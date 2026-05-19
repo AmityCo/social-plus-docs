@@ -50,9 +50,84 @@ Increase in count → **FAIL** by definition (always includes new pairs).
 
 ## What it doesn't gate (yet)
 
-- **iOS / Android / Flutter validators**: those extractors still have known noise (`.shared` not captured on iOS; internal types leak on Android; no public marker on Flutter). They run for informational purposes but don't gate. We'll expand the gate as those validators mature.
 - **Prose, structure, IA**: the gate is API-accuracy-only. The 6-dimension rubric is broader; per-PR scoring is a future addition.
 - **SDK changes**: the gate compares docs against the SDK surface AS COMMITTED in this repo. When the upstream SDK changes, someone must re-run the extractor and commit the new `sdk-surface/*.json`. A separate workflow (TBD) will detect SDK changes and open docs PRs to update.
+
+## Doc-as-test layer
+
+In addition to the regex-based drift check, the gate runs **doc-as-test** steps that type-check code blocks from the top-traffic doc pages against the real SDK source. Four languages are currently covered: **TypeScript** (via `tsc --noEmit --strict`), **Flutter/Dart** (via `dart analyze`), **Android/Kotlin** (via `kotlinc`), and **iOS/Swift** (via `swiftc`). iOS requires macOS — on Linux machines, the iOS check reports `unavailable` and does not block the gate.
+
+### What it catches (and what the regex validator misses)
+
+| Problem type | Regex validator | Doc-as-test |
+|---|---|---|
+| Stale API name (renamed method) | ✓ catches | ✓ catches |
+| Wrong argument type | ✗ misses | ✓ catches |
+| Missing required argument | ✗ misses | ✓ catches |
+| Wrong async/await pattern | ✗ misses | ✓ catches |
+| Broken syntax (copy-paste error) | ✗ misses | ✓ catches |
+
+### Gate policy
+
+**TypeScript** — **Blocks the push** if any failure contains a `TS2xxx` error (type error = real API drift). **Warns but does NOT block** on `TS1xxx`-only errors (parser errors in intentionally partial/illustrative snippets).
+
+**Flutter/Dart** — **Blocks the push** if `dart analyze` reports any `error`-severity issue on a block. **Warns but does NOT block** on `warning`-severity issues. `info`/lint hints are ignored entirely.
+
+**Android/Kotlin** — **Blocks the push** if `kotlinc` reports any error-severity compile failure on a block. Warnings (e.g., deprecation notices) are counted but do NOT block.
+
+**iOS/Swift** — **Blocks the push** if `swiftc` reports any error-severity compile failure on a block. Warnings are counted but do NOT block. iOS requires macOS (`swiftc`); on Linux the check reports `unavailable` (non-blocking). Phase 2.2 GitHub Actions must use macOS runners for iOS coverage.
+
+Runner crashes (e.g., `dart` CLI not installed, Kotlin compiler not found) are **non-blocking** — infra failures shouldn't block pushes.
+
+### Opting out per block
+
+If a code block is intentionally illustrative (e.g., a class method body shown without its class shell), add a skip marker on the line **immediately before** the opening fence:
+
+```mdx
+{/* doc-as-test: skip (illustrative partial snippet — class method body without enclosing class) */}
+```typescript
+async myMethod() {
+  // ...
+}
+```
+
+Both HTML comment (`<!-- doc-as-test: skip -->`) and JSX comment (`{/* doc-as-test: skip */}`) styles are supported. An optional parenthetical reason is captured in the manifest for auditability.
+
+### Scope
+
+- **TypeScript** — 28 pages (cohort-balanced selection covering chat + social hot paths). Defined in `.docs-ops/integration-tests/pages.json`.
+- **Flutter/Dart** — 29 pages (same 28 + `flutter-quick-start.mdx`). Defined in `.docs-ops/integration-tests/flutter/pages.json`.
+- **Android/Kotlin** — 29 pages (same coverage as Flutter). Defined in `.docs-ops/integration-tests/android/pages.json`.
+- **iOS** — 29 pages (same coverage as Android). Defined in `.docs-ops/integration-tests/ios/pages.json`. Requires macOS (`swiftc`).
+- **Candidate only** — all checks run against the current working tree, not a baseline comparison.
+
+### Running locally
+
+```bash
+# TypeScript doc-as-test (extract + type-check):
+python3 .docs-ops/integration-tests/extract-blocks.py
+python3 .docs-ops/integration-tests/run-tests.py
+cat .docs-ops/integration-tests/results/latest.json | python3 -m json.tool
+
+# Flutter doc-as-test (extract + analyze):
+cd .docs-ops/integration-tests/flutter
+dart pub get   # once, resolves amity_sdk from local path
+cd -
+python3 .docs-ops/integration-tests/flutter/extract-blocks.py
+python3 .docs-ops/integration-tests/flutter/run-tests.py
+cat .docs-ops/integration-tests/flutter/results/latest.json | python3 -m json.tool
+
+# Android doc-as-test (extract + compile):
+python3 .docs-ops/integration-tests/android/extract-blocks.py
+python3 .docs-ops/integration-tests/android/run-tests.py
+cat .docs-ops/integration-tests/android/results/latest.json | python3 -m json.tool
+
+# iOS doc-as-test (extract + type-check, macOS only):
+python3 .docs-ops/integration-tests/ios/extract-blocks.py
+python3 .docs-ops/integration-tests/ios/run-tests.py
+cat .docs-ops/integration-tests/ios/results/latest.json | python3 -m json.tool
+```
+
 
 ## Layers of enforcement
 
@@ -66,7 +141,7 @@ The same `check-drift.py` script powers three layers — each one is independent
 
 **Today (Phase 2.1)** — local layer is live. Awareness depends on contributors running `pre-commit install`.
 
-**Next (Phase 2.2)** — GitHub Action will call the same script in CI, post the delta as a PR comment, and (with branch protection enabled) block merges. At that point local enforcement is best-effort; server enforcement is the true gate.
+**Next (Phase 2.2)** — GitHub Action will call the same script in CI, post the delta as a PR comment, and (with branch protection enabled) block merges. With all four platforms covered (TS + Flutter + Android + iOS), this is the next milestone: server-enforced gating via GitHub Action + branch protection rule. **Note:** the iOS check requires a macOS runner — the Phase 2.2 Action should use `runs-on: macos-latest` (or a matrix) to ensure iOS coverage is not silently skipped on Linux runners.
 
 ## For contributors
 

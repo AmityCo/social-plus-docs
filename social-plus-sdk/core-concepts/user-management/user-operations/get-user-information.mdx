@@ -21,7 +21,7 @@ func observeUser() {
     let liveObject = userRepository.getUser("<user-id>")
     token = liveObject.observe { liveObject, error in
         // Handle live object notification
-        guard let user = liveObject.object else {
+        guard let user = liveObject.snapshot else {
             print("Error: \(String(describing: error))")
             return
         }
@@ -60,10 +60,16 @@ const GetUser: FC<{ userId: string }> = ({ userId }) => {
 
   useEffect(() => {
     // Get user with live updates
-     const unsubscribe = UserRepository.getUser(userId, setUser);
+    const unsubscribe = UserRepository.getUser(userId, setUserData);
 
     return () => unsubscribe();
   }, [userId]);
+
+  if (loading) return null;
+  if (error) return null;
+
+  return <div>{user?.displayName}</div>;
+};
 ```
 
 ```dart Flutter
@@ -85,28 +91,13 @@ Retrieve multiple users efficiently using batch operations:
 
 <CodeGroup>
 ```swift iOS
-// Get multiple users by IDs
-let userIds = ["user_1", "user_2", "user_3"]
+// Get all users with pagination (observe live collection)
+let liveCollection = userRepository.getUsers(.displayName)
 
-userRepository.getUsers(userIds: userIds) { result in
-    switch result {
-    case .success(let users):
-        users.forEach { user in
-            print("\(user.userId): \(user.displayName ?? "Unknown")")
-        }
-    case .failure(let error):
-        print("Error: \(error.localizedDescription)")
-    }
-}
-
-// Get all users with pagination
-let liveCollection = userRepository.getUsers()
-
-liveCollection.observe { [weak self] (collection, error) in
-    guard let users = collection.object else { return }
-    
+token = liveCollection.observe { collection, error in
+    let users = collection.snapshots
     print("Loaded \(users.count) users")
-    self?.displayUserList(users)
+    displayUserList(users)
 }
 
 // Load next page
@@ -138,9 +129,11 @@ fun getUsersByIds(
 // Get all users with pagination
 fun getAllUsers(userRepository: AmityUserRepository) {
     userRepository.getUsers()
-        .doOnNext { users: List<AmityUser> ->
+        .build()
+        .query()
+        .doOnNext { pagingData ->
             // Handle paginated users
-            Log.d("UserRepo", "Loaded ${users.size} users")
+            Log.d("UserRepo", "Loaded page of users")
         }
         .doOnError { error ->
             Log.e("UserRepo", "Failed to get users", error)
@@ -214,110 +207,38 @@ const UserListComponent: FC = () => {
 ```dart Flutter
 final userRepo = AmityCoreClient.newUserRepository();
 
-// Get multiple users by IDs
-Future<List<AmityUser>> getUsersByIds(List<String> userIds) async {
+// Get a single user by ID
+Future<AmityUser?> getSingleUser(String userId) async {
   try {
-    final users = await userRepo.getUsersByIds(userIds);
-    
-    for (final user in users) {
-      print('User: ${user.displayName}');
-    }
-    
-    return users;
+    final user = await userRepo.getUser(userId);
+    print('User: ${user.displayName}');
+    return user;
   } catch (error) {
-    print('Error getting users: $error');
-    return [];
+    print('Error getting user: $error');
+    return null;
   }
 }
 
-// Get all users with pagination and live updates
-class UserListWidget extends StatefulWidget {
-  @override
-  _UserListWidgetState createState() => _UserListWidgetState();
-}
-
-class _UserListWidgetState extends State<UserListWidget> {
-  List<AmityUser> users = [];
-  StreamSubscription<List<AmityUser>>? usersSubscription;
-  bool isLoading = true;
-  bool hasNextPage = true;
-  
-  @override
-  void initState() {
-    super.initState();
-    loadUsers();
-  }
-  
-  void loadUsers() {
-    final userRepo = AmityCoreClient.newUserRepository());
-    final liveCollection = userRepo.getUsers();
-    
-    usersSubscription = liveCollection.listen((userList) {
-      setState(() {
-        users = userList;
-        isLoading = false;
-      });
-      
-      print('Loaded ${userList.length} users');
-    });
-  }
-  
-  Future<void> loadMoreUsers() async {
-    if (!hasNextPage) return;
-    
+// Get multiple users by ID — fetch individually (no batch API)
+Future<List<AmityUser>> getUsersByIds(List<String> userIds) async {
+  final users = <AmityUser>[];
+  for (final id in userIds) {
     try {
-      final userRepo = AmityCoreClient.newUserRepository());
-      final moreUsers = await userRepo.getUsers(
-        options: PaginationOptions(
-          limit: 20,
-          token: getNextPageToken(),
-        ),
-      );
-      
-      setState(() {
-        users.addAll(moreUsers);
-        hasNextPage = moreUsers.length == 20; // Assuming 20 is the page size
-      });
+      final user = await userRepo.getUser(id);
+      users.add(user);
     } catch (error) {
-      print('Error loading more users: $error');
+      print('Error getting user $id: $error');
     }
   }
-  
-  @override
-  void dispose() {
-    usersSubscription?.cancel();
-    super.dispose();
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              return ListTile(
-                title: Text(user.displayName ?? 'Unknown User'),
-                subtitle: Text('ID: ${user.userId}'),
-              );
-            },
-          ),
-        ),
-        
-        if (hasNextPage)
-          ElevatedButton(
-            onPressed: loadMoreUsers,
-            child: const Text('Load More'),
-          ),
-      ],
-    );
-  }
+  return users;
 }
+
+// Get all users with live updates
+final liveCollection = userRepo.getUsers().getLiveCollection();
+liveCollection.getStreamController().stream.listen((userList) {
+  for (final user in userList) {
+    print('User: ${user.displayName}, ID: ${user.userId}');
+  }
+});
 ```
 </CodeGroup>

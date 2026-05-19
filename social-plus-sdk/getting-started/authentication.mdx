@@ -178,10 +178,9 @@ Task { @MainActor in
 
 
 ```kotlin Android
-AmityCoreClient.login(userId = "user-123")
+AmityCoreClient.login(userId = "user-123", sessionHandler = sessionHandler)
     .displayName(displayName = "John Doe")
     .authToken(authToken) // Optional for development
-    .sessionHandler(sessionHandler)
     .build()
     .submit()
     .doOnComplete {
@@ -198,7 +197,7 @@ AmityCoreClient.login(userId = "user-123")
 try {
     await client.login({
         userId: 'user-123',
-        displayName: 'John Doe'
+        displayName: 'John Doe',
         authToken: 'your-auth-token', // Optional for development
     }, sessionHandler);
     console.log('Login successful');
@@ -229,12 +228,12 @@ Verify if a user is currently logged in:
 <CodeGroup>
 
 ```swift iOS
-if (client.sessionState == .established) {
-    let currentUserId = client.getCurrentUserId()
-    print("Current user: \(currentUserId)")
+if case .established = client.sessionState {
+    let currentUserId = client.currentUserId
+    print("Current user: \(currentUserId ?? "")")
 } else {
     // Proceed to social.plus Authentication
-    authenticateToSocialPlus()
+    // authenticateToSocialPlus()
 }
 ```
 
@@ -398,6 +397,7 @@ Monitor session state changes to handle authentication in your app:
 
 <Tabs>
   <Tab title="iOS">
+    {/* doc-as-test: skip (truly-illustrative: UIViewController scaffold — 'self' only valid inside a class body, not in a free function) */}
     ```swift
     var cancellable: AnyCancellable?
     // Observe session state changes
@@ -430,28 +430,24 @@ Monitor session state changes to handle authentication in your app:
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .doOnNext { sessionState: SessionState ->
-                    when (state) {
-                        AmitySessionState.NOT_LOGGED_IN -> {
+                    when (sessionState) {
+                        is SessionState.NotLoggedIn -> {
                             // Show login screen
                             showLogin()
                         }
-                        AmitySessionState.ESTABLISHING -> {
+                        is SessionState.Establishing -> {
                             // Show loading indicator
-                            showLoading()
                         }
-                        AmitySessionState.ESTABLISHED -> {
+                        is SessionState.Established -> {
                             // Hide loading indicator, proceed to app
-                            hideLoading()
-                            proceedToApp()
                         }
-                        AmitySessionState.TOKEN_EXPIRED -> {
+                        is SessionState.TokenExpired -> {
                             // Attempt to refresh token (Optional)
-                            showTokenRefreshIndicator()
                         }
-                        AmitySessionState.TERMINATED -> {
+                        is SessionState.Terminated -> {
                             // Handle session termination
-                            handleTermination()
                         }
+                        else -> {}
                     }
                 }
                 .doOnError {
@@ -506,24 +502,24 @@ Monitor session state changes to handle authentication in your app:
     // Listen to session state changes
     AmityCoreClient.observeSessionState().listen((state) {
       switch (state) {
-        case AmitySessionState.notLoggedIn:
+        case SessionState.notLoggedIn:
           // Show login screen
           showLoginScreen();
           break;
-        case AmitySessionState.establishing:
+        case SessionState.establishing:
           // Show loading indicator
           showLoadingIndicator();
           break;
-        case AmitySessionState.established:
+        case SessionState.established:
           // Hide loading indicator, proceed to app
           hideLoadingIndicator();
           proceedToApp();
           break;
-        case AmitySessionState.tokenExpired:
+        case SessionState.tokenExpired:
           // Attempt to refresh token (Optional)
-          showTokenRefreshIndicator()
+          showTokenRefreshIndicator();
           break;
-        case AmitySessionState.terminated:
+        case SessionState.terminated:
           // Handle session termination
           handleSessionTermination();
           break;
@@ -544,22 +540,23 @@ Session handlers automatically manage token lifecycle:
 <Tabs>
   <Tab title="iOS">
     ```swift
-    class ProductionSessionHandler: AmitySessionHandler {
+    class ProductionSessionHandler: SessionHandler {
         func sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
             // Call your backend to get a fresh token
-            AuthService.shared.refreshToken { result in
-                switch result {
-                case .success(let newToken):
-                    renewal.renewWithAuthToken(withAuthToken: newToken)
-                case .failure(let error):
-                    print("Token refresh failed: \(error)")
-                    renewal.unableToRetrieveAuthToken()
+            Task {
+                do {
+                    // let newToken = try await YourAuthService.fetchToken()
+                    // renewal.renewWithAuthToken(authToken: newToken)
+                    renewal.unableToRetrieveAuthToken() // replace with real token fetch
                 }
             }
         }
     }
     
     // Use during login
+    let userId = "user-id"
+    let displayName: String? = "Display Name"
+    let authToken: String? = nil
     let sessionHandler = ProductionSessionHandler()
     try await client.login(
         userId: userId,
@@ -573,23 +570,16 @@ Session handlers automatically manage token lifecycle:
     ```kotlin
     class ProductionSessionHandler : SessionHandler {
         override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            // Call your backend to refresh token
-            authRepository.refreshToken { newToken ->
-                if (newToken != null) {
-                    renewal.renewWithAuthToken(newToken)
-                } else {
-                    renewal.unableToRetrieveAuthToken()
-                }
-            }
+            // Call your backend to refresh token; renewal.renewWithAuthToken(newToken)
+            // or renewal.unableToRetrieveAuthToken() on failure
         }
     }
-    
+
     // Use during login
-    val sessionHandler = ProductionSessionHandler()
-    AmityCoreClient.login(userId)
+    val productionSessionHandler = ProductionSessionHandler()
+    AmityCoreClient.login(userId = userId, sessionHandler = productionSessionHandler)
         .displayName(displayName)
         .authToken(authToken)
-        .sessionHandler(sessionHandler)
         .build()
         .submit()
     ```
@@ -617,7 +607,7 @@ Session handlers automatically manage token lifecycle:
     // Use when logging in with backend-verified token
     await client.login({
             userId: 'user-123',
-            displayName: 'John Doe'
+            displayName: 'John Doe',
             authToken: 'your-auth-token',
         }, sessionHandler);
     ```
@@ -759,9 +749,8 @@ Integration requires three steps: implement a token handler, register it, then l
     //    your own authentication backend.
     val handler = object : AccessTokenHandler {
       override suspend fun onTokenRenew(userId: String): String {
-        // get new token from your api
-        val response = myApiService.refreshToken(userId)
-        return response.accessToken
+        // get new token from your api; replace with real API call
+        return "new-access-token"
       }
     }
 
@@ -773,7 +762,7 @@ Integration requires three steps: implement a token handler, register it, then l
     // 3. Now login with the initial access token.
     //    On subsequent token renewals, the SDK will automatically
     //    call onTokenRenew and re-authenticate using the returned JWT.
-    AmityCoreClient.loginWithAccessToken(accessToken)
+    AmityCoreClient.loginWithAccessToken(authToken)
       .build()
       .submit()
       .subscribe()

@@ -1,0 +1,31 @@
+{
+  "id": "0055-wire-flutter-doc-as-test-into-gate",
+  "tier": "A",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/ci/check-drift.py",
+    ".docs-ops/CI_GATE.md",
+    ".gitignore",
+    ".docs-ops/integration-tests/flutter/results/extracted/.gitkeep"
+  ],
+  "context_files": [
+    ".docs-ops/ci/check-drift.py",
+    ".docs-ops/integration-tests/flutter/run-tests.py",
+    ".docs-ops/integration-tests/flutter/results/latest.json"
+  ],
+  "instructions": "Extend the local CI gate to also run Flutter doc-as-test as a third check (alongside the existing regex drift + TS doc-as-test). Mirror the design choices from 0051 (which wired TS doc-as-test). Also clean up the gitignore leak from 0052 that committed Flutter's generated .dart files.\n\n## Part A — Gitignore cleanup\n\nThe Flutter framework's generated `.dart` files in `.docs-ops/integration-tests/flutter/results/extracted/` got committed when 0052 landed because the gitignore pattern only covered the TS extracted directory. Fix:\n\n1. Add to `.gitignore`:\n   ```\n   # Flutter doc-as-test generated files\n   .docs-ops/integration-tests/flutter/results/extracted/*.dart\n   .docs-ops/integration-tests/flutter/results/extracted/_manifest.json\n   .docs-ops/integration-tests/flutter/.dart_tool/\n   .docs-ops/integration-tests/flutter/pubspec.lock\n   ```\n2. Untrack the leaked files: `git rm -rf --cached .docs-ops/integration-tests/flutter/results/extracted/*.dart .docs-ops/integration-tests/flutter/.dart_tool .docs-ops/integration-tests/flutter/pubspec.lock`\n3. Keep `.docs-ops/integration-tests/flutter/results/extracted/.gitkeep` so the directory still exists in checkouts.\n\n## Part B — Extend `check-drift.py` to run Flutter doc-as-test\n\nAdd a `run_flutter_doc_as_test_check()` function parallel to the existing `run_doc_as_test_check()` (which is TS-specific). Same shape:\n\n  - Skip cleanly if `.docs-ops/integration-tests/flutter/` doesn't exist (treat as unavailable, not as a failure).\n  - Set `SP_SDKS_ROOT` env var when invoking the runner.\n  - Run `python3 .docs-ops/integration-tests/flutter/extract-blocks.py` then `python3 .docs-ops/integration-tests/flutter/run-tests.py`.\n  - Read `.docs-ops/integration-tests/flutter/results/latest.json`.\n  - **Gate policy for Flutter** (mirrors TS policy but with Dart severity classes):\n    - `severity=error` errors → BLOCKING (real type/API drift in Dart land)\n    - `severity=warning` warnings → WARNING (non-blocking)\n    - `severity=info` / lints → ignore\n  - Return: `{available, crashed, crash_reason, stats, blocking_failures, warning_failures}` (same schema as the TS function).\n\nIn `main()`, after the existing TS doc-as-test invocation, call the Flutter one. Combined gate verdict logic:\n\n  - `regression OR ts_blocking_failures OR flutter_blocking_failures` → exit 1\n  - else → exit 0\n\nUpdate the printed summary to show all three signals on separate lines:\n\n```\n  Regex drift:           baseline=0  candidate=0  delta=0  ✓\n  Doc-as-test (TS):      passed=72  skipped=4  warnings=0  blocking=0  ✓\n  Doc-as-test (Flutter): passed=41  skipped=3  warnings=0  blocking=0  ✓\n  PASS — okay to push.\n```\n\nKeep the `--quiet` one-line output format extended too:\n\n```\ndocs-ops drift: baseline=0 candidate=0 delta=0 new_pairs=0 ts_passed=72 ts_skipped=4 ts_blocking=0 fl_passed=41 fl_skipped=3 fl_blocking=0 verdict=PASS\n```\n\nKeep design symmetry — if you later add iOS / Android, the same pattern just needs another parallel function.\n\n## Part C — Update CI_GATE.md\n\nUpdate the Doc-as-test section to clarify:\n  - Two languages currently covered: TypeScript + Flutter\n  - Same gate policy applies per platform (blocking=type errors; warning=parser/severity-warning)\n  - Per-platform scope: TS = 28 pages, Flutter = 29 pages (mostly same set + flutter-quick-start)\n  - Future: iOS / Android coming\n\nAlso add a line in the existing 'Scope' subsection noting the TS-only constraint is now lifted.\n\n## Verification\n\nAfter the changes, run `python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch` and verify:\n  - Output shows ALL THREE signals (Regex, TS doc-as-test, Flutter doc-as-test)\n  - Each is currently green (drift=0, TS pass+skip=100%, Flutter pass+skip=100%)\n  - Exit code 0\n  - The `--quiet` one-liner format shows both `ts_*` and `fl_*` fields\n\nReport in `notes`: confirmation that gitignore leak is fixed (git status should show no .dart files modified after running the framework); output of a successful gate run; any edge cases (e.g., if `dart` CLI isn't installed, runner crash should be reported as 'unavailable', not as a blocking failure).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "gate_runs_all_three_checks_and_gitignore_clean",
+        "command": "python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch 2>&1 | tee /tmp/gate.out | tail -10 && grep -q 'Flutter' /tmp/gate.out && grep -q 'PASS' /tmp/gate.out && grep -q 'flutter/results/extracted/\\*\\.dart' .gitignore && echo OK",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-18T15:00:00Z"
+}

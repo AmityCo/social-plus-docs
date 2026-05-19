@@ -1,0 +1,33 @@
+{
+  "id": "0060-ios-doc-as-test-skip-retriage",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/integration-tests/ios/preamble.swift",
+    ".docs-ops/integration-tests/ios/extract-blocks.py",
+    ".docs-ops/integration-tests/ios/run-tests.py",
+    ".docs-ops/integration-tests/ios/results/latest.json"
+  ],
+  "context_files": [
+    ".docs-ops/integration-tests/ios/results/latest.json",
+    ".docs-ops/integration-tests/ios/preamble.swift",
+    ".docs-ops/integration-tests/flutter/preamble.dart",
+    ".docs-ops/integration-tests/android/preamble.kt",
+    ".docs-ops/sdk-surface/ios.json"
+  ],
+  "instructions": "0059 left the iOS framework at 26 passed / 48 skipped (65% skip rate — far above Android's 11% and Flutter's 7%). Skip markers were used as an escape hatch for failing blocks rather than as a precise classification for illustrative-only content. The current state gives false confidence: only 35% of iOS blocks are actually being type-checked.\n\nThis task drives the skip rate down to be comparable with the other platforms (target: <15% skip rate, ≥85% genuinely passing).\n\n## Part A — Restore the 48 currently-skipped blocks and re-run\n\n1. Identify every `<!-- doc-as-test: skip -->` (or `{/* doc-as-test: skip */}`) marker that was added by 0059. Use `git log --oneline --diff-filter=A -- '*.mdx' | head` if needed; or grep for skip markers across all touched mdx files. Cross-reference with `.docs-ops/integration-tests/ios/results/latest.json`'s `skipped` list (48 entries).\n2. REMOVE every skip marker that was added in 0059 (preserve any that pre-existed from earlier rounds — those are likely good).\n3. Re-run `extract-blocks.py` + `run-tests.py`. This will restore the 48 blocks to active extraction and produce a fresh failure report.\n\n## Part B — Triage each of the 48 returned failures\n\nFor each failure, classify into ONE bucket using the failure's exact compiler error:\n\n  - **TRULY_ILLUSTRATIVE** — block is genuinely pseudocode or partial (parse errors like `expected expression`, abbreviated `// ...` blocks, UIKit ViewController scaffolds with `// implementation here`). Keep skip marker; include the EXACT REASON inline: `<!-- doc-as-test: skip (UIKit ViewController scaffold; class shell only) -->`.\n  - **PREAMBLE_GAP** — block uses an iOS SDK type or context var that isn't declared in `preamble.swift`. Error pattern: `cannot find 'X' in scope` or `cannot find type 'X' in scope` where X IS a real type per `.docs-ops/sdk-surface/ios.json`. Don't skip — fix the preamble.\n  - **VERSION_SKEW** — block uses an API that exists in the SDK source (per ios.json) but NOT in the v8.1.1 binary xcframework that the toolchain points at. Error pattern: `value of type 'X' has no member 'Y'` where Y exists in the surface JSON. Flag in notes as `version_skew:<ref>`. Keep block extracted (don't skip) so the failure shows in the report — surfaces toolchain limit. If too many, escalate to recommend switching to Option A (live SDK source) in a follow-up.\n  - **REAL_BUG** — block uses an API that doesn't exist anywhere (not in surface, not in v8.1.1 binary). Genuine doc drift. Flag in notes as `needs_doc_fix:<file>:<line>` with the wrong ref and the likely correct alternative. DON'T auto-fix; leave for a separate doc-fix task.\n  - **TOOLCHAIN_NOISE** — error is from the binary xcframework not exposing internal symbols (e.g., `module 'X' not found`). Investigate: is X a real public iOS framework? If yes, add to swiftc invocation. If no, skip with `<!-- doc-as-test: skip (uses internal/private SDK symbol not in public xcframework) -->`.\n\nWrite the bucket counts to `notes`. Aim for: TRULY_ILLUSTRATIVE small (single digits), PREAMBLE_GAP zero after fix, VERSION_SKEW + REAL_BUG flagged separately.\n\n## Part C — Preamble expansion based on Part B findings\n\nFor every PREAMBLE_GAP ref identified in Part B, add the missing `let` declaration to `preamble.swift`. Verify each against `.docs-ops/sdk-surface/ios.json`. If a type doesn't exist in the surface, it's not a preamble gap — it's REAL_BUG or VERSION_SKEW; reclassify.\n\nIterate: re-run after each preamble batch (or batches) until the PREAMBLE_GAP bucket hits 0.\n\n## Part D — Final report\n\nAfter Parts A-C, re-run a final time. Target:\n\n  - pass+skip rate ≥ 85% (matches Android floor)\n  - skip rate ≤ 15% (matches Android skip rate)\n  - Remaining failures: only VERSION_SKEW or REAL_BUG categories, each enumerated in `needs_*` notes for follow-up tasks.\n\nReport in `notes`:\n  - Bucket counts (TRULY_ILLUSTRATIVE / PREAMBLE_GAP / VERSION_SKEW / REAL_BUG / TOOLCHAIN_NOISE)\n  - Preamble additions: type list + verification against ios.json\n  - List of VERSION_SKEW refs (input to potential toolchain change)\n  - List of REAL_BUG refs with proposed fix (input to a doc-fix task)\n  - Final pass/skip/fail counts\n  - Honest recommendation: is the framework ready to gate? Or does it need a toolchain switch (binary → source) first?\n\n## Rules\n\n- Don't gate-wire iOS into check-drift.py in this task — that's the next follow-up, and only after this raises real coverage.\n- Don't auto-fix doc code. Either skip (with precise reason), expand preamble, or flag for follow-up.\n- Be honest in the bucket counts — over-skipping again would defeat the purpose.\n\nThis task may be longer than typical. That's fine — the goal is genuine coverage, not a passing validator.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "ios_skip_rate_acceptable_and_buckets_reported",
+        "command": "test -f .docs-ops/integration-tests/ios/results/latest.json && python3 -c \"import json; d=json.load(open('.docs-ops/integration-tests/ios/results/latest.json')); s=d['stats']; passed=s.get('blocks_passed',0); skipped=s.get('blocks_skipped',0); extracted=s.get('blocks_extracted',0); total=passed+skipped+s.get('blocks_failed',0); skip_rate=skipped/max(total,1); pass_skip_rate=(passed+skipped)/max(total,1); print(f'pass={passed} skip={skipped} fail={s.get(\\\"blocks_failed\\\")} total={total}'); print(f'skip_rate={skip_rate:.1%}  pass+skip={pass_skip_rate:.1%}'); assert skip_rate <= 0.20, f'skip rate {skip_rate:.1%} still > 20% — re-triage incomplete'; print('OK')\"",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-19T10:00:00Z"
+}
