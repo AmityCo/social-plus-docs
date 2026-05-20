@@ -231,41 +231,22 @@ FENCE_RE = re.compile(r"^[ \t]*```([A-Za-z0-9_]+)[^\n]*\n(.*?)^[ \t]*```", re.MU
 
 ---
 
-### TICKET-0086-V2 — Dynamic `import(...)` syntax not checked
+### ~~TICKET-0086-V2 — Dynamic `import(...)` syntax not checked~~ ✅ RESOLVED (task 0090)
 
 **Category**: VALIDATOR GAP  
-**Priority**: P3 (lower false-negative risk; dynamic imports are uncommon)  
-**File**: `.docs-ops/validators/ts-accuracy-validator.py` line 42–45 (`IMPORT_RE`)  
-**Description**:
+**Resolution**: `DYNAMIC_IMPORT_RE` added to `.docs-ops/validators/ts-accuracy-validator.py` (alongside existing `IMPORT_RE`). Both patterns are now unioned in `scan_block`. Gate remains GREEN; `createUserToken` is caught and allowlisted via `KNOWN_VALID_REFS` (see TICKET-0090-SDK-1).  
+**Fix pattern**:
 ```python
-IMPORT_RE = re.compile(r"""import\s*(?:type\s+)?\{([^}]+)\}\s*from\s*['"]@amityco/ts-sdk['"]""", re.DOTALL)
+DYNAMIC_IMPORT_RE = re.compile(
+    r"""\{([^}]+)\}\s*=\s*await\s+import\s*\(\s*['"]@amityco/ts-sdk['"]\s*\)""", re.DOTALL)
 ```
-Only matches static `import { ... } from '@amityco/ts-sdk'`. Dynamic `const { foo } = await import('@amityco/ts-sdk')` is not detected.
-
-**Reproduction**: `social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx:78`:
-```typescript
-const { createUserToken, API_REGIONS } = await import('@amityco/ts-sdk');
-```
-`createUserToken` is a removed `@hidden` symbol (0083), but the validator doesn't flag it because it uses dynamic import syntax.
-
-**Fix required**: Add a second import regex for the destructure-from-dynamic-import pattern:
-```python
-DYNAMIC_IMPORT_RE = re.compile(r"""(?:const|let|var)\s*\{([^}]+)\}\s*=\s*await\s+import\(['"]@amityco/ts-sdk['"]\)""")
-```
-Then union results from both `IMPORT_RE` and `DYNAMIC_IMPORT_RE` in `scan_block`.
-**Note**: `createUserToken` in `user-token-management.mdx` also needs a follow-up content review (see TICKET-0086-C1).
 
 ---
 
-### TICKET-0086-C1 — `createUserToken` in user-token-management.mdx uses @hidden symbol
+### ~~TICKET-0086-C1 — `createUserToken` in user-token-management.mdx uses @hidden symbol~~ ✅ RESOLVED-PENDING-SDK → see TICKET-0090-SDK-1
 
-**Category**: CONTENT REWRITE  
-**Priority**: P2 (documents a `@private`-tagged internal SDK function as public API)  
-**File**: `social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx:78-80`  
-**Description**: The TypeScript code block (at column 0, not affected by V1) uses `createUserToken` imported via dynamic import from `@amityco/ts-sdk`. This symbol was removed from the surface in task 0083 as an `@hidden` root export.  
-**Context**: The page documents generating user tokens — a legitimate use case. The question for SDK team: is `createUserToken` intentionally `@hidden` (server-side utility that should NOT appear in public docs), or was it mis-tagged? If intentionally private, the page needs to be updated to reflect a backend-call pattern or removed.  
-**Scope**: Outside task 0086 target_files; requires SDK team clarification before content rewrite.  
-**Suggested action**: Confirm with TS SDK team whether `createUserToken` is intentionally hidden or should be restored to the public surface. File a separate task once clarified.
+**Category**: CONTENT REWRITE → reclassified SDK CHANGE REQUEST  
+**Resolution (task 0090)**: CTO confirmed `createUserToken` is a legitimate public API mis-tagged as `@hidden` in the TS SDK. The doc page is CORRECT. A temporary `KNOWN_VALID_REFS` allowlist entry added to `ts-accuracy-validator.py` bridges the gap until the SDK-side fix ships. See **TICKET-0090-SDK-1** for the SDK action required.
 
 
 ---
@@ -372,3 +353,26 @@ Affects 27 files, 50 pairs. Split into sub-tasks if needed.
 | `UserRepository.Relationship.acceptFollower` | `UserRepository.Relationship.acceptMyFollower` | user-profiles-and-social-graph.mdx |
 | `UserRepository.getViewedUsers` | `UserRepository.getReachedUsers` | post-impressions-and-creator-analytics.mdx |
 
+
+---
+
+## TS SDK action required (task 0090)
+
+### TICKET-0090-SDK-1 — Remove `@hidden` tag from `createUserToken` in TS SDK
+
+**Category**: SDK CHANGE REQUEST  
+**Priority**: P2  
+**Raised by**: task 0090-import-regex-fix-and-cleanup  
+
+**Description**: `createUserToken` is currently tagged `@hidden` (or `@private`) in `AmityTypescriptSDK/` source, which causes the docs-ops surface extractor to exclude it from `sdk-surface/typescript.json`. However, CTO has confirmed it is a legitimate public API. It is documented in `social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx` (dynamic import pattern, line ~78).
+
+**Current workaround**: `createUserToken` added to `KNOWN_VALID_REFS` allowlist in `.docs-ops/validators/ts-accuracy-validator.py` with a comment referencing this ticket.
+
+**SDK action required**:  
+1. Remove the `@hidden`/`@private` JSDoc tag from `createUserToken` in `AmityTypescriptSDK/`.
+2. Re-run the TS surface extractor (`typescript-hybrid-extractor.py`) after the tag is removed — `createUserToken` should then appear in `root_exports` of `typescript.json`.
+3. Once it appears in the surface, remove the `createUserToken` entry from `KNOWN_VALID_REFS` in `ts-accuracy-validator.py` and close this ticket.
+
+**Files to update after SDK fix**:
+- `AmityTypescriptSDK/` — remove `@hidden` from `createUserToken`
+- `.docs-ops/validators/ts-accuracy-validator.py` — remove `createUserToken` from `KNOWN_VALID_REFS`
