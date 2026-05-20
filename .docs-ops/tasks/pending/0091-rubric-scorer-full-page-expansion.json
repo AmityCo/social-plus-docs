@@ -1,0 +1,49 @@
+{
+  "id": "0091-rubric-scorer-full-page-expansion",
+  "tier": "B",
+  "type": "infrastructure+content",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/rubric-scorer/pages.json",
+    ".docs-ops/rubric-scorer/results/accuracy-latest.json",
+    ".docs-ops/rubric-scorer/results/clarity-latest.json",
+    ".docs-ops/rubric-scorer/results/completeness-latest.json",
+    ".docs-ops/rubric-scorer/results/parity-latest.json",
+    ".docs-ops/rubric-scorer/results/examples-latest.json",
+    ".docs-ops/rubric-scorer/results/ai-consumability-latest.json",
+    ".docs-ops/rubric-scorer/results/overall-latest.json",
+    ".docs-ops/rubric-scorer/results/overall-latest-report.md",
+    ".docs-ops/rubric-scorer/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/rubric-scorer/README.md",
+    ".docs-ops/rubric-scorer/pages-pilot.json",
+    ".docs-ops/rubric-scorer/prepare.py",
+    ".docs-ops/rubric-scorer/collect.py",
+    ".docs-ops/rubric-scorer/render-report.py",
+    ".docs-ops/rubric-scorer/prompts/clarity.md",
+    ".docs-ops/integration-tests/pages.json"
+  ],
+  "instructions": "Expand the rubric scorer from the 10-page pilot to the full 28-page set used by doc-as-test, scored across all 6 dimensions. Mirrors the existing pilot workflow (prepare → score → collect → render) — no new prompts or scoring infrastructure needed.\n\n**Heads up on cost**: 28 pages × 6 dimensions = 168 agent-judgments. This is heavy. Run by dimension (one dimension at a time) and commit incrementally so the work is restartable. If you hit token/time budget limits, partial completion (e.g. 4 dimensions done, 2 to go) is acceptable — note exactly what's done in result.json so a follow-up task can complete the rest.\n\n## Part A — Build the expanded page set\n\nCreate `.docs-ops/rubric-scorer/pages.json` (alongside the existing `pages-pilot.json`, which stays as historical pilot reference).\n\nThe full page list is in `.docs-ops/integration-tests/pages.json`. Resolve the `enumerate:` directives (they mean \"every .mdx in this directory\") to get the concrete page paths. Expected total: 28 (matches `ts_passed=72` block coverage, not page count exactly — verify against `.docs-ops/integration-tests/results/latest.json` for the actual page count if needed).\n\nFor each page, assign a cohort:\n  - `eastern` — if listed under `chat_track`\n  - `western` — if listed under `social_track`\n  - `shared` — if listed under `shared`\n\nShape (mirrors pages-pilot.json):\n\n```json\n{\n  \"version\": 1,\n  \"selection_rationale\": \"Full doc-as-test page set (~28 pages) covering chat-heavy Eastern + social-heavy Western + Shared cohorts. Aligns rubric scoring with doc-as-test integration test coverage so the same pages are validated for both API accuracy and editorial quality.\",\n  \"pages\": [\n    { \"path\": \"...\", \"cohort\": \"eastern\" | \"western\" | \"shared\" },\n    ...\n  ]\n}\n```\n\n## Part B — Update scripts to accept `--pages` arg\n\nUpdate `prepare.py`, `collect.py`, and `render-report.py` to accept an optional `--pages <path>` argument that defaults to `pages.json`. If `--pages pages-pilot.json` is passed, prior pilot behavior is preserved.\n\nThe default flip from `pages-pilot.json` to `pages.json` is the moment of switch — verify no other consumer hard-codes the pilot path.\n\n## Part C — Run prepare + agent-score + collect + render for all 6 dimensions\n\nRecommended order (easiest agent-judgments first, builds confidence):\n\n1. **accuracy** — already validated by doc-as-test; rubric scoring here adds editorial dimension\n2. **clarity** — well-defined, the existing pilot prompt is mature\n3. **examples** — quick to judge per page\n4. **completeness** — moderate effort, requires comparison to API surface\n5. **parity** — heaviest, requires reading all 4 platform tabs and comparing\n6. **ai-consumability** — meta-dimension; can run after others land\n\nFor each dimension:\n  1. `python3 .docs-ops/rubric-scorer/prepare.py --dimension <name>` — generates 28 prompt files in `results/pending/`\n  2. **Agent scoring**: read each `results/pending/<dimension>-<slug>.json`, judge against the prompt's rubric, write `results/scored/<dimension>-<slug>.json` with `{ score, rationale, confidence, suggestions, _prompt_hash, _scored_by, _scored_at }`. (Same protocol as the pilot — see existing scored/ files for shape.)\n  3. `python3 .docs-ops/rubric-scorer/collect.py --dimension <name> --archive`\n  4. `python3 .docs-ops/rubric-scorer/render-report.py --dimension <name>`\n  5. **Commit after each dimension** so the work is restartable: `chore(docs-ops): rubric scorer — <dimension> expanded to full page set`\n\n## Part D — Generate the overall report\n\nAfter all 6 dimensions complete (or as many as you got through), regenerate the cross-dimension aggregate:\n\n  - `python3 .docs-ops/rubric-scorer/collect.py --overall` (or equivalent — check the existing render-report code for the overall flow)\n  - `python3 .docs-ops/rubric-scorer/render-report.py --overall`\n\nThe `results/overall-latest-report.md` should show per-page scores across all dimensions, weighted per `.docs-ops/rubric.json`.\n\n## Part E — Update rubric-scorer README\n\nNote in the README that the default page set is now the full 28-page doc-as-test set (vs the 10-page pilot). Mention that `pages-pilot.json` is preserved for reference and reproducibility of the original pilot results.\n\n## Out of scope\n\n- Adding new dimensions beyond the existing 6.\n- Changing prompt content (prompts are already mature from the pilot).\n- Acting on the surfaced low scores — interpretation is for the user.\n- Long-tail expansion beyond 28 pages.\n\n## Success criteria\n\n- `.docs-ops/rubric-scorer/pages.json` exists with 25+ pages (target: ~28, exact number depends on enumerate resolution).\n- All 6 `<dimension>-latest.json` files contain scores for the full page set (or partial with clear note in result.json on what's incomplete).\n- `overall-latest-report.md` regenerated.\n- README reflects the new default.\n- Each dimension committed separately for restartability.\n\nReport in `notes`: page count (final); dimensions completed (vs deferred); aggregate scores per cohort + per dimension; top 5 lowest-scoring pages (highest investment opportunity); any unexpected findings from the expanded coverage.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "pages_json_has_full_set",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/rubric-scorer/pages.json')); pages=d.get('pages',[]); assert len(pages)>=25, f'expected >=25 pages, got {len(pages)}'; cohorts=set(p.get('cohort') for p in pages); assert cohorts=={'eastern','western','shared'}, f'cohorts incomplete: {cohorts}'; print(f'OK pages={len(pages)} cohorts={cohorts}')\"",
+        "expect_in_stdout": "OK pages="
+      },
+      {
+        "name": "at_least_one_dimension_expanded",
+        "command": "python3 -c \"import json,glob; dims=['accuracy','clarity','completeness','parity','examples','ai-consumability']; expanded=[]; \\nfor d in dims:\\n  try:\\n    data=json.load(open(f'.docs-ops/rubric-scorer/results/{d}-latest.json'))\\n    scores=data.get('scores',data.get('pages',[]))\\n    if len(scores)>=20: expanded.append((d,len(scores)))\\n  except FileNotFoundError: pass\\nassert len(expanded)>=1, f'no dimension reached >=20 pages: {expanded}'; print(f'OK expanded={expanded}')\"",
+        "expect_in_stdout": "OK expanded="
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/rubric-scorer/results/overall-latest-report.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T18:00:00Z"
+}
