@@ -202,3 +202,67 @@ _Updated: task 0043 execution_
 **Category**: REWRITE  
 **Priority**: P2 (internal API being documented as public)  
 **Resolution (task 0085)**: Replaced `PostRepository.deletePost(postId, true)` with `PostRepository.hardDeletePost(postId)` and `PostRepository.deletePost(postId)` with `PostRepository.softDeletePost(postId)`. Both public functions are exported via `PostRepository` in `src/postRepository/api/`. Drift gate: delta=0 ✅
+
+---
+
+## Validator gap: missed scan paths (task 0086)
+
+*Surfaced by: Task 0086 Part A/C investigation. Two structural gaps in `ts-accuracy-validator.py` allow real TypeScript code references to @hidden symbols to pass undetected.*
+
+### TICKET-0086-V1 — FENCE_RE misses indented fenced code blocks
+
+**Category**: VALIDATOR BUG  
+**Priority**: P2 (false negatives — real doc drift silently passes the gate)  
+**File**: `.docs-ops/validators/ts-accuracy-validator.py` line 38–41  
+**Description**:
+```python
+FENCE_RE = re.compile(r"^```([A-Za-z0-9_]+)[^\n]*\n(.*?)^```", re.MULTILINE | re.DOTALL)
+```
+`^` with `re.MULTILINE` matches start-of-line (col 0 only). MDX files inside `<Tab>` / `<CodeGroup>` components use **indented fenced blocks** (4 spaces of leading whitespace before the triple backtick). These are never matched by `FENCE_RE`.
+
+**Reproduction**: `social-plus-sdk/social/posts/flag-unflag-post.mdx:796` (line ~765 opens `    \`\`\`typescript`, line ~796 has `PostRepository.deletePost`). Fixed in task 0086 (soft delete rewrite), but the validator would NOT have caught it without the manual sweep.
+
+**Fix required**: Change `FENCE_RE` to also accept optional leading whitespace:
+```python
+FENCE_RE = re.compile(r"^[ \t]*```([A-Za-z0-9_]+)[^\n]*\n(.*?)^[ \t]*```", re.MULTILINE | re.DOTALL)
+```
+**Estimated effort**: 30 minutes (regex + regression test). Must re-validate that existing tests still pass.
+
+---
+
+### TICKET-0086-V2 — Dynamic `import(...)` syntax not checked
+
+**Category**: VALIDATOR GAP  
+**Priority**: P3 (lower false-negative risk; dynamic imports are uncommon)  
+**File**: `.docs-ops/validators/ts-accuracy-validator.py` line 42–45 (`IMPORT_RE`)  
+**Description**:
+```python
+IMPORT_RE = re.compile(r"""import\s*(?:type\s+)?\{([^}]+)\}\s*from\s*['"]@amityco/ts-sdk['"]""", re.DOTALL)
+```
+Only matches static `import { ... } from '@amityco/ts-sdk'`. Dynamic `const { foo } = await import('@amityco/ts-sdk')` is not detected.
+
+**Reproduction**: `social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx:78`:
+```typescript
+const { createUserToken, API_REGIONS } = await import('@amityco/ts-sdk');
+```
+`createUserToken` is a removed `@hidden` symbol (0083), but the validator doesn't flag it because it uses dynamic import syntax.
+
+**Fix required**: Add a second import regex for the destructure-from-dynamic-import pattern:
+```python
+DYNAMIC_IMPORT_RE = re.compile(r"""(?:const|let|var)\s*\{([^}]+)\}\s*=\s*await\s+import\(['"]@amityco/ts-sdk['"]\)""")
+```
+Then union results from both `IMPORT_RE` and `DYNAMIC_IMPORT_RE` in `scan_block`.
+**Note**: `createUserToken` in `user-token-management.mdx` also needs a follow-up content review (see TICKET-0086-C1).
+
+---
+
+### TICKET-0086-C1 — `createUserToken` in user-token-management.mdx uses @hidden symbol
+
+**Category**: CONTENT REWRITE  
+**Priority**: P2 (documents a `@private`-tagged internal SDK function as public API)  
+**File**: `social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx:78-80`  
+**Description**: The TypeScript code block (at column 0, not affected by V1) uses `createUserToken` imported via dynamic import from `@amityco/ts-sdk`. This symbol was removed from the surface in task 0083 as an `@hidden` root export.  
+**Context**: The page documents generating user tokens — a legitimate use case. The question for SDK team: is `createUserToken` intentionally `@hidden` (server-side utility that should NOT appear in public docs), or was it mis-tagged? If intentionally private, the page needs to be updated to reflect a backend-call pattern or removed.  
+**Scope**: Outside task 0086 target_files; requires SDK team clarification before content rewrite.  
+**Suggested action**: Confirm with TS SDK team whether `createUserToken` is intentionally hidden or should be restored to the public surface. File a separate task once clarified.
+
