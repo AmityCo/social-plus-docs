@@ -267,3 +267,108 @@ Then union results from both `IMPORT_RE` and `DYNAMIC_IMPORT_RE` in `scan_block`
 **Scope**: Outside task 0086 target_files; requires SDK team clarification before content rewrite.  
 **Suggested action**: Confirm with TS SDK team whether `createUserToken` is intentionally hidden or should be restored to the public surface. File a separate task once clarified.
 
+
+---
+
+## TICKET-0088D — Type-import cohort investigation
+
+**Category**: INVESTIGATION COMPLETE — follow-up MDX cleanup required  
+**Created by**: task 0088d-type-import-investigation  
+**Files affected**: 27 MDX files, 50 import drift pairs (surfaced by 0087 FENCE_RE fix)
+
+### Classification
+
+**Category A — Type exists as `Amity.X` (remove import, qualify usage):**
+
+| Import | Correct qualified form | Files |
+|---|---|---|
+| `AmityPost` | `Amity.Post` | get-user-feed.mdx, get-post.mdx, pinned-post.mdx, query-post.mdx |
+| `Post` (bare) | `Amity.Post` | query-global-feed.mdx |
+| `LiveCollection` | `Amity.LiveCollection` | get-user-feed.mdx, pinned-post.mdx, query-post.mdx |
+| `LiveObject` | `Amity.LiveObject` | get-post.mdx |
+| `Reaction` | `Amity.Reaction` | add-remove-reaction.mdx, query-reactions.mdx |
+| `ContentFlagReason` | `Amity.ContentFlagReason` | flag-unflag-post.mdx, message-flagging.mdx |
+| `AmityContentFlagReason` | `Amity.ContentFlagReason` | flag-unflag-a-message.mdx |
+| `Category` | `Amity.Category` | community-categories.mdx |
+| `Community` | `Amity.Community` | get-community.mdx |
+| `AmityFollowInfo` | `Amity.FollowInfo` | get-connection-status-and-connection-counter.mdx |
+| `AmityFollowStatus` | `Amity.FollowStatus` | get-follower-following-list.mdx |
+| `AmityUser` | `Amity.User` | get-follower-following-list.mdx |
+| `AmityNotificationTrayItem` | `Amity.NotificationTrayItem` | mark-notification-tray-item-seen.mdx |
+| `AmityRoom` | `Amity.Room` | video-new/analytics/overview.mdx |
+| `FeedType` | `Amity.FeedType` | roles-permissions-and-governance.mdx |
+
+**Fix**: In each TS block, remove the import name from `import { ... } from '@amityco/ts-sdk'` and replace inline usages with `Amity.X` form. If the only imported name was this type, delete the whole import line.
+
+**Category B — Type NOT in surface (remove import or add skip marker):**
+
+| Import | Diagnosis | Files |
+|---|---|---|
+| `CommunityPostSetting` | No public equivalent found | README.mdx, create-community.mdx, update-community.mdx |
+| `ReactionReferenceType` | Not in surface | add-remove-reaction.mdx, query-reactions.mdx |
+| `MessageType` | Not in surface | message-preview.mdx |
+| `MessageFlagRepository` | Not in surface | flag-unflag-a-message.mdx |
+| `CategoryQuery` | Not in surface | community-categories.mdx |
+| `CategorySortOption` | Not in surface | community-categories.mdx |
+| `CreateCommunityParams` | Not in surface | create-community.mdx |
+| `AmityError` | Not in surface | join-leave-community.mdx |
+| `CommunityCollection` | Not in surface | query-communities.mdx |
+| `CommunityFilter` | Not in surface | query-communities.mdx |
+| `CommunitySortOption` | Not in surface | query-communities.mdx |
+| `UpdateCommunityParams` | Not in surface | update-community.mdx |
+| `FeedUpdateEvent` | Not in surface | feed/README.mdx |
+| `AmityFeedRepository` | Not in surface | get-user-feed.mdx |
+| `FeedQueryOptions` | Not in surface | query-global-feed.mdx |
+| `PaginationOptions` | Not in surface | query-global-feed.mdx |
+| `QueryAllPostsOptions` | Not in surface | query-global-feed.mdx |
+| `AmityConnectionStatus` | Not in surface | follow-unfollow-user.mdx |
+| `AmityNotificationCategory` | Not in surface | query-notification-tray-item.mdx |
+| `AmityNotificationSeenStatus` | Not in surface | query-notification-tray-item.mdx |
+| `AmityNotificationTrayQuery` | Not in surface | query-notification-tray-item.mdx |
+| `CreatePostParams` | Not in surface | mention-in-post.mdx |
+| `PinnedPostPlacement` | Not in surface | pinned-post.mdx |
+| `PostQueryParams` | Not in surface | query-post.mdx |
+| `SocialClient` | Not in surface | add-remove-reaction.mdx |
+
+**Fix**: Remove the import line from each affected TS code block. If the type name appears in function signatures (illustrative), no further change needed — the usage itself doesn't trigger the validator. If the type is load-bearing in logic, add a comment noting it was removed or restructured.
+
+### Follow-up task required
+See `0089-type-import-cleanup.json` in `tasks/pending/` for the MDX cleanup task.  
+Affects 27 files, 50 pairs. Split into sub-tasks if needed.
+
+
+---
+
+## TICKET-0088E — Mixed-bag cohort: removed APIs (notification settings + channel archive/subscribe + community membership check)
+
+**Category**: REMOVED API — no direct replacement in v6 TypeScript SDK  
+**Created by**: task 0088e-notification-follow-channel-cohort
+
+### APIs confirmed removed (not in `typescript.json` surface)
+
+| Old API | File | Disposition |
+|---|---|---|
+| `CommunityRepository.isMember` | text-post.mdx | Code block replaced with comment — server-side enforcement |
+| `ChannelRepository.archiveChannel` | channels-and-conversations.mdx | Replaced with comment — use metadata pattern |
+| `ChannelRepository.subscribeChannel` | sending-messages.mdx | Replaced with comment — live collection pattern in v6 |
+| `UserRepository.getNotificationSettings` | notifications-and-engagement.mdx | Replaced with comment — v6 push notification docs |
+| `UserRepository.updateNotificationSettings` | notifications-and-engagement.mdx | Replaced with comment — v6 push notification docs |
+
+**Suggested action for SDK team**: Confirm these were intentionally removed. If replacement APIs exist (e.g. for notification settings, for channel subscription), update docs with the correct v6 pattern.
+
+### APIs renamed (confirmed in v6 surface, applied in 0088e)
+
+| Old | New | Files |
+|---|---|---|
+| `MessageRepository.createTextMessage` | `MessageRepository.createMessage` | send-a-message.mdx |
+| `CommunityRepository.getCommunityLive` | `CommunityRepository.getCommunity` | get-community.mdx |
+| `ChannelRepository.getMembers` | `ChannelRepository.Membership.getMembers` | channels-and-conversations.mdx |
+| `ChannelRepository.getMember` | `ChannelRepository.Membership.getMembers` | channel-roles-and-permissions.mdx |
+| `ChannelRepository.unmuteMembers` | `ChannelRepository.Moderation.unmuteMembers` | chat-moderation.mdx |
+| `ChannelRepository.banMembers` | `ChannelRepository.Moderation.banMembers` | live-chat-and-engagement.mdx |
+| `InvitationRepository.getMyRoomInvitations` | `InvitationRepository.getMyCommunityInvitations` | co-hosting.mdx |
+| `RoomRepository.getRecordedUrls` | `RoomRepository.getRecordedUrl` | go-live-and-room-management.mdx |
+| `notificationTray.markAllNotificationTrayItemsAsSeen` | `notificationTray.markTraySeen` | notifications-and-engagement.mdx |
+| `UserRepository.Relationship.acceptFollower` | `UserRepository.Relationship.acceptMyFollower` | user-profiles-and-social-graph.mdx |
+| `UserRepository.getViewedUsers` | `UserRepository.getReachedUsers` | post-impressions-and-creator-analytics.mdx |
+
