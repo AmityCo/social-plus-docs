@@ -1,0 +1,39 @@
+{
+  "id": "0087-fence-regex-fix-and-drift-triage",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/evals/sdk-tickets-to-file.md",
+    ".docs-ops/evals/0087-fence-fix-triage.md"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/tasks/done/0086-hidden-symbol-sweep-and-validator-audit.result.json",
+    ".docs-ops/evals/sdk-tickets-to-file.md",
+    ".docs-ops/ci/check-drift.py"
+  ],
+  "instructions": "Fix the FENCE_RE validator gap surfaced as TICKET-0086-V1 and produce a triage of the resulting drift. **Do NOT attempt to clean up the surfaced drift in this task** — the cleanup will be one or more separate batched tasks once we know the shape and scale.\n\n## Background\n\n0086's investigation confirmed that `FENCE_RE` in `ts-accuracy-validator.py` uses `^` with `re.MULTILINE`, which only matches column-0 backticks. Every indented fenced code block (4-space indent inside `<Tab>` / `<Tabs>` / `<CodeGroup>` / `<Accordion>` / etc components) has been silently skipped since doc-as-test launched. That's likely hundreds of code blocks across the multi-platform docs.\n\nFlag-unflag-post.mdx:796 was one such miss (caught by manual grep in 0086, fixed there). The full scope is unknown until we fix the regex and run the gate.\n\n## Part A — Apply the one-line fix\n\nIn `.docs-ops/validators/ts-accuracy-validator.py`, update `FENCE_RE` per TICKET-0086-V1:\n\n```python\nFENCE_RE = re.compile(r\"^[ \\t]*```([A-Za-z0-9_]+)[^\\n]*\\n(.*?)^[ \\t]*```\", re.MULTILINE | re.DOTALL)\n```\n\nThe change: prepend `[ \\t]*` to both opening and closing fence anchors so leading whitespace is accepted.\n\nRun the validator's unit tests if any exist; if not, do a quick smoke test by running the validator directly on `social-plus-sdk/social/posts/flag-unflag-post.mdx` and confirming it now sees code blocks inside `<Tab>` (it would have skipped them before).\n\n## Part B — Run the gate and capture impact\n\nRun `python3 .docs-ops/ci/check-drift.py --json-out /tmp/drift-after-fence-fix.json` and capture the full delta.\n\nReport in the triage doc:\n  - **Total new (file, ref) pairs surfaced** by the fix\n  - **Per-platform breakdown** (likely most are TS-only since this is the TS validator, but cohort grouping if useful)\n  - **Per-file count** (sorted descending — top 20)\n  - **Per-symbol top hits** (which API names appear most often in newly-scanned blocks) — this gives a sense of whether the new drift is \"a few popular renames affecting many pages\" vs \"unique drift everywhere\"\n  - **Classification per top-hit**:\n    - **REAL_DRIFT**: stale API name that needs a rewrite (like 0083's @hidden cleanups)\n    - **NEEDS_SKIP_MARKER**: intentional illustrative snippet that should have a `doc-as-test: skip` marker (per CI_GATE.md §Opting out per block)\n    - **VALIDATOR_FALSE_POSITIVE**: the validator misinterprets the block (rare — file as separate ticket if seen)\n\nThis triage doc IS the deliverable. Don't fix any of the drift.\n\n## Part C — Update tickets\n\nMark `TICKET-0086-V1` as RESOLVED in `.docs-ops/evals/sdk-tickets-to-file.md` (with a reference to this task and a pointer to the triage doc for the resulting cleanup scope).\n\n## Push policy for this branch\n\nThe gate will be RED after this task. That's expected and known. Note in the result that follow-up cleanup tasks will need to land before the branch can be merged. Do NOT bypass the gate (`--no-verify`) — the local pre-push hook will block, and that's fine for now since cleanup tasks are coming. Land this task's commits locally; the user (Claude) will handle the push-when-clean strategy.\n\n## Out of scope\n\n- Fixing any of the surfaced drift items (separate task(s) — to be designed based on this triage)\n- Fixing IMPORT_RE (V2) — separate task 0088\n- Adding skip markers — separate task driven by the NEEDS_SKIP_MARKER classification\n- Touching the createUserToken page (C1) — needs SDK team input\n\n## Success criteria\n\n- `FENCE_RE` updated and validator's behavior verified on at least one previously-skipped block.\n- `.docs-ops/evals/0087-fence-fix-triage.md` produced with all 5 sections (totals / per-platform / per-file top 20 / per-symbol top hits / classification of top hits).\n- Triage classification covers AT LEAST the top 10 symbols by frequency (more is better).\n- `TICKET-0086-V1` marked RESOLVED in `sdk-tickets-to-file.md`.\n- The gate is allowed to go RED — `success_criteria.validators` below does NOT check drift gate verdict.\n\nReport in `notes`: total drift count surfaced; whether the distribution is concentrated (few symbols, many files) or diffuse (many unique drifts); recommended structure for follow-up cleanup tasks (one big task vs split-by-platform vs split-by-symbol-cohort).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "fence_re_accepts_indented_blocks",
+        "command": "python3 -c \"import re, sys; sys.path.insert(0, '.docs-ops/validators'); import importlib.util; spec=importlib.util.spec_from_file_location('v','.docs-ops/validators/ts-accuracy-validator.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); test='    \\`\\`\\`typescript\\n    const x = 1\\n    \\`\\`\\`'; matches=list(m.FENCE_RE.finditer(test)); assert len(matches)==1, f'FENCE_RE did not match indented block: {len(matches)} matches'; print(f'OK FENCE_RE matched indented block')\"",
+        "expect_in_stdout": "OK FENCE_RE matched"
+      },
+      {
+        "name": "triage_doc_produced",
+        "command": "test -f .docs-ops/evals/0087-fence-fix-triage.md && wc -l .docs-ops/evals/0087-fence-fix-triage.md | awk '{ if ($1 > 30) print \"OK triage doc has substance (\"$1\" lines)\"; else { print \"FAIL: triage doc too thin (\"$1\" lines)\"; exit 1 } }'",
+        "expect_in_stdout": "OK triage doc"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/0087-fence-fix-triage.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T15:00:00Z"
+}
