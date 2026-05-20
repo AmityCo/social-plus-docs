@@ -209,10 +209,11 @@ _Updated: task 0043 execution_
 
 *Surfaced by: Task 0086 Part A/C investigation. Two structural gaps in `ts-accuracy-validator.py` allow real TypeScript code references to @hidden symbols to pass undetected.*
 
-### TICKET-0086-V1 — FENCE_RE misses indented fenced code blocks
+### TICKET-0086-V1 — FENCE_RE misses indented fenced code blocks ✅ RESOLVED
 
 **Category**: VALIDATOR BUG  
 **Priority**: P2 (false negatives — real doc drift silently passes the gate)  
+**Resolution (task 0087)**: Fixed in `.docs-ops/validators/ts-accuracy-validator.py` line 38–41 — prepended `[ \t]*` to both opening and closing fence anchors. Surfaced 92 new `(file, ref)` drift pairs across 46 files. See triage: `.docs-ops/evals/0087-fence-fix-triage.md`. Cleanup batched into 5 follow-up tasks (0088a–e).  
 **File**: `.docs-ops/validators/ts-accuracy-validator.py` line 38–41  
 **Description**:
 ```python

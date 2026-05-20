@@ -36,7 +36,7 @@ TS_LANGS = {"typescript", "ts", "tsx", "javascript", "js", "jsx"}
 
 # Fence pattern: ``` followed by lang token, capturing the body until the closing ```
 FENCE_RE = re.compile(
-    r"^```([A-Za-z0-9_]+)[^\n]*\n(.*?)^```",
+    r"^[ \t]*```([A-Za-z0-9_]+)[^\n]*\n(.*?)^[ \t]*```",
     re.MULTILINE | re.DOTALL,
 )
 IMPORT_RE = re.compile(
