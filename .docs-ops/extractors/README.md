@@ -13,8 +13,9 @@ Each extractor walks its platform's SDK source (or compiled artifact) and emits 
 | `ios-extractor.py` | iOS | Swift source regex (**DEPRECATED**) | _(retired)_ |
 | `android-dokka-extractor.py` | Android | Dokka GFM output (**primary**) | `sdk-surface/android.json` |
 | `android-extractor.py` | Android | Kotlin/Java source regex (**DEPRECATED**) | _(retired)_ |
-| `flutter-extractor.py` | Flutter | Dart barrel re-exports (**primary — pending swap**) | `sdk-surface/flutter.json` |
-| `flutter-dartdoc-extractor.py` | Flutter | `dartdoc` index.json (**pilot in progress**) | `sdk-surface/flutter-from-dartdoc.json` |
+| `flutter-extractor.py` | Flutter | Dart barrel re-exports (**DEPRECATED**) | _(retired)_ |
+| `flutter-dartdoc-extractor.py` | Flutter | `dartdoc` index.json (**pilot, superseded**) | _(retired)_ |
+| `flutter-hybrid-extractor.py` | Flutter | `dartdoc` index.json + enum-value regex (**primary**) | `sdk-surface/flutter.json` |
 
 ## Running extractors
 
@@ -38,11 +39,14 @@ python3 .docs-ops/extractors/ios-docc-extractor.py
 python3 .docs-ops/extractors/android-dokka-extractor.py    # primary (Dokka GFM)
 python3 .docs-ops/extractors/android-extractor.py          # DEPRECATED (regex, retained for reference)
 
-# Flutter dartdoc runner (pilot — parallel artifact, no swap yet)
-# Requires: dart pub global activate dartdoc (one-time)
-# cd Amity-Social-Cloud-SDK-Flutter-Internal && dartdoc --output /tmp/flutter-dartdoc-out --no-include-source
-python3 .docs-ops/extractors/flutter-dartdoc-extractor.py  # pilot (dartdoc index.json)
-python3 .docs-ops/extractors/flutter-extractor.py          # primary (regex, pending swap)
+# Flutter dartdoc runner (primary hybrid extractor)
+# Requires dartdoc pre-run (one-time per release):
+#   cd Amity-Social-Cloud-SDK-Flutter-Internal
+#   dart pub global activate dartdoc  (one-time install)
+#   dartdoc --output /tmp/flutter-dartdoc-out --no-include-source
+python3 .docs-ops/extractors/flutter-hybrid-extractor.py  # primary (dartdoc + enum-value regex)
+python3 .docs-ops/extractors/flutter-extractor.py          # DEPRECATED (regex, retained for reference)
+python3 .docs-ops/extractors/flutter-dartdoc-extractor.py  # pilot superseded (retained for reference)
 ```
 
 ## iOS migration: complete (task 0076)
@@ -89,25 +93,30 @@ Note: `dokkaJson` task is not wired in the Android SDK Gradle config. `dokkaGfm`
 **TypeDoc invocation**: `src/index.ts` against `packages/sdk/tsconfig.json` with `--skipErrorChecking --excludeExternals`. Produces 2.4 MB JSON in ~10s.
 
 
-## Flutter migration: pilot in progress (task 0082)
+## Flutter migration: complete (task 0084)
 
-**Primary (pending swap)**: `flutter-extractor.py` (regex) → `sdk-surface/flutter.json`  
-**Pilot**: `flutter-dartdoc-extractor.py` (dartdoc index.json) → `sdk-surface/flutter-from-dartdoc.json`
+**Primary**: `flutter-hybrid-extractor.py` (dartdoc + enum-value regex) → `sdk-surface/flutter.json`  
+**Retired**: `flutter-extractor.py` (regex, DEPRECATED) and `flutter-dartdoc-extractor.py` (pilot, superseded)
 
-**Approach used**: Approach 2 (dart doc HTML + index.json parsing). `dartdoc --output-format json` flag does not exist in dartdoc 9.0.4.
+**Why hybrid, not a clean swap** (same pattern as TypeScript migration):
+- `dartdoc index.json` is authoritative for types, extensions, and class members (strict superset of regex)
+- One gap: dartdoc's `index.json` does NOT index individual named enum constants — only the synthetic `.values` property per enum. Solution: Pass 2 targeted enum-value regex over barrel-reachable files only.
 
 **Key findings** (see `.docs-ops/evals/flutter-surface-comparison.md` for full details):
-- dartdoc is a **strict superset** of regex at type-name level (0 regex false positives)
-- **+11 types** missed by regex (sealed class variants like `AmityUpload*`, generic classes `LiveCollection`, `PagingController`)
-- **+65 extensions** missed by regex (~171 methods invisible to drift tracking)
-- **+474 non-enum-value members** for shared types — significant class member under-counting in regex
-- **Gap**: dartdoc `index.json` does NOT index individual enum constants (222 values are regex-only)
+- **+11 types** previously invisible to regex: sealed class variants (`AmityUpload*`), generic utility classes (`LiveCollection` with 24 members, `PagingController` with 19)
+- **+65 extensions** now tracked: entire `Amity<Enum>Extension` convention pattern (~171 methods)
+- **+474 net non-enum members** for shared types (e.g., `AmityPost` +22, `AmityComment` +21, `AmityStory` +26)
+- **2 false positives removed**: `AmityCommunityPostSettings.isPostReviewEnabled` and `.onlyAdminCanPost` were final fields of a Dart enhanced enum constructor, not enum constants — regex extracted them incorrectly; hybrid correctly excludes them
+- **0 new drift** introduced by the swap — drift gate delta unchanged at +6 (pre-existing @hidden cleanup items from task 0083)
 
-**Recommendation**: Hybrid approach (same as TypeScript migration):
-- Pass 1: dartdoc index.json (primary — types, extensions, class members)
-- Pass 2: targeted enum-value regex (fill the one gap dartdoc can't close)
+**All 4 platforms now migrated to authoritative sources — Phase 4 universally complete.**
 
-Next task: implement hybrid + swap `flutter.json`.
+| Platform | Source | Approach |
+|---|---|---|
+| iOS | `.abi.json` from xcframework | Clean swap |
+| Android | Dokka GFM output | Clean swap |
+| TypeScript | TypeDoc + targeted `@types` regex | Hybrid |
+| **Flutter** | **dartdoc index.json + enum-value regex** | **Hybrid** |
 
  (platform-specific fields may vary):
 

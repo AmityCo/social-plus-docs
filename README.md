@@ -132,11 +132,78 @@ Once connected, skills are discovered automatically — no extra installation ne
 
 ## Docs Quality (`.docs-ops/`)
 
-This repo runs an automated drift-detection gate that compares documentation code samples against the actual TypeScript SDK source, so docs stay in sync with what the SDK ships. Contributors should enable the local pre-push hook once after cloning:
+This repo runs an automated quality system that keeps documentation accurate, consistent, and AI-consumable as the underlying SDKs evolve. It validates against the real SDK source for all four platforms (TypeScript / iOS / Android / Flutter) on every push, and additionally scores each high-traffic doc page on a 5-dimension rubric.
+
+### The layers
+
+Every push runs through these checks; what they catch is complementary:
+
+| Layer | What it catches | Source of truth |
+|---|---|---|
+| **Regex drift** | Stale API names, renamed methods, removed types, fabricated refs in code blocks | Per-platform SDK surface JSON |
+| **Doc-as-test (TS / iOS / Android / Flutter)** | Wrong signatures, arg type mismatches, async/await drift — anything the language's actual type-checker would flag | Real SDK source (compile snippets with `tsc` / `swiftc` / `kotlinc` / `dart analyze`) |
+| **MDX structure** | HTML comments inside JSX components (silently break MDX v2 parsing — blanks pages in Mintlify) | Static structural check |
+
+Two further outputs run periodically (not as gates) for visibility:
+
+| Layer | What it produces |
+|---|---|
+| **Cohort dashboards** | Weekly snapshot of drift per platform per customer cohort (Eastern chat-heavy / Western social-heavy / Shared) at `.docs-ops/dashboards/latest-report.md` |
+| **5-dimension rubric scorer** | Per-page weighted scores on Accuracy, Clarity, Cross-platform parity, Completeness, Examples, AI-consumability — useful for content-investment prioritization. Reports at `.docs-ops/rubric-scorer/results/overall-latest-report.md` |
+
+And one workflow runs automatically:
+
+| Workflow | What it does |
+|---|---|
+| **SDK→docs PR-bot** (daily GH Action) | Polls all four SDK repos; when a public API changes, opens a draft docs PR with auto-rewrites for unambiguous renames and a structured comment listing what changed |
+
+### SDK surface sources
+
+The surface JSON the gates validate against comes from the most authoritative source per platform:
+
+| Platform | Source | Notes |
+|---|---|---|
+| iOS | `.abi.json` from the vendored `AmitySDK.xcframework` | Apple's Swift ABI artifact; ships with the framework |
+| Android | Dokka GFM output | Existing Dokka config in `amity-sdk/build.gradle` already encodes the public/private boundary via `perPackageOption suppress` rules |
+| TypeScript | Regex extractor (migration to TypeDoc in progress) | TypeDoc migration pending; see `.docs-ops/extractors/README.md` |
+| Flutter | Regex extractor (migration to `dart doc` planned) | Same shape as TS migration |
+
+Old regex extractors remain in-tree as DEPRECATED fallbacks for iOS and Android, available for cross-checks if needed.
+
+### For contributors
+
+One-time setup after cloning:
 
 ```bash
 pip install pre-commit
 pre-commit install --hook-type pre-push
 ```
 
-After that, every `git push` is compared against `origin/main`. If your changes introduce new docs-accuracy issues (stale API names, renamed methods, removed types), the push is blocked with a list of the new issues to fix. See [`.docs-ops/CI_GATE.md`](.docs-ops/CI_GATE.md) for the full system design and [`.docs-ops/README.md`](.docs-ops/README.md) for the multi-agent improvement pipeline behind it.
+Daily: just `git push`. The hook runs the full check suite in a few seconds (longer on first run while toolchains warm up). If anything regresses, the output names the exact file:line and what's wrong.
+
+Manual gate run any time:
+
+```bash
+python3 .docs-ops/ci/check-drift.py              # against origin/main
+python3 .docs-ops/ci/check-drift.py --base main  # against local main
+python3 .docs-ops/ci/check-drift.py --quiet      # one-line summary
+```
+
+Bypass (`git push --no-verify`) exists for legitimate exceptions — please file an issue or ping #docs-ops first if you find yourself wanting to use it; usually it means either a validator has a false positive or there's a docs change pattern we should teach the gate.
+
+iOS-specific: the iOS doc-as-test check requires macOS (`swiftc`). On Linux contributor machines the gate gracefully reports iOS as `unavailable` rather than failing — your push isn't blocked.
+
+### How it stays accurate
+
+Two mechanisms keep the system itself from going stale:
+
+- **PR-bot proactive watcher** — the daily GH Action opens a draft PR whenever any SDK's public surface changes. Docs catch up before drift accumulates.
+- **Audit trail of every change** — every doc fix has a corresponding task spec + result in `.docs-ops/tasks/done/`. Reviewers (and future maintainers) can trace why each edit happened.
+
+### Deeper reading
+
+- [`.docs-ops/README.md`](.docs-ops/README.md) — the multi-agent task protocol that powers the cleanup pipeline
+- [`.docs-ops/CI_GATE.md`](.docs-ops/CI_GATE.md) — full design of the local CI gate
+- [`.docs-ops/extractors/README.md`](.docs-ops/extractors/README.md) — per-platform extractor status and migration history
+- [`.docs-ops/rubric.json`](.docs-ops/rubric.json) — the 6-dimension rubric definition
+- [`.docs-ops/evals/sdk-tickets-to-file.md`](.docs-ops/evals/sdk-tickets-to-file.md) — cross-platform SDK gaps surfaced by the validators (queued for SDK leads to file)

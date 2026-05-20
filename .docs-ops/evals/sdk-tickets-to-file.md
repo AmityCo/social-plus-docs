@@ -191,25 +191,14 @@ _Updated: task 0043 execution_
 
 *Surfaced by: TypeDoc pilot (0080) confirmed 33 `@hidden`/`@private`-tagged symbols were over-captured by the regex extractor v1.3. After removing them from the surface in 0083, 6 drift issues appeared across 5 doc pages. These docs reference internal SDK symbols that were never intended for public consumption. Each needs a REWRITE to use a public API equivalent.*
 
-### TICKET-0083-01 — Replace `Client.getActiveClient` references (4 files)
+### TICKET-0083-01 — Replace `Client.getActiveClient` references (4 files) ✅ RESOLVED
 
 **Category**: REWRITE  
 **Priority**: P2 (internal API being documented as public)  
-**Affected docs**:
-- `social-plus-sdk/getting-started/authentication.mdx` (line 252)
-- `social-plus-sdk/social/comments/create-comment.mdx` (lines 441, 1221)
-- `social-plus-sdk/social/comments/mention-in-comment.mdx` (line 882)
-- `social-plus-sdk/social/comments/query-comment.mdx`
+**Resolution (task 0085)**: Replaced all 5 occurrences with `client` variable referencing the instance returned by `Client.createClient()` at initialization. Auth page used a comment clarifying the `client` is already in scope from initialization. Comment manager and query manager usages updated to pass the retained `client` reference instead of calling the hidden accessor. Drift gate: delta=0 ✅
 
-**Description**: `Client.getActiveClient` is tagged `@hidden` in the SDK source — it's an internal accessor for SDK machinery, not a public API. The documentation code snippets use it directly. These should be rewritten to use the public `Client.createClient` / session state APIs instead.  
-**Suggested fix**: Replace `Client.getActiveClient()` calls with appropriate public patterns (e.g., store the client returned from `createClient`, or use `Client.getCurrentUser()`).
-
-### TICKET-0083-02 — Replace `PostRepository.deletePost` reference
+### TICKET-0083-02 — Replace `PostRepository.deletePost` reference ✅ RESOLVED
 
 **Category**: REWRITE  
 **Priority**: P2 (internal API being documented as public)  
-**Affected docs**:
-- `social-plus-sdk/social/content-management/posts/moderation/delete-post.mdx`
-
-**Description**: `PostRepository.deletePost` is tagged `@private` in the SDK source. The public API for deleting posts is through the post repository's public surface. The docs code snippet calls an internal variant directly.  
-**Suggested fix**: Replace with the appropriate public `PostRepository` method for post deletion (confirm with the TS SDK team which public method is the intended replacement).
+**Resolution (task 0085)**: Replaced `PostRepository.deletePost(postId, true)` with `PostRepository.hardDeletePost(postId)` and `PostRepository.deletePost(postId)` with `PostRepository.softDeletePost(postId)`. Both public functions are exported via `PostRepository` in `src/postRepository/api/`. Drift gate: delta=0 ✅
