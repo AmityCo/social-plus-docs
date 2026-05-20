@@ -1,0 +1,41 @@
+{
+  "id": "0081-ts-hybrid-extractor-and-swap",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/typescript-hybrid-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/extractors/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/typescript-typedoc-extractor.py",
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/sdk-surface/typescript-from-typedoc.json",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/typescript-surface-comparison.md",
+    ".docs-ops/ci/check-drift.py"
+  ],
+  "instructions": "Follow-up to 0080 pilot. The TypeDoc pilot found TypeDoc is the right primary source for TS BUT misses the entire `declare global namespace Amity { ... }` block (946 type members in `@types/domains/*.ts`). A direct swap to TypeDoc would drop those references from the validator. Solution: hybrid extractor that merges TypeDoc (authoritative for namespaced + honors @hidden) + targeted regex over `@types/domains/*.ts` only (for Amity global types).\n\nFull context in [.docs-ops/evals/typescript-surface-comparison.md](.docs-ops/evals/typescript-surface-comparison.md). Read sections 3a + 5 + 6 first — they justify the hybrid approach.\n\n## Part A — Build the hybrid extractor\n\nWrite `.docs-ops/extractors/typescript-hybrid-extractor.py`. It runs both passes and merges:\n\n1. **TypeDoc pass** — call `typescript-typedoc-extractor.py` logic (refactor into a reusable function or import). Produces namespaces + root_exports + signatures, with `@hidden` filtered.\n2. **Amity globals pass** — targeted regex over the SDK's `src/@types/domains/*.ts` files ONLY (NOT the whole src tree — that's what the current full-regex extractor does, and what TypeDoc replaces). Extract symbols inside `declare global { namespace Amity { ... } }` blocks. Reuse logic from the existing `typescript-extractor.py` if straightforward.\n3. **Merge** — combine into a single surface JSON. The merged `namespaces` dict should contain TypeDoc's namespaces PLUS a synthesized `Amity` entry containing the global-namespace members. Set `extractor_version: \"0.3.0-hybrid\"`, `extractor: \"typescript-hybrid-extractor.py\"`. Add a `sources` field documenting both passes (`typedoc_json_path`, `at_types_glob`).\n\nSchema stays compatible with current `typescript.json` so downstream validators don't break.\n\nIf there are name collisions (same symbol in both passes), TypeDoc wins. Log collisions in a `merge_notes` field for transparency.\n\n## Part B — Swap typescript.json to hybrid output\n\nReplace `.docs-ops/sdk-surface/typescript.json` with the hybrid extractor's output. Delete `.docs-ops/sdk-surface/typescript-from-typedoc.json` (it was a pilot artifact; the hybrid supersedes it).\n\n## Part C — Drift gate must not regress\n\nRun the local drift gate. The hybrid surface is expected to:\n  - **Add** ~2 references (the genuine new functions `getCommunityByIds`, `getSubChannelByIds`) — these may flag if docs reference them and the extractor misses them, but more likely they'll appear in the surface and stop being flagged.\n  - **Remove** ~33 `@hidden` references from the surface — if any docs reference them, those will newly flag as drift. List any new flags and add them to `.docs-ops/evals/sdk-tickets-to-file.md` (REWRITE category — the docs should stop referencing internal-only APIs).\n  - **Retain** the full 946 Amity.* coverage from the global namespace pass.\n\nIf the gate reports a manageable number of new drift items (say ≤ 25) caused by removed `@hidden` symbols, leave them as drift to be cleaned up by docs PRs (file the ticket and reference it in the result notes). Don't try to fix the doc pages in this task — scope is the extractor swap.\n\nIf the gate reports unexpected drift NOT explained by the comparison findings (e.g., the Amity global pass missed something), investigate and fix.\n\n## Part D — Update extractors README\n\nMark TS Phase 4 status as **complete** (was 'pilot in progress'). Note the hybrid approach (TypeDoc + targeted regex) and why it differs from iOS (.abi.json clean swap) and Android (Dokka clean swap). Cross-link to the comparison document.\n\n## Out of scope\n\n- Touching doc pages to fix references to removed `@hidden` symbols — file as SDK/docs tickets.\n- Updating doc-as-test to consume the new signature fields — separate future task.\n- Flutter migration — task 0082.\n- TS SDK team conversation about removing `declare global namespace Amity` in favor of explicit exports — flagged in 0080 comparison; long-term cleanup, not blocking.\n\n## Success criteria\n\n- `.docs-ops/sdk-surface/typescript.json` updated, `extractor: typescript-hybrid-extractor.py`\n- Surface contains BOTH TypeDoc namespaced members (~381) AND Amity globals (~946) — total namespaced_members should be in the same order as current regex output (~1300+)\n- `python3 .docs-ops/ci/check-drift.py --quiet` runs cleanly OR reports only the expected `@hidden`-removal drift items\n- README extractors table updated\n- `typescript-from-typedoc.json` deleted (pilot superseded)\n\nReport in `notes`: hybrid output stats; how many `@hidden`-removal drift items hit the gate (and ticket filed); any merge collisions surfaced.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "hybrid_extractor_produces_complete_surface",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/typescript.json')); assert d.get('extractor','').startswith('typescript-hybrid'), f'wrong extractor: {d.get(\\\"extractor\\\")}'; ns=d.get('namespaces',{}); assert 'Amity' in ns, 'Amity global namespace missing from hybrid output'; amity_count=len(ns['Amity'].get('members',[])); assert amity_count > 500, f'Amity should have ~946 members, got {amity_count}'; total=sum(len(v.get('members',[])) for v in ns.values()); assert total > 1000, f'expected >1000 namespaced members, got {total}'; print(f'OK namespaces={len(ns)} amity_members={amity_count} total_namespaced={total}')\"",
+        "expect_in_stdout": "OK namespaces="
+      },
+      {
+        "name": "pilot_artifact_removed",
+        "command": "test ! -f .docs-ops/sdk-surface/typescript-from-typedoc.json && echo 'OK pilot artifact removed'",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/typescript.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T12:00:00Z"
+}

@@ -184,3 +184,21 @@ _Updated: task 0043 execution_
 **Affected docs**: `social-plus-sdk/social/posts/create-post/live-stream-post.mdx`
 **Description**: iOS and Android expose stream repository APIs directly, but Flutter's stream repository lives behind the video sub-module and is not exported from the main `amity_sdk` barrel.
 **Suggested API**: Export Flutter stream repository APIs from the main `amity_sdk` barrel.
+
+---
+
+## TS @hidden symbol cleanup (task 0083)
+
+*Surfaced by: TypeDoc pilot (0080) confirmed 33 `@hidden`/`@private`-tagged symbols were over-captured by the regex extractor v1.3. After removing them from the surface in 0083, 6 drift issues appeared across 5 doc pages. These docs reference internal SDK symbols that were never intended for public consumption. Each needs a REWRITE to use a public API equivalent.*
+
+### TICKET-0083-01 — Replace `Client.getActiveClient` references (4 files) ✅ RESOLVED
+
+**Category**: REWRITE  
+**Priority**: P2 (internal API being documented as public)  
+**Resolution (task 0085)**: Replaced all 5 occurrences with `client` variable referencing the instance returned by `Client.createClient()` at initialization. Auth page used a comment clarifying the `client` is already in scope from initialization. Comment manager and query manager usages updated to pass the retained `client` reference instead of calling the hidden accessor. Drift gate: delta=0 ✅
+
+### TICKET-0083-02 — Replace `PostRepository.deletePost` reference ✅ RESOLVED
+
+**Category**: REWRITE  
+**Priority**: P2 (internal API being documented as public)  
+**Resolution (task 0085)**: Replaced `PostRepository.deletePost(postId, true)` with `PostRepository.hardDeletePost(postId)` and `PostRepository.deletePost(postId)` with `PostRepository.softDeletePost(postId)`. Both public functions are exported via `PostRepository` in `src/postRepository/api/`. Drift gate: delta=0 ✅

@@ -6,31 +6,47 @@ Each extractor walks its platform's SDK source (or compiled artifact) and emits 
 
 | File | Platform | Source | Output |
 |---|---|---|---|
-| `typescript-extractor.py` | TypeScript | `AmityTypescriptSDK` barrel + nested namespaces | `sdk-surface/typescript.json` |
+| `typescript-extractor.py` | TypeScript | `AmityTypescriptSDK` barrel + nested namespaces (**DEPRECATED**) | _(retired)_ |
+| `typescript-typedoc-extractor.py` | TypeScript | TypeDoc JSON from `src/index.ts` (**pilot, superseded**) | _(retired)_ |
+| `typescript-hybrid-extractor.py` | TypeScript | TypeDoc (namespaces) + targeted @types regex (Amity globals) (**primary**) | `sdk-surface/typescript.json` |
 | `ios-docc-extractor.py` | iOS | Compiled `.abi.json` from xcframework (**primary**) | `sdk-surface/ios.json` |
 | `ios-extractor.py` | iOS | Swift source regex (**DEPRECATED**) | _(retired)_ |
-| `android-dokka-extractor.py` | Android | Dokka GFM output (**pilot**) | `sdk-surface/android-from-dokka.json` |
-| `android-extractor.py` | Android | Kotlin/Java source regex (current primary) | `sdk-surface/android.json` |
-| `flutter-extractor.py` | Flutter | Dart barrel re-exports | `sdk-surface/flutter.json` |
+| `android-dokka-extractor.py` | Android | Dokka GFM output (**primary**) | `sdk-surface/android.json` |
+| `android-extractor.py` | Android | Kotlin/Java source regex (**DEPRECATED**) | _(retired)_ |
+| `flutter-extractor.py` | Flutter | Dart barrel re-exports (**DEPRECATED**) | _(retired)_ |
+| `flutter-dartdoc-extractor.py` | Flutter | `dartdoc` index.json (**pilot, superseded**) | _(retired)_ |
+| `flutter-hybrid-extractor.py` | Flutter | `dartdoc` index.json + enum-value regex (**primary**) | `sdk-surface/flutter.json` |
 
 ## Running extractors
 
 ```sh
-# TypeScript (SP_SDKS_ROOT must point to sp-sdks/ parent)
-python3 .docs-ops/extractors/typescript-extractor.py
+# TypeScript hybrid (primary — TypeDoc + targeted @types regex for Amity globals)
+# Requires pre-built TypeDoc JSON:
+#   cd AmityTypescriptSDK/packages/sdk
+#   npm install --no-save --legacy-peer-deps typedoc
+#   npx typedoc --json /tmp/typedoc-output.json src/index.ts --tsconfig tsconfig.json --skipErrorChecking --excludeExternals
+python3 .docs-ops/extractors/typescript-hybrid-extractor.py /tmp/typedoc-output.json
+
+# TypeScript — legacy regex (DEPRECATED, retained for reference)
+# python3 .docs-ops/extractors/typescript-extractor.py
 
 # iOS (ABI — no SDK clone needed, reads vendor xcframework)
 python3 .docs-ops/extractors/ios-docc-extractor.py
 
-# Android
-python3 .docs-ops/extractors/android-extractor.py          # current primary (regex)
-python3 .docs-ops/extractors/android-dokka-extractor.py    # pilot (Dokka GFM)
-# Dokka GFM requires pre-built artifact:
-#   cd Amity-Social-Cloud-SDK-Android
-#   ANDROID_HOME=~/Library/Android/sdk ./gradlew :amity-sdk:dokkaGfm
+# Android (primary — Dokka GFM, requires pre-built artifact)
+# cd Amity-Social-Cloud-SDK-Android
+# ANDROID_HOME=~/Library/Android/sdk ./gradlew :amity-sdk:dokkaGfm
+python3 .docs-ops/extractors/android-dokka-extractor.py    # primary (Dokka GFM)
+python3 .docs-ops/extractors/android-extractor.py          # DEPRECATED (regex, retained for reference)
 
-# Flutter
-python3 .docs-ops/extractors/flutter-extractor.py
+# Flutter dartdoc runner (primary hybrid extractor)
+# Requires dartdoc pre-run (one-time per release):
+#   cd Amity-Social-Cloud-SDK-Flutter-Internal
+#   dart pub global activate dartdoc  (one-time install)
+#   dartdoc --output /tmp/flutter-dartdoc-out --no-include-source
+python3 .docs-ops/extractors/flutter-hybrid-extractor.py  # primary (dartdoc + enum-value regex)
+python3 .docs-ops/extractors/flutter-extractor.py          # DEPRECATED (regex, retained for reference)
+python3 .docs-ops/extractors/flutter-dartdoc-extractor.py  # pilot superseded (retained for reference)
 ```
 
 ## iOS migration: complete (task 0076)
@@ -46,21 +62,63 @@ Migration outcome (see `.docs-ops/evals/ios-surface-comparison.md` for full deta
 - 573 regex-only refs correctly excluded (545 streaming lib over-reach + 15 extractor artifacts + 13 access-level mismatches)
 - Drift validator: 0 issues after swap
 
-## Android migration: in progress (task 0078)
+## Android migration: complete (task 0079)
 
-**Current primary**: `android-extractor.py` (regex) → `sdk-surface/android.json`  
-**Pilot**: `android-dokka-extractor.py` (Dokka GFM) → `sdk-surface/android-from-dokka.json`
+**Primary**: `android-dokka-extractor.py` (Dokka GFM) → `sdk-surface/android.json`  
+**Retired**: `android-extractor.py` (regex, DEPRECATED, retained for reference only)
 
 **Key findings** (see `.docs-ops/evals/android-surface-comparison.md` for full details):
 - 726 regex-only types are false positives — bundled vendor code (mp4parser, RTMP, GPU filters) + internal suppressed packages
-- Dokka adds 2 new types (`AmityRoomSortOption`, `AmityRoomStatus`) + 177 members on shared types that regex misses
-- Swap decision: **recommended** — Dokka surface is strictly better; swap task queued as 0079
+- Dokka adds 2 new types + 177 members on shared types that regex misses
+- Migration complete — drift=0, doc-as-test 70/70 ✅
 
-Note: `dokkaJson` task is not wired in the Android SDK Gradle config. `dokkaGfm` is used instead (already configured with `perPackageOption` suppress rules in `dokkaHtml` block; extractor applies same rules manually since GFM doesn't inherit them).
+Note: `dokkaJson` task is not wired in the Android SDK Gradle config. `dokkaGfm` is used instead; extractor manually applies the same `perPackageOption` suppress rules from `dokkaHtml`.
+
+## TypeScript migration: complete (task 0081)
+
+**Primary**: `typescript-hybrid-extractor.py` (TypeDoc + targeted @types regex) → `sdk-surface/typescript.json`  
+**Retired**: `typescript-extractor.py` (regex v1.3, DEPRECATED) and `typescript-typedoc-extractor.py` (pilot, superseded)
+
+**Why hybrid, not a clean swap** (unlike iOS and Android):
+- TypeDoc is authoritative for namespaced exports (24 namespaces) and honors `@hidden`/`@private` natively
+- The `declare global { namespace Amity { ... } }` pattern (~946 members) is ambient global augmentation that TypeDoc does not surface from a single `src/index.ts` entry point
+- Solution: TypeDoc for namespaces + targeted regex over `src/@types/domains/*.ts` only for the Amity global namespace
+
+**Key findings** (see `.docs-ops/evals/typescript-surface-comparison.md` for full details):
+- 2 new functions caught by TypeDoc that survived 4 regex refinement rounds: `getCommunityByIds`, `getSubChannelByIds`
+- 33 `@hidden`/`@private`-tagged internal symbols removed from surface (task 0083 / hybrid natively)
+- 6 drift items surfaced (docs referencing internal API) — filed as tickets 0083-01 and 0083-02 in `sdk-tickets-to-file.md`
+- Amity globals: 946 members unchanged (Pass 2 targeted scan)
+
+**TypeDoc invocation**: `src/index.ts` against `packages/sdk/tsconfig.json` with `--skipErrorChecking --excludeExternals`. Produces 2.4 MB JSON in ~10s.
 
 
+## Flutter migration: complete (task 0084)
 
-All extractors emit the same top-level shape (platform-specific fields may vary):
+**Primary**: `flutter-hybrid-extractor.py` (dartdoc + enum-value regex) → `sdk-surface/flutter.json`  
+**Retired**: `flutter-extractor.py` (regex, DEPRECATED) and `flutter-dartdoc-extractor.py` (pilot, superseded)
+
+**Why hybrid, not a clean swap** (same pattern as TypeScript migration):
+- `dartdoc index.json` is authoritative for types, extensions, and class members (strict superset of regex)
+- One gap: dartdoc's `index.json` does NOT index individual named enum constants — only the synthetic `.values` property per enum. Solution: Pass 2 targeted enum-value regex over barrel-reachable files only.
+
+**Key findings** (see `.docs-ops/evals/flutter-surface-comparison.md` for full details):
+- **+11 types** previously invisible to regex: sealed class variants (`AmityUpload*`), generic utility classes (`LiveCollection` with 24 members, `PagingController` with 19)
+- **+65 extensions** now tracked: entire `Amity<Enum>Extension` convention pattern (~171 methods)
+- **+474 net non-enum members** for shared types (e.g., `AmityPost` +22, `AmityComment` +21, `AmityStory` +26)
+- **2 false positives removed**: `AmityCommunityPostSettings.isPostReviewEnabled` and `.onlyAdminCanPost` were final fields of a Dart enhanced enum constructor, not enum constants — regex extracted them incorrectly; hybrid correctly excludes them
+- **0 new drift** introduced by the swap — drift gate delta unchanged at +6 (pre-existing @hidden cleanup items from task 0083)
+
+**All 4 platforms now migrated to authoritative sources — Phase 4 universally complete.**
+
+| Platform | Source | Approach |
+|---|---|---|
+| iOS | `.abi.json` from xcframework | Clean swap |
+| Android | Dokka GFM output | Clean swap |
+| TypeScript | TypeDoc + targeted `@types` regex | Hybrid |
+| **Flutter** | **dartdoc index.json + enum-value regex** | **Hybrid** |
+
+ (platform-specific fields may vary):
 
 ```json
 {

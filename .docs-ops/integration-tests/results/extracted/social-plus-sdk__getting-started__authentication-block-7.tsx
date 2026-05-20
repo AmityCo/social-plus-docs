@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/getting-started/authentication.mdx:461-497
+// source: social-plus-sdk/getting-started/authentication.mdx:460-496
 
     // Listen to session state changes
     import { Client } from '@amityco/ts-sdk';

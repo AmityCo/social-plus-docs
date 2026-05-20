@@ -92,17 +92,46 @@ def resolve_module(from_file: Path, spec: str) -> Path | None:
     return None
 
 
+JSDOC_HIDDEN_RE = re.compile(r'@(?:hidden|private|internal)\b')
+
+
+def _has_hidden_jsdoc(lines: list[str], decl_lineno: int) -> bool:
+    """Return True if the JSDoc comment block immediately before decl_lineno contains @hidden."""
+    # Scan backwards from the declaration line through any JSDoc/comment lines
+    i = decl_lineno - 2  # 0-indexed, one line above the declaration
+    while i >= 0:
+        stripped = lines[i].strip()
+        if JSDOC_HIDDEN_RE.search(stripped):
+            return True
+        # Keep scanning while inside a comment block or on a blank line between comment and decl
+        if stripped.startswith("*") or stripped.startswith("/*") or stripped.startswith("//") or stripped == "*/":
+            i -= 1
+        elif stripped == "":
+            # Allow one blank line between comment and declaration
+            i -= 1
+            # But stop if the next line up is also blank (no JSDoc nearby)
+            if i >= 0 and lines[i].strip() == "":
+                break
+        else:
+            break
+    return False
+
+
 def extract_local_declarations(file: Path) -> list[dict]:
-    """Find top-level `export class/interface/function/...` declarations in a single file."""
+    """Find top-level `export class/interface/function/...` declarations in a single file.
+    Skips declarations preceded by a JSDoc block containing @hidden."""
     items: list[dict] = []
     try:
         text = file.read_text(encoding="utf-8")
     except (UnicodeDecodeError, FileNotFoundError):
         return items
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    lines = text.splitlines()
+    for lineno, line in enumerate(lines, start=1):
         for kind, pat in DECL_PATTERNS:
             m = pat.match(line.strip())
             if m:
+                if _has_hidden_jsdoc(lines, lineno):
+                    break  # skip @hidden symbols
                 items.append({
                     "name": m.group(1),
                     "kind": kind,
