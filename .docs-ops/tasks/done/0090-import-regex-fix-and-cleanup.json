@@ -1,0 +1,34 @@
+{
+  "id": "0090-import-regex-fix-and-cleanup",
+  "tier": "B",
+  "type": "infrastructure+content",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/evals/sdk-tickets-to-file.md",
+    "social-plus-sdk/core-concepts/user-management/user-operations/user-token-management.mdx"
+  ],
+  "context_files": [
+    ".docs-ops/validators/ts-accuracy-validator.py",
+    ".docs-ops/evals/sdk-tickets-to-file.md",
+    ".docs-ops/tasks/done/0086-hidden-symbol-sweep-and-validator-audit.result.json",
+    ".docs-ops/ci/check-drift.py"
+  ],
+  "instructions": "Resolve `TICKET-0086-V2` (IMPORT_RE doesn't match dynamic `await import(...)` syntax) AND `TICKET-0086-C1` (`createUserToken` in user-token-management.mdx). Both are bundled here because V2's fix is what makes C1 visible to the validator.\n\n## Background\n\n0086's audit found that `IMPORT_RE` in `ts-accuracy-validator.py` only matches static imports — `import { ... } from '@amityco/ts-sdk'` — and misses dynamic imports — `const { ... } = await import('@amityco/ts-sdk')`. The known instance is `user-token-management.mdx:78` which uses dynamic import for `createUserToken`.\n\n**CTO direction on C1**: `createUserToken` is **mis-tagged** as `@hidden`/`@private` in the TS SDK. It's a legitimate public API. The long-term fix is to remove the `@hidden` tag from the SDK source. Until that ships, we add a temporary validator allowlist entry.\n\n## Part A — Fix IMPORT_RE\n\nIn `.docs-ops/validators/ts-accuracy-validator.py`, add a second regex `DYNAMIC_IMPORT_RE` to catch the `await import(...)` pattern and union its results with `IMPORT_RE` in `scan_block` (per TICKET-0086-V2's suggested fix).\n\nExpected pattern (verify against actual SDK destructuring shape):\n\n```python\nDYNAMIC_IMPORT_RE = re.compile(\n    r\"\\{([^}]+)\\}\\s*=\\s*await\\s+import\\s*\\(\\s*['\\\"]@amityco/ts-sdk['\\\"]\\s*\\)\",\n    re.DOTALL,\n)\n```\n\nIn `scan_block`, also iterate matches from `DYNAMIC_IMPORT_RE` and add identifiers to the import set the same way as `IMPORT_RE` matches.\n\nSmoke-test by running the validator on `user-token-management.mdx` and confirming it now flags `createUserToken` (which it didn't before — that's the whole point of this fix).\n\n## Part B — Run the gate and measure drift\n\nRun `python3 .docs-ops/ci/check-drift.py --json-out /tmp/drift-after-v2.json`.\n\n**Expected**: small surface — dynamic imports are rare. Likely 1–3 items including `createUserToken` in user-token-management.mdx.\n\n**Decision branch**:\n  - **If drift count ≤ 5**: proceed to Part C (inline cleanup).\n  - **If drift count > 5**: STOP. Produce a triage doc mirroring the 0087 pattern (per-file, per-symbol top hits, classification) at `.docs-ops/evals/0090-import-fix-triage.md` and exit. We'll queue per-cohort cleanup tasks based on it. Do NOT attempt to clean up inline.\n\n## Part C — Inline cleanup (only if drift ≤ 5)\n\nFor each surfaced drift item:\n\n### createUserToken specifically (the C1 item)\n\nDo NOT rewrite the doc page. Per CTO direction, the symbol is mis-tagged in the SDK.\n\nInstead:\n  1. Add a `KNOWN_VALID_REFS` allowlist entry (or equivalent existing mechanism — search the validator for `KNOWN_VALID`, `allowlist`, `whitelist`, or `KNOWN_SDK_SYMBOLS`) for `createUserToken`. If no such mechanism exists, add one — a top-of-file `KNOWN_VALID_REFS: set[str] = {...}` is the simplest shape, checked at the end of `validate_block` before reporting drift.\n  2. The entry MUST include a comment referencing both `TICKET-0086-C1` and `TICKET-0090-SDK-1` (filed in step 3) so future readers know it's a temporary bridge.\n  3. File `TICKET-0090-SDK-1` in `.docs-ops/evals/sdk-tickets-to-file.md` under a new section \"TS SDK action required (task 0090)\":\n     - Category: SDK CHANGE REQUEST\n     - Priority: P2\n     - Description: `createUserToken` is currently tagged `@hidden`/`@private` in the TS SDK source but is a public API used in `user-token-management.mdx`. CTO has confirmed it's mis-tagged. Action: remove the `@hidden`/`@private` JSDoc tag from `createUserToken` in `AmityTypescriptSDK/`. When the SDK re-extract runs after that ships, both this ticket and the validator allowlist entry can be removed.\n  4. Mark `TICKET-0086-C1` as RESOLVED-PENDING-SDK with a pointer to `TICKET-0090-SDK-1`.\n\n### Any other surfaced drift\n\nApply the same investigate-then-fix pattern from 0088a–e. If a symbol is a known-public mis-tag (like createUserToken), allowlist it. If it's stale → rename. If it's removed → skip-marker or delete the snippet.\n\n## Part D — Mark V2 ticket resolved\n\nUpdate `TICKET-0086-V2` in `sdk-tickets-to-file.md` with a ✅ RESOLVED marker pointing to this task.\n\n## Success criteria\n\n- `DYNAMIC_IMPORT_RE` added to validator; smoke-tested on `user-token-management.mdx`.\n- Drift gate: **candidate=0 delta=0 verdict=PASS** after cleanup (assuming Part C took the inline path).\n  - If Part B's branch went to triage (drift > 5): drift count is documented, branch is left as-is, no cleanup attempted.\n- `KNOWN_VALID_REFS` (or equivalent) entry added for `createUserToken` with comment referencing both tickets — IF inline path taken.\n- `TICKET-0086-V2` marked RESOLVED.\n- `TICKET-0086-C1` marked RESOLVED-PENDING-SDK pointing to `TICKET-0090-SDK-1`.\n- `TICKET-0090-SDK-1` filed under new section.\n\nReport in `notes`: which path (inline cleanup vs triage); drift count surfaced; per-symbol disposition; allowlist mechanism used (existing vs newly-added).",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "dynamic_import_regex_matches",
+        "command": "python3 -c \"import re, importlib.util; spec=importlib.util.spec_from_file_location('v','.docs-ops/validators/ts-accuracy-validator.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); test=\\\"const { createUserToken, API_REGIONS } = await import('@amityco/ts-sdk');\\\"; assert hasattr(m, 'DYNAMIC_IMPORT_RE'), 'DYNAMIC_IMPORT_RE not defined in validator'; matches=list(m.DYNAMIC_IMPORT_RE.finditer(test)); assert len(matches)==1, f'DYNAMIC_IMPORT_RE did not match: {len(matches)} matches'; print(f'OK DYNAMIC_IMPORT_RE matched dynamic import block')\"",
+        "expect_in_stdout": "OK DYNAMIC_IMPORT_RE matched"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/sdk-tickets-to-file.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T17:00:00Z"
+}

@@ -36,13 +36,25 @@ TS_LANGS = {"typescript", "ts", "tsx", "javascript", "js", "jsx"}
 
 # Fence pattern: ``` followed by lang token, capturing the body until the closing ```
 FENCE_RE = re.compile(
-    r"^```([A-Za-z0-9_]+)[^\n]*\n(.*?)^```",
+    r"^[ \t]*```([A-Za-z0-9_]+)[^\n]*\n(.*?)^[ \t]*```",
     re.MULTILINE | re.DOTALL,
 )
 IMPORT_RE = re.compile(
     r"""import\s*(?:type\s+)?\{([^}]+)\}\s*from\s*['"]@amityco/ts-sdk['"]""",
     re.DOTALL,
 )
+# Catches dynamic import destructuring: const { X, Y } = await import('@amityco/ts-sdk')
+# See TICKET-0086-V2 (now resolved).
+DYNAMIC_IMPORT_RE = re.compile(
+    r"""\{([^}]+)\}\s*=\s*await\s+import\s*\(\s*['"]@amityco/ts-sdk['"]\s*\)""",
+    re.DOTALL,
+)
+
+# Temporarily allowlisted symbols: confirmed public APIs mis-tagged in SDK source.
+# Each entry must reference a ticket; remove when the SDK-side fix ships.
+KNOWN_VALID_REFS: set[str] = {
+    "createUserToken",  # TICKET-0086-C1 / TICKET-0090-SDK-1: @hidden tag in SDK is incorrect; CTO confirmed public API
+}
 
 
 def load_surface() -> tuple[dict, set[str]]:
@@ -171,22 +183,25 @@ def scan_block(body: str, start_line: int, namespaces: dict, roots: set[str], me
                 "hint_present_at": member_index.get(failing_part, []),
             })
 
-    # 2. Named imports from '@amityco/ts-sdk'
-    for m in IMPORT_RE.finditer(body):
-        names_raw = m.group(1)
-        line_in_block = body.count("\n", 0, m.start()) + 1
-        for raw in names_raw.split(","):
-            name = raw.strip().split(" as ")[0].strip()
-            if not name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
-                continue
-            if name in known_ns_names or name in roots:
-                continue
-            issues.append({
-                "kind": "unknown_import_from_sdk",
-                "import_name": name,
-                "line": start_line + line_in_block - 1,
-                "hint_present_at": member_index.get(name, []),
-            })
+    # 2. Named imports from '@amityco/ts-sdk' (static and dynamic)
+    for import_re in (IMPORT_RE, DYNAMIC_IMPORT_RE):
+        for m in import_re.finditer(body):
+            names_raw = m.group(1)
+            line_in_block = body.count("\n", 0, m.start()) + 1
+            for raw in names_raw.split(","):
+                name = raw.strip().split(" as ")[0].strip()
+                if not name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+                    continue
+                if name in known_ns_names or name in roots:
+                    continue
+                if name in KNOWN_VALID_REFS:
+                    continue
+                issues.append({
+                    "kind": "unknown_import_from_sdk",
+                    "import_name": name,
+                    "line": start_line + line_in_block - 1,
+                    "hint_present_at": member_index.get(name, []),
+                })
 
     return issues
 
