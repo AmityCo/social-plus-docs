@@ -1,0 +1,33 @@
+{
+  "id": "0083-ts-hidden-symbol-cleanup",
+  "tier": "C",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/sdk-surface/typescript.json",
+    ".docs-ops/evals/sdk-tickets-to-file.md"
+  ],
+  "context_files": [
+    ".docs-ops/evals/typescript-surface-comparison.md",
+    ".docs-ops/extractors/typescript-extractor.py",
+    ".docs-ops/ci/check-drift.py"
+  ],
+  "instructions": "Standalone accuracy win surfaced by the 0080 TypeDoc pilot. Independent of the 0081 hybrid migration — this fix lands NOW so the regex extractor stops counting `@hidden`-tagged internal symbols as public API. Even if 0081 ships and supersedes this code path, this is a 1-spec correctness improvement that the validator users benefit from immediately.\n\nFull context in [.docs-ops/evals/typescript-surface-comparison.md](.docs-ops/evals/typescript-surface-comparison.md) §3b. TypeDoc confirmed 33 currently-over-captured symbols all have `@hidden` JSDoc tags in the SDK source. They're internal API (marker sync, query helpers, paging utilities, cache primitives) — doc references to them are wrong, not just unmatched.\n\n## The 33 confirmed @hidden symbols\n\n**Namespaced (8 members):**\n- `Client.getActiveClient`, `Client.markerSync`, `Client.markerSyncTrigger`, `Client.getMarkerSyncEvents`, `Client.setMarkerSyncEvents`, `Client.pushMarkerSyncEvent`\n- `SubChannelRepository.deleteSubChannel`\n- `PostRepository.deletePost`\n\n**Root exports (25 symbols):**\n`createUserToken`, `filterByChannelMembership`, `filterByCommunityMembership`, `filterByFeedType`, `filterByPostDataTypes`, `filterByPropEquality`, `filterBySearchTerm`, `getNetworkTopic`, `getSmartFeedChannelTopic`, `getSmartFeedMessageTopic`, `getSmartFeedSubChannelTopic`, `isAfterBefore`, `isAfterBeforeRaw`, `isCachable`, `isFetcher`, `isFresh`, `isLocal`, `isMutator`, `isOffline`, `isPaged`, `isSkip`, `toPage`, `toPageRaw`, `toToken`, `upsertInCache`\n\n## Two implementation options — pick the smaller one that's correct\n\n### Option A (preferred if straightforward): JSDoc `@hidden` tag detection\n\nExtend the regex extractor to detect `@hidden` in the JSDoc comment immediately preceding any exported symbol declaration. Skip those during extraction. Durable across future SDK changes — new `@hidden` additions auto-honored.\n\n### Option B (fallback if A is brittle): hardcoded exclusion set\n\nAdd a literal `HIDDEN_SYMBOLS` set to `typescript-extractor.py` listing the 33 confirmed symbols above. Filter them at the end of extraction. Less durable (new `@hidden` additions need manual maintenance) but a guaranteed-correct cleanup of what's known wrong today.\n\nPrefer A. Fall back to B if the JSDoc parsing turns out to need substantial new logic — the goal is the cleanup, not perfect parsing.\n\n## Steps\n\n1. Modify `typescript-extractor.py` per the chosen option.\n2. Regenerate `.docs-ops/sdk-surface/typescript.json`.\n3. Verify all 33 symbols are now absent from the surface (`grep` check).\n4. Run `python3 .docs-ops/ci/check-drift.py --quiet`. New drift items may appear — those are doc pages referencing internal API that should never have been documented. List them in `.docs-ops/evals/sdk-tickets-to-file.md` under a new section \"TS @hidden symbol cleanup (task 0083)\" with REWRITE category. Don't touch the doc pages — file the tickets and stop.\n5. If 0081 has already landed by the time you start this, this task may be a no-op (the hybrid extractor already honors @hidden via TypeDoc). In that case, exit early and note in result.json.\n\n## Out of scope\n\n- Updating doc pages to remove references to the 33 symbols — file SDK tickets only.\n- Detecting other JSDoc tags (`@deprecated`, `@internal`, `@beta`) — separate task if useful later.\n- The hybrid migration (0081) supersedes this work long-term; 0083 is a near-term cleanup.\n\n## Success criteria\n\n- All 33 listed symbols absent from `.docs-ops/sdk-surface/typescript.json`.\n- Local drift gate either passes or surfaces only `@hidden`-removal drift (which is ticketed not fixed).\n- New section appended to `sdk-tickets-to-file.md` if any drift items resulted.\n\nReport in `notes`: which option (A or B) was chosen and why; how many new drift items hit the gate; ticket section added.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "hidden_symbols_removed_from_surface",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/typescript.json')); root=set(e.get('name','') if isinstance(e,dict) else e for e in d.get('root_exports',[])); client_members=set(m.get('name','') if isinstance(m,dict) else m for m in d.get('namespaces',{}).get('Client',{}).get('members',[])); hidden_root={'createUserToken','filterByChannelMembership','isCachable','isFetcher','toToken','upsertInCache'}; hidden_client={'getActiveClient','markerSync','pushMarkerSyncEvent'}; root_leaks=hidden_root&root; client_leaks=hidden_client&client_members; assert not root_leaks, f'@hidden root exports still present: {root_leaks}'; assert not client_leaks, f'@hidden Client members still present: {client_leaks}'; print(f'OK @hidden symbols removed from surface')\"",
+        "expect_in_stdout": "OK @hidden symbols removed"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/typescript.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T12:00:00Z"
+}

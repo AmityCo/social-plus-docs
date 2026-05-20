@@ -1,0 +1,39 @@
+{
+  "id": "0082-flutter-dartdoc-extractor-pilot",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/flutter-dartdoc-extractor.py",
+    ".docs-ops/sdk-surface/flutter-from-dartdoc.json",
+    ".docs-ops/evals/flutter-surface-comparison.md",
+    ".docs-ops/extractors/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/extractors/ios-docc-extractor.py",
+    ".docs-ops/extractors/android-dokka-extractor.py",
+    ".docs-ops/extractors/typescript-typedoc-extractor.py",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/evals/ios-surface-comparison.md",
+    ".docs-ops/evals/android-surface-comparison.md",
+    ".docs-ops/evals/typescript-surface-comparison.md"
+  ],
+  "instructions": "Fourth Phase 4 migration pilot. Same pattern as iOS DocC (0075), Android Dokka (0078), TS TypeDoc (0080) — produce a PARALLEL extractor + comparison artifact; don't swap `flutter.json` yet. Swap (or hybrid, per TS precedent) follows in a separate task after comparison review.\n\n## Part A — Run `dart doc` against the Flutter SDK\n\n`dart doc` is the official Dart API doc generator. Produces HTML by default, but a `--json` flavor (via the underlying `dartdoc` package) is available, OR we can use `dart doc --output-dir` + parse the generated `index.json` artifact.\n\nThree approaches in priority order — try each, document which worked:\n\n1. **`dartdoc --output-format json`** — direct JSON output. Most ergonomic if it exists in current `dartdoc` versions. Run from `AmityFlutterSDK/` (sibling of social-plus-docs, per `SP_SDKS_ROOT`):\n   ```\n   cd AmityFlutterSDK && dart pub get && dart pub global activate dartdoc && dartdoc --output-format json --output /tmp/flutter-dartdoc.json\n   ```\n2. **`dart doc` + parse `index.json`** — `dart doc --output-dir /tmp/flutter-doc` produces an `index.json` listing all public APIs. Less rich (no signatures) but reliably available.\n3. **`dart analyzer` package programmatic API** — if neither above works, write a small Dart script using `package:analyzer` to walk the public API. Last resort; more work but always available.\n\nDocument which approach worked in the extractor's docstring + the README.\n\n## Part B — Build the dartdoc-based extractor\n\nWrite `.docs-ops/extractors/flutter-dartdoc-extractor.py`. Input: path to `dartdoc` JSON output (or directory of generated docs). Output: `.docs-ops/sdk-surface/flutter-from-dartdoc.json` matching the SAME SCHEMA as the current `flutter.json` (so downstream validators don't break).\n\nSchema (mirror current flutter.json shape):\n\n```json\n{\n  \"extractor_version\": \"0.2.0-dartdoc\",\n  \"extractor\": \"flutter-dartdoc-extractor.py\",\n  \"extracted_at\": \"<iso>\",\n  \"sdk_package\": \"amity_sdk\",\n  \"sdk_source\": \"<path/version>\",\n  \"libraries\": { \"<library_name>\": { \"types\": { \"<type_name>\": { \"kind\": \"class|enum|mixin|extension|typedef\", \"members\": [...] } } } },\n  \"top_level\": [ ... functions, getters, top-level vars ... ],\n  \"stats\": { ... }\n}\n```\n\n(Adapt the field names to match what's already in `flutter.json` — preserve compatibility.)\n\nKey considerations:\n  - Dart has `library` as the top-level grouping (similar to TS namespaces). Use that as the primary partition.\n  - Filter on Dart visibility: only PUBLIC symbols (no leading underscore). Honor `@internal` annotation from `package:meta` if present (analogous to TypeDoc's @hidden).\n  - The current flutter regex extractor likely uses heuristics to identify public API; the new extractor benefits from the analyzer's actual visibility rules.\n\nBONUS — capture FULL SIGNATURES in optional schema fields (same as prior pilots). dartdoc has parameter types, return types, generic type parameters. Capture under each member's `signature` field.\n\n## Part C — Side-by-side comparison artifact\n\nProduce `.docs-ops/evals/flutter-surface-comparison.md`. Same 6 sections as iOS/Android/TS comparisons:\n\n1. **Stats delta** — library counts, type counts, member totals, top-level export counts\n2. **In dartdoc, not in regex** — symbols dartdoc catches that the regex extractor missed. Pay attention to: extension methods (regex may miss `extension X on Y { ... }` blocks), generated code (`freezed`, `json_serializable` generated `.g.dart`/`.freezed.dart` symbols), mixins\n3. **In regex, not in dartdoc** — symbols regex had that dartdoc doesn't. Investigate per case: regex over-counting? generated/private code leaking in? dartdoc filtering correctly (e.g. `@internal`)?\n4. **Same name, different shape** — types both extractors found but with different kind/path metadata\n5. **Coverage analysis** — does dartdoc catch anything that survived the existing regex extractor? If yes → strong case for migration. Compare false positive / false negative rates similar to the TS comparison table\n6. **Recommendation** — based on the diff: clean swap (iOS/Android pattern), hybrid (TS pattern), or hold (rare). Include analogous table to TS §5's cross-platform comparison.\n\n## Part D — Update extractors README\n\nAdd a section noting Flutter dartdoc migration pilot in progress. Update the platform-status summary table — Flutter Phase 4 status shifts from 'pending' to 'pilot in progress'.\n\n## Out of scope\n\n- Swapping `flutter.json` as source of truth — pending comparison review (follow-up task TBD).\n- Wiring `dart doc` into the Flutter SDK build's CI to publish artifacts on release — separate SDK-team conversation.\n- Updating downstream consumers (regex validator, doc-as-test) to use the new signature richness — separate future task.\n\n## Success criteria (LOOSE — exploratory pilot)\n\n- `flutter-from-dartdoc.json` produced with the same schema shape as `flutter.json`.\n- `flutter-surface-comparison.md` exists with all 6 sections populated.\n- Per-section findings name specific symbols.\n- Recommendation in section 6 is clear and justified, including swap-vs-hybrid framing.\n\nReport in `notes`: which dart doc invocation worked (output-format json vs index.json vs analyzer); stats delta; honest read on whether dartdoc caught anything regex missed; recommendation for swap vs hybrid.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "dartdoc_pilot_produces_parallel_surface_and_comparison",
+        "command": "test -f .docs-ops/sdk-surface/flutter-from-dartdoc.json && test -f .docs-ops/evals/flutter-surface-comparison.md && python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/flutter-from-dartdoc.json')); assert d.get('extractor','').startswith('flutter-dartdoc'); assert ('libraries' in d or 'namespaces' in d), 'expected libraries or namespaces in surface'; print(f'OK extractor={d.get(\\\"extractor\\\")} version={d.get(\\\"extractor_version\\\")}')\"",
+        "expect_in_stdout": "OK extractor="
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/flutter-surface-comparison.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T12:00:00Z"
+}
