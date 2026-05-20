@@ -6,25 +6,28 @@ Each extractor walks its platform's SDK source (or compiled artifact) and emits 
 
 | File | Platform | Source | Output |
 |---|---|---|---|
-| `typescript-extractor.py` | TypeScript | `AmityTypescriptSDK` barrel + nested namespaces | `sdk-surface/typescript.json` |
-| `typescript-typedoc-extractor.py` | TypeScript | TypeDoc JSON from `src/index.ts` (**pilot**) | `sdk-surface/typescript-from-typedoc.json` |
+| `typescript-extractor.py` | TypeScript | `AmityTypescriptSDK` barrel + nested namespaces (**DEPRECATED**) | _(retired)_ |
+| `typescript-typedoc-extractor.py` | TypeScript | TypeDoc JSON from `src/index.ts` (**pilot, superseded**) | _(retired)_ |
+| `typescript-hybrid-extractor.py` | TypeScript | TypeDoc (namespaces) + targeted @types regex (Amity globals) (**primary**) | `sdk-surface/typescript.json` |
 | `ios-docc-extractor.py` | iOS | Compiled `.abi.json` from xcframework (**primary**) | `sdk-surface/ios.json` |
 | `ios-extractor.py` | iOS | Swift source regex (**DEPRECATED**) | _(retired)_ |
 | `android-dokka-extractor.py` | Android | Dokka GFM output (**primary**) | `sdk-surface/android.json` |
 | `android-extractor.py` | Android | Kotlin/Java source regex (**DEPRECATED**) | _(retired)_ |
-| `flutter-extractor.py` | Flutter | Dart barrel re-exports | `sdk-surface/flutter.json` |
+| `flutter-extractor.py` | Flutter | Dart barrel re-exports (**primary — pending swap**) | `sdk-surface/flutter.json` |
+| `flutter-dartdoc-extractor.py` | Flutter | `dartdoc` index.json (**pilot in progress**) | `sdk-surface/flutter-from-dartdoc.json` |
 
 ## Running extractors
 
 ```sh
-# TypeScript — regex (current primary, SP_SDKS_ROOT must point to sp-sdks/ parent)
-python3 .docs-ops/extractors/typescript-extractor.py
+# TypeScript hybrid (primary — TypeDoc + targeted @types regex for Amity globals)
+# Requires pre-built TypeDoc JSON:
+#   cd AmityTypescriptSDK/packages/sdk
+#   npm install --no-save --legacy-peer-deps typedoc
+#   npx typedoc --json /tmp/typedoc-output.json src/index.ts --tsconfig tsconfig.json --skipErrorChecking --excludeExternals
+python3 .docs-ops/extractors/typescript-hybrid-extractor.py /tmp/typedoc-output.json
 
-# TypeScript — TypeDoc pilot (requires pre-built TypeDoc JSON)
-# cd AmityTypescriptSDK/packages/sdk
-# npm install --no-save --legacy-peer-deps typedoc
-# npx typedoc --json /tmp/typedoc-output.json src/index.ts --tsconfig tsconfig.json --skipErrorChecking --excludeExternals
-python3 .docs-ops/extractors/typescript-typedoc-extractor.py /tmp/typedoc-output.json
+# TypeScript — legacy regex (DEPRECATED, retained for reference)
+# python3 .docs-ops/extractors/typescript-extractor.py
 
 # iOS (ABI — no SDK clone needed, reads vendor xcframework)
 python3 .docs-ops/extractors/ios-docc-extractor.py
@@ -35,8 +38,11 @@ python3 .docs-ops/extractors/ios-docc-extractor.py
 python3 .docs-ops/extractors/android-dokka-extractor.py    # primary (Dokka GFM)
 python3 .docs-ops/extractors/android-extractor.py          # DEPRECATED (regex, retained for reference)
 
-# Flutter
-python3 .docs-ops/extractors/flutter-extractor.py
+# Flutter dartdoc runner (pilot — parallel artifact, no swap yet)
+# Requires: dart pub global activate dartdoc (one-time)
+# cd Amity-Social-Cloud-SDK-Flutter-Internal && dartdoc --output /tmp/flutter-dartdoc-out --no-include-source
+python3 .docs-ops/extractors/flutter-dartdoc-extractor.py  # pilot (dartdoc index.json)
+python3 .docs-ops/extractors/flutter-extractor.py          # primary (regex, pending swap)
 ```
 
 ## iOS migration: complete (task 0076)
@@ -64,22 +70,46 @@ Migration outcome (see `.docs-ops/evals/ios-surface-comparison.md` for full deta
 
 Note: `dokkaJson` task is not wired in the Android SDK Gradle config. `dokkaGfm` is used instead; extractor manually applies the same `perPackageOption` suppress rules from `dokkaHtml`.
 
-## TypeScript migration: pilot in progress (task 0080)
+## TypeScript migration: complete (task 0081)
 
-**Current primary**: `typescript-extractor.py` (regex v1.3) → `sdk-surface/typescript.json`  
-**Pilot**: `typescript-typedoc-extractor.py` (TypeDoc) → `sdk-surface/typescript-from-typedoc.json`
+**Primary**: `typescript-hybrid-extractor.py` (TypeDoc + targeted @types regex) → `sdk-surface/typescript.json`  
+**Retired**: `typescript-extractor.py` (regex v1.3, DEPRECATED) and `typescript-typedoc-extractor.py` (pilot, superseded)
+
+**Why hybrid, not a clean swap** (unlike iOS and Android):
+- TypeDoc is authoritative for namespaced exports (24 namespaces) and honors `@hidden`/`@private` natively
+- The `declare global { namespace Amity { ... } }` pattern (~946 members) is ambient global augmentation that TypeDoc does not surface from a single `src/index.ts` entry point
+- Solution: TypeDoc for namespaces + targeted regex over `src/@types/domains/*.ts` only for the Amity global namespace
 
 **Key findings** (see `.docs-ops/evals/typescript-surface-comparison.md` for full details):
-- TypeDoc catches 2 new public functions (`getCommunityByIds`, `getSubChannelByIds`) that survived 4 regex refinement rounds
-- TypeDoc correctly excludes 33 `@hidden`-tagged internal symbols that regex was over-capturing
-- **Structural gap**: `declare global namespace Amity {}` (~946 members) not captured by TypeDoc
-- Recommendation: **hybrid merger** (TypeDoc for namespaced exports + targeted `@types/` scan for `Amity.*`) rather than direct swap. Follow-up task 0082.
+- 2 new functions caught by TypeDoc that survived 4 regex refinement rounds: `getCommunityByIds`, `getSubChannelByIds`
+- 33 `@hidden`/`@private`-tagged internal symbols removed from surface (task 0083 / hybrid natively)
+- 6 drift items surfaced (docs referencing internal API) — filed as tickets 0083-01 and 0083-02 in `sdk-tickets-to-file.md`
+- Amity globals: 946 members unchanged (Pass 2 targeted scan)
 
-**TypeDoc invocation that worked**: `src/index.ts` with `--tsconfig tsconfig.json --skipErrorChecking --excludeExternals` from `packages/sdk/`. The `dist/index.d.ts` approach failed (TypeDoc couldn't resolve the tsconfig). Source-based approach produces a 2.4 MB JSON in ~10s.
+**TypeDoc invocation**: `src/index.ts` against `packages/sdk/tsconfig.json` with `--skipErrorChecking --excludeExternals`. Produces 2.4 MB JSON in ~10s.
 
 
+## Flutter migration: pilot in progress (task 0082)
 
-All extractors emit the same top-level shape (platform-specific fields may vary):
+**Primary (pending swap)**: `flutter-extractor.py` (regex) → `sdk-surface/flutter.json`  
+**Pilot**: `flutter-dartdoc-extractor.py` (dartdoc index.json) → `sdk-surface/flutter-from-dartdoc.json`
+
+**Approach used**: Approach 2 (dart doc HTML + index.json parsing). `dartdoc --output-format json` flag does not exist in dartdoc 9.0.4.
+
+**Key findings** (see `.docs-ops/evals/flutter-surface-comparison.md` for full details):
+- dartdoc is a **strict superset** of regex at type-name level (0 regex false positives)
+- **+11 types** missed by regex (sealed class variants like `AmityUpload*`, generic classes `LiveCollection`, `PagingController`)
+- **+65 extensions** missed by regex (~171 methods invisible to drift tracking)
+- **+474 non-enum-value members** for shared types — significant class member under-counting in regex
+- **Gap**: dartdoc `index.json` does NOT index individual enum constants (222 values are regex-only)
+
+**Recommendation**: Hybrid approach (same as TypeScript migration):
+- Pass 1: dartdoc index.json (primary — types, extensions, class members)
+- Pass 2: targeted enum-value regex (fill the one gap dartdoc can't close)
+
+Next task: implement hybrid + swap `flutter.json`.
+
+ (platform-specific fields may vary):
 
 ```json
 {

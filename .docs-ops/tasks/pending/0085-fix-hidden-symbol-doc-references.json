@@ -1,0 +1,35 @@
+{
+  "id": "0085-fix-hidden-symbol-doc-references",
+  "tier": "C",
+  "type": "content",
+  "owner_hint": "copilot",
+  "target_files": [
+    "social-plus-sdk/getting-started/authentication.mdx",
+    "social-plus-sdk/social/comments/create-comment.mdx",
+    "social-plus-sdk/social/comments/mention-in-comment.mdx",
+    "social-plus-sdk/social/comments/query-comment.mdx",
+    "social-plus-sdk/social/content-management/posts/moderation/delete-post.mdx",
+    ".docs-ops/evals/sdk-tickets-to-file.md"
+  ],
+  "context_files": [
+    ".docs-ops/evals/sdk-tickets-to-file.md",
+    ".docs-ops/sdk-surface/typescript.json"
+  ],
+  "instructions": "Unblock the drift gate after 0083. Six TS doc references to `@hidden`/`@private` internal SDK symbols are now correctly flagged as drift. Fix the 5 affected pages to reference public API instead — gate goes green, docs become accurate.\n\nFull ticket context: see [.docs-ops/evals/sdk-tickets-to-file.md](.docs-ops/evals/sdk-tickets-to-file.md) under \"TS @hidden symbol cleanup (task 0083)\".\n\n## Two reference patterns to fix\n\n### Pattern 1 — `Client.getActiveClient()` (4 files, 5 references)\n\n`Client.getActiveClient` is `@hidden` SDK machinery. The PUBLIC pattern is to retain the reference returned from `Client.createClient(...)` (the initialization call) and use that, OR to use `Client.getCurrentUser()` where current user identity is what's actually needed.\n\nFor each affected snippet, inspect what the original code USED the active client for:\n  - If it was reading current user info → use `Client.getCurrentUser()` (public)\n  - If it was a config/session operation → assume the user has a `client` variable in scope from earlier setup (snippets usually do; if not, add a brief comment noting the precondition)\n  - If it was calling methods on the client → those methods may exist as direct module functions or on a retained client reference\n\nFiles to edit:\n  - `social-plus-sdk/getting-started/authentication.mdx` (line ~252)\n  - `social-plus-sdk/social/comments/create-comment.mdx` (lines ~441, ~1221)\n  - `social-plus-sdk/social/comments/mention-in-comment.mdx` (line ~882)\n  - `social-plus-sdk/social/comments/query-comment.mdx` (line wherever it appears)\n\n### Pattern 2 — `PostRepository.deletePost` (1 file)\n\nFile: `social-plus-sdk/social/content-management/posts/moderation/delete-post.mdx`\n\n`PostRepository.deletePost` is `@private`. **High likelihood this hits the instance-method-on-linked-object gotcha** (a documented blind spot in our cross-platform triage): the public API is probably `post.delete()` (instance method on the AmityPost object returned by a query), NOT a static `PostRepository.deletePost(postId)` call.\n\nSteps:\n  1. Check the TS SDK source (`AmityTypescriptSDK/`) for a public delete method — search for `delete` on `AmityPost` or `Post` types, AND for any `PostRepository.deletePost` or `deletePost` static exports.\n  2. If `post.delete()` exists as an instance method → rewrite the snippet to fetch the post first then call `.delete()` on it.\n  3. If a different public path is the intended one (e.g. a separate `deletePost` module export) → use that.\n  4. If NO public delete exists at all → leave the snippet but add a clear note: `{/* TODO: replace internal PostRepository.deletePost reference — see TICKET-0083-02 — pending SDK team confirmation of public delete API */}` and add a paragraph noting the limitation. Update the ticket in sdk-tickets-to-file.md to status \"BLOCKED — pending SDK team\".\n\n## Verify with drift gate\n\nAfter edits, run `python3 .docs-ops/ci/check-drift.py --quiet`. Expected: gate passes (0 new pairs) OR only the unresolvable PostRepository.deletePost case remains (if Step 4 was taken).\n\n## Update tickets\n\nIn `.docs-ops/evals/sdk-tickets-to-file.md`:\n  - Mark TICKET-0083-01 as RESOLVED (with brief note on the public-API replacement used)\n  - Mark TICKET-0083-02 as RESOLVED or BLOCKED depending on which Step path was taken\n\n## Out of scope\n\n- Other doc accuracy issues unrelated to the 6 @hidden references.\n- Updating multi-platform parity for these snippets (separate parity audit if needed).\n- Adding new code examples beyond what's needed to replace the internal-API references.\n\n## Success criteria\n\n- Drift gate passes OR surfaces ≤1 remaining (the BLOCKED PostRepository.deletePost case only)\n- All 5 doc pages no longer reference `Client.getActiveClient` or `PostRepository.deletePost` (except as a TODO note in the BLOCKED case)\n- Tickets updated in `sdk-tickets-to-file.md`\n\nReport in `notes`: which replacement public API was used for each reference; whether PostRepository.deletePost had a public equivalent (and what); final drift gate count.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "hidden_symbol_refs_removed_from_docs",
+        "command": "GREP_COUNT=$(grep -rEn 'Client\\.getActiveClient|PostRepository\\.deletePost' social-plus-sdk/ 2>/dev/null | grep -v 'TODO' | wc -l | tr -d ' '); echo \"remaining_refs=$GREP_COUNT\"; [ \"$GREP_COUNT\" -le 1 ] && echo OK || (echo FAIL; exit 1)",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/evals/sdk-tickets-to-file.md"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T13:00:00Z"
+}

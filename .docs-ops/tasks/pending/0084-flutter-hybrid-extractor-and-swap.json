@@ -1,0 +1,42 @@
+{
+  "id": "0084-flutter-hybrid-extractor-and-swap",
+  "tier": "B",
+  "type": "infrastructure",
+  "owner_hint": "copilot",
+  "target_files": [
+    ".docs-ops/extractors/flutter-hybrid-extractor.py",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/extractors/README.md"
+  ],
+  "context_files": [
+    ".docs-ops/extractors/flutter-dartdoc-extractor.py",
+    ".docs-ops/extractors/flutter-extractor.py",
+    ".docs-ops/extractors/typescript-hybrid-extractor.py",
+    ".docs-ops/sdk-surface/flutter-from-dartdoc.json",
+    ".docs-ops/sdk-surface/flutter.json",
+    ".docs-ops/evals/flutter-surface-comparison.md",
+    ".docs-ops/ci/check-drift.py"
+  ],
+  "instructions": "Follow-up to 0082 pilot. dartdoc is a strict superset at type level (+11 types, +65 extensions, +474 class members) but misses individual enum values (222 cases — dartdoc index.json indexes only the synthetic `.values` property, not named constants). Mirror the TS hybrid pattern (0081): dartdoc primary + targeted regex for the gap.\n\nFull context in [.docs-ops/evals/flutter-surface-comparison.md](.docs-ops/evals/flutter-surface-comparison.md) §6. Reference implementation: [.docs-ops/extractors/typescript-hybrid-extractor.py](.docs-ops/extractors/typescript-hybrid-extractor.py).\n\n## Part A — Build the hybrid extractor\n\nWrite `.docs-ops/extractors/flutter-hybrid-extractor.py`. It runs both passes and merges:\n\n1. **dartdoc pass** — call `flutter-dartdoc-extractor.py` logic (refactor into a reusable function or import). Produces classes + enums + extensions + members.\n2. **Enum values pass** — targeted regex over enum declarations in the SDK source. For each enum type discovered by dartdoc, locate its source file and extract the named constants (`BAN_USER`, `EDIT_USER`, etc.). Reuse logic from existing `flutter-extractor.py` if straightforward — the enum-value extraction is well-isolated.\n3. **Merge** — combine into a single surface JSON. dartdoc wins for all type-level + class-member data. Enum values are appended per type from the regex pass under each enum's `members`. No collisions expected (dartdoc emits only the synthetic `.values`; regex emits named constants). Set `extractor_version: \"0.3.0-hybrid\"`, `extractor: \"flutter-hybrid-extractor.py\"`. Add `sources` field documenting both passes.\n\nSchema stays compatible with current `flutter.json` so downstream validators don't break.\n\nIf there are name collisions, dartdoc wins. Log collisions in a `merge_notes` field.\n\n## Part B — Swap flutter.json to hybrid output\n\nReplace `.docs-ops/sdk-surface/flutter.json` with the hybrid extractor's output. Delete `.docs-ops/sdk-surface/flutter-from-dartdoc.json` (pilot artifact superseded).\n\n## Part C — Drift gate must not regress\n\nRun the local drift gate. The hybrid surface is expected to:\n  - **Add** the 11 new types + 65 extensions + 474 missing class members → likely STOPS flagging real refs that the regex extractor was missing\n  - **Retain** all 222 enum values via the regex pass\n  - **Likely net-negative or zero new drift** — dartdoc is strict superset at type level so no removal-driven drift\n\nIf the gate reports unexpected new drift, investigate. If it surfaces previously-hidden drift now correctly captured (i.e. fewer false NEGATIVES in the validator), that's a win not a regression.\n\n## Part D — Update extractors README\n\nMark Flutter Phase 4 status as **complete** (was 'pilot in progress'). Note the hybrid approach (dartdoc + targeted enum-value regex) matches the TS pattern but for a different gap (enum values vs Amity globals). All 4 platforms now use AST/generated-docs as primary source — Phase 4 universally complete.\n\n## Out of scope\n\n- Cross-checking the new class members against doc references (any new drift is filed not fixed).\n- Updating doc-as-test to consume the new signature fields — separate future task.\n- TS SDK team conversation about removing `declare global namespace Amity` — flagged separately.\n\n## Success criteria\n\n- `.docs-ops/sdk-surface/flutter.json` updated, `extractor: flutter-hybrid-extractor.py`\n- Surface contains 336+ types AND 220+ enum values (combined from both passes)\n- `python3 .docs-ops/ci/check-drift.py --quiet` runs cleanly OR new drift is documented in result notes\n- README extractors table updated\n- `flutter-from-dartdoc.json` deleted (pilot superseded)\n- Phase 4 marked universally complete\n\nReport in `notes`: hybrid output stats; drift gate result; any merge collisions; confirmation that all 4 platforms are on AST/generated-docs sources.",
+  "success_criteria": {
+    "validators": [
+      {
+        "name": "flutter_hybrid_produces_complete_surface",
+        "command": "python3 -c \"import json; d=json.load(open('.docs-ops/sdk-surface/flutter.json')); assert d.get('extractor','').startswith('flutter-hybrid'), f'wrong extractor: {d.get(\\\"extractor\\\")}'; total_types=0; total_enum_vals=0; total_members=0; \\nfor lib in d.get('libraries',{}).values(): \\n  types=lib.get('types',{}) if isinstance(lib,dict) else {}\\n  total_types += len(types)\\n  for t in types.values(): \\n    members=t.get('members',[]) if isinstance(t,dict) else []\\n    total_members += len(members)\\n    if isinstance(t,dict) and t.get('kind')=='enum': \\n      total_enum_vals += len([m for m in members if (m.get('kind') if isinstance(m,dict) else '') in ('enum_value','constant')])\\nassert total_types > 300, f'expected >300 types, got {total_types}'; \\nassert total_members > 1500, f'expected >1500 members, got {total_members}'; \\nprint(f'OK types={total_types} members={total_members} enum_values={total_enum_vals}')\"",
+        "expect_in_stdout": "OK types="
+      },
+      {
+        "name": "flutter_pilot_artifact_removed",
+        "command": "test ! -f .docs-ops/sdk-surface/flutter-from-dartdoc.json && echo 'OK pilot artifact removed'",
+        "expect_in_stdout": "OK"
+      }
+    ],
+    "rubric_must_not_regress": false
+  },
+  "expected_outputs": {
+    "report_path": ".docs-ops/sdk-surface/flutter.json"
+  },
+  "blocked_by": [],
+  "created_by": "claude-opus-4-7",
+  "created_at": "2026-05-20T13:00:00Z"
+}
