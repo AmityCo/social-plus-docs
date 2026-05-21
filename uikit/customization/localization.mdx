@@ -3,48 +3,237 @@ title: "Localization"
 description: "Customize UI strings and add language support to the social.plus UIKit"
 ---
 
-The social.plus UIKit ships with built-in English strings and a localization API that lets you add any language — or override individual strings — without forking the UIKit. Translation keys follow the same naming convention on Web, iOS, and Android.
+The social.plus UIKit ships with built-in English strings and a localization API that lets you add any language — or override individual strings — without forking the UIKit. English is the only built-in language. Any key missing from a custom locale bundle automatically resolves to its English value — no errors are thrown and no code changes are needed.
 
-## Built-in Languages
-
-| Language | Locale Code | Status |
-|----------|-------------|--------|
-| English | `en` | Full coverage — always the final fallback |
-
-English is the only built-in language. Any key missing from a custom locale bundle automatically resolves to its English value — no errors are thrown and no code changes are needed.
-
-## Three Independent Modules
-
-Localization keys are organized into three independent modules. Each module has its own string provider instance, so when registering locale bundles or overrides you provide keys to the correct module provider.
-
-| Module | Scope |
-|--------|-------|
-| Social | Posts, comments, communities, events, stories, livestream, clips, polls, feeds, notifications |
-| Common | Reactions, ads, time labels, shared buttons, dialogs, error states, empty states |
-| Chat | Messages, channels, message input, chat-specific features |
-
-### Format specifiers
-
-| Specifier | Meaning | Example |
-|-----------|---------|---------|
-| `%s` / `%1$s` / `%2$s` | Positional string substitution | `"By %s"` |
-| `%d` / `%1$d` / `%2$d` | Integer substitution | `"Follow requests (%1$d)"` |
-| `%@` | iOS-style string substitution (equivalent to `%s`) | `"Voted by %@ participants"` |
-
-Format specifiers must be preserved in the exact same positions when translating. The `%@` specifier is native to iOS; the Web UIKit normalizes it to `%s` automatically.
+### 
 
 ## Platform Implementation
 
 Select your platform below for API details and integration code.
 
 <Tabs>
+  <Tab title="iOS (Swift)">
+    ### String Providers
+
+    The iOS UIKit uses `AmityStringProvider` with three singleton instances — `.social`, `.common`, and `.chat` — matching the three modules. Each provider exposes the same API for registering locale bundles and overrides.
+
+    | Method | Behavior |
+    | --- | --- |
+    | `setLocale(_:bundle:)` | Register a locale bundle (replace semantics). Activates immediately. |
+    | `activateLocale(_:)` | Re-activate a previously registered locale by identifier. |
+    | `deactivateLocale()` | Deactivate the current locale. Keys fall through to library defaults. Does **not** delete the cached bundle. |
+    | `setOverrides(_:)` | Merge key-value overrides on top of any active locale. Multiple calls merge. |
+    | `clearOverrides()` | Remove all programmatic overrides. |
+
+    ### How to Add a New Language
+
+    #### Option A — Programmatic via String Provider API (recommended)
+
+    Provide a `[String: String]` dictionary of translated keys and register it with each provider. No fork required.
+
+    <Steps>
+      <Step title="Create a locale bundle">
+        Create a dictionary with the translated keys. You only need to include keys you're translating — missing keys fall back to the built-in English values automatically.
+
+        ```swift
+        struct MyJapaneseStrings {
+            static let social: [String: String] = [
+                "amity_social_button_comments": "コメント",
+                "amity_social_button_delete_comment": "コメントを削除",
+                "amity_social_button_edit_comment": "コメントを編集",
+            ]
+        
+            static let common: [String: String] = [
+                "amity_common_button_cancel": "キャンセル",
+                "amity_common_button_done": "完了",
+            ]
+        
+            static let chat: [String: String] = [
+                "amity_chat_edit_message": "メッセージを編集",
+            ]
+        }
+        ```
+      </Step>
+      <Step title="Register the locale bundle">
+        Call `setLocale` on each provider — typically at app launch or in response to a user language-switch action:
+
+        ```swift
+        AmityStringProvider.social.setLocale("ja", bundle: MyJapaneseStrings.social)
+        AmityStringProvider.common.setLocale("ja", bundle: MyJapaneseStrings.common)
+        AmityStringProvider.chat.setLocale("ja", bundle: MyJapaneseStrings.chat)
+        ```
+
+        To revert to the default English strings:
+
+        ```swift
+        AmityStringProvider.social.deactivateLocale()
+        AmityStringProvider.common.deactivateLocale()
+        AmityStringProvider.chat.deactivateLocale()
+        ```
+      </Step>
+    </Steps>
+
+    #### Option B — Override individual keys
+
+    To replace specific strings without providing a full locale bundle, use `setOverrides()`. Overrides take the highest priority and merge on top of any active locale.
+
+    ```swift
+    AmityStringProvider.social.setOverrides([
+        "amity_social_button_comments": "Replies",
+        "amity_social_modal_dialog_generic_error": "Something went wrong. Please try again.",
+    ])
+    
+    AmityStringProvider.common.setOverrides([
+        "amity_common_button_cancel": "Dismiss",
+    ])
+    ```
+
+    To clear overrides:
+
+    ```swift
+    AmityStringProvider.social.clearOverrides()
+    AmityStringProvider.common.clearOverrides()
+    ```
+
+    #### Option C — Bundle-based `.lproj` files
+
+    You can also provide translations via standard iOS `.lproj` directories in your app bundle. The UIKit checks `Bundle.main` for `AmityLocalizable.strings` before falling back to its framework bundle — no code changes needed.
+
+    ```text
+    MyApp/
+    └── Resources/
+        ├── en.lproj/AmityLocalizable.strings   ← English overrides (optional)
+        └── ja.lproj/AmityLocalizable.strings   ← Japanese translations
+    ```
+
+    ```text
+    /* ja.lproj/AmityLocalizable.strings */
+    "amity_common_button_cancel" = "キャンセル";
+    "amity_common_button_delete" = "削除";
+    "amity_social_button_comments" = "コメント";
+    ```
+
+    iOS automatically selects the correct `.lproj` folder based on the device language. Strings provided via `.lproj` are resolved at the library defaults level — programmatic overrides and locale bundles still take precedence.
+  </Tab>
+  <Tab title="Android (Kotlin)">
+    ### String Providers
+
+    String resolution is handled by two providers: `DefaultAmitySocialStringProvider` (social strings) and `DefaultAmityCommonStringProvider` (common strings). Both providers are singletons initialized in your `Application.onCreate()`.
+
+    | Method | Behavior |
+    | --- | --- |
+    | `setLocale(id, bundle)` | Register a locale bundle (replace semantics). Activates immediately. |
+    | `clearLocale()` | Deactivate the current locale. Keys fall through to library defaults. |
+    | `setOverrides(map)` | Merge key-value overrides on top of any active locale. |
+    | `clearOverrides()` | Remove all programmatic overrides. |
+
+    ### How to Add a New Language
+
+    #### Option A — Locale bundle via String Provider API (recommended)
+
+    Provide a `Map<String, String>` of translated keys and register it with the provider. No fork required.
+
+    <Steps>
+      <Step title="Initialize the providers">
+        Call both providers in your `Application.onCreate()`:
+
+        ```kotlin
+        class MyApplication : Application() {
+            override fun onCreate() {
+                super.onCreate()
+                DefaultAmitySocialStringProvider.initialize(this)
+                DefaultAmityCommonStringProvider.initialize(this)
+            }
+        }
+        ```
+      </Step>
+      <Step title="Create a locale bundle">
+        Create a Kotlin object (or a plain `Map<String, String>`) with the translated keys. You only need to include keys you're translating — missing keys fall back to the English `strings.xml` values automatically.
+
+        ```kotlin
+        object MyJapaneseStrings {
+            val social: Map<String, String> = mapOf(
+                "amity_social_button_comments" to "コメント",
+                "amity_social_button_delete_comment" to "コメントを削除",
+                "amity_social_button_edit_comment" to "コメントを編集",
+            )
+        
+            val common: Map<String, String> = mapOf(
+                "amity_common_button_cancel" to "キャンセル",
+                "amity_common_button_done" to "完了",
+            )
+        }
+        ```
+      </Step>
+      <Step title="Register the locale bundle">
+        Call `setLocale()` on both providers — typically in `Application.onCreate()` after initialization, or in response to a user language-switch action:
+
+        ```kotlin
+        DefaultAmitySocialStringProvider.setLocale("ja", MyJapaneseStrings.social)
+        DefaultAmityCommonStringProvider.setLocale("ja", MyJapaneseStrings.common)
+        ```
+
+        To revert to the default English resources:
+
+        ```kotlin
+        DefaultAmitySocialStringProvider.getInstance().clearLocale()
+        DefaultAmityCommonStringProvider.getInstance().clearLocale()
+        ```
+      </Step>
+    </Steps>
+
+    #### Option B — Override individual keys
+
+    To replace specific strings without providing a full locale bundle, use `setOverrides()`. Overrides take the highest priority and merge on top of any active locale.
+
+    ```kotlin
+    DefaultAmitySocialStringProvider.setOverrides(mapOf(
+        "amity_social_button_comments" to "Replies",
+        "amity_social_modal_dialog_generic_error" to "Something went wrong. Please try again.",
+    ))
+    
+    DefaultAmityCommonStringProvider.setOverrides(mapOf(
+        "amity_common_button_cancel" to "Dismiss",
+    ))
+    ```
+
+    To clear overrides:
+
+    ```kotlin
+    DefaultAmitySocialStringProvider.getInstance().clearOverrides()
+    DefaultAmityCommonStringProvider.getInstance().clearOverrides()
+    ```
+
+    #### Option C — Fork the UIKit repository
+
+    For full static translation using the Android resource system, clone the UIKit and add `values-<language-code>/` resource directories inside each module:
+
+    ```text
+    common/src/main/res/values-ja/strings.xml
+    social/src/main/res/values-ja/strings.xml
+    social-compose/src/main/res/values-ja/strings.xml
+    chat/src/main/res/values-ja/strings.xml
+    chat-compose/src/main/res/values-ja/strings.xml
+    ```
+
+    <Note>
+      Social keys start with `amity_social_`; common keys start with `amity_common_`. When calling provider methods, use the correct provider for each key prefix.
+    </Note>
+
+    For the full key list, refer to the English default `strings.xml` files in the [Android UIKit open source repository](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource):
+
+    - [`social-compose/.../values/strings.xml`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/social-compose/src/main/res/values/strings.xml) (social keys)
+    - [`common-compose/.../values/strings.xml`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/common-compose/src/main/res/values/strings.xml) (common keys)
+
+    You can also refer to the comprehensive [`LOCALIZATION_GUIDE.md`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/LOCALIZATION_GUIDE.md) in the repository for detailed instructions and examples.
+  </Tab>
   <Tab title="Web (React)">
     ### Provider Props
 
     Configure localization via the `localization` prop on `AmityUIKitProvider`.
 
     | Prop | Type | Description |
-    |------|------|-------------|
+    | --- | --- | --- |
     | `localeBundle` | `Record<string, string>` | Explicitly set a locale bundle. Takes precedence over `localeMap` auto-detection. |
     | `overrides` | `Record<string, string>` | Merge-override individual keys on top of the active locale. |
     | `localeMap` | `Record<string, Record<string, string>>` | Map of locale code → bundle for automatic device-language detection via `navigator.language`. |
@@ -70,7 +259,7 @@ Select your platform below for API details and integration code.
       <Accordion title="Auto-detect device language">
         ```tsx
         import jaLocale from './locales/ja.json';
-
+        
         <AmityUIKitProvider
           localization={{ localeMap: { ja: jaLocale } }}
         >
@@ -104,10 +293,10 @@ Select your platform below for API details and integration code.
         ```tsx
         import { useLocale, useString } from '@amityco/ui-kit';
         import jaLocale from './locales/ja.json';
-
+        
         function LanguageSwitcher() {
           const { setLocaleBundle, clearLocaleBundle } = useLocale();
-
+        
           return (
             <>
               <button onClick={() => setLocaleBundle(jaLocale)}>日本語</button>
@@ -115,7 +304,7 @@ Select your platform below for API details and integration code.
             </>
           );
         }
-
+        
         // Any child component — automatically re-renders on locale change
         function CancelButton() {
           const label = useString('amity_common_button_cancel');
@@ -139,13 +328,12 @@ Select your platform below for API details and integration code.
         }
         ```
       </Step>
-
       <Step title="Register via localeMap">
         Pass the bundle via `localeMap` so the UIKit auto-detects it from `navigator.language`:
 
         ```tsx
         import jaLocale from './locales/ja.json';
-
+        
         <AmityUIKitProvider
           localization={{
             localeMap: {
@@ -157,233 +345,10 @@ Select your platform below for API details and integration code.
         </AmityUIKitProvider>
         ```
       </Step>
-
       <Step title="Verify coverage">
         Compare your translation file against [`en.json`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Web-OpenSource/blob/master/src/v4/core/localization/defaults/en.json) to identify missing keys. Any untranslated key silently falls back to English — no errors are thrown.
       </Step>
     </Steps>
-
-  </Tab>
-
-  <Tab title="iOS (Swift)">
-    ### String Providers
-
-    The iOS UIKit uses `AmityStringProvider` with three singleton instances — `.social`, `.common`, and `.chat` — matching the three modules. Each provider exposes the same API for registering locale bundles and overrides.
-
-    | Method | Behavior |
-    |--------|----------|
-    | `setLocale(_:bundle:)` | Register a locale bundle (replace semantics). Activates immediately. |
-    | `activateLocale(_:)` | Re-activate a previously registered locale by identifier. |
-    | `deactivateLocale()` | Deactivate the current locale. Keys fall through to library defaults. Does **not** delete the cached bundle. |
-    | `setOverrides(_:)` | Merge key-value overrides on top of any active locale. Multiple calls merge. |
-    | `clearOverrides()` | Remove all programmatic overrides. |
-
-    ### How to Add a New Language
-
-    #### Option A — Programmatic via String Provider API (recommended)
-
-    Provide a `[String: String]` dictionary of translated keys and register it with each provider. No fork required.
-
-    <Steps>
-      <Step title="Create a locale bundle">
-        Create a dictionary with the translated keys. You only need to include keys you're translating — missing keys fall back to the built-in English values automatically.
-
-        ```swift
-        struct MyJapaneseStrings {
-            static let social: [String: String] = [
-                "amity_social_button_comments": "コメント",
-                "amity_social_button_delete_comment": "コメントを削除",
-                "amity_social_button_edit_comment": "コメントを編集",
-            ]
-
-            static let common: [String: String] = [
-                "amity_common_button_cancel": "キャンセル",
-                "amity_common_button_done": "完了",
-            ]
-
-            static let chat: [String: String] = [
-                "amity_chat_edit_message": "メッセージを編集",
-            ]
-        }
-        ```
-      </Step>
-
-      <Step title="Register the locale bundle">
-        Call `setLocale` on each provider — typically at app launch or in response to a user language-switch action:
-
-        ```swift
-        AmityStringProvider.social.setLocale("ja", bundle: MyJapaneseStrings.social)
-        AmityStringProvider.common.setLocale("ja", bundle: MyJapaneseStrings.common)
-        AmityStringProvider.chat.setLocale("ja", bundle: MyJapaneseStrings.chat)
-        ```
-
-        To revert to the default English strings:
-
-        ```swift
-        AmityStringProvider.social.deactivateLocale()
-        AmityStringProvider.common.deactivateLocale()
-        AmityStringProvider.chat.deactivateLocale()
-        ```
-      </Step>
-    </Steps>
-
-    #### Option B — Override individual keys
-
-    To replace specific strings without providing a full locale bundle, use `setOverrides()`. Overrides take the highest priority and merge on top of any active locale.
-
-    ```swift
-    AmityStringProvider.social.setOverrides([
-        "amity_social_button_comments": "Replies",
-        "amity_social_modal_dialog_generic_error": "Something went wrong. Please try again.",
-    ])
-
-    AmityStringProvider.common.setOverrides([
-        "amity_common_button_cancel": "Dismiss",
-    ])
-    ```
-
-    To clear overrides:
-
-    ```swift
-    AmityStringProvider.social.clearOverrides()
-    AmityStringProvider.common.clearOverrides()
-    ```
-
-    #### Option C — Bundle-based `.lproj` files
-
-    You can also provide translations via standard iOS `.lproj` directories in your app bundle. The UIKit checks `Bundle.main` for `AmityLocalizable.strings` before falling back to its framework bundle — no code changes needed.
-
-    ```
-    MyApp/
-    └── Resources/
-        ├── en.lproj/AmityLocalizable.strings   ← English overrides (optional)
-        └── ja.lproj/AmityLocalizable.strings   ← Japanese translations
-    ```
-
-    ```
-    /* ja.lproj/AmityLocalizable.strings */
-    "amity_common_button_cancel" = "キャンセル";
-    "amity_common_button_delete" = "削除";
-    "amity_social_button_comments" = "コメント";
-    ```
-
-    iOS automatically selects the correct `.lproj` folder based on the device language. Strings provided via `.lproj` are resolved at the library defaults level — programmatic overrides and locale bundles still take precedence.
-
-  </Tab>
-
-  <Tab title="Android (Kotlin)">
-    ### String Providers
-
-    String resolution is handled by two providers: `DefaultAmitySocialStringProvider` (social strings) and `DefaultAmityCommonStringProvider` (common strings). Both providers are singletons initialized in your `Application.onCreate()`.
-
-    | Method | Behavior |
-    |--------|----------|
-    | `setLocale(id, bundle)` | Register a locale bundle (replace semantics). Activates immediately. |
-    | `clearLocale()` | Deactivate the current locale. Keys fall through to library defaults. |
-    | `setOverrides(map)` | Merge key-value overrides on top of any active locale. |
-    | `clearOverrides()` | Remove all programmatic overrides. |
-
-    ### How to Add a New Language
-
-    #### Option A — Locale bundle via String Provider API (recommended)
-
-    Provide a `Map<String, String>` of translated keys and register it with the provider. No fork required.
-
-    <Steps>
-      <Step title="Initialize the providers">
-        Call both providers in your `Application.onCreate()`:
-
-        ```kotlin
-        class MyApplication : Application() {
-            override fun onCreate() {
-                super.onCreate()
-                DefaultAmitySocialStringProvider.initialize(this)
-                DefaultAmityCommonStringProvider.initialize(this)
-            }
-        }
-        ```
-      </Step>
-
-      <Step title="Create a locale bundle">
-        Create a Kotlin object (or a plain `Map<String, String>`) with the translated keys. You only need to include keys you're translating — missing keys fall back to the English `strings.xml` values automatically.
-
-        ```kotlin
-        object MyJapaneseStrings {
-            val social: Map<String, String> = mapOf(
-                "amity_social_button_comments" to "コメント",
-                "amity_social_button_delete_comment" to "コメントを削除",
-                "amity_social_button_edit_comment" to "コメントを編集",
-            )
-
-            val common: Map<String, String> = mapOf(
-                "amity_common_button_cancel" to "キャンセル",
-                "amity_common_button_done" to "完了",
-            )
-        }
-        ```
-      </Step>
-
-      <Step title="Register the locale bundle">
-        Call `setLocale()` on both providers — typically in `Application.onCreate()` after initialization, or in response to a user language-switch action:
-
-        ```kotlin
-        DefaultAmitySocialStringProvider.setLocale("ja", MyJapaneseStrings.social)
-        DefaultAmityCommonStringProvider.setLocale("ja", MyJapaneseStrings.common)
-        ```
-
-        To revert to the default English resources:
-
-        ```kotlin
-        DefaultAmitySocialStringProvider.getInstance().clearLocale()
-        DefaultAmityCommonStringProvider.getInstance().clearLocale()
-        ```
-      </Step>
-    </Steps>
-
-    #### Option B — Override individual keys
-
-    To replace specific strings without providing a full locale bundle, use `setOverrides()`. Overrides take the highest priority and merge on top of any active locale.
-
-    ```kotlin
-    DefaultAmitySocialStringProvider.setOverrides(mapOf(
-        "amity_social_button_comments" to "Replies",
-        "amity_social_modal_dialog_generic_error" to "Something went wrong. Please try again.",
-    ))
-
-    DefaultAmityCommonStringProvider.setOverrides(mapOf(
-        "amity_common_button_cancel" to "Dismiss",
-    ))
-    ```
-
-    To clear overrides:
-
-    ```kotlin
-    DefaultAmitySocialStringProvider.getInstance().clearOverrides()
-    DefaultAmityCommonStringProvider.getInstance().clearOverrides()
-    ```
-
-    #### Option C — Fork the UIKit repository
-
-    For full static translation using the Android resource system, clone the UIKit and add `values-<language-code>/` resource directories inside each module:
-
-    ```
-    common/src/main/res/values-ja/strings.xml
-    social/src/main/res/values-ja/strings.xml
-    social-compose/src/main/res/values-ja/strings.xml
-    chat/src/main/res/values-ja/strings.xml
-    chat-compose/src/main/res/values-ja/strings.xml
-    ```
-
-    <Note>
-      Social keys start with `amity_social_`; common keys start with `amity_common_`. When calling provider methods, use the correct provider for each key prefix.
-    </Note>
-
-    For the full key list, refer to the English default `strings.xml` files in the [Android UIKit open source repository](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource):
-    - [`social-compose/.../values/strings.xml`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/social-compose/src/main/res/values/strings.xml) (social keys)
-    - [`common-compose/.../values/strings.xml`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/common-compose/src/main/res/values/strings.xml) (common keys)
-
-    You can also refer to the comprehensive [`LOCALIZATION_GUIDE.md`](https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/LOCALIZATION_GUIDE.md) in the repository for detailed instructions and examples.
-
   </Tab>
 </Tabs>
 
@@ -393,14 +358,14 @@ You can use an AI assistant (e.g. ChatGPT, Claude, Copilot) to quickly generate 
 
 <AccordionGroup>
   <Accordion title="Example AI prompt" icon="sparkles">
-    ```
+    ```text
     I have a localization file for a mobile/web UIKit with English strings.
     Please translate all values to [TARGET LANGUAGE] while keeping:
     - All keys exactly the same (do not rename any key)
     - All format specifiers (%s, %d, %1$s, %1$d, %@, etc.) in the same positions
     - The same file format (JSON / .strings / XML)
     - Natural, user-facing language appropriate for a social app UI
-
+    
     Here is the English file:
     [PASTE THE CONTENTS OF THE ENGLISH LOCALIZATION FILE]
     ```
@@ -412,11 +377,11 @@ You can use an AI assistant (e.g. ChatGPT, Claude, Copilot) to quickly generate 
 ## Migrating from `config.json` Text Overrides
 
 <Warning>
-**`config.json` text overrides are deprecated for string customization.** If you previously used `config.json` to override UI strings (e.g. button labels, error messages), you should migrate those overrides to the localization API described above — even if you don't plan to add new languages.
+  **`config.json` text overrides are deprecated for string customization.** If you previously used `config.json` to override UI strings (e.g. button labels, error messages), you should migrate those overrides to the localization API described above — even if you don't plan to add new languages.
 
-Existing `config.json` text overrides are still resolved gracefully for now, but this auto-resolution **may be removed in a future release**. New UI components and features will only support string customization through the localization system.
+  Existing `config.json` text overrides are still resolved gracefully for now, but this auto-resolution **may be removed in a future release**. New UI components and features will only support string customization through the localization system.
 
-`config.json` remains available for other configuration such as theme and UI element visibility — only string/text overrides are being deprecated.
+  `config.json` remains available for other configuration such as theme and UI element visibility — only string/text overrides are being deprecated.
 </Warning>
 
 ## Open Source Reference Files
@@ -424,29 +389,19 @@ Existing `config.json` text overrides are still resolved gracefully for now, but
 Use these English localization files as the source of truth when building translations for each platform.
 
 <Info>
-**Version alignment:** New UIKit releases may introduce new localization keys for new UI components or features. When upgrading, re-generate your translation files from the open source reference file that matches your UIKit version to ensure no keys are missing. Untranslated keys fall back to English silently, but keeping your translation files up to date ensures a fully localized experience.
+  **Version alignment:** New UIKit releases may introduce new localization keys for new UI components or features. When upgrading, re-generate your translation files from the open source reference file that matches your UIKit version to ensure no keys are missing. Untranslated keys fall back to English silently, but keeping your translation files up to date ensures a fully localized experience.
 </Info>
 
 <CardGroup cols={3}>
-  <Card
-    title="Web"
-    icon="globe"
-    href="https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Web-OpenSource/blob/master/src/v4/core/localization/defaults/en.json"
-  >
+  <Card title="Web" icon="globe" href="https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Web-OpenSource/blob/master/src/v4/core/localization/defaults/en.json">
     `en.json`
   </Card>
-  <Card
-    title="iOS"
-    icon="apple"
-    href="https://github.com/AmityCo/ASC-UIKit-iOS-OpenSource/blob/main/UpstraUIKit/AmityUIKit4/AmityUIKit4/Core/Localization/en.lproj/AmityLocalizable.strings"
-  >
+
+  <Card title="iOS" icon="apple" href="https://github.com/AmityCo/ASC-UIKit-iOS-OpenSource/blob/main/UpstraUIKit/AmityUIKit4/AmityUIKit4/Core/Localization/en.lproj/AmityLocalizable.strings">
     `AmityLocalizable.strings`
   </Card>
-  <Card
-    title="Android"
-    icon="android"
-    href="https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/social-compose/src/main/res/values/strings.xml"
-  >
-    `strings.xml` (social + common keys)
+
+  <Card title="Android" icon="android" href="https://github.com/AmityCo/Amity-Social-Cloud-UIKit-Android-OpenSource/blob/main/social-compose/src/main/res/values/strings.xml">
+    `strings.xml` (social \+ common keys)
   </Card>
 </CardGroup>
