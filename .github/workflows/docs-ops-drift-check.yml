@@ -1,0 +1,169 @@
+name: Docs-Ops Drift Gate
+
+# Server-enforced docs-ops gate (Phase 2.2). Runs the SAME check-drift.py that
+# powers the local pre-push hook, on every PR into main. With a branch-protection
+# rule requiring the "drift-gate" check, this blocks merges that introduce new
+# (file, stale-API-ref) pairs or break documented code blocks.
+#
+# COVERAGE (what this job actually enforces on ubuntu):
+#   - TS regex drift delta ...... BLOCKS  (pure Python; reads TS SDK source)
+#   - MDX structure check ........ BLOCKS  (pure Python)
+#   - TS doc-as-test (tsc) ....... BLOCKS when toolchain present; best-effort setup below
+#   - Flutter / Android / iOS
+#     doc-as-test ................ report "unavailable" (non-blocking) — NOT enforced here.
+#                                  Enabling them needs dart / kotlinc, and macOS (swiftc)
+#                                  for iOS. See .docs-ops/CI_GATE.md "Extending coverage".
+#
+# Every layer's status is surfaced in the PR comment + job summary, so uncovered
+# platforms are visible, never silently assumed green.
+
+on:
+  # No `paths:` filter on purpose. When this is a REQUIRED status check, a
+  # path-filtered run that is skipped leaves the check "pending" forever and
+  # blocks the PR. Running on every PR to main avoids that deadlock.
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  # One in-flight run per PR; a new push cancels the previous run.
+  group: docs-ops-drift-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # to post the sticky delta comment
+
+    defaults:
+      run:
+        working-directory: social-plus-docs
+
+    steps:
+      # check-drift.py hardcodes the SDK location at REPO_ROOT.parent (the docs
+      # repo's parent dir). actions/checkout cannot write OUTSIDE $GITHUB_WORKSPACE,
+      # so we lay both repos out as SIBLINGS inside the workspace:
+      #   $GITHUB_WORKSPACE/social-plus-docs   (this repo, REPO_ROOT)
+      #   $GITHUB_WORKSPACE/AmityTypescriptSDK  (= REPO_ROOT.parent/AmityTypescriptSDK)
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          path: social-plus-docs
+          # Full history so check-drift.py can build a baseline worktree at origin/main.
+          fetch-depth: 0
+
+      - name: Checkout TypeScript SDK (drift extractor reads its source)
+        uses: actions/checkout@v4
+        with:
+          repository: AmityCo/AmityTypescriptSDK
+          path: AmityTypescriptSDK
+          token: ${{ secrets.SDK_READONLY_PAT }}   # read access to the SDK repo
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Best-effort TS doc-as-test toolchain. If this step fails, the doc-as-test
+      # layer reports "crashed"/"unavailable" (non-blocking) and the blocking
+      # guarantee falls back to TS regex drift + MDX. It does NOT silently pass —
+      # the status is printed in the PR comment.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install TypeScript (tsc) for doc-as-test
+        continue-on-error: true
+        run: npm install -g typescript
+
+      - name: Run docs-ops drift gate
+        id: gate
+        continue-on-error: true   # let the comment post even on failure; final step decides
+        # No SP_SDKS_ROOT env: check-drift.py sets it to REPO_ROOT.parent itself,
+        # overriding any value here. The sibling checkout layout above is what makes
+        # the SDK resolvable.
+        run: |
+          python3 .docs-ops/ci/check-drift.py \
+            --base origin/main \
+            --json-out "$RUNNER_TEMP/delta.json"
+
+      - name: Build report (summary + PR comment body)
+        if: always()
+        id: report
+        run: |
+          python3 - "$RUNNER_TEMP/delta.json" > "$RUNNER_TEMP/comment.md" <<'PY'
+          import json, sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          if not p.exists():
+              print("### 🚨 Docs-Ops Drift Gate\n\nThe gate did not produce a delta report — it likely failed to run (could not resolve base, SDK checkout, or extractor crash). **Check the job logs.** Treating as a failure.")
+              sys.exit(0)
+          d = json.loads(p.read_text())
+          dr = d.get("drift_delta", {})
+          def dat(key):
+              x = d.get(key, {})
+              if not x.get("available"): return "⚪ unavailable (not enforced here)"
+              if x.get("crashed"):       return f"⚠️ crashed (non-blocking): {x.get('crash_reason','')[:120]}"
+              b = len(x.get("blocking_failures", []))
+              s = x.get("stats", {})
+              passed = s.get("blocks_passed", "?")
+              return ("❌ " if b else "✅ ") + f"{b} blocking, {passed} passed"
+          regressed = dr.get("regressed")
+          new_pairs = dr.get("new_pairs", [])
+          lines = []
+          lines.append("### " + ("❌ Docs-Ops Drift Gate — FAIL" if (regressed or any('❌' in dat(k) for k in ('doc_as_test_ts','doc_as_test_flutter','doc_as_test_android','doc_as_test_ios')) or d.get('mdx_structure',{}).get('blocking')) else "✅ Docs-Ops Drift Gate — PASS"))
+          lines.append("")
+          lines.append(f"**Regex drift:** baseline `{dr.get('baseline_total','?')}` → candidate `{dr.get('candidate_total','?')}` "
+                       f"(Δ {dr.get('delta_total','?')}), **{len(new_pairs)} new (file, ref) pair(s)**.")
+          if new_pairs:
+              lines.append("")
+              lines.append("<details><summary>New drift pairs (these block the merge)</summary>\n")
+              for pr in new_pairs[:50]:
+                  lines.append(f"- `{pr.get('file','?')}` → `{pr.get('ref','?')}`")
+              if len(new_pairs) > 50:
+                  lines.append(f"- …and {len(new_pairs)-50} more")
+              lines.append("\n</details>")
+          lines.append("")
+          lines.append("| Layer | Status |")
+          lines.append("|---|---|")
+          lines.append(f"| TS doc-as-test | {dat('doc_as_test_ts')} |")
+          lines.append(f"| Flutter doc-as-test | {dat('doc_as_test_flutter')} |")
+          lines.append(f"| Android doc-as-test | {dat('doc_as_test_android')} |")
+          lines.append(f"| iOS doc-as-test | {dat('doc_as_test_ios')} |")
+          mdx = d.get("mdx_structure", {})
+          lines.append(f"| MDX structure | {'❌ ' + str(len(mdx.get('violations',[]))) + ' violation(s)' if mdx.get('blocking') else '✅ clean'} |")
+          lines.append("")
+          lines.append("<sub>Layers marked _unavailable_ are not enforced by this job (missing toolchain / macOS). See `.docs-ops/CI_GATE.md`.</sub>")
+          print("\n".join(lines))
+          PY
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post / update PR comment
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true   # a fork/permissions hiccup must not red the gate; only the verdict does
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.RUNNER_TEMP + '/comment.md', 'utf8');
+            const marker = '<!-- docs-ops-drift-gate -->';
+            const full = marker + '\n' + body;
+            const {owner, repo} = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.rest.issues.listComments({owner, repo, issue_number});
+            const existing = comments.data.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body: full});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body: full});
+            }
+
+      - name: Enforce gate result
+        if: always()
+        run: |
+          # check-drift.py exit: 0 = pass, 1 = regression/blocking failure, 2 = environmental.
+          # A server gate fails LOUDLY on both — green-when-broken is worse than red.
+          if [ "${{ steps.gate.outcome }}" != "success" ]; then
+            echo "::error::Docs-Ops drift gate failed (new drift, doc-as-test block, or environmental error). See the PR comment / job summary."
+            exit 1
+          fi
+          echo "Docs-Ops drift gate passed."
