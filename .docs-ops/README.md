@@ -2,6 +2,8 @@
 
 This directory is the coordination surface between AI agents (Claude, Copilot CLI, future agents) working on the social.plus docs. **File-based, no orchestrator.** Agents claim work by atomic rename and drop results back as JSON.
 
+> **Source-of-truth boundary:** `sdk-surface/*` is the *factual* layer (machine-extracted SDK symbols) — **regenerate it, never hand-edit it.** The *opinion* layer (enforced SDK best-practices) lives in the Vise repo (`social-plus-foundry`), not here. The full facts-vs-opinion ownership map — what each source owns and which way truth flows on a conflict — is in Vise's `docs/ARCHITECTURE.md` → "Sources of Truth".
+
 ## Layout
 
 ```
