@@ -141,9 +141,7 @@ Check that the new entries are valid MDX and follow the established patterns.
   </AccordionGroup>
 
   {/* Android SDK only — see "API Reference link" rule below */}
-  <Note>
-    📘 [Browse the full VERSION API reference →](https://android-sdk.docs.amity.co/VERSION/)
-  </Note>
+  <Card title="📘 API Reference — VERSION" icon="book-open" href="https://android-sdk.docs.amity.co/VERSION/" horizontal />
 </Update>
 ```
 
@@ -173,17 +171,15 @@ Check that the new entries are valid MDX and follow the established patterns.
    - **🐞 Bug Fixes**: corrections to *incorrect or broken* behavior — crashes, wrong results, leaks, loops, regressions. Phrase starting with "Fixed…" and describe what was wrong, not the implementation detail.
    - **Both in one release**: keep them in separate sections (Improvements above Bug Fixes). A release commonly has both; don't force everything into one bucket. If a single change both fixes a defect *and* improves behavior, file it under Bug Fixes (the defect is the headline).
    - **Tag implication**: a release with only these two sections (no New Features) takes `["Improvements"]`; see Rule 2.
-8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add it as a `<Note>` callout at the **very bottom** of each `<Update>` entry, *after* the `## 🧩 Compatibility` `</AccordionGroup>` (the API reference is not compatibility info, so it lives outside that group). Substitute the exact release version into both the link text and the `href`:
+8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add it as a **compact, title-only horizontal `<Card>`** at the **very bottom** of each `<Update>` entry, *after* the `## 🧩 Compatibility` `</AccordionGroup>`. The API reference is *not* compatibility info, so it must live outside that accordion group. Keep the card self-closing with no body text so it renders as a single row. Substitute the exact release version into both the title and the `href`:
 
    ```mdx
-   <Note>
-     📘 [Browse the full <VERSION> API reference →](https://android-sdk.docs.amity.co/<VERSION>/)
-   </Note>
+   <Card title="📘 API Reference — <VERSION>" icon="book-open" href="https://android-sdk.docs.amity.co/<VERSION>/" horizontal />
    ```
 
    - **Scope**: Android SDK changelog only. Do **not** add this to Android UIKit or any other platform — they have no published doc-link pattern yet. Other platforms can be added once their link pattern exists.
    - Applies to versions **7.6.0 and newer** (docs are not published for older versions).
-   - When writing a new Android SDK entry, always include this `<Note>` with the new version's link.
+   - When writing a new Android SDK entry, always include this card with the new version's link.
 
 ### Writing Quality Guidelines
 
