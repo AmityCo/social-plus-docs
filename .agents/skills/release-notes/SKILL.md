@@ -112,7 +112,7 @@ Check that the new entries are valid MDX and follow the established patterns.
   #### Feature Title
   Description of the feature and what it enables.
 
-  ## Improvements
+  ## ✨ Improvements
 
   - Improvement description.
 
@@ -138,22 +138,24 @@ Check that the new entries are valid MDX and follow the established patterns.
       | :--------------- | :------ |
       | Dependency Name  | X.Y.Z   |
     </Accordion>
+    {/* Android SDK only — see "API Reference link" rule below */}
+    <Accordion title="API Reference" icon="book-open">
+      [Browse the VERSION API reference →](https://android-sdk.docs.amity.co/VERSION/)
+    </Accordion>
   </AccordionGroup>
-
-  {/* Android SDK only — see "API Reference Link" rule below */}
-  ## 📘 API Reference
-
-  <Card title="Android SDK VERSION — API Reference" icon="book-open" href="https://android-sdk.docs.amity.co/VERSION/" horizontal>
-    Full Dokka-generated API reference for this release.
-  </Card>
 </Update>
 ```
 
 ### Rules
 
 1. **Date format**: `DD/MM/YYYY`
-2. **Tags**: Use `["New Releases"]` for features, `["Improvements"]` for bug fixes only, `["New Releases", "Improvements"]` for both
-3. **Section order**: New Features → Improvements → Bug Fixes → Compatibility Changes → Compatibility
+2. **Tags**: Use `["New Releases"]` when the release contains new features, `["Improvements"]` when it only contains improvements and/or bug fixes (no new features), and `["New Releases", "Improvements"]` when it has both new features AND improvements/fixes.
+3. **Section headings & order** — always use these exact emoji-prefixed headings, in this order (omit any with no content):
+   1. `## 🚀 New Features`
+   2. `## ✨ Improvements`
+   3. `## 🐞 Bug Fixes`
+   4. `## 🚨 Compatibility Changes`
+   5. `## 🧩 Compatibility`
 4. **Omit empty sections** — only include sections that have content
 5. **Compatibility table**: Always include for Android SDK/UIKit. Optional for others depending on platform convention:
    - Android SDK: "Android SDK" config + "Dependencies" tables
@@ -165,20 +167,22 @@ Check that the new entries are valid MDX and follow the established patterns.
    - React Native UIKit: "Environment" + "iOS SDK" + "Android SDK" (3 accordions)
    - Flutter SDK/UIKit: "Environment" with Flutter version
 6. **Feature descriptions**: Write clear, developer-facing descriptions. Don't just copy commit messages — synthesize them into meaningful release notes.
-7. **Bug fix style**: Start with "Fixed..." and describe what was wrong, not the implementation detail.
-8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add an `## 📘 API Reference` section with a horizontal `<Card>` as the **last** section of each `<Update>` entry (after the Compatibility accordions). Substitute the exact release version into both the card title and the `href`:
+7. **Improvements vs Bug Fixes** — choose the section by intent, not by code size:
+   - **✨ Improvements**: enhancements to *existing, already-working* behavior — performance, stability, retry/backoff logic, refactors with user-visible benefit, dependency/SDK-target bumps, removed-permission cleanups. Nothing was broken; it just got better. Phrase as "Added…", "Improved…", "Optimized…", "Removed…".
+   - **🐞 Bug Fixes**: corrections to *incorrect or broken* behavior — crashes, wrong results, leaks, loops, regressions. Phrase starting with "Fixed…" and describe what was wrong, not the implementation detail.
+   - **Both in one release**: keep them in separate sections (Improvements above Bug Fixes). A release commonly has both; don't force everything into one bucket. If a single change both fixes a defect *and* improves behavior, file it under Bug Fixes (the defect is the headline).
+   - **Tag implication**: a release with only these two sections (no New Features) takes `["Improvements"]`; see Rule 2.
+8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add it as the **last accordion** inside the `## 🧩 Compatibility` `<AccordionGroup>` (after "Dependencies"). Substitute the exact release version into both the link text and the `href`:
 
    ```mdx
-   ## 📘 API Reference
-
-   <Card title="Android SDK <VERSION> — API Reference" icon="book-open" href="https://android-sdk.docs.amity.co/<VERSION>/" horizontal>
-     Full Dokka-generated API reference for this release.
-   </Card>
+   <Accordion title="API Reference" icon="book-open">
+     [Browse the <VERSION> API reference →](https://android-sdk.docs.amity.co/<VERSION>/)
+   </Accordion>
    ```
 
    - **Scope**: Android SDK changelog only. Do **not** add this to Android UIKit or any other platform — they have no published doc-link pattern yet. Other platforms can be added once their link pattern exists.
    - Applies to versions **7.6.0 and newer** (docs are not published for older versions).
-   - When writing a new Android SDK entry, always include this card with the new version's link.
+   - When writing a new Android SDK entry, always include this accordion with the new version's link.
 
 ### Writing Quality Guidelines
 
