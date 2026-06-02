@@ -1,0 +1,198 @@
+name: Docs-Ops Drift Gate
+
+# Server-enforced docs-ops gate. Runs on every PR into main. With a branch-
+# protection rule requiring the "drift-gate" check, it blocks merges that break
+# the docs.
+#
+# TWO TIERS:
+#   1. ALWAYS (no token, pure Python) — BLOCKS:
+#        - MDX validity (.docs-ops/ci/check-mdx.py): unterminated code fences +
+#          unbalanced JSX component tags. This catches Mintlify build-breakers.
+#   2. WHEN secrets.SDK_READONLY_PAT IS SET (needs the private TS SDK) — BLOCKS:
+#        - TS regex drift delta, TS doc-as-test, MDX-structure (check-drift.py).
+#      If the secret is NOT configured, this tier is SKIPPED with a clear notice
+#      in the PR comment — it does NOT fail the PR for a missing-secret config.
+#
+# Flutter/Android/iOS doc-as-test need their toolchains (+ macOS for iOS) and
+# report "unavailable" — see .docs-ops/CI_GATE.md "Extending coverage".
+
+on:
+  # No `paths:` filter on purpose. A skipped path-filtered run would leave a
+  # REQUIRED check pending forever and deadlock the PR.
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: docs-ops-drift-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # to post the sticky delta comment
+    env:
+      # 'true' only when the secret is configured; gates the SDK-dependent tier.
+      HAS_SDK_TOKEN: ${{ secrets.SDK_READONLY_PAT != '' }}
+
+    defaults:
+      run:
+        working-directory: social-plus-docs
+
+    steps:
+      # Both repos are laid out as SIBLINGS inside the workspace because
+      # check-drift.py hardcodes the SDK at REPO_ROOT.parent and actions/checkout
+      # cannot write outside $GITHUB_WORKSPACE.
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          path: social-plus-docs
+          fetch-depth: 0   # full history for the baseline worktree
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ---- Tier 1: MDX validity — ALWAYS runs, no token, blocking ----
+      # Scans only the .mdx files THIS PR changes (so a pre-existing break in an
+      # untouched file can't block an unrelated PR). Full-scan fallback if the
+      # base ref can't be resolved.
+      - name: MDX validity (build-breaker check)
+        id: mdx
+        continue-on-error: true   # let the comment post; the enforce step decides
+        run: |
+          set -o pipefail   # without this, `| tee` would mask check-mdx's non-zero exit
+          git fetch --no-tags --quiet origin "${{ github.base_ref }}" || true
+          python3 .docs-ops/ci/check-mdx.py --changed-since "origin/${{ github.base_ref }}" | tee "$RUNNER_TEMP/mdx.txt"
+
+      # ---- Tier 2: SDK-dependent drift + doc-as-test — only with the token ----
+      - name: Checkout TypeScript SDK
+        if: env.HAS_SDK_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: AmityCo/AmityTypescriptSDK
+          path: AmityTypescriptSDK
+          token: ${{ secrets.SDK_READONLY_PAT }}
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_SDK_TOKEN == 'true'
+        with:
+          node-version: '20'
+      - name: Install TypeScript (tsc) for doc-as-test
+        if: env.HAS_SDK_TOKEN == 'true'
+        continue-on-error: true
+        run: npm install -g typescript
+
+      - name: Run docs-ops drift gate
+        id: gate
+        if: env.HAS_SDK_TOKEN == 'true'
+        continue-on-error: true
+        run: |
+          python3 .docs-ops/ci/check-drift.py \
+            --base origin/main \
+            --json-out "$RUNNER_TEMP/delta.json"
+
+      - name: Build report (summary + PR comment body)
+        if: always()
+        env:
+          MDX_OUTCOME: ${{ steps.mdx.outcome }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+          HAS_SDK_TOKEN: ${{ env.HAS_SDK_TOKEN }}
+        run: |
+          python3 - "$RUNNER_TEMP/delta.json" "$RUNNER_TEMP/mdx.txt" > "$RUNNER_TEMP/comment.md" <<'PY'
+          import json, os, sys, pathlib
+          delta_p, mdx_p = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          mdx_outcome = os.environ.get("MDX_OUTCOME", "")
+          gate_outcome = os.environ.get("GATE_OUTCOME", "")
+          has_token = os.environ.get("HAS_SDK_TOKEN", "") == "true"
+          L = []
+          # ---- MDX validity (always) ----
+          mdx_txt = mdx_p.read_text() if mdx_p.exists() else ""
+          mdx_last = mdx_txt.strip().splitlines()[-1] if mdx_txt.strip() else "(no output)"
+          mdx_ok = (mdx_outcome == "success")
+          L.append("### " + ("✅" if mdx_ok else "❌") + " Docs-Ops Gate — MDX validity " + ("PASS" if mdx_ok else "FAIL"))
+          L.append("")
+          L.append(f"`{mdx_last}`")
+          if not mdx_ok:
+              L.append("\n<details><summary>MDX problems (block the merge)</summary>\n\n```")
+              L.append(mdx_txt[-2500:])
+              L.append("```\n</details>")
+          # ---- Drift / doc-as-test (token-gated) ----
+          L.append("")
+          if not has_token:
+              L.append("> ⚠️ **Drift + doc-as-test SKIPPED** — `SDK_READONLY_PAT` secret is not configured, "
+                       "so the private TS SDK can't be checked out. MDX validity above still gates. "
+                       "Add the secret to enable the full API-accuracy layer (see `.docs-ops/CI_GATE.md`).")
+          elif delta_p.exists():
+              d = json.loads(delta_p.read_text()); dr = d.get("drift_delta", {})
+              def dat(key):
+                  x = d.get(key, {})
+                  if not x.get("available"): return "⚪ unavailable"
+                  if x.get("crashed"):       return f"⚠️ crashed (non-blocking): {x.get('crash_reason','')[:100]}"
+                  b = len(x.get("blocking_failures", []))
+                  return ("❌ " if b else "✅ ") + f"{b} blocking, {x.get('stats',{}).get('blocks_passed','?')} passed"
+              new_pairs = dr.get("new_pairs", [])
+              L.append(f"**Regex drift:** baseline `{dr.get('baseline_total','?')}` → candidate `{dr.get('candidate_total','?')}` "
+                       f"(Δ {dr.get('delta_total','?')}), **{len(new_pairs)} new pair(s)**.")
+              if new_pairs:
+                  L.append("\n<details><summary>New drift pairs</summary>\n")
+                  for pr in new_pairs[:50]:
+                      L.append(f"- `{pr.get('file','?')}` → `{pr.get('ref','?')}`")
+                  L.append("\n</details>")
+              L.append("")
+              L.append("| Layer | Status |")
+              L.append("|---|---|")
+              for lbl, k in [("TS doc-as-test","doc_as_test_ts"),("Flutter","doc_as_test_flutter"),
+                             ("Android","doc_as_test_android"),("iOS","doc_as_test_ios")]:
+                  L.append(f"| {lbl} | {dat(k)} |")
+          else:
+              L.append("> ⚠️ Drift layer ran but produced no report — check the job logs.")
+          print("\n".join(L))
+          PY
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post / update PR comment
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true   # a fork/permissions hiccup must not red the gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.RUNNER_TEMP + '/comment.md', 'utf8');
+            const marker = '<!-- docs-ops-drift-gate -->';
+            const full = marker + '\n' + body;
+            const {owner, repo} = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.rest.issues.listComments({owner, repo, issue_number});
+            const existing = comments.data.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body: full});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body: full});
+            }
+
+      - name: Enforce gate result
+        if: always()
+        env:
+          MDX_OUTCOME: ${{ steps.mdx.outcome }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        run: |
+          # MDX validity ALWAYS blocks. Drift blocks only when it actually ran
+          # (GATE_OUTCOME == 'failure'); a skipped drift tier (no token) is a
+          # known config state, not a failure — green-when-misconfigured is
+          # acceptable HERE because MDX validity still guards every PR.
+          fail=0
+          if [ "$MDX_OUTCOME" != "success" ]; then
+            echo "::error::MDX validity failed — a page would break the Mintlify build. See the PR comment."
+            fail=1
+          fi
+          if [ "$GATE_OUTCOME" = "failure" ]; then
+            echo "::error::Drift / doc-as-test gate failed — new API drift or a broken doc code block. See the PR comment."
+            fail=1
+          fi
+          if [ "$GATE_OUTCOME" = "skipped" ]; then
+            echo "::warning::Drift / doc-as-test tier skipped (SDK_READONLY_PAT not configured). MDX validity still enforced."
+          fi
+          [ "$fail" = "0" ] && echo "Docs-Ops gate passed." || exit 1

@@ -136,12 +136,44 @@ The same `check-drift.py` script powers three layers — each one is independent
 | Layer | Where it runs | Bypassable? | Who sets up |
 |---|---|---|---|
 | **Local pre-push hook** | Contributor's machine on `git push` | Yes (`--no-verify`) | Each contributor, one-time |
-| **GitHub Action** (final step, not yet wired) | Server on every PR | No (without branch protection edit) | Repo admin |
-| **Branch protection** (final step) | Server on merge | No without repo-admin role | Repo admin in GitHub UI |
+| **GitHub Action** (`docs-ops-drift-check.yml`) | Server on every PR into `main` | No (with branch protection on) | ✅ wired |
+| **Branch protection** | Server on merge | No without repo-admin role | Repo admin in GitHub UI (one toggle — see below) |
 
-**Today (Phase 2.1)** — local layer is live. Awareness depends on contributors running `pre-commit install`.
+**Today (Phase 2.2)** — the GitHub Action `.github/workflows/docs-ops-drift-check.yml` runs `check-drift.py` on every PR into `main`, posts a sticky delta comment, and exits non-zero on any regression. It becomes a *merge blocker* the moment the branch-protection rule below is enabled — that toggle is the only remaining step, and it's a repo-admin action in the GitHub UI.
 
-**Next (Phase 2.2)** — GitHub Action will call the same script in CI, post the delta as a PR comment, and (with branch protection enabled) block merges. With all four platforms covered (TS + Flutter + Android + iOS), this is the next milestone: server-enforced gating via GitHub Action + branch protection rule. **Note:** the iOS check requires a macOS runner — the Phase 2.2 Action should use `runs-on: macos-latest` (or a matrix) to ensure iOS coverage is not silently skipped on Linux runners.
+### What the Action enforces (coverage scope)
+
+The Action runs on `ubuntu-latest` in **two tiers**:
+
+**Tier 1 — always, no token, BLOCKS.** Pure Python, runs on every PR regardless of secrets:
+
+| Check | Why |
+|---|---|
+| **MDX validity** (`check-mdx.py`) | unterminated code fences + unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…) — i.e. **Mintlify build-breakers**. This is the layer that catches the class of bug that took down `send-a-message.mdx`. |
+
+**Tier 2 — only when `secrets.SDK_READONLY_PAT` is configured (needs the private TS SDK), BLOCKS:**
+
+| Check | Enforced? | Why |
+|---|---|---|
+| TS regex drift delta | ✅ | reads TS SDK source (sibling checkout) |
+| MDX structure | ✅ | pure Python (runs inside `check-drift.py`) |
+| TS doc-as-test (`tsc`) | ✅ when `tsc` is set up | best-effort node install in the job |
+| Flutter / Android doc-as-test | ⚪ *unavailable* | needs `dart` / `kotlinc` |
+| iOS doc-as-test | ⚪ *unavailable* | needs **macOS** + `swiftc` |
+
+**If `SDK_READONLY_PAT` is NOT set, Tier 2 is SKIPPED with a notice in the PR comment — it does not fail the PR.** This is deliberate: a missing-secret config state is not a regression, and Tier 1 (MDX validity) still guards every PR. Add the secret to switch Tier 2 on. (The same checks run locally via the pre-push hook — see "For contributors" — where the SDK sibling is already present, so the full set runs with no token.)
+
+Uncovered Tier-2 layers are **surfaced in the PR comment** as `unavailable` — never silently assumed green.
+
+### Extending coverage
+
+To enforce more platforms server-side, add toolchains to the job (and a matrix for iOS):
+
+- **Flutter** — add a Dart/Flutter setup step (`subosito/flutter-action`) + `dart pub get` in `.docs-ops/integration-tests/flutter/`; check out the Flutter SDK sibling.
+- **Android** — install a Kotlin compiler (`kotlinc`) and check out the Android SDK sibling.
+- **iOS** — add a second job on `runs-on: macos-latest` (macOS runners cost ~10× ubuntu minutes — a deliberate cost decision) running only the iOS doc-as-test leg, and require it as a separate status check.
+
+Each added platform flips its row from *unavailable* to *blocks* automatically — `check-drift.py` already orchestrates all four; it's purely a question of which toolchains the runner has.
 
 ## For contributors
 
@@ -177,9 +209,15 @@ When you review a docs PR:
 
 ## For repo admins
 
-Once you're happy with the local layer, enable the server layer:
+The Action (`.github/workflows/docs-ops-drift-check.yml`) is wired and runs on every PR into `main`. It does **not** block merges until you require it as a status check. To turn it into a real merge blocker:
 
-1. Wire `.github/workflows/docs-ops-drift-check.yml` (TBD — Phase 2.2).
-2. In GitHub → Settings → Branches → branch protection rule for `main` → require status check `docs-ops-drift-check` to pass before merge.
+1. Open one PR so the check runs at least once (GitHub only lists checks it has seen).
+2. GitHub → **Settings → Branches → Branch protection rules → `main`** (add a rule if none).
+3. Enable **"Require status checks to pass before merging."**
+4. In the search box, add the status check named **`drift-gate`** (the job id).
+5. (Recommended) also enable **"Require branches to be up to date before merging"** so the gate runs against current `main`.
+6. Save.
 
-After that, the gate is genuinely enforced. Contributors who bypass locally still get caught at PR time.
+Prerequisite: the repo secret **`SDK_READONLY_PAT`** must exist (it already does — `sdk-drift-watcher.yml` uses it). It needs read access to `AmityCo/AmityTypescriptSDK`.
+
+After that, the gate is genuinely enforced. Contributors who bypass the local hook with `--no-verify` still get caught at PR time.
