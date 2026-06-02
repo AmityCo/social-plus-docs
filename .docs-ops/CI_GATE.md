@@ -143,17 +143,27 @@ The same `check-drift.py` script powers three layers — each one is independent
 
 ### What the Action enforces (coverage scope)
 
-The Action runs on `ubuntu-latest`. Each check self-gates on toolchain availability, so the **blocking** guarantee is:
+The Action runs on `ubuntu-latest` in **two tiers**:
 
-| Check | Enforced server-side? | Why |
+**Tier 1 — always, no token, BLOCKS.** Pure Python, runs on every PR regardless of secrets:
+
+| Check | Why |
+|---|---|
+| **MDX validity** (`check-mdx.py`) | unterminated code fences + unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…) — i.e. **Mintlify build-breakers**. This is the layer that catches the class of bug that took down `send-a-message.mdx`. |
+
+**Tier 2 — only when `secrets.SDK_READONLY_PAT` is configured (needs the private TS SDK), BLOCKS:**
+
+| Check | Enforced? | Why |
 |---|---|---|
-| TS regex drift delta | ✅ **blocks** | pure Python; reads TS SDK source (checked out as a sibling) |
-| MDX structure | ✅ **blocks** | pure Python |
-| TS doc-as-test (`tsc`) | ✅ blocks when `tsc` is set up (best-effort node install in the job) |
-| Flutter / Android doc-as-test | ⚪ reports *unavailable* | needs `dart` / `kotlinc` on the runner |
-| iOS doc-as-test | ⚪ reports *unavailable* | needs **macOS** + `swiftc` |
+| TS regex drift delta | ✅ | reads TS SDK source (sibling checkout) |
+| MDX structure | ✅ | pure Python (runs inside `check-drift.py`) |
+| TS doc-as-test (`tsc`) | ✅ when `tsc` is set up | best-effort node install in the job |
+| Flutter / Android doc-as-test | ⚪ *unavailable* | needs `dart` / `kotlinc` |
+| iOS doc-as-test | ⚪ *unavailable* | needs **macOS** + `swiftc` |
 
-Uncovered layers are **surfaced in the PR comment** as `unavailable` — never silently assumed green. The Action depends on the existing `SDK_READONLY_PAT` secret (already used by `sdk-drift-watcher.yml`) for the SDK checkout.
+**If `SDK_READONLY_PAT` is NOT set, Tier 2 is SKIPPED with a notice in the PR comment — it does not fail the PR.** This is deliberate: a missing-secret config state is not a regression, and Tier 1 (MDX validity) still guards every PR. Add the secret to switch Tier 2 on. (The same checks run locally via the pre-push hook — see "For contributors" — where the SDK sibling is already present, so the full set runs with no token.)
+
+Uncovered Tier-2 layers are **surfaced in the PR comment** as `unavailable` — never silently assumed green.
 
 ### Extending coverage
 
