@@ -13,10 +13,13 @@ Exit 0 = clean, 1 = problems found (so it can gate locally + in CI).
 Needs no SDK source and no token, so it runs anywhere.
 
 Usage:
-  python3 .docs-ops/ci/check-mdx.py [paths...]   # default: scan all docs dirs
+  python3 .docs-ops/ci/check-mdx.py [paths...]          # default: scan all docs dirs
+  python3 .docs-ops/ci/check-mdx.py --changed-since REF  # only .mdx changed vs REF
+                                                         # (PR-gate mode; full-scan fallback)
 """
 import re
 import sys
+import subprocess
 import pathlib
 
 DOCS_DIRS = ["social-plus-sdk", "analytics-and-moderation", "uikit",
@@ -73,15 +76,40 @@ def check_file(path):
     return problems
 
 
+def changed_mdx(ref):
+    """`.mdx` files changed vs `ref` (added/modified, not deleted). None on failure."""
+    try:
+        out = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=d", f"{ref}...HEAD", "--", "*.mdx"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return [pathlib.Path(p) for p in out.split() if p]
+
+
 def main(argv):
-    args = argv or DOCS_DIRS
-    roots = [pathlib.Path(a) for a in args]
-    files = []
-    for r in roots:
-        if r.is_dir():
-            files.extend(sorted(r.rglob("*.mdx")))
-        elif r.suffix == ".mdx" and r.exists():
-            files.append(r)
+    files = None
+    if argv and argv[0] == "--changed-since":
+        ref = argv[1] if len(argv) > 1 else "origin/main"
+        argv = []   # consume the flag so the full-scan fallback uses DOCS_DIRS
+        changed = changed_mdx(ref)
+        if changed is None:
+            print(f"⚠️  could not diff against {ref}; falling back to full scan", file=sys.stderr)
+        else:
+            files = [p for p in changed if p.exists()]
+            print(f"PR-gate mode: {len(files)} changed .mdx file(s) vs {ref}")
+            if not files:
+                print("no .mdx changed; nothing to check")
+                return 0
+    if files is None:
+        roots = [pathlib.Path(a) for a in (argv or DOCS_DIRS)]
+        files = []
+        for r in roots:
+            if r.is_dir():
+                files.extend(sorted(r.rglob("*.mdx")))
+            elif r.suffix == ".mdx" and r.exists():
+                files.append(r)
     total_bad = 0
     for f in files:
         probs = check_file(f)
