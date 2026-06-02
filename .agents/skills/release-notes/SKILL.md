@@ -139,6 +139,13 @@ Check that the new entries are valid MDX and follow the established patterns.
       | Dependency Name  | X.Y.Z   |
     </Accordion>
   </AccordionGroup>
+
+  {/* Android SDK only — see "API Reference Link" rule below */}
+  ## 📘 API Reference
+
+  <Card title="Android SDK VERSION — API Reference" icon="book-open" href="https://android-sdk.docs.amity.co/VERSION/" horizontal>
+    Full Dokka-generated API reference for this release.
+  </Card>
 </Update>
 ```
 
@@ -159,6 +166,19 @@ Check that the new entries are valid MDX and follow the established patterns.
    - Flutter SDK/UIKit: "Environment" with Flutter version
 6. **Feature descriptions**: Write clear, developer-facing descriptions. Don't just copy commit messages — synthesize them into meaningful release notes.
 7. **Bug fix style**: Start with "Fixed..." and describe what was wrong, not the implementation detail.
+8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add an `## 📘 API Reference` section with a horizontal `<Card>` as the **last** section of each `<Update>` entry (after the Compatibility accordions). Substitute the exact release version into both the card title and the `href`:
+
+   ```mdx
+   ## 📘 API Reference
+
+   <Card title="Android SDK <VERSION> — API Reference" icon="book-open" href="https://android-sdk.docs.amity.co/<VERSION>/" horizontal>
+     Full Dokka-generated API reference for this release.
+   </Card>
+   ```
+
+   - **Scope**: Android SDK changelog only. Do **not** add this to Android UIKit or any other platform — they have no published doc-link pattern yet. Other platforms can be added once their link pattern exists.
+   - Applies to versions **7.6.0 and newer** (docs are not published for older versions).
+   - When writing a new Android SDK entry, always include this card with the new version's link.
 
 ### Writing Quality Guidelines
 
