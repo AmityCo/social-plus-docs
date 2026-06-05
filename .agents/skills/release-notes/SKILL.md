@@ -62,7 +62,7 @@ GitHub org: `AmityCo`
 - **Android SDK/UIKit**: Releases tagged in GitHub (e.g., `7.21.0`, `4.17.0`). Changelogs may be in GitHub Releases page. Use `git log` between tags for actual changes.
 - **iOS SDK**: Tags in the SwiftPM distribution repo `Amity-Social-Cloud-SDK-iOS-SwiftPM`. Source changes in `AmitySDKIOS`. May have release notes at `https://github.com/AmityCo/Amity-Social-Cloud-SDK-iOS-SwiftPM/releases`.
 - **iOS UIKit**: Tags in `ASC-UIKit-iOS-OpenSource`. Source changes in `AmityUIKitIOS`. May have release notes at `https://github.com/AmityCo/ASC-UIKit-iOS-OpenSource/releases`.
-- **TypeScript SDK**: Version bumps as commits in `develop` branch (not git tags). Check `package.json` version and commits like `v7.21.0 (#1437)`.
+- **TypeScript SDK**: Version bumps are commits that may be on **any branch**, not necessarily merged to `develop` yet. The release is also published as a **draft GitHub Release** (URL looks like `untagged-{hash}` because there is no git tag). Use `git log --all --oneline | grep -E ' v[0-9]+\.[0-9]+\.[0-9]+ '` to find version bump commits across all branches, then verify with `git show <commit>:package.json | grep '"version"'`. Do **not** rely only on `git log develop`.
 - **Web UIKit**: Releases as draft in GitHub Releases. Tags like `v4.16.0`.
 - **React Native UIKit**: Tags like `v4.0.0-RC.23`.
 - **Flutter SDK**: Tags in internal repo. May also publish to `https://pub.dev/packages/amity_sdk/changelog`.
@@ -76,11 +76,26 @@ Read the first `<Update>` entry from each changelog file to find the latest reco
 
 ### Step 2: Find New Releases in Source Repos
 
+**Always check ALL 9 platforms** — do not skip any. Run all fetches in parallel:
+
+| Platform | Repo | Detection method |
+|---|---|---|
+| Android SDK | `Amity-Social-Cloud-SDK-Android` | `git tag --sort=-creatordate \| head -20` |
+| iOS SDK | `AmitySDKIOS` | `git tag --sort=-creatordate \| head -20` |
+| TypeScript SDK | `AmityTypescriptSDK` | `git log --all --oneline \| grep -E ' v[0-9]+\.[0-9]+\.[0-9]+ '` (see note below) |
+| Flutter SDK | `Amity-Social-Cloud-SDK-Flutter-Internal` | `git tag --sort=-creatordate \| head -20` |
+| Android UIKit | `UIKit-V4` | `git tag --sort=-creatordate \| head -20` |
+| iOS UIKit | `AmityUIKitIOS` | `git tag --sort=-creatordate \| head -20` |
+| Web UIKit | `Amity-Social-Cloud-UIKit-Web` | `git tag --sort=-creatordate \| head -20` |
+| React Native UIKit | `Amity-Social-UIKit-React-Native-CLI-OpenSource` | `git tag --sort=-creatordate \| head -20` |
+| Flutter UIKit | `Amity-Social-Cloud-UIKit-Flutter` | `git tag --sort=-creatordate \| head -20` |
+
 For each platform:
-1. `git fetch` the source repo (ensure up to date)
-2. List tags sorted by date: `git tag --sort=-creatordate | head -20`
+1. `git fetch --tags` the source repo (ensure up to date)
+2. Run the detection command above
 3. Get dates: `git log -1 --format='%ai' <tag>`
-4. For TypeScript SDK (no tags): check commit messages for version bumps like `v7.21.0 (#1437)` and `package.json` version
+
+**TypeScript SDK special note**: The version bump commit is often on a release or feature branch, **not yet merged to `develop`**. The GitHub release is published as a **draft** (untagged). Use `git log --all --oneline | grep -E ' v[0-9]+\.[0-9]+\.[0-9]+ '` to scan all branches. Confirm the version with `git show <commit>:package.json | grep '"version"'`.
 
 Identify tags/versions released AFTER the latest recorded date.
 
