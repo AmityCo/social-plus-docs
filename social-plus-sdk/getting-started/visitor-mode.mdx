@@ -651,8 +651,8 @@ All visitor restrictions are enforced **server-side** - attempting restricted ac
 <CodeGroup>
 ```typescript Error Codes
 // Error codes for visitor/bot permission denial
-ServerError.VISITOR_PERMISSION_DENIED: 488999
-ServerError.BOT_PERMISSION_DENIED: 488998
+ServerError.VISITOR_PERMISSION_DENIED: 403999
+ServerError.BOT_PERMISSION_DENIED: 403998
 ```
 
 ```typescript Example Error Handling
@@ -722,213 +722,75 @@ const users = await UserRepository.searchUserByDisplayName({ displayName: 'John'
 </Tab>
 </Tabs>
 
-## UIKit Visitor Experience
+## Daily Usage Limit
 
-UIKit automatically adapts to visitor mode with optimized navigation and content discovery:
+Visitor and bot users share a **daily read request quota**. Once the quota is exhausted, all subsequent read API calls return error code `400323` until the quota resets.
 
-### Page Visibility
+<Info>
+**Quota**: 100 read requests per day, shared across all API endpoints — feed, events, communities, user profiles, etc. The counter resets daily. Monthly overages are a billing concern only; the SDK never receives a monthly-limit error.
+</Info>
 
-UIKit shows/hides pages based on user type:
+### Error Code
 
-<Tabs>
-<Tab title="Visitor Mode">
-**Visible Pages:**
-- ✅ Explore (default homepage)
-- ✅ Clips Feed (configurable, hidden by default)
+| Error Constant | Code | Trigger |
+|---|---|---|
+| `VISITOR_USAGE_LIMIT_EXCEEDED` | `400323` | Visitor/bot has exhausted their daily read quota |
+| `VISITOR_PERMISSION_DENIED` | `403999` | Visitor attempted a write operation |
+| `BOT_PERMISSION_DENIED` | `403998` | Bot attempted a restricted operation |
 
-**Hidden Pages:**
-- ❌ Newsfeed
-- ❌ Notifications
-- ❌ My Communities
+### SDK Event Subscription
 
-```json
-// config.json - Clips Feed visibility control
-{
-  "feature_flags": {
-    "post": {
-      "clip": {
-        "can_create": "signed_in_user_only",  // or "all", "none"
-        "can_view_tab": "signed_in_user_only" // or "all", "none"
-      }
-    }
-  }
-}
-```
-</Tab>
-
-<Tab title="Signed-In User">
-**All Pages Visible:**
-- ✅ Newsfeed
-- ✅ Explore
-- ✅ Clips Feed
-- ✅ Notifications
-- ✅ My Communities
-- ✅ Full navigation access
-</Tab>
-</Tabs>
-
-### Adaptive Navigation
-
-UIKit navigation automatically adjusts based on available pages:
-
-<CardGroup cols={2}>
-<Card title="Mobile Navigation" icon="mobile">
-**Single Tab Scenario**: When only one page is visible (e.g., Explore only)
-- Top tab navigation bar is **hidden**
-- Cleaner, focused single-page experience
-
-**Multiple Tabs**: When 2+ pages are visible
-- Top tab navigation bar **remains visible**
-- Users can switch between available pages
-</Card>
-
-<Card title="Desktop Navigation" icon="desktop">
-**Sidebar Always Visible**: Regardless of page count
-- Main sidebar navigation **always shown**
-- Ensures persistent access to global elements
-- Includes search bar and other navigation tools
-- Maintains consistent desktop experience
-</Card>
-</CardGroup>
-
-### Visitor Interaction Handling
-
-UIKit provides default behaviors for visitor interaction attempts:
+The SDK emits a `visitorUsageLimitReached` event the first time error `400323` is detected per session. Subsequent failures within a 2-second window are deduplicated to avoid triggering the handler on simultaneous parallel requests.
 
 <Tabs>
 <Tab title="iOS">
 ```swift
-// Set behavior
-AmityUIKit4Manager.behavior.globalBehavior = MyGlobalBehavior()
-
-// Override behavior
-class MyGlobalBehavior: AmityGlobalBehavior { 
-
-    override func handleGuestUserAction(context: Context?) {
-        // Custom Behavior
+// Subscribe to usage limit events after visitor login
+let cancellable = AmityClient.shared.getVisitorUsageLimitEvents()
+    .receive(on: DispatchQueue.main)
+    .sink { event in
+        // Navigate to sign-in or show custom error UI
+        print("Visitor usage limit reached for user: \(event.userId)")
     }
-    
-    override func handleNonMemberAction(context: Context?) {
-        // Custom Behavior
-    }
-    
-    override func handleNonFollowerAction(context: Context?) {
-        // Custom Behavior
-    }
-}
-
 ```
 </Tab>
 
 <Tab title="Android">
 ```kotlin
-AmityUIKit4Manager.behavior.globalBehavior = object: AmityGlobalBehavior() {
-    override fun handleVisitorUserAction() {
-        // Custom behavior for visitor user action
+// Subscribe to usage limit events after visitor login
+AmityCoreClient.getVisitorUsageLimitEvents()
+    .observeOn(AndroidSchedulers.mainThread())
+    .doOnNext { event ->
+        // Navigate to sign-in or show custom error UI
+        Log.d("Visitor", "Usage limit reached for user: ${event.userId}")
     }
-
-    override fun handleNonMemberAction() {
-        // Custom behavior for non-member action
-    }
-
-    override fun handleNonFollowerAction() {
-        // Custom behavior for non-follower action
-    }
-}
-
+    .subscribe()
 ```
 </Tab>
 
 <Tab title="TypeScript">
 ```typescript
-// AmityGlobalBehavior - Default visitor interaction handling
+import { onVisitorUsageLimitReached } from '@amityco/ts-sdk';
 
-const { AmityGlobalBehavior } = usePageBehavior();
+// Subscribe to usage limit events after visitor login
+const unsubscribe = onVisitorUsageLimitReached(() => {
+    // Navigate to sign-in or show custom error UI
+    console.log('Visitor usage limit reached');
+});
 
-// Visitor user
-AmityGlobalBehavior.handleGuestUserAction();
-// Non-Member user in a community
-AmityGlobalBehavior.handleNonMemberAction();
-// Non-Follower user of a user
-AmityGlobalBehavior.handleNonFollowerAction();
-
+// Unsubscribe when cleaning up
+// unsubscribe();
 ```
 </Tab>
 </Tabs>
 
-### Action Button States
+<Note>
+The event is only emitted for `VISITOR` and `BOT` user types. Signed-in users never receive this event.
+</Note>
 
-UIKit manages action button visibility based on user type and permissions:
-
-<AccordionGroup>
-<Accordion title="Public Community Actions" icon="users">
-| Action | Visitor | Non-Member | Member |
-|--------|---------|------------|--------|
-| **React to Post** | Button visible, action blocked | Button visible, action allowed | Button visible, action allowed |
-| **Comment on Post** | Button visible, action blocked | Button visible, action allowed | Button visible, action allowed |
-| **Reply to Comment** | Button visible, action blocked | Button visible, action allowed | Button visible, action allowed |
-| **Report Content** | Button visible, action blocked | Button visible, action blocked | Button visible, action allowed |
-| **Vote in Poll** | Button visible, action blocked | Button hidden, join required | Button visible, action allowed |
-</Accordion>
-
-<Accordion title="User Profile Actions" icon="user">
-| Action | Visitor | Signed-In User |
-|--------|---------|----------------|
-| **React to Post** | Button hidden | Button visible, action allowed |
-| **Comment on Post** | Button visible, action blocked | Button visible, action allowed |
-| **Reply to Comment** | Button visible, action blocked | Button visible, action allowed |
-| **Report Post** | Button visible, action blocked | Button visible, action allowed |
-| **Follow User** | Button visible, action blocked | Button visible, action allowed |
-| **Block User** | Button visible, action blocked | Button visible, action allowed |
-</Accordion>
-
-<Accordion title="Story & Clip Actions" icon="photo-film">
-| Action | Visitor | Signed-In User |
-|--------|---------|----------------|
-| **React to Story** | Button visible, action blocked | Button visible, action allowed |
-| **React to Clip** | Button visible, action blocked | Button visible, action allowed |
-| **Comment on Clip** | Button visible, action blocked | Button visible, action allowed |
-</Accordion>
-
-<Accordion title="Livestream Actions" icon="video">
-| Action | Visitor | Signed-In User |
-|--------|---------|----------------|
-| **Send Message** | Input visible, action blocked | Input visible, action allowed |
-| **React to Message** | Button visible, action blocked | Button visible, action allowed |
-| **Report Message** | Button visible, action blocked | Button visible, action allowed |
-</Accordion>
-</AccordionGroup>
-
-### Customizing Visitor Behavior
-
-Override default behaviors to match your app's UX:
-
-```typescript
-// Example: Custom visitor action handling
-
- <AmityUIKitProvider
-  apiKey="API_KEY"
-  apiRegion="API_REGION"
-  userId="userId"
-  displayName="displayName"
-  configs={config}
-  pageBehavior={{
-    AmityGlobalBehavior: {
-        handleGuestUserAction: () => {
-            // Overridable for custom behavior
-        },
-        handleNonMemberAction: () => {
-            // Overridable for custom behavior
-        },
-        handleNonFollowerAction: () => {
-            // Overridable for custom behavior
-        },
-    }
-  }}
->
- <UikitComponent>
-</AmityUIKitProvider>
-```
+<Card title="UIKit: Usage Limit Page & Behavior Overrides" icon="mobile-screen" href="/uikit/getting-started/visitor-access">
+UIKit subscribes to this event automatically and shows a full-screen `VisitorUsageLimitPage`. See the UIKit Visitor Access guide for the error page, `AmityGlobalBehavior` overrides, and per-platform availability.
+</Card>
 
 ## Data Management & Lifecycle
 
@@ -1186,6 +1048,17 @@ const getContextualMessage = (action: string) => {
 4. For clips feed: verify `can_view_tab` configuration
 5. Clear app cache and restart
 6. Check for custom navigation overrides
+</Accordion>
+
+<Accordion title="Usage limit error page not showing (or showing when it shouldn't)">
+**Symptoms**: Visitor exceeds quota but no error page appears, or signed-in users see the error page unexpectedly
+
+**Solutions**:
+1. Verify UIKit version is **4.17.0+ (Web), 4.18.0+ (Android), 4.22.0+ (iOS)** — older UIKit versions do not have the usage limit page
+2. Confirm the user type is `VISITOR` or `BOT` — signed-in users never trigger this flow
+3. If using a custom `handleVisitorUsageLimitReached` override, ensure it is correctly wired in `AmityGlobalBehavior`
+4. Check that your override is not swallowing the event silently
+5. If the error page persists after sign-in: ensure you are calling `registerDevice()` with the signed-in `userId` — this re-initializes the SDK session and resets the state
 </Accordion>
 </AccordionGroup>
 
