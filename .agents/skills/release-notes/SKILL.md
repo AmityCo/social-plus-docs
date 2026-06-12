@@ -186,15 +186,20 @@ Check that the new entries are valid MDX and follow the established patterns.
    - **🐞 Bug Fixes**: corrections to *incorrect or broken* behavior — crashes, wrong results, leaks, loops, regressions. Phrase starting with "Fixed…" and describe what was wrong, not the implementation detail.
    - **Both in one release**: keep them in separate sections (Improvements above Bug Fixes). A release commonly has both; don't force everything into one bucket. If a single change both fixes a defect *and* improves behavior, file it under Bug Fixes (the defect is the headline).
    - **Tag implication**: a release with only these two sections (no New Features) takes `["Improvements"]`; see Rule 2.
-8. **API Reference link (Android SDK only)**: The CI/CD pipeline publishes a Dokka API reference for every Android SDK release at `https://android-sdk.docs.amity.co/<VERSION>/`. Add it as a **compact, title-only horizontal `<Card>`** at the **very bottom** of each `<Update>` entry, *after* the `## 🧩 Compatibility` `</AccordionGroup>`. The API reference is *not* compatibility info, so it must live outside that accordion group. Keep the card self-closing with no body text so it renders as a single row. Substitute the exact release version into both the title and the `href`:
+8. **API Reference link (Android SDK & iOS SDK)**: The CI/CD pipeline publishes a generated API reference for every Android SDK and iOS SDK release. Add it as a **compact, title-only horizontal `<Card>`** at the **very bottom** of each `<Update>` entry, *after* the `## 🧩 Compatibility` `</AccordionGroup>`. The API reference is *not* compatibility info, so it must live outside that accordion group. Keep the card self-closing with no body text so it renders as a single row. Substitute the exact release version into both the title and the `href`:
 
+   **Android SDK** (Dokka) — applies to versions **7.6.0 and newer**:
    ```mdx
    <Card title="📘 API Reference — <VERSION>" icon="book-open" href="https://android-sdk.docs.amity.co/<VERSION>/" horizontal />
    ```
 
-   - **Scope**: Android SDK changelog only. Do **not** add this to Android UIKit or any other platform — they have no published doc-link pattern yet. Other platforms can be added once their link pattern exists.
-   - Applies to versions **7.6.0 and newer** (docs are not published for older versions).
-   - When writing a new Android SDK entry, always include this card with the new version's link.
+   **iOS SDK** (DocC) — applies to versions **8.0.0 and newer** (do **not** add to v7 or older — docs are not published for those):
+   ```mdx
+   <Card title="📘 API Reference — <VERSION>" icon="book-open" href="https://ios-sdk.docs.amity.co/<VERSION>/documentation/amitysdk/" horizontal />
+   ```
+
+   - **Scope**: Android SDK and iOS SDK changelogs only. Do **not** add this to any UIKit changelog or other platform — they have no published doc-link pattern yet. Other platforms can be added once their link pattern exists.
+   - When writing a new Android SDK or iOS SDK entry, always include this card with the new version's link (respecting the per-platform minimum version above).
 
 ### Writing Quality Guidelines
 
