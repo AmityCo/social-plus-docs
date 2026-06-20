@@ -39,6 +39,8 @@ import com.amity.socialcloud.sdk.api.social.post.AmityPostRepository
 import com.amity.socialcloud.sdk.api.social.story.AmityStoryRepository
 import com.amity.socialcloud.sdk.api.social.story.AmityStorySortOption
 import com.amity.socialcloud.sdk.api.social.storytarget.AmityGlobalStoryTargetsQueryOption
+import com.amity.socialcloud.sdk.api.social.event.query.AmityEventOrderOption
+import com.amity.socialcloud.sdk.api.social.event.query.AmityEventSortOption
 import com.amity.socialcloud.sdk.api.social.community.AmityCommunityRepository
 import com.amity.socialcloud.sdk.api.social.community.query.AmityCommunitySortOption
 import com.amity.socialcloud.sdk.api.social.category.query.AmityCommunityCategorySortOption
@@ -65,6 +67,12 @@ import com.amity.socialcloud.sdk.model.social.community.AmityCommunityStorySetti
 import com.amity.socialcloud.sdk.model.social.community.AmityJoinResult
 import com.amity.socialcloud.sdk.model.social.community.AmityJoinRequest
 import com.amity.socialcloud.sdk.model.social.community.AmityJoinRequestStatus
+import com.amity.socialcloud.sdk.model.social.event.AmityEvent
+import com.amity.socialcloud.sdk.model.social.event.AmityEventOriginType
+import com.amity.socialcloud.sdk.model.social.event.AmityEventResponse
+import com.amity.socialcloud.sdk.model.social.event.AmityEventResponseStatus
+import com.amity.socialcloud.sdk.model.social.event.AmityEventStatus
+import com.amity.socialcloud.sdk.model.social.event.AmityEventType
 import com.amity.socialcloud.sdk.model.social.category.AmityCommunityCategory
 import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMember
 import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMembership
@@ -260,6 +268,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_stories", [])
         + pages_data.get("audited_discovery_search", [])
         + pages_data.get("audited_notifications", [])
+        + pages_data.get("audited_events", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
