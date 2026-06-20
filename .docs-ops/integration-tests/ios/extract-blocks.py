@@ -52,6 +52,8 @@ var token: AmityNotificationToken? = nil
 let initialAccessToken: String = ""
 let imageData = Data()
 let channelId: String = ""
+let signature: String = ""
+let expiresAt: Date? = Date()
 let channelMembership = AmityChannelMembership(channelId: "")
 let membershipParticipation = AmityChannelMembership(channelId: "")
 
@@ -78,6 +80,7 @@ func showRetryOption(_ msg: String) {}
 func updateUIForSyncState(_ state: Any) {}
 func displayUserList(_ users: Any) {}
 func fetchNewTokenFromBackend(userId: String) async throws -> String { return "" }
+func fetchAuthSignature(deviceId: String) async throws -> (String, Date?) { return (signature, expiresAt) }
 
 // ── Upload placeholder stubs (edit-post doc snippets) ────────────────────────
 let yourFile = AmityUploadableFile(fileData: Data(), fileName: nil)

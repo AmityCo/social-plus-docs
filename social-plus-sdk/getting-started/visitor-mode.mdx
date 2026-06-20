@@ -133,7 +133,7 @@ import { Client } from '@amityco/ts-sdk';
 
 const client = Client.createClient('your-api-key', 'sg');
 
-await Client.loginAsBot();
+await Client.loginAsBot({ sessionHandler });
 ```
 
 **Capabilities:**
@@ -190,7 +190,7 @@ Log.d("Visitor", "Device ID: $deviceId")
 ```typescript TypeScript
 
 const client = Client.createClient('your-api-key', 'sg');
-const deviceId = client.getVisitorDeviceId();
+const deviceId = await client.getVisitorDeviceId();
 
 console.log('Device ID:', deviceId);
 ```
@@ -212,7 +212,7 @@ Task { @MainActor in
         try await client.loginAsVisitor(
             authSignature: nil,
             authSignatureExpiresAt: nil,
-            sessionHandler: visitorSessionHandler
+            sessionHandler: sessionHandler
         )
         print("Visitor login successful")
     } catch {
@@ -446,7 +446,7 @@ node server.js
 ### Secure Visitor Login
 
 Use auth signatures for production visitor sessions:
-Obtain authSignature via the API implemented in the previous step, and provide the corresponding values to loginAsVisitory() function.
+Obtain `authSignature` via the API implemented in the previous step, and provide the corresponding values to the `loginAsVisitor()` function.
 
 <CodeGroup>
 ```swift iOS
@@ -462,7 +462,7 @@ Task { @MainActor in
         try await client.loginAsVisitor(
             authSignature: signature,
             authSignatureExpiresAt: expiresAt,
-            sessionHandler: visitorSessionHandler
+            sessionHandler: sessionHandler
         )
         print("Secure visitor login successful")
     } catch {
@@ -476,14 +476,9 @@ val deviceId = AmityCoreClient.getVisitorDeviceId()
 
 // Request auth signature from your backend
 fetchAuthSignature(deviceId) { signature, expiresAt ->
-    AmityCoreClient.loginAsVisitor(object : SessionHandler {
-                override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-                    renewal.renew()
-                }
-            })
+    AmityCoreClient.loginAsVisitor(sessionHandler)
         .authSignature(signature)
         .authSignatureExpiresAt(expiresAt)
-        .sessionHandler(visitorSessionHandler)
         .build()
         .submit()
         .doOnComplete {
@@ -498,18 +493,18 @@ fetchAuthSignature(deviceId) { signature, expiresAt ->
 
 ```typescript TypeScript
 try {
-    const deviceId = client.getVisitorDeviceId();
+    const deviceId = await client.getVisitorDeviceId();
     
     // Request auth signature from your backend
     const { authSignature, authSignatureExpiresAt } = 
         await fetchAuthSignature(deviceId);
     
     // Login with secure mode
-    await Client.loginAsVisitor(
+    await Client.loginAsVisitor({
         authSignature,
         authSignatureExpiresAt,
-        visitorSessionHandler
-    );
+        sessionHandler,
+    });
     console.log('Secure visitor login successful');
 } catch (error) {
     console.error('Secure visitor login failed:', error);
@@ -524,19 +519,19 @@ Implement session handlers to automatically refresh auth signatures:
 <Tabs>
 <Tab title="iOS">
 ```swift
-class VisitorSessionHandler: AmitySessionHandler {
+class VisitorSessionHandler: SessionHandler {
     func sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
         let deviceId = client.getVisitorDeviceId()
         
-        // Fetch new auth signature from your backend
-        AuthService.shared.fetchVisitorAuthSignature(deviceId: deviceId) { result in
-            switch result {
-            case .success(let authData):
+        Task {
+            do {
+                // Fetch new auth signature from your backend
+                let (signature, expiresAt) = try await fetchAuthSignature(deviceId: deviceId)
                 renewal.renewWithAuthSignature(
-                    authSignature: authData.signature,
-                    authSignatureExpiresAt: authData.expiresAt
+                    authSignature: signature,
+                    authSignatureExpiresAt: expiresAt
                 )
-            case .failure(let error):
+            } catch {
                 print("Failed to refresh visitor token: \(error)")
                 renewal.unableToRetrieveAuthSignature()
             }
@@ -568,7 +563,7 @@ class VisitorSessionHandler : SessionHandler {
                     authData.expiresAt
                 )
             } else {
-                renewal.unableToRetrieveAuthSignature()
+                renewal.unableToRetrieveAuthToken()
             }
         }
     }
@@ -576,11 +571,7 @@ class VisitorSessionHandler : SessionHandler {
 
 // Use during visitor login
 val sessionHandler = VisitorSessionHandler()
-AmityCoreClient.loginAsVisitor(object : SessionHandler {
-        override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            renewal.renew()
-        }
-    })
+AmityCoreClient.loginAsVisitor(sessionHandler)
     .authSignature(signature)
     .authSignatureExpiresAt(expiresAt)
     .build()
@@ -593,7 +584,7 @@ AmityCoreClient.loginAsVisitor(object : SessionHandler {
 const createVisitorSessionHandler = (): Amity.SessionHandler => ({
     sessionWillRenewAccessToken: async (renewal: Amity.AccessTokenRenewal) => {
         try {
-            const deviceId = client.getVisitorDeviceId();
+            const deviceId = await client.getVisitorDeviceId();
             
             // Fetch new auth signature from your backend
             const { authSignature, authSignatureExpiresAt } = 
@@ -797,6 +788,7 @@ UIKit provides default behaviors for visitor interaction attempts:
 
 <Tabs>
 <Tab title="iOS">
+{/* doc-as-test: skip (UIKit behavior customization example; UIKit is outside the SDK-first audit scope) */}
 ```swift
 // Set behavior
 AmityUIKit4Manager.behavior.globalBehavior = MyGlobalBehavior()
@@ -821,6 +813,7 @@ class MyGlobalBehavior: AmityGlobalBehavior {
 </Tab>
 
 <Tab title="Android">
+{/* doc-as-test: skip (UIKit behavior customization example; UIKit is outside the SDK-first audit scope) */}
 ```kotlin
 AmityUIKit4Manager.behavior.globalBehavior = object: AmityGlobalBehavior() {
     override fun handleVisitorUserAction() {
@@ -903,6 +896,7 @@ UIKit manages action button visibility based on user type and permissions:
 
 Override default behaviors to match your app's UX:
 
+{/* doc-as-test: skip (UIKit JSX customization example; UIKit is outside the SDK-first audit scope) */}
 ```typescript
 // Example: Custom visitor action handling
 
@@ -1034,14 +1028,14 @@ To prevent accumulation of transient visitor data, social.plus automatically cle
 
 ```typescript
 // ✅ Production: Secure visitor mode with auth signatures
-await client.loginAsVisitor(
+await Client.loginAsVisitor({
   authSignature,        // Generated by your backend
   authSignatureExpiresAt, // With proper expiration
-  sessionHandler        // With token renewal logic
-);
+  sessionHandler,       // With token renewal logic
+});
 
 // ❌ Development only: Simple visitor mode
-await client.loginAsVisitor(); // No auth signature
+await Client.loginAsVisitor({ sessionHandler }); // No auth signature
 ```
 
 **Why Secure Mode?**
@@ -1098,7 +1092,7 @@ await client.loginAsVisitor(); // No auth signature
 ```typescript
 // Example: Strategic upgrade prompts
 const handleVisitorAction = (action: string) => {
-  const userType = client.getCurrentUserType();
+  const userType = Client.getCurrentUserType();
   
   if (userType === UserTypeEnum.VISITOR) {
     showUpgradePrompt({
@@ -1157,7 +1151,7 @@ const getContextualMessage = (action: string) => {
 **Symptoms**: Visitors can perform restricted actions, permission errors not shown
 
 **Solutions**:
-1. Verify user type detection: `client.getCurrentUserType()`
+1. Verify user type detection: `Client.getCurrentUserType()`
 2. Check UIKit version supports visitor mode restrictions
 3. Ensure server-side permissions are properly configured
 4. Update to latest SDK version with visitor mode support

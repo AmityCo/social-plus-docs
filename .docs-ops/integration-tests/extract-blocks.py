@@ -40,7 +40,8 @@ SKIP_MARKER_RE = re.compile(
 def resolve_pages(pages_data):
     paths = []
     all_entries = (
-        pages_data.get("chat_track", [])
+        pages_data.get("audited_getting_started", [])
+        + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
     )
@@ -58,7 +59,13 @@ def resolve_pages(pages_data):
                 paths.append(entry)
             else:
                 print(f"  WARN: page not found: {entry}", file=sys.stderr)
-    return paths
+    seen = set()
+    deduped = []
+    for p in paths:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+    return deduped
 
 
 def extract_blocks(page_path):
