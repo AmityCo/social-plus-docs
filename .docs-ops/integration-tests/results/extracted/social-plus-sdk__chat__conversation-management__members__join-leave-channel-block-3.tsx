@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/chat/conversation-management/members/join-leave-channel.mdx:224-237
+// source: social-plus-sdk/chat/conversation-management/members/join-leave-channel.mdx:222-235
 
     import { ChannelRepository } from '@amityco/ts-sdk';
     import { FC, useEffect, useState } from 'react';

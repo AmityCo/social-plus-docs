@@ -21,6 +21,8 @@ This directory is the coordination surface between AI agents (Claude, Copilot CL
     task.schema.json         ← JSON schema for a task
     result.schema.json       ← JSON schema for a task result
     score.schema.json        ← JSON schema for a per-page rubric score
+  sdk-audit/
+    tracker.csv              ← generated SDK page list plus human review ledger
   tasks/
     pending/                 ← unclaimed task files
     in_progress/             ← claimed (filename includes agent_id + claimed_at)
@@ -67,3 +69,9 @@ pre-commit install --hook-type pre-push
 ```
 
 After that, every `git push` is compared against `origin/main` and blocked if it introduces new (file, API-ref) pairs to the drift report.
+
+For SDK-first page-by-page accuracy work, use `sdk-audit/tracker.csv` as the review ledger. Regenerate it with:
+
+```bash
+python3 .docs-ops/sdk-audit/build-tracker.py
+```

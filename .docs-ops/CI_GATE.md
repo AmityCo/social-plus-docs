@@ -95,10 +95,10 @@ Both HTML comment (`<!-- doc-as-test: skip -->`) and JSX comment (`{/* doc-as-te
 
 ### Scope
 
-- **TypeScript** — 28 pages (cohort-balanced selection covering chat + social hot paths). Defined in `.docs-ops/integration-tests/pages.json`.
-- **Flutter/Dart** — 29 pages (same 28 + `flutter-quick-start.mdx`). Defined in `.docs-ops/integration-tests/flutter/pages.json`.
-- **Android/Kotlin** — 29 pages (same coverage as Flutter). Defined in `.docs-ops/integration-tests/android/pages.json`.
-- **iOS** — 29 pages (same coverage as Android). Defined in `.docs-ops/integration-tests/ios/pages.json`. Requires macOS (`swiftc`).
+- **TypeScript** — cohort-balanced selection covering chat + social hot paths. Defined in `.docs-ops/integration-tests/pages.json`.
+- **Flutter/Dart** — same SDK content coverage plus Flutter quick start. Defined in `.docs-ops/integration-tests/flutter/pages.json`.
+- **Android/Kotlin** — same SDK content coverage plus Android quick start. Defined in `.docs-ops/integration-tests/android/pages.json`.
+- **iOS** — same SDK content coverage plus iOS quick start. Defined in `.docs-ops/integration-tests/ios/pages.json`. Requires macOS (`swiftc`).
 - **Candidate only** — all checks run against the current working tree, not a baseline comparison.
 
 ### Running locally
@@ -192,6 +192,14 @@ python3 .docs-ops/ci/check-drift.py --base main  # against local main
 python3 .docs-ops/ci/check-drift.py --quiet      # one-line summary only
 python3 .docs-ops/ci/check-drift.py --json-out /tmp/delta.json  # for tooling
 ```
+
+For an SDK accuracy proof run, require every doc-as-test runner to execute:
+
+```bash
+python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-test all
+```
+
+The normal gate treats missing platform toolchains as unavailable so everyday docs work can proceed. The proof run is stricter: if TypeScript, Flutter, Android, or iOS doc-as-test is unavailable or crashes, the command fails because the docs accuracy evidence is incomplete.
 
 **Bypass** (sparingly — only when you have a legitimate exception and have documented why):
 ```bash

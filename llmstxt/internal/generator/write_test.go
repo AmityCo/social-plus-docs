@@ -100,7 +100,7 @@ func TestGenerate_WritesFiles(t *testing.T) {
 	}
 }
 
-func TestGenerate_MissingPageIsSkipped(t *testing.T) {
+func TestGenerate_MissingPageFails(t *testing.T) {
 	docsRoot := t.TempDir()
 	outDir := t.TempDir()
 	sections := []config.Section{
@@ -111,9 +111,45 @@ func TestGenerate_MissingPageIsSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Should not return an error; missing page is warned and skipped.
-	if err := generator.Generate(cfg, false); err != nil {
-		t.Fatalf("expected no error for missing page, got: %v", err)
+	err = generator.Generate(cfg, false)
+	if err == nil {
+		t.Fatal("expected missing page error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nonexistent.mdx") {
+		t.Fatalf("expected missing path in error, got: %v", err)
+	}
+}
+
+func TestRender_StripsTrailingWhitespace(t *testing.T) {
+	docsRoot := t.TempDir()
+	pageDir := filepath.Join(docsRoot, "sdk")
+	if err := os.MkdirAll(pageDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(pageDir, "trailing.mdx")
+	if err := os.WriteFile(pagePath, []byte("---\ntitle: Trailing\n---\n\nLine with spaces   \nLine with tab\t\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := t.TempDir()
+	cfg, err := config.New(
+		"https://docs.example.com",
+		"Test SDK",
+		"desc",
+		docsRoot,
+		outDir,
+		[]config.Section{{Title: "SDK", Pages: []config.Page{{Path: "sdk/trailing.mdx"}}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, llmsFullTxt := generator.Render(cfg, false)
+	if strings.Contains(llmsFullTxt, " \n") || strings.Contains(llmsFullTxt, "\t\n") {
+		t.Fatalf("expected no trailing whitespace before newlines, got:\n%q", llmsFullTxt)
+	}
+	if !strings.Contains(llmsFullTxt, "Line with spaces\nLine with tab\n") {
+		t.Fatalf("expected body text with whitespace trimmed, got:\n%q", llmsFullTxt)
 	}
 }
 

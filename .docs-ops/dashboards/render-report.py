@@ -20,6 +20,7 @@ SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SNAPSHOTS_DIR = SCRIPT_DIR / "snapshots"
 REPORT_PATH = SCRIPT_DIR / "latest-report.md"
+STRICT_PROOF_PATH = SCRIPT_DIR / "strict-proof-latest.json"
 
 PLATFORMS = ["typescript", "ios", "android", "flutter"]
 PLATFORM_LABELS = {
@@ -38,6 +39,12 @@ def load_snapshots() -> tuple[dict, dict | None]:
     latest = json.loads(snaps[-1].read_text(encoding="utf-8"))
     prev = json.loads(snaps[-2].read_text(encoding="utf-8")) if len(snaps) >= 2 else None
     return latest, prev
+
+
+def load_strict_proof() -> dict | None:
+    if not STRICT_PROOF_PATH.exists():
+        return None
+    return json.loads(STRICT_PROOF_PATH.read_text(encoding="utf-8"))
 
 
 def pct(score: float | None) -> str:
@@ -88,7 +95,22 @@ def sparkline(values: list[int | float]) -> str:
     return "".join(blocks[min(8, int((v - mn) / span * 8))] for v in values)
 
 
-def render(latest: dict, prev: dict | None, all_snaps: list[dict]) -> str:
+def proof_platform_row(label: str, proof_key: str, proof: dict) -> str:
+    dat = proof.get(proof_key, {})
+    stats = dat.get("stats", {})
+    warnings = stats.get("total_warnings", 0) or stats.get("blocks_warned", 0)
+    available = "yes" if dat.get("available") else "no"
+    crashed = "yes" if dat.get("crashed") else "no"
+    return (
+        f"| {label} | {available} | {crashed} "
+        f"| {stats.get('blocks_passed', 0)} "
+        f"| {stats.get('blocks_skipped', 0)} "
+        f"| {stats.get('blocks_failed', 0)} "
+        f"| {warnings} |"
+    )
+
+
+def render(latest: dict, prev: dict | None, all_snaps: list[dict], strict_proof: dict | None = None) -> str:
     lines: list[str] = []
 
     prev_date = prev["snapshot_date"] if prev else None
@@ -121,6 +143,31 @@ def render(latest: dict, prev: dict | None, all_snaps: list[dict]) -> str:
 
     healthy_badge = "✅ All systems healthy" if s["healthy"] else "⚠️  Issues detected — see Alerts below"
     lines.append(f"**Status:** {healthy_badge}\n")
+
+    # ── Strict SDK proof ──────────────────────────────────────────────────────
+    if strict_proof:
+        lines.append("## Strict SDK Proof\n")
+        required = ", ".join(strict_proof.get("required_doc_as_test", [])) or "none"
+        runner_failures = strict_proof.get("required_runner_failures", [])
+        drift = strict_proof.get("drift_delta", {})
+        mdx = strict_proof.get("mdx_structure", {})
+        proof_status = "PASS" if not runner_failures and not drift.get("regressed") and not mdx.get("blocking") else "FAIL"
+
+        lines.append("**Command:** `python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-test all`")
+        lines.append(f"**Status:** {proof_status}")
+        lines.append(f"**Required runners:** {required}")
+        lines.append(f"**Required runner failures:** {len(runner_failures)}")
+        lines.append(f"**Regex drift delta:** {drift.get('delta_total', 0)}")
+        lines.append(f"**MDX structure:** {mdx.get('files_scanned', 0)} files scanned, {len(mdx.get('violations', []))} violations\n")
+
+        lines.append("| Platform | Available | Crashed | Pass | Skip | Fail | Warn |")
+        lines.append("|---|---|---|---|---|---|---|")
+        lines.append(proof_platform_row("TypeScript", "doc_as_test_ts", strict_proof))
+        lines.append(proof_platform_row("Flutter", "doc_as_test_flutter", strict_proof))
+        lines.append(proof_platform_row("Android", "doc_as_test_android", strict_proof))
+        lines.append(proof_platform_row("iOS", "doc_as_test_ios", strict_proof))
+        lines.append("")
+        lines.append("_Interpretation: this proves the selected SDK snippet set and all platform runners were available. It does not replace the page-by-page SDK audit tracker._\n")
 
     # ── Per-platform regex drift ───────────────────────────────────────────────
     lines.append("## Per-platform (regex drift)\n")
@@ -170,10 +217,10 @@ def render(latest: dict, prev: dict | None, all_snaps: list[dict]) -> str:
 
         lines.append("| Date | Drift | Failures | Eastern health | Western health |")
         lines.append("|---|---|---|---|---|")
-        for s in recent:
-            sm = s["summary"]
+        for snap in recent:
+            sm = snap["summary"]
             lines.append(
-                f"| {s['snapshot_date']} "
+                f"| {snap['snapshot_date']} "
                 f"| {sm['total_drift_issues']} "
                 f"| {sm['total_doc_as_test_failures']} "
                 f"| {pct(sm['eastern_health_score'])} "
@@ -222,8 +269,9 @@ def render(latest: dict, prev: dict | None, all_snaps: list[dict]) -> str:
 def main() -> int:
     latest, prev = load_snapshots()
     all_snaps = [json.loads(p.read_text()) for p in sorted(SNAPSHOTS_DIR.glob("*.json"))]
+    strict_proof = load_strict_proof()
 
-    report = render(latest, prev, all_snaps)
+    report = render(latest, prev, all_snaps, strict_proof)
     REPORT_PATH.write_text(report, encoding="utf-8")
     print(f"Report written → {REPORT_PATH.relative_to(REPO_ROOT)}")
     return 0

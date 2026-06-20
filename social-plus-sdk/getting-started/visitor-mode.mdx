@@ -82,11 +82,11 @@ Understanding the different user types helps you design the right access pattern
     ```typescript
     // Full authenticated user with read/write access
     import { Client } from '@amityco/ts-sdk';
-    
+
     const client = Client.createClient('apiKey', 'apiRegion');
-    
+
     // ... your app setup code
-    
+
     await Client.login({
       userId: 'user-123',
       displayName: 'John Doe',
@@ -105,9 +105,9 @@ Understanding the different user types helps you design the right access pattern
     ```typescript
     // Anonymous visitor with read-only access
     import { Client } from '@amityco/ts-sdk';
-    
+
     const client = Client.createClient('your-api-key', 'sg');
-    
+
     await Client.loginAsVisitor({
         sessionHandler,
     });
@@ -127,10 +127,10 @@ Understanding the different user types helps you design the right access pattern
     ```typescript
     // Search engine crawler with read-only access
     import { Client } from '@amityco/ts-sdk';
-    
+
     const client = Client.createClient('your-api-key', 'sg');
-    
-    await Client.loginAsBot();
+
+    await Client.loginAsBot({ sessionHandler });
     ```
 
     **Capabilities:**
@@ -190,7 +190,7 @@ Log.d("Visitor", "Device ID: $deviceId")
 ```typescript TypeScript
 
 const client = Client.createClient('your-api-key', 'sg');
-const deviceId = client.getVisitorDeviceId();
+const deviceId = await client.getVisitorDeviceId();
 
 console.log('Device ID:', deviceId);
 ```
@@ -214,7 +214,7 @@ Task { @MainActor in
         try await client.loginAsVisitor(
             authSignature: nil,
             authSignatureExpiresAt: nil,
-            sessionHandler: visitorSessionHandler
+            sessionHandler: sessionHandler
         )
         print("Visitor login successful")
     } catch {
@@ -225,11 +225,7 @@ Task { @MainActor in
 
 ```kotlin Android
 // Simple visitor login (development)
-AmityCoreClient.loginAsVisitor(object : SessionHandler {
-        override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-            renewal.renew()
-        }
-    })
+AmityCoreClient.loginAsVisitor(sessionHandler)
     .build()
     .submit()
     .doOnComplete {
@@ -399,17 +395,17 @@ app.use(express.json());
 app.post('/api/visitor/auth-signature', async (req, res) => {
   try {
     const { deviceId } = req.body;
-    
+
     // Set expiration (e.g., 1 hour from now)
     const authSignatureExpiresAt = new Date(Date.now() + 3600000).toISOString();
-    
+
     // Create signature using HMAC-SHA256 with your visitor secret
     const message = `deviceId=${deviceId}&authSignatureExpiresAt=${authSignatureExpiresAt}`;
     const authSignature = crypto
       .createHmac('sha256', process.env.SOCIAL_PLUS_VISITOR_APP_SECRET)
       .update(message)
       .digest('hex');
-    
+
     res.json({
       authSignature,
       authSignatureExpiresAt
@@ -453,7 +449,7 @@ node server.js
 
 ### Secure Visitor Login
 
-Use auth signatures for production visitor sessions: Obtain authSignature via the API implemented in the previous step, and provide the corresponding values to loginAsVisitory() function.
+Use auth signatures for production visitor sessions. Obtain `authSignature` via the API implemented in the previous step, and provide the corresponding values to the `loginAsVisitor()` function.
 
 <CodeGroup>
 
@@ -462,15 +458,15 @@ Task { @MainActor in
     do {
         // Get device ID
         let deviceId = client.getVisitorDeviceId()
-        
+
         // Request auth signature from your backend
         let (signature, expiresAt) = try await fetchAuthSignature(deviceId: deviceId)
-        
+
         // Login with secure mode
         try await client.loginAsVisitor(
             authSignature: signature,
             authSignatureExpiresAt: expiresAt,
-            sessionHandler: visitorSessionHandler
+            sessionHandler: sessionHandler
         )
         print("Secure visitor login successful")
     } catch {
@@ -484,14 +480,9 @@ val deviceId = AmityCoreClient.getVisitorDeviceId()
 
 // Request auth signature from your backend
 fetchAuthSignature(deviceId) { signature, expiresAt ->
-    AmityCoreClient.loginAsVisitor(object : SessionHandler {
-                override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-                    renewal.renew()
-                }
-            })
+    AmityCoreClient.loginAsVisitor(sessionHandler)
         .authSignature(signature)
         .authSignatureExpiresAt(expiresAt)
-        .sessionHandler(visitorSessionHandler)
         .build()
         .submit()
         .doOnComplete {
@@ -506,18 +497,18 @@ fetchAuthSignature(deviceId) { signature, expiresAt ->
 
 ```typescript TypeScript
 try {
-    const deviceId = client.getVisitorDeviceId();
-    
+    const deviceId = await client.getVisitorDeviceId();
+
     // Request auth signature from your backend
-    const { authSignature, authSignatureExpiresAt } = 
+    const { authSignature, authSignatureExpiresAt } =
         await fetchAuthSignature(deviceId);
-    
+
     // Login with secure mode
-    await Client.loginAsVisitor(
+    await Client.loginAsVisitor({
         authSignature,
         authSignatureExpiresAt,
-        visitorSessionHandler
-    );
+        sessionHandler,
+    });
     console.log('Secure visitor login successful');
 } catch (error) {
     console.error('Secure visitor login failed:', error);
@@ -533,26 +524,26 @@ Implement session handlers to automatically refresh auth signatures:
 <Tabs>
   <Tab title="iOS">
     ```swift
-    class VisitorSessionHandler: AmitySessionHandler {
+    class VisitorSessionHandler: SessionHandler {
         func sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
             let deviceId = client.getVisitorDeviceId()
-            
-            // Fetch new auth signature from your backend
-            AuthService.shared.fetchVisitorAuthSignature(deviceId: deviceId) { result in
-                switch result {
-                case .success(let authData):
+
+            Task {
+                do {
+                    // Fetch new auth signature from your backend
+                    let (signature, expiresAt) = try await fetchAuthSignature(deviceId: deviceId)
                     renewal.renewWithAuthSignature(
-                        authSignature: authData.signature,
-                        authSignatureExpiresAt: authData.expiresAt
+                        authSignature: signature,
+                        authSignatureExpiresAt: expiresAt
                     )
-                case .failure(let error):
+                } catch {
                     print("Failed to refresh visitor token: \(error)")
                     renewal.unableToRetrieveAuthSignature()
                 }
             }
         }
     }
-    
+
     // Use during visitor login
     let sessionHandler = VisitorSessionHandler()
     try await client.loginAsVisitor(
@@ -567,7 +558,7 @@ Implement session handlers to automatically refresh auth signatures:
     class VisitorSessionHandler : SessionHandler {
         override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
             val deviceId = AmityCoreClient.getVisitorDeviceId()
-            
+
             // Fetch new auth signature from your backend
             authRepository.fetchVisitorAuthSignature(deviceId) { authData ->
                 if (authData != null) {
@@ -576,19 +567,15 @@ Implement session handlers to automatically refresh auth signatures:
                         authData.expiresAt
                     )
                 } else {
-                    renewal.unableToRetrieveAuthSignature()
+                    renewal.unableToRetrieveAuthToken()
                 }
             }
         }
     }
-    
+
     // Use during visitor login
     val sessionHandler = VisitorSessionHandler()
-    AmityCoreClient.loginAsVisitor(object : SessionHandler {
-            override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {
-                renewal.renew()
-            }
-        })
+    AmityCoreClient.loginAsVisitor(sessionHandler)
         .authSignature(signature)
         .authSignatureExpiresAt(expiresAt)
         .build()
@@ -600,12 +587,12 @@ Implement session handlers to automatically refresh auth signatures:
     const createVisitorSessionHandler = (): Amity.SessionHandler => ({
         sessionWillRenewAccessToken: async (renewal: Amity.AccessTokenRenewal) => {
             try {
-                const deviceId = client.getVisitorDeviceId();
-                
+                const deviceId = await client.getVisitorDeviceId();
+
                 // Fetch new auth signature from your backend
-                const { authSignature, authSignatureExpiresAt } = 
+                const { authSignature, authSignatureExpiresAt } =
                     await AuthService.fetchVisitorAuthSignature(deviceId);
-                
+
                 renewal.renewWithAuthSignature({ authSignature, authSignatureExpiresAt });
             } catch (error) {
                 console.error('Failed to refresh visitor token:', error);
@@ -613,7 +600,7 @@ Implement session handlers to automatically refresh auth signatures:
             }
         }
     });
-    
+
     // Use during visitor login
     await Client.loginAsVisitor({
         authSignature,
@@ -747,20 +734,9 @@ Visitor and bot users share a **daily read request quota**. Once the quota is ex
 
 ### SDK Event Subscription
 
-The SDK emits a `visitorUsageLimitReached` event the first time error `400323` is detected per session. Subsequent failures within a 2-second window are deduplicated to avoid triggering the handler on simultaneous parallel requests.
+The Android and TypeScript SDKs emit a visitor usage-limit event the first time error `400323` is detected per session. Subsequent failures within a 2-second window are deduplicated to avoid triggering the handler on simultaneous parallel requests.
 
 <Tabs>
-  <Tab title="iOS">
-    ```swift
-    // Subscribe to usage limit events after visitor login
-    let cancellable = AmityClient.shared.getVisitorUsageLimitEvents()
-        .receive(on: DispatchQueue.main)
-        .sink { event in
-            // Navigate to sign-in or show custom error UI
-            print("Visitor usage limit reached for user: \(event.userId)")
-        }
-    ```
-  </Tab>
   <Tab title="Android">
     ```kotlin
     // Subscribe to usage limit events after visitor login
@@ -776,13 +752,13 @@ The SDK emits a `visitorUsageLimitReached` event the first time error `400323` i
   <Tab title="TypeScript">
     ```typescript
     import { onVisitorUsageLimitReached } from '@amityco/ts-sdk';
-    
+
     // Subscribe to usage limit events after visitor login
     const unsubscribe = onVisitorUsageLimitReached(() => {
         // Navigate to sign-in or show custom error UI
         console.log('Visitor usage limit reached');
     });
-    
+
     // Unsubscribe when cleaning up
     // unsubscribe();
     ```
@@ -896,14 +872,14 @@ To prevent accumulation of transient visitor data, social.plus automatically cle
 
     ```typescript
     // ✅ Production: Secure visitor mode with auth signatures
-    await client.loginAsVisitor(
+    await Client.loginAsVisitor({
       authSignature,        // Generated by your backend
       authSignatureExpiresAt, // With proper expiration
-      sessionHandler        // With token renewal logic
-    );
-    
+      sessionHandler,       // With token renewal logic
+    });
+
     // ❌ Development only: Simple visitor mode
-    await client.loginAsVisitor(); // No auth signature
+    await Client.loginAsVisitor({ sessionHandler }); // No auth signature
     ```
 
     **Why Secure Mode?**

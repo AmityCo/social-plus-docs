@@ -88,7 +88,7 @@ The `_prompt_hash` lets future runs detect if the prompt template or page conten
 ## Pilot scope
 
 10 pages, cohort-balanced:
-- 4 **Eastern** (chat-heavy): send-a-message, query-channels, query-and-filter-messages, flag-unflag-a-message
+- 4 **Eastern** (chat-heavy): send-a-message, query-channels, query-and-filter-messages, message-flagging
 - 4 **Western** (social-heavy): file, image-handling, update-user-information, query-posts
 - 2 **Shared** (universal): authentication, get-user-information
 

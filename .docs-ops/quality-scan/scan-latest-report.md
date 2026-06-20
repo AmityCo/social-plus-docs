@@ -49,4 +49,3 @@ _LLM-free structural proxies for the 3 weak rubric dimensions. Scanned 166 pages
 - `social-plus-sdk/core-concepts/foundation/logging.mdx` — iOS 3, Android 3, TS 2, **Flutter 0**
 
 ## Marketing-register openers (top 25)
-

@@ -520,7 +520,15 @@ def compute_delta(baseline: dict | None, candidate: dict | None, base_ref: str) 
     }
 
 
-def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None = None, an_dat: dict | None = None, ios_dat: dict | None = None, mdx_chk: dict | None = None) -> None:
+def print_summary(
+    delta: dict,
+    ts_dat: dict | None = None,
+    fl_dat: dict | None = None,
+    an_dat: dict | None = None,
+    ios_dat: dict | None = None,
+    mdx_chk: dict | None = None,
+    required_runner_failures: list[str] | None = None,
+) -> None:
     bar = "═" * 60
     print(bar)
     print("  Docs-Ops Drift Check")
@@ -626,7 +634,8 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
     an_blocking = an_dat and an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
     ios_blocking = ios_dat and ios_dat.get("available") and not ios_dat.get("crashed") and len(ios_dat.get("blocking_failures", [])) > 0
     mdx_blocking = mdx_chk and mdx_chk["blocking"]
-    if regressed or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking:
+    required_runner_blocking = bool(required_runner_failures)
+    if regressed or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking or required_runner_blocking:
         if regressed:
             print("  FAIL — fix new drift above, or run the validator locally:")
             print(f"           python3 {TS_VALIDATOR}")
@@ -641,9 +650,40 @@ def print_summary(delta: dict, ts_dat: dict | None = None, fl_dat: dict | None =
             print("  FAIL — fix iOS doc-as-test compile errors above.")
         if mdx_blocking:
             print("  FAIL — fix MDX structure violations above (<!-- --> → {/* */} inside JSX).")
+        if required_runner_blocking:
+            print("  FAIL — required doc-as-test runner(s) did not complete:")
+            for failure in required_runner_failures:
+                print(f"           - {failure}")
     else:
         print("  PASS — okay to push.")
     print(bar)
+
+
+def parse_required_doc_as_test(value: str) -> set[str]:
+    if not value:
+        return set()
+    allowed = {"ts", "flutter", "android", "ios"}
+    requested = {p.strip().lower() for p in value.split(",") if p.strip()}
+    if "all" in requested:
+        requested.remove("all")
+        requested |= allowed
+    invalid = requested - allowed
+    if invalid:
+        raise ValueError(f"unknown doc-as-test platform(s): {', '.join(sorted(invalid))}")
+    return requested
+
+
+def required_doc_as_test_failures(required: set[str], checks: list[tuple[str, str, dict]]) -> list[str]:
+    failures = []
+    for key, label, dat in checks:
+        if key not in required:
+            continue
+        if not dat.get("available"):
+            reason = dat.get("crash_reason") or "not available"
+            failures.append(f"{label} unavailable ({reason})")
+        elif dat.get("crashed"):
+            failures.append(f"{label} crashed ({dat.get('crash_reason', 'unknown reason')})")
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -652,7 +692,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json-out", help="Write the delta as JSON to this path")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip `git fetch` before resolving base ref")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-pair lists; print summary only")
+    parser.add_argument(
+        "--require-doc-as-test",
+        default="",
+        help="Comma-separated platforms that must run successfully: ts,flutter,android,ios,all",
+    )
     args = parser.parse_args(argv)
+
+    try:
+        required_doc_as_test = parse_required_doc_as_test(args.require_doc_as_test)
+    except ValueError as e:
+        parser.error(str(e))
 
     try:
         base_sha = resolve_base(args.base, args.skip_fetch)
@@ -682,13 +732,19 @@ def main(argv: list[str] | None = None) -> int:
     an_dat = run_android_doc_as_test_check()
     ios_dat = run_ios_doc_as_test_check()
     mdx_chk = run_mdx_structure_check()
+    required_runner_failures = required_doc_as_test_failures(required_doc_as_test, [
+        ("ts", "TS doc-as-test", ts_dat),
+        ("flutter", "Flutter doc-as-test", fl_dat),
+        ("android", "Android doc-as-test", an_dat),
+        ("ios", "iOS doc-as-test", ios_dat),
+    ])
 
     ts_blocking = ts_dat.get("available") and not ts_dat.get("crashed") and len(ts_dat.get("blocking_failures", [])) > 0
     fl_blocking = fl_dat.get("available") and not fl_dat.get("crashed") and len(fl_dat.get("blocking_failures", [])) > 0
     an_blocking = an_dat.get("available") and not an_dat.get("crashed") and len(an_dat.get("blocking_failures", [])) > 0
     ios_blocking = ios_dat.get("available") and not ios_dat.get("crashed") and len(ios_dat.get("blocking_failures", [])) > 0
     mdx_blocking = mdx_chk["blocking"]
-    overall_fail = delta["regressed"] or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking
+    overall_fail = delta["regressed"] or ts_blocking or fl_blocking or an_blocking or ios_blocking or mdx_blocking or bool(required_runner_failures)
 
     if args.quiet:
         sign = "+" if delta["delta_total"] > 0 else ""
@@ -714,15 +770,16 @@ def main(argv: list[str] | None = None) -> int:
               f"an_blocking={an_b} "
               f"ios_passed={ios_s.get('blocks_passed', 0)} ios_skipped={ios_s.get('blocks_skipped', 0)} "
               f"ios_blocking={ios_b} "
+              f"required_runner_failures={len(required_runner_failures)} "
               f"mdx_html_comments_in_jsx={len(mdx_chk['violations'])} mdx_blocking={int(mdx_blocking)} "
               f"verdict={verdict}")
     else:
-        print_summary(delta, ts_dat, fl_dat, an_dat, ios_dat, mdx_chk)
+        print_summary(delta, ts_dat, fl_dat, an_dat, ios_dat, mdx_chk, required_runner_failures)
 
     if args.json_out:
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat, "doc_as_test_android": an_dat, "doc_as_test_ios": ios_dat, "mdx_structure": mdx_chk}
+        combined = {"drift_delta": delta, "doc_as_test_ts": ts_dat, "doc_as_test_flutter": fl_dat, "doc_as_test_android": an_dat, "doc_as_test_ios": ios_dat, "mdx_structure": mdx_chk, "required_doc_as_test": sorted(required_doc_as_test), "required_runner_failures": required_runner_failures}
         out_path.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
 
     return 1 if overall_fail else 0

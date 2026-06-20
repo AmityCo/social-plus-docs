@@ -34,6 +34,7 @@ import com.amity.socialcloud.sdk.api.chat.AmityChatClient
 import com.amity.socialcloud.sdk.api.social.AmitySocialClient
 import com.amity.socialcloud.sdk.api.chat.channel.AmityChannelRepository
 import com.amity.socialcloud.sdk.api.chat.message.AmityMessageRepository
+import com.amity.socialcloud.sdk.api.social.post.AmityFeedRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityPostRepository
 import com.amity.socialcloud.sdk.api.core.user.AmityUserRepository
 import com.amity.socialcloud.sdk.api.core.file.AmityFileRepository
@@ -49,6 +50,7 @@ import com.amity.socialcloud.sdk.model.social.comment.AmityComment
 import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotificationSettings
 import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotificationEvent
 import com.amity.socialcloud.sdk.model.core.user.AmityUser
+import com.amity.socialcloud.sdk.model.core.user.AmityUserType
 import com.amity.socialcloud.sdk.model.social.poll.AmityPoll
 import com.amity.socialcloud.sdk.model.core.file.AmityImage
 import com.amity.socialcloud.sdk.model.core.file.AmityFile
@@ -99,7 +101,8 @@ import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import java.util.Calendar"""
+import java.util.Calendar
+import org.joda.time.DateTime"""
 
 # Stub functions for common pseudocode patterns used in doc snippets
 KOTLIN_STUBS = """\
@@ -147,7 +150,20 @@ fun authenticateToSocialPlus(userId: String = "") {}
 @Suppress("UNUSED_PARAMETER")
 fun showUnflagSuccessMessage() {}
 @Suppress("UNUSED_PARAMETER")
-fun updateMessageUI(id: String = "", isFlagged: Boolean = false) {}"""
+fun updateMessageUI(id: String = "", isFlagged: Boolean = false) {}
+val signature: String = ""
+val expiresAt: DateTime = DateTime.now()
+data class VisitorAuthData(val signature: String, val expiresAt: DateTime)
+@Suppress("UNUSED_PARAMETER")
+fun fetchAuthSignature(deviceId: String, callback: (String, DateTime) -> Unit) {
+    callback(signature, expiresAt)
+}
+object authRepository {
+    @Suppress("UNUSED_PARAMETER")
+    fun fetchVisitorAuthSignature(deviceId: String, callback: (VisitorAuthData?) -> Unit) {
+        callback(VisitorAuthData(signature, expiresAt))
+    }
+}"""
 
 KOTLIN_PARAMS = """\
     apiKey: String = "",
@@ -166,7 +182,9 @@ KOTLIN_PARAMS = """\
     channelRepository: AmityChannelRepository = AmityChatClient.newChannelRepository(),
     messageRepository: AmityMessageRepository = AmityChatClient.newMessageRepository(),
     postRepository: AmityPostRepository = AmitySocialClient.newPostRepository(),
-    sessionHandler: SessionHandler? = null,
+    sessionHandler: SessionHandler = object : SessionHandler {
+        override fun sessionWillRenewAccessToken(renewal: AccessTokenRenewal) {}
+    },
     channel: AmityChannel? = null,
     message: AmityMessage? = null,
     post: AmityPost? = null,
@@ -186,6 +204,7 @@ def resolve_pages(pages_data):
     paths = []
     all_entries = (
         pages_data.get("android_specific", [])
+        + pages_data.get("audited_getting_started", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

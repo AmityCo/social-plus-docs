@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,8 +24,12 @@ type renderedSection struct {
 }
 
 // Generate loads all pages, strips MDX, and writes llms.txt and llms-full.txt
-// to cfg.ResolvedOutputDir(). Missing pages are warned and skipped.
+// to cfg.ResolvedOutputDir().
 func Generate(cfg *config.Config, verbose bool) error {
+	if err := ValidatePages(cfg); err != nil {
+		return err
+	}
+
 	llmsTxt, llmsFullTxt := Render(cfg, verbose)
 
 	outDir := cfg.ResolvedOutputDir()
@@ -40,11 +45,41 @@ func Generate(cfg *config.Config, verbose bool) error {
 	return nil
 }
 
+// ValidatePages returns an error if any configured page path does not exist.
+func ValidatePages(cfg *config.Config) error {
+	missing := MissingPages(cfg)
+	if len(missing) == 0 {
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("llms config references missing page(s):")
+	for _, path := range missing {
+		sb.WriteString("\n  - " + path)
+	}
+	return errors.New(sb.String())
+}
+
+// MissingPages returns the configured page paths that cannot be read.
+func MissingPages(cfg *config.Config) []string {
+	docsRoot := cfg.ResolvedDocsRoot()
+	var missing []string
+	for _, sec := range cfg.Sections {
+		for _, pg := range sec.Pages {
+			fullPath := filepath.Join(docsRoot, pg.Path)
+			if _, err := os.Stat(fullPath); err != nil {
+				missing = append(missing, pg.Path)
+			}
+		}
+	}
+	return missing
+}
+
 // Render returns both output file contents as strings without writing them.
 // Used by dry-run mode and tests.
 func Render(cfg *config.Config, verbose bool) (llmsTxt, llmsFullTxt string) {
 	sections := loadSections(cfg, verbose)
-	return buildIndex(cfg, sections), buildFull(cfg, sections)
+	return trimTrailingWhitespace(buildIndex(cfg, sections)), trimTrailingWhitespace(buildFull(cfg, sections))
 }
 
 func loadSections(cfg *config.Config, verbose bool) []renderedSection {
@@ -141,6 +176,20 @@ func buildFull(cfg *config.Config, sections []renderedSection) string {
 			}
 		}
 		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func trimTrailingWhitespace(s string) string {
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for _, line := range strings.SplitAfter(s, "\n") {
+		if strings.HasSuffix(line, "\n") {
+			sb.WriteString(strings.TrimRight(strings.TrimSuffix(line, "\n"), " \t"))
+			sb.WriteString("\n")
+			continue
+		}
+		sb.WriteString(strings.TrimRight(line, " \t"))
 	}
 	return sb.String()
 }

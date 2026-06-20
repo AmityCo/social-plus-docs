@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,7 +39,23 @@ def find_jar(base_path, pattern, required=True):
         if required:
             raise FileNotFoundError(f"JAR not found matching {pattern} under {base_path}")
         return None
-    return sorted(matches)[0]
+    return sorted(matches)[-1]
+
+
+def extract_aar_classes(aar_path, label):
+    out_dir = Path(f"/tmp/{label}_extracted")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "classes.jar"
+    if out_path.exists() and out_path.stat().st_mtime >= aar_path.stat().st_mtime:
+        return out_path
+
+    with zipfile.ZipFile(aar_path) as aar:
+        try:
+            data = aar.read("classes.jar")
+        except KeyError as e:
+            raise FileNotFoundError(f"{aar_path} does not contain classes.jar") from e
+    out_path.write_bytes(data)
+    return out_path
 
 
 def build_classpath():
@@ -55,15 +72,33 @@ def build_classpath():
         GRADLE_CACHE / "io.reactivex.rxjava3/rxjava",
         "rxjava-3.1*.jar",
     )
-    rxandroid = Path("/tmp/rxandroid_extracted/classes.jar")
+    rxandroid_aar = find_jar(
+        GRADLE_CACHE / "io.reactivex.rxjava3/rxandroid",
+        "rxandroid-3.0*.aar",
+    )
+    rxandroid = extract_aar_classes(rxandroid_aar, "rxandroid")
     reactive_streams = find_jar(
         GRADLE_CACHE / "org.reactivestreams/reactive-streams",
         "reactive-streams-1.0.4.jar",
     )
-    paging_common = find_jar(
-        GRADLE_CACHE / "androidx.paging/paging-common",
-        "paging-common-3.2.1.jar",
+    paging_common_aar = find_jar(
+        GRADLE_CACHE / "androidx.paging/paging-common-android",
+        "paging-common.aar",
+        required=False,
     )
+    if paging_common_aar is not None:
+        paging_common = extract_aar_classes(paging_common_aar, "paging_common_android")
+    else:
+        paging_common = find_jar(
+            GRADLE_CACHE / "androidx.paging/paging-common",
+            "paging-common-3.4*.jar",
+            required=False,
+        )
+    if paging_common is None:
+        paging_common = find_jar(
+            GRADLE_CACHE / "androidx.paging/paging-common-ktx",
+            "paging-common-ktx-3.4*.jar",
+        )
     gson = find_jar(
         GRADLE_CACHE / "com.google.code.gson/gson",
         "gson-2.10.1.jar",
@@ -82,6 +117,9 @@ def build_classpath():
         (kotlin_stdlib, "kotlin-stdlib"),
         (annotations, "annotations"),
         (rxjava3, "rxjava3"),
+        (rxandroid, "rxandroid"),
+        (reactive_streams, "reactive-streams"),
+        (paging_common, "paging-common"),
         (amity_sdk, "amity-sdk"),
         (amity_rxbridge, "amity-rxbridge"),
         (amity_log, "amity-log"),

@@ -46,6 +46,8 @@ go run ./cmd/main.go -dry-run -verbose
 go run ./cmd/main.go
 ```
 
+Generation is strict: every page listed in `llmstxt/llms-config.yml` must exist. Missing configured pages fail the command instead of producing stale AI links.
+
 ### Adding or removing pages
 
 Edit `llmstxt/llms-config.yml` to add, remove, or reorder pages. Each entry is a path relative to the repo root.
@@ -64,37 +66,12 @@ Then run `go run ./cmd/main.go` to regenerate.
 1. Reads `llmstxt/llms-config.yml` for the curated page list
 2. Parses each `.mdx` file — strips JSX components, imports, and frontmatter
 3. Assembles `llms.txt` (index) and `llms-full.txt` (full content) per the llmstxt.org spec
-## AI Skills (MCP)
+
+## AI Docs (MCP)
 
 social.plus exposes a [Mintlify MCP server](https://mintlify.com/docs/ai/model-context-protocol) at `https://learn.social.plus/mcp`, giving AI coding tools (Claude Code, Cursor, Windsurf, VS Code + Continue) direct access to the documentation.
 
-### Skill Files
-
-Eight lightweight skill files live under `.mintlify/skills/`. Each one orients an AI agent to a specific product area, then hands off to the MCP search tool and `llms.txt` for deep content.
-
-**Product skills** — one per product area:
-
-| Skill | Path | When it activates |
-|-------|------|-------------------|
-| Chat | `.mintlify/skills/chat/SKILL.md` | Channels, messages, real-time, unread counts |
-| Social | `.mintlify/skills/social/SKILL.md` | Users, communities, posts, feeds, stories |
-| Video | `.mintlify/skills/video/SKILL.md` | Rooms, broadcasting, co-hosting, playback |
-| UIKit | `.mintlify/skills/uikit/SKILL.md` | Pre-built components, theming, customization |
-| Server | `.mintlify/skills/server/SKILL.md` | REST APIs, auth tokens, webhooks, pre-hooks |
-| Admin | `.mintlify/skills/admin/SKILL.md` | Console/Portal: moderation, analytics, settings |
-
-**Diagnostic skills** — activated by developer pain, not product area:
-
-| Skill | Path | When it activates |
-|-------|------|-------------------|
-| Setup Validator | `.mintlify/skills/setup-validator/SKILL.md` | "Is my setup correct?" / SDK or UIKit init problems |
-| Troubleshooter | `.mintlify/skills/troubleshoot/SKILL.md` | Integration broken, error code, unexpected behavior |
-
-Mintlify exposes these via the discovery endpoint at `/.well-known/agent-skills/index.json`.
-
-### Design Principle
-
-Skill files intentionally contain **no API signatures or code samples** — those live in the docs and are fetched on demand via `get_page_social_plus`. Skills describe *what the product does, when to use which API, and undocumented gotchas* that aren't in the docs. This keeps skill files durable and low-maintenance as the API evolves.
+This repo no longer ships `.mintlify/skills/*` agent-skill files. They became another stale documentation surface. AI tooling should use the hosted MCP tools plus the checked-in `llms.txt` / `llms-full.txt` outputs instead.
 
 ### MCP Tools
 
@@ -104,8 +81,6 @@ The MCP server exposes two tools to AI agents:
 |------|---------|
 | `search_social_plus` | Full-text search across all documentation pages |
 | `get_page_social_plus` | Fetch the full content of a specific page by path |
-
-Skills use these tools to pull live documentation on demand — the skills themselves stay thin.
 
 ### Using the MCP Server
 
@@ -128,11 +103,11 @@ Add to your AI tool's config:
 | Windsurf | Settings → MCP |
 | VS Code + Continue | `.continuerc.json` |
 
-Once connected, skills are discovered automatically — no extra installation needed.
+Once connected, the MCP tools are available to the AI client — no extra installation needed.
 
 ## Docs Quality (`.docs-ops/`)
 
-This repo runs an automated quality system that keeps documentation accurate, consistent, and AI-consumable as the underlying SDKs evolve. It validates against the real SDK source for all four platforms (TypeScript / iOS / Android / Flutter) on every push, and additionally scores each high-traffic doc page on a 5-dimension rubric.
+This repo runs an automated quality system that keeps documentation accurate, consistent, and AI-consumable as the underlying SDKs evolve. It validates against the real SDK source for all four platforms (TypeScript / iOS / Android / Flutter) on every push, and additionally scores each high-traffic doc page on a 6-dimension rubric.
 
 ### The layers
 
@@ -149,7 +124,8 @@ Two further outputs run periodically (not as gates) for visibility:
 | Layer | What it produces |
 |---|---|
 | **Cohort dashboards** | Weekly snapshot of drift per platform per customer cohort (Eastern chat-heavy / Western social-heavy / Shared) at `.docs-ops/dashboards/latest-report.md` |
-| **5-dimension rubric scorer** | Per-page weighted scores on Accuracy, Clarity, Cross-platform parity, Completeness, Examples, AI-consumability — useful for content-investment prioritization. Reports at `.docs-ops/rubric-scorer/results/overall-latest-report.md` |
+| **SDK accuracy audit tracker** | Page-by-page review ledger for `social-plus-sdk/**/*.mdx` at `.docs-ops/sdk-audit/tracker.csv` |
+| **6-dimension rubric scorer** | Per-page weighted scores on Accuracy, Clarity, Cross-platform parity, Completeness, Examples, AI-consumability — useful for content-investment prioritization. Reports at `.docs-ops/rubric-scorer/results/overall-latest-report.md` |
 
 And one workflow runs automatically:
 
@@ -188,6 +164,14 @@ python3 .docs-ops/ci/check-drift.py              # against origin/main
 python3 .docs-ops/ci/check-drift.py --base main  # against local main
 python3 .docs-ops/ci/check-drift.py --quiet      # one-line summary
 ```
+
+SDK accuracy proof run:
+
+```bash
+python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-test all
+```
+
+The normal gate blocks new drift and snippet type errors. The proof run also requires every SDK doc-as-test runner (TypeScript, Flutter, Android, and iOS) to actually execute; unavailable or crashed runners fail the command because they leave an accuracy gap.
 
 Bypass (`git push --no-verify`) exists for legitimate exceptions — please file an issue or ping #docs-ops first if you find yourself wanting to use it; usually it means either a validator has a false positive or there's a docs change pattern we should teach the gate.
 
