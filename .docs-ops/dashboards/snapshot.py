@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     snap_date = args.date or datetime.date.today().isoformat()
-    run_at = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    run_at = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     cohorts = resolve_cohort_tags(REPO_ROOT)
     print(f"Cohort pages resolved: eastern={len(cohorts['eastern'])} western={len(cohorts['western'])} shared={len(cohorts['shared'])}")

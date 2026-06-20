@@ -22,6 +22,11 @@ func main() {
 	}
 
 	if *dryRun {
+		if err := generator.ValidatePages(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(2)
+		}
+
 		llmsTxt, llmsFullTxt := generator.Render(cfg, *verbose)
 		fmt.Println("=== llms.txt ===")
 		fmt.Print(llmsTxt)
