@@ -1,376 +1,162 @@
 ---
 title: "Text Posts"
-description: "Create simple text-based posts with mentions, hashtags, links, and rich formatting"
+description: "Create text posts with the current Social+ SDKs, including optional structured links where supported."
 ---
 
-import CreateTextPost from '/snippets/social/posts/create-text-post.mdx';
-
-
-Create a text post (up to 20,000 characters) with mentions, hashtags, links, and custom metadata. Post to a user's feed, a community, or your own timeline.
+Text posts publish written content to a user feed, a community feed, or the current user's own feed. Use them for plain updates, status messages, and posts that attach structured link metadata.
 
 <CardGroup cols={2}>
-  <Card title="Rich Text Support" icon="text">
-    Up to 20,000 characters with mentions, hashtags, and links
+  <Card title="Flexible Targets" icon="users-viewfinder">
+    Publish to user feeds, community feeds, or the current user's feed depending on the SDK target API.
   </Card>
-  <Card title="Flexible Targeting" icon="users-viewfinder">
-    Post to user feeds, communities, or your own timeline
+  <Card title="Optional Enrichment" icon="link">
+    TypeScript, Android, and iOS can attach structured links during text post creation.
   </Card>
 </CardGroup>
 
-## Overview
+## Create a Text Post
 
-Text posts provide a clean, straightforward way to share written content:
-
-- **Text Support**: Up to 20,000 characters per post
-- **Mentions**: Tag other users with @displayname syntax
-- **Hashtags**: Categorize content with #hashtag syntax  
-- **Links**: Attach up to 100 structured links with optional preview metadata
-- **Custom Metadata**: Add additional structured data
-- **Flexible Targeting**: Post to user feeds or communities
-- **No Structure Type**: Text-only posts don't have a `structureType` field
-
-## Links and Preview Metadata
-
-Text post creation supports an optional `links` field in the request payload. Each post can contain up to **100 links**.
-
-<Info>
-When a link should show a preview card, set `renderPreview: true`. If preview metadata is missing, fetch it first with `getLinkPreviewMetadata(url)` and include the enriched data in your `links` array.
-</Info>
-
-### Link Models
-
-```ts
-AmityLink = {
-  index?: Int,
-  length?: Int,
-  url: String,
-  renderPreview: Bool,
-  domain?: String,
-  title?: String,
-  imageUrl?: String,
-}
-
-AmityLinkPreviewMetadata = {
-  title?: String,
-  description?: String,
-  domain?: String,
-  imageUrl?: String,
-}
-```
-
-## Understanding Post Structure Types
-
-<Info>
-**New Concept**: Posts now have a `structureType` field that describes their media composition. This enables precise content filtering and better content discovery.
-</Info>
-
-Text-only posts are unique in the post structure type system:
-
-<Tabs>
-  <Tab title="Text-Only Posts">
-    **Structure Type**: `null` or absent
-    
-    When you create a text post without any attachments (images, videos, audio, or files), the post does not have a `structureType` value. This distinguishes pure text content from media-rich posts.
-    
-    ```typescript
-    // Text-only post example
-    const textPost = {
-      data: { text: "Hello, world!" },
-      targetType: "user",
-      targetId: "user123"
-    };
-    // Result: structureType = null (no attachments)
-    ```
-  </Tab>
-  
-  <Tab title="Posts with Attachments">
-    **Structure Types**: `image` | `video` | `audio` | `file` | `mixed`
-    
-    When you add media attachments to a post, it automatically gets a `structureType` based on the media combination:
-    
-    - **Single type**: `image`, `video`, `audio`, or `file` (when all attachments are the same type)
-    - **Multiple types**: `mixed` (when combining different media types)
-    
-    ```typescript
-    // Post with image attachments
-    const imagePost = {
-      data: { text: "Check out these photos!" },
-      attachments: [
-        { type: "image", fileId: "img1" },
-        { type: "image", fileId: "img2" }
-      ],
-      targetType: "community",
-      targetId: "community123"
-    };
-    // Result: structureType = "image"
-    
-    // Post with mixed media
-    const mixedPost = {
-      data: { text: "My multimedia post" },
-      attachments: [
-        { type: "image", fileId: "img1" },
-        { type: "audio", fileId: "aud1" }
-      ],
-      targetType: "community",
-      targetId: "community123"
-    };
-    // Result: structureType = "mixed"
-    ```
-  </Tab>
-</Tabs>
-
-### How Structure Types Affect Queries
-
-The `structureType` field enables powerful content filtering:
-
-```typescript
-// Query all posts (including text-only)
-const allPosts = await PostRepository.getPosts({
-  // No dataTypes filter = returns all posts
-});
-
-// Query posts with specific media types
-const imagePosts = await PostRepository.getPosts({
-  dataTypes: ['image']
-  // Returns only pure image posts (structureType = "image")
-  // Excludes mixed posts by default
-});
-
-// Query including mixed media posts
-const imageAndMixedPosts = await PostRepository.getPosts({
-  dataTypes: ['image'],
-  includeMixedStructure: true
-  // Returns both pure image posts AND mixed posts containing images
-});
-```
-
-<Note>
-For complete details on post structure types and filtering, see [Mixed Media Posts](./mixed-media-post).
-</Note>
-
-## Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `text` | String | ✅ | Text content (max 20,000 characters) |
-| `targetType` | Enum | ✅ | Target type (`user` or `community`) |
-| `targetId` | String | ✅ | Target ID (`userId` or `communityId`) |
-| `metadata` | Object | ❌ | Custom metadata for the post |
-| `mentionUsers` | Array\<String\> | ❌ | User IDs to mention in the post |
-| `links` | Array\<AmityLink\> | ❌ | Structured links to attach to the post. Maximum **100 links** per post. |
-| `productTags` | Array\<AmityTextProductTag\> | ❌ | Product tags in text (max 20 per post) |
-
-### Create Text Post with Links
+The examples below create a text post in a community. Use the equivalent user target method or target type when posting to a user feed.
 
 <CodeGroup>
 ```swift iOS
-func createTextPostWithLinks() async throws {
-  let postRepository = AmityPostRepository(client: amityClient)
+let postRepository = AmityPostRepository()
+let builder = AmityTextPostBuilder()
+builder.setText("Hello community")
 
-  let builder = AmityTextPostBuilder()
-  builder.setText("Check this out https://www.amity.co")
-
-  let links = [
-    AmityLink(
-      url: "https://www.amity.co",
-      index: 15,
-      length: 20,
-      renderPreview: true,
-      domain: "www.amity.co"
-    )
-  ]
-
-  let post = try await postRepository.createTextPost(
+let post = try await postRepository.createTextPost(
     builder,
-    targetId: "userId1",
-    targetType: .user,
+    targetId: communityId,
+    targetType: .community,
     metadata: nil,
-    mentionees: nil,
-    hashtags: nil,
-    links: links,
-    productTags: nil
-  )
-}
+    mentionees: nil
+)
 ```
 
 ```kotlin Android
-fun createTextPostWithLinks(postRepository: AmityPostRepository) {
-  val links = listOf(
-    AmityLink(
-      index = 15,
-      length = 20,
-      url = "https://www.amity.co",
-      renderPreview = true,
-      domain = "www.amity.co",
-      title = null,
-      imageUrl = null
-    )
-  )
-
-  postRepository.createTextPost(
-    targetType = AmityPost.TargetType.USER,
-    targetId = "user1",
-    text = "Check this out https://www.amity.co",
-    links = links,
-  )
-    .doOnSuccess { post: AmityPost ->
-      // Success - text post with links created
-    }
-    .doOnError { error ->
-      // Handle error
-    }
-    .subscribe()
-}
+postRepository.createTextPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    text = "Hello community"
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
 ```
 
-```typescript
-import { PostRepository } from '@amityco/ts-sdk';
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
 
-async function createTextPostWithLinks(): Promise<Amity.Post> {
-  const newPost = {
-  targetType: 'user',
-  targetId: 'userId1',
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
   data: {
-    text: 'Check this out https://www.amity.co',
+    text: "Hello community",
   },
-  links: [
-    {
-    index: 15,
-    length: 20,
-    url: 'https://www.amity.co',
-    renderPreview: true,
-    domain: 'www.amity.co',
-    },
-  ],
-  };
+});
+```
 
-  const { data: post } = await PostRepository.createPost(newPost);
-  return post;
-}
+```dart Flutter
+final post = await AmitySocialClient.newPostRepository()
+    .createPost()
+    .targetCommunity(communityId)
+    .text('Hello community')
+    .createTextPost();
 ```
 </CodeGroup>
 
-### Get Link Preview Metadata
+## Add Structured Links
+
+TypeScript, Android, and iOS expose a `links` field when creating a text post. Fetch preview metadata first if the post should render a preview card.
+
+<Note>
+Flutter's current public post creation builder supports text, metadata, and user mentions, but it does not expose a structured `links` payload on the text post builder.
+</Note>
 
 <CodeGroup>
 ```swift iOS
-let metadata = try await amityClient.getLinkPreviewMetadata(url: "https://www.amity.co")
+let postRepository = AmityPostRepository()
+let builder = AmityTextPostBuilder()
+builder.setText("Check this out https://www.amity.co")
+
+let preview = try await client.getLinkPreviewMetadata(url: "https://www.amity.co")
+let links = [
+    AmityLink(
+        url: "https://www.amity.co",
+        renderPreview: true,
+        domain: preview.domain,
+        title: preview.title,
+        imageUrl: preview.imageUrl
+    )
+]
+
+let post = try await postRepository.createTextPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil,
+    links: links
+)
 ```
 
 ```kotlin Android
 AmityCoreClient.getLinkPreviewMetadata("https://www.amity.co")
-  .subscribe { metadata ->
-    // metadata.title, metadata.description, metadata.domain, metadata.imageUrl
-  }
+    .flatMap { preview ->
+        val links = listOf(
+            AmityLink(
+                index = null,
+                length = null,
+                url = "https://www.amity.co",
+                renderPreview = true,
+                domain = preview.getDomain(),
+                title = preview.getTitle(),
+                imageUrl = preview.getImageUrl()
+            )
+        )
+
+        postRepository.createTextPost(
+            targetType = AmityPost.TargetType.COMMUNITY,
+            targetId = communityId,
+            text = "Check this out https://www.amity.co",
+            links = links
+        )
+    }
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
 ```
 
-```typescript
-import { Client } from '@amityco/ts-sdk';
+```typescript TypeScript
+import { Client, PostRepository } from "@amityco/ts-sdk";
 
-const metadata = await Client.getLinkPreviewMetadata('https://www.amity.co');
+const preview = await Client.getLinkPreviewMetadata("https://www.amity.co");
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    text: "Check this out https://www.amity.co",
+  },
+  links: [
+    {
+      url: "https://www.amity.co",
+      renderPreview: true,
+      domain: preview.domain ?? undefined,
+      title: preview.title ?? undefined,
+      imageUrl: preview.imageUrl ?? undefined,
+    },
+  ],
+});
 ```
 </CodeGroup>
 
+## Querying Text Posts
 
-<CreateTextPost />
+Post query APIs are SDK-specific. For TypeScript, `PostRepository.getPosts` returns a live collection through a callback instead of a promise, so do not call it with `await`.
 
-
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Content Guidelines">
-    - Keep text concise and engaging
-    - Use mentions sparingly to avoid spam
-    - Add relevant hashtags for discoverability
-    - Include context for better user engagement
-  </Accordion>
-  
-  <Accordion title="Technical Implementation">
-    - Validate text length before submission
-    - Handle network errors gracefully
-    - Provide user feedback during creation
-    - Cache drafts for better user experience
-  </Accordion>
-  
-  <Accordion title="User Experience">
-    - Show character count indicators
-    - Provide auto-complete for mentions
-    - Suggest relevant hashtags
-    - Allow draft saving and editing
-  </Accordion>
-</AccordionGroup>
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="Text Length Validation" icon="ruler">
-    **Problem**: Post creation fails with text length error
-    
-    **Solution**: Ensure text content is under 20,000 characters
-    
-    ```typescript
-    if (text.length > 20000) {
-      throw new Error('Text exceeds maximum length of 20,000 characters');
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="Mention Format Issues" icon="at">
-    **Problem**: Mentions not working properly
-    
-    **Solution**: Use correct format with @username (no spaces in username)
-    
-    ```typescript
-    // ✅ Correct
-    "Hello @john-doe, how are you?"
-    
-    // ❌ Incorrect  
-    "Hello @john doe, how are you?"
-    ```
-  </Accordion>
-  
-  <Accordion title="Target Validation" icon="users-viewfinder">
-    **Problem**: Post fails with invalid target error
-    
-    **Solution**: Verify target exists and user has permission to post
-    
-    ```typescript
-    // Community membership is enforced server-side in v6.
-    // The client-side membership check API was removed.
-    // Simply attempt the operation — the server returns an error if unauthorized.
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Common Use Cases
-
-- **Status Updates**: Share personal thoughts and experiences
-- **Community Discussions**: Start conversations in community feeds
-- **Announcements**: Broadcast important information
-- **Questions**: Ask for advice or opinions from followers
-- **Storytelling**: Share experiences and narratives
-- **Links Sharing**: Share URLs with context and commentary
-
-## Related Topics
-
-<CardGroup cols={3}>
-  <Card title="Image Posts" href="./image-post" icon="image">
-    Create posts with photos and visual content
-  </Card>
-  <Card title="Video Posts" href="./video-post" icon="video">
-    Share video content and multimedia experiences
-  </Card>
-  <Card title="Audio Posts" href="./audio-post" icon="file-audio">
-    Share audio content like podcasts and music
-  </Card>
-  <Card title="File Posts" href="./file-post" icon="file">
-    Share documents and file attachments
-  </Card>
-  <Card title="Mixed Media Posts" href="./mixed-media-post" icon="layer-group">
-    Combine multiple media types in one post
-  </Card>
-  <Card title="Post Management" href="../moderation/edit-post" icon="gear">
-    Edit, delete, and moderate your published posts
-  </Card>
-</CardGroup>
+For structure type values and filtering behavior, see [Posts Overview](../overview) and [Mixed Media Posts](./mixed-media-post).
