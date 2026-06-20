@@ -37108,1561 +37108,441 @@ func createRoomPost(roomId: String, communityId: String) async throws -> AmityPo
 
 ### [Get Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/retrieval/get-post)
 
-> Retrieve a single post by ID or multiple posts by IDs using PostRepository. Results are live objects that update automatically.
+> Retrieve one post as a live object, or fetch a known set of post IDs where the SDK supports batch lookup.
 
-Use `PostRepository.getPost(postId)` to retrieve a single post as a live object, or `PostRepository.getPosts(postIds)` to retrieve multiple posts by ID. Both return live objects or live collections that update automatically when the underlying data changes.
+Use post retrieval when your app already knows the post ID. Single-post retrieval returns a live object or stream on every SDK. Batch lookup is available on TypeScript, iOS, and Android.
 
-## Overview
+## Single Post
 
-
-    Posts are returned as live objects that automatically update when data changes
-    Retrieve complete post information including content, reactions, comments, and metadata
-
-## Single Post Retrieval
-
-Retrieve a specific post by its unique identifier with complete post information and real-time updates.
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func getPostByIdExample() {
-    token = postRepository.getPost(withId: "<post-id>").observe { liveObject, error in
-        // Observer block, Do something here
-    }
-}
-```
-
-```kotlin Android
-fun getPost(postRepository: AmityPostRepository) {
-    postRepository.getPost("post123")
-        .doOnNext { amityPost: AmityPost ->
-            //results
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
-import { PostRepository } from '@amityco/ts-sdk';
+import { PostRepository } from "@amityco/ts-sdk";
 
 const unsubscribe = PostRepository.getPost(
-  'postId',
+  postId,
   ({ data: post, loading, error }) => {
+    if (loading) return;
     if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+      handleError(error);
+      return;
     }
     if (post) {
-      // Process the data
+      renderResults(post);
     }
   },
 );
 ```
 
-```dart Flutter
-void observePost(String postId) {
-  StreamBuilder<AmityPost>(
-      stream: AmitySocialClient.newPostRepository().live.getPost(postId),
-      builder: (context, snapshot) {
-        // update widget
-        // eg. widget.text = post.postId
-        return Container();
-      });
+```kotlin Android
+postRepository.getPost(postId)
+    .subscribe(
+        { post -> showSuccessMessage(post.getPostId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+var token: AmityNotificationToken?
+
+token = postRepository.getPost(withId: "post-id").observe { liveObject, error in
+    guard let post = liveObject.snapshot else { return }
+    showSuccessMessage(post.postId)
 }
 ```
 
-## Multiple Posts Retrieval
+```dart Flutter
+final subscription = AmitySocialClient.newPostRepository()
+    .live
+    .getPost(postId)
+    .listen((AmityPost post) {
+      final id = post.postId;
+    });
 
-Retrieve multiple posts by their IDs in a single operation with live collection updates.
+await subscription.cancel();
+```
 
-```swift iOS
-var token: AmityNotificationToken?
 
-token = postRepository.getPosts(postIds: ["post-id-1", "post-id-2"]).observe { collection, error in
-    // Observe live collection here
-}
+## Multiple Posts By ID
+
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: posts } = await PostRepository.getPostByIds([
+  postId,
+  "another-post-id",
+]);
 ```
 
 ```kotlin Android
-fun getPostByIds(
-    postRepository: AmityPostRepository,
-    postIds: Set<String>
-) {
-    postRepository.getPostByIds(postIds = postIds)
-        .doOnNext { posts: List<AmityPost> ->
-            // List<AmityPost>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
+postRepository.getPostByIds(setOf(postId, "another-post-id"))
+    .subscribe(
+        { posts -> showSuccessMessage(posts.size) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+var token: AmityNotificationToken?
+
+token = postRepository.getPosts(postIds: ["post-id", "another-post-id"]).observe { collection, error in
+    showSuccessMessage(collection.snapshots.count)
 }
 ```
+
+
+  The current Flutter public post repository exposes single-post retrieval through `live.getPost(postId)` and the deprecated `getPost(postId)` future, but it does not expose a public batch get-by-IDs method.
+
+## Notes
+
+- Keep the unsubscriber or notification token so you can dispose the live object when the screen is destroyed.
+- Use query APIs when you need a feed, pagination, filtering, or real-time collection updates.
+- Batch lookup skips invalid IDs on iOS collection results; handle an empty collection as a valid outcome.
+
+## Related Topics
+
+    Query posts by feed target, post type, review status, or tags
+    Render post data and child media safely
+    Review post structure and post data types
 
 ---
 
 ### [Query Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/retrieval/query-posts)
 
-> Query posts by target, type, tags, feed status, and time boundary using PostRepository.getPosts(). Results are returned as live collections.
+> Query live post collections by target, data type, review status, deletion state, tags, and pagination options.
 
-Use `PostRepository.getPosts()` (or `feedRepository.getCommunityFeed()`) to query posts by community or user, filtering by post type, tags, deletion status, feed type (`published`, `reviewing`, `declined`), and mixed media structure. Results are live collections that update in real time.
+Use post queries to build user feeds, community feeds, review queues, and media galleries. Query results are paginated live collections on the client SDKs.
 
-    Query results are returned as live collections with real-time updates
+## Common Filters
 
-    Filter by post type, target, deletion status, and custom criteria
+| Filter | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Target | `targetType`, `targetId` | `targetType`, `targetId` | `.targetUser()`, `.targetCommunity()` | `.targetUser()`, `.targetCommunity()` |
+| Data type | `dataTypes` | `dataTypes` | `.dataTypes()` | `.types()` |
+| Include deleted | `includeDeleted` | `deletedOption` | `.includeDeleted()` | `.includeDeleted()` |
+| Review/feed status | `feedType` with published or reviewing | `feedType` | `.reviewStatus()` | `.feedType()` |
+| Tags | `tags` | `tags` | `.tags()` | `.tags()` |
+| Mixed media matching | `includeMixedStructure` | `includeMixedStructure` | `.includeMixedStructure()` | Not exposed in the current public builder |
+| Time boundary | `untilAt` | `untilAt` | `.untilAt()` | Not exposed in the current public builder |
+| Invalidate cache | Not exposed | Not exposed | `.invalidateCache()` | Not exposed |
 
-## Query Parameters
+## Data Type Filters
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `targetId` | String | ✅ | ID of the community or user respectively. Use community ID for community posts or user ID for user feed posts. |
-| `targetType` | Enum | ✅ | Type of the target, either a particular community (`community`) or a user feed (`user`). |
-| `types` | Array | ❌ | Available post types: `video`, `image`, `file`, `liveStream`, `poll`, and `custom`. If not specified, returns all post types for the target. |
-| `tags` | Array | ❌ | Filter posts by specific tags. When specified, only posts containing these tags will be returned. Useful for content categorization and topic-based filtering. |
-| `includeDeleted` | Boolean | ❌ | Deletion filter. When `true`, retrieves both deleted and non-deleted posts. When `false` (default), only non-deleted posts are returned. Excludes all deleted posts (both soft and hard deleted) not owned by the logged-in user. Community moderators can see soft-deleted posts in community feeds, while users can see their own soft-deleted posts in their user feeds. |
-| `sortBy` | Enum | ❌ | Sort order for results. `lastCreated` (default) shows most recently created posts first, `firstCreated` shows earliest created posts first. |
-| `feedType` | Enum | ❌ | Type of the feed filter. Possible values: `published`, `reviewing`, `declined`. See [Feed Types](#feed-types) for details. |
-| `includeMixedStructure` | Boolean | ❌ | Mixed media filter. When `true`, posts with mixed media (combining multiple media types) are included in results when filtering by `types`. When `false` (default), only posts with pure single-type structures are returned. See [Mixed Media Filtering](#mixed-media-filtering) for details. |
-| `untilAt` | DateTime | ❌ | Time boundary for pagination (local-only). Stops fetching and collecting posts beyond this datetime. The comparison is exclusive. Available on **iOS** and **Android** only. See [Time-Bounded Pagination](#time-bounded-pagination-with-untilat). |
+| Platform | Query data type values |
+| --- | --- |
+| TypeScript | Non-text post data types through `dataTypes`, including image, video, file, poll, live stream, audio, clip, room, and custom strings |
+| iOS | String `dataTypes`; deprecated `filterPostTypes` exists but new docs should use `dataTypes` |
+| Android | `AmityPost.DataType`, including text, image, video, file, poll, live stream, audio, clip, room, and custom |
+| Flutter | `AmityDataType.TEXT`, `IMAGE`, `VIDEO`, `FILE`, `LIVESTREAM`, `POLL`, and `CUSTOM`; no public audio, clip, or room enum values |
 
-### Feed Types
+## Query A Community Feed
 
-    **Value**: `published`
-
-    Posts that have been approved and are visible to community members. This is the default state for most posts in communities without review requirements.
-
-    **Value**: `reviewing`
-
-    Posts that are pending moderator approval. These posts are only visible to the post author and community moderators until approved.
-
-    **Value**: `declined`
-
-    Posts that have been rejected by moderators. These posts are only visible to the post author and community moderators.
-
-### Mixed Media Filtering
-
-  The `includeMixedStructure` parameter controls whether posts with mixed media types are included when filtering by specific post types. This is particularly useful when querying for content galleries or type-specific feeds.
-
-Posts can have different structure types based on their attachments:
-
-- **Pure Structure**: Posts with a single media type (e.g., only images, only videos, only audio files)
-- **Mixed Structure**: Posts combining multiple media types (e.g., images \+ videos, audio \+ files, any combination)
-
-    When `includeMixedStructure = false` (default), querying for specific types returns only posts with pure single-type structures:
-
-```typescript
-// Query for images only
-const options = {
-  targetId: "community-123",
-  targetType: "community",
-  types: ["image"],
-  includeMixedStructure: false  // or omit (default)
-};
-
-// Returns:
-// ✅ Posts with ONLY images (structureType: 'image')
-// ❌ Posts with images + videos (structureType: 'mixed')
-// ❌ Posts with images + audio (structureType: 'mixed')
-```
-
-    This is ideal for:
-
-    - Pure photo galleries
-    - Type-specific content feeds
-    - Simplified content categorization
-    When `includeMixedStructure = true`, querying for specific types returns both pure and mixed structure posts containing that type:
-
-```typescript
-// Query for images including mixed media
-const options = {
-  targetId: "community-123",
-  targetType: "community",
-  types: ["image"],
-  includeMixedStructure: true
-};
-
-// Returns:
-// ✅ Posts with ONLY images (structureType: 'image')
-// ✅ Posts with images + videos (structureType: 'mixed')
-// ✅ Posts with images + audio (structureType: 'mixed')
-// ✅ Any mixed post containing at least one image
-```
-
-    This is ideal for:
-
-    - Comprehensive media searches
-    - Finding all content featuring a specific media type
-    - Flexible content discovery
-    When `types` parameter is omitted or empty, all post types are returned regardless of `includeMixedStructure`:
-
-```typescript
-// Query all posts (no type filter)
-const options = {
-  targetId: "community-123",
-  targetType: "community"
-  // types not specified
-  // includeMixedStructure is ignored
-};
-
-// Returns:
-// ✅ Text-only posts (structureType: null)
-// ✅ Pure image posts (structureType: 'image')
-// ✅ Pure video posts (structureType: 'video')
-// ✅ Pure audio posts (structureType: 'audio')
-// ✅ Pure file posts (structureType: 'file')
-// ✅ Mixed media posts (structureType: 'mixed')
-```
-
-  Learn more about post structure types and creating mixed media posts in the [Mixed Media Posts](/social-plus-sdk/social/content-management/posts/creation/mixed-media-post) guide.
-
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func postQueryExample() {
-    // In this example, we will query posts to build user's media gallery.
-    // This gallery shows the feed; specifically "image" and "video".
-    //
-    // 1. Create AmityPostQueryOptions
-    // For this use-case:
-    // - Search all the "image" and "video" posts
-    // - Belong to a user, for example "steven".
-    // - Only non-deleted posts.
-    // - Sorted by last created.
-    let options = AmityPostQueryOptions(
-        targetType: .user,
-        targetId: "steven",
-        sortBy: .lastCreated,
-        deletedOption: .notDeleted,
-        dataTypes: ["image", "video"]
-    )
-    // 2. query the posts, and handle the results via the live collection.
-    token = postRepository.getPosts(options).observe { collection, error in
-        // Observe the live collection changes here.
-    }
-}
-
-func queryPostsWithTags() {
-    // Query posts filtered by tags for topic-based content discovery.
-    // Maximum 5 tags can be specified.
-    let options = AmityPostQueryOptions(
-        targetType: .community,
-        targetId: "<community-id>",
-        sortBy: .lastCreated,
-        deletedOption: .notDeleted,
-        dataTypes: nil,
-        feedType: .published,
-        tags: ["product", "promotion"]
-    )
-
-    token = postRepository.getPosts(options).observe { collection, error in
-        // Observe the live collection changes here.
-    }
-}
-```
-
-```kotlin Android
-fun queryPosts(postRepository: AmityPostRepository) {
-    //User's Media Gallery Example
-    //For this use-case:
-    //  - Search all the "image" and "video" posts - Belong to the user "steven".
-    //  - Only non-deleted posts.
-    //  - Sorted by last created.
-    postRepository
-        .getPosts()
-        .targetUser(userId = "steven")
-        .types(postTypes = listOf(AmityPost.DataType.IMAGE, AmityPost.DataType.VIDEO))
-        .includeDeleted(includeDeleted = false)
-        .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
-        .build()
-        .query()
-        .doOnNext { pagingData: PagingData<AmityPost> ->
-            //Observe the changes here.
-        }
-        .subscribe()
-}
-
-fun queryPostsWithTags(postRepository: AmityPostRepository, tags: List<String>) {
-    //User's Media Gallery Example
-    //For this use-case:
-    //  - Search all the "image" and "video" posts - Belong to the user "steven".
-    //  - Only non-deleted posts.
-    //  - Sorted by last created.
-    postRepository
-        .getPosts()
-        .targetUser(userId = "steven")
-        .tags(tags = tags)  // For example: listOf("product","promotion")
-        .types(postTypes = listOf(AmityPost.DataType.IMAGE, AmityPost.DataType.VIDEO))
-        .includeDeleted(includeDeleted = false)
-        .sortBy(sortOption = AmityUserFeedSortOption.LAST_CREATED)
-        .build()
-        .query()
-        .doOnNext { pagingData: PagingData<AmityPost> ->
-            //Observe the changes here.
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
-import { PostRepository } from '@amityco/ts-sdk';
+import { PostRepository } from "@amityco/ts-sdk";
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
-
-const communityPostsParam: Amity.PostLiveCollection = {
-  targetId: 'targetId',
-  targetType: 'community',
-  sortBy: 'lastCreated',
-  tags: ["product", "promotion"],
-};
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
 
 const unsubscribe = PostRepository.getPosts(
-  communityPostsParam,
+  {
+    targetType: "community",
+    targetId: communityId,
+    dataTypes: ["image", "video", "poll"],
+    includeDeleted: false,
+    feedType: "published",
+    sortBy: "lastCreated",
+    tags: ["product", "promotion"],
+    includeMixedStructure: true,
+  },
   ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (posts) {
-      // Process the data
-      console.log(posts);
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    renderResults(posts);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
   },
 );
 
-// Function to load more items (next page)
-function loadMore() {
-  // Check if more pages are available to load
-  if (hasMore) {
-    nextPageFn?.(); // Execute the nextPage function if it's defined
+function loadMorePosts() {
+  if (canLoadMore) {
+    loadNextPage?.();
   }
 }
 ```
 
-```dart Flutter
-late PostLiveCollection postLiveCollection;
-List<AmityPost> amityPosts = [];
-final scrollcontroller = ScrollController();
-
-void observePosts(String userId) {
-  //initialize post live collection
-  postLiveCollection = AmitySocialClient.newPostRepository()
-      .getPosts()
-      .targetUser(userId)
-      .getLiveCollection(pageSize: 20);
-
-  //listen to data changes from live collection
-  postLiveCollection.getStreamController().stream.listen((event) {
-    // update latest results here
-    // setState(() {
-    amityPosts = event;
-    // });
-  });
-
-  //load first page when initiating widget
-  postLiveCollection.loadNext();
-
-  //add pagination listener when srolling to top/bottom
-  scrollcontroller.addListener(paginationListener);
-}
-
-void paginationListener() {
-  //check if
-  //#1 scrolling reached top/bottom
-  //#2 live collection has next page to load more
-  if ((scrollcontroller.position.pixels ==
-          (scrollcontroller.position.maxScrollExtent)) &&
-      postLiveCollection.hasNextPage()) {
-    postLiveCollection.loadNext();
-  }
-}
-```
-
-
-## Invalidate Cache
-
-  By default, a post query serves cached posts immediately and clears the cache _after_ the first page is fetched.
-
-Use `invalidateCache(true)` when you want a community or user feed to always reflect the latest server state on load. For example, after a pull-to-refresh or when returning to a feed that may have changed. The option defaults to `false`.
-
-
-```kotlin Android
-fun queryCommunityFeedInvalidateCache(feedRepository: AmityFeedRepository) {
-    // Community feed — skip stale cache on re-entry
-    feedRepository
-        .getCommunityFeed(communityId = "<community-id>")
-        .invalidateCache(true) // clear the paging-id cache before fetching the first page
-        .build()
-        .query()
-        .doOnNext { pagingData: PagingData<AmityPost> ->
-            //Observe the changes here.
-        }
-        .subscribe()
-}
-
-fun queryUserFeedInvalidateCache(postRepository: AmityPostRepository) {
-    // User feed — skip stale cache on re-entry
-    postRepository
-        .getPosts()
-        .targetUser(userId = "steven")
-        .invalidateCache(true) // clear the paging-id cache before fetching the first page
-        .build()
-        .query()
-        .doOnNext { pagingData: PagingData<AmityPost> ->
-            //Observe the changes here.
-        }
-        .subscribe()
-}
-```
-
-
-  `invalidateCache` is currently available on **Android** only. Support for other platforms is under development.
-
-## Parameter Usage Examples
-
-    **Use Case**: Create a photo gallery showing only images and videos from a specific community
-
-```typescript
-const options = {
-  targetId: "community-123",
-  targetType: "community",
-  types: ["image", "video"],
-  includeDeleted: false,
-  sortBy: "lastCreated"
-};
-```
-
-    This query retrieves only image and video posts from community "community-123", excludes any deleted content, and shows newest posts first.
-
-    **Use Case**: Display a user's complete post history including their own deleted posts
-
-```typescript
-const options = {
-  targetId: "user-456",
-  targetType: "user",
-  // types not specified = all post types
-  includeDeleted: true, // Shows user's own soft-deleted posts
-  sortBy: "firstCreated"
-};
-```
-
-    This query shows all post types from the user's timeline, including their own soft-deleted posts, sorted from oldest to newest.
-
-    **Use Case**: Community moderators reviewing pending posts
-
-```typescript
-const options = {
-  targetId: "community-789",
-  targetType: "community",
-  feedType: "reviewing",
-  includeDeleted: false,
-  sortBy: "lastCreated"
-};
-```
-
-    This query retrieves only posts that are pending review in the community, helping moderators efficiently process approval queues.
-
-    **Use Case**: Find posts with specific tags for topic-based content filtering
-
-```typescript
-const options = {
-  targetId: "community-101",
-  targetType: "community",
-  tags: ["tutorial", "beginner", "javascript"],
-  feedType: "published",
-  sortBy: "lastCreated"
-};
-```
-
-    This query filters for posts tagged with "tutorial", "beginner", and "javascript", perfect for creating topic-specific feeds or educational content discovery.
-
-    **Use Case**: Combine tags with content type filtering for specialized searches
-
-```typescript
-const options = {
-  targetId: "community-202",
-  targetType: "community",
-  types: ["video", "image"],
-  tags: ["product-demo", "feature-announcement"],
-  feedType: "published",
-  sortBy: "lastCreated"
-};
-```
-
-    This query finds visual content (videos and images) tagged with product or feature-related tags, ideal for creating marketing galleries or product showcase feeds.
-
-    **Use Case**: Access declined posts for audit or appeal purposes
-
-```typescript
-const options = {
-  targetId: "community-202",
-  targetType: "community",
-  feedType: "declined",
-  includeDeleted: true,
-  sortBy: "firstCreated"
-};
-```
-
-    This query retrieves declined posts including deleted ones, sorted chronologically for audit trail purposes. Only available to moderators and administrators.
-
-## Time-Bounded Pagination with `untilAt`
-
-  **Platform Availability**: The `untilAt` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
-
-The `untilAt` parameter enables time-bounded pagination for post queries (including community feed queries via `targetType: 'community'`). When provided, the SDK stops fetching and collecting posts beyond the specified datetime boundary.
-
-- **Automatic pagination stop** — Once the boundary is reached, no further pages are fetched and `hasNextPage` becomes `false`.
-- **Real-time filtering** — New posts arriving via real-time events are also checked against the boundary.
-
-| Sort Direction | `untilAt` Acts As | Excludes Posts Where |
-| --- | --- | --- |
-| `lastCreated` (newest first) | Lower bound | `createdAt < untilAt` (older than boundary) |
-| `firstCreated` (oldest first) | Upper bound | `createdAt > untilAt` (newer than boundary) |
-
-```swift
-// Query community posts from the last 7 days only
-let oneWeekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+```swift iOS
+let postRepository = AmityPostRepository()
+var token: AmityNotificationToken?
 
 let options = AmityPostQueryOptions(
     targetType: .community,
-    targetId: "community-123",
+    targetId: communityId,
     sortBy: .lastCreated,
     deletedOption: .notDeleted,
-    dataTypes: nil,
-    untilAt: oneWeekAgo
+    dataTypes: Set(["image", "video", "poll"]),
+    feedType: .published,
+    tags: ["product", "promotion"],
+    includeMixedStructure: true
 )
 
 token = postRepository.getPosts(options).observe { collection, error in
-    // All posts will have createdAt >= oneWeekAgo
+    showSuccessMessage(collection.snapshots.count)
 }
 ```
-```kotlin
-// Query community posts from the last 7 days only
-val oneWeekAgo = org.joda.time.DateTime().minusDays(7)
+
+```kotlin Android
+postRepository
+    .getPosts()
+    .targetCommunity(communityId = communityId)
+    .dataTypes(
+        dataTypes = listOf(
+            AmityPost.DataType.IMAGE,
+            AmityPost.DataType.VIDEO,
+            AmityPost.DataType.POLL
+        )
+    )
+    .includeDeleted(includeDeleted = false)
+    .reviewStatus(AmityReviewStatus.PUBLISHED)
+    .tags(tags = listOf("product", "promotion"))
+    .includeMixedStructure(includeMixedStructure = true)
+    .sortBy(sortOption = AmityCommunityFeedSortOption.LAST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```dart Flutter
+final postLiveCollection = AmitySocialClient.newPostRepository()
+    .getPosts()
+    .targetCommunity(communityId)
+    .types([
+      AmityDataType.IMAGE,
+      AmityDataType.VIDEO,
+      AmityDataType.POLL,
+    ])
+    .includeDeleted(false)
+    .feedType(AmityFeedType.PUBLISHED)
+    .tags(['product', 'promotion'])
+    .getLiveCollection(pageSize: 20);
+
+postLiveCollection.getStreamController().stream.listen((posts) {
+  final count = posts.length;
+});
+
+await postLiveCollection.loadNext();
+
+if (postLiveCollection.hasNextPage()) {
+  await postLiveCollection.loadNext();
+}
+```
+
+
+## Android Cache Invalidation
+
+Android exposes `invalidateCache(true)` on post query builders. Use it when a screen should skip stale paging cache on entry, such as after pull-to-refresh.
+
+```kotlin Android
+postRepository
+    .getPosts()
+    .targetCommunity(communityId = communityId)
+    .includeDeleted(includeDeleted = false)
+    .invalidateCache(invalidateCache = true)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+## Time Boundaries
+
+`untilAt` is available on TypeScript, iOS, and Android query surfaces. It is a time boundary for pagination. For newest-first sorting, older posts beyond the boundary are excluded; for oldest-first sorting, newer posts beyond the boundary are excluded.
+
+```kotlin Android
+val oneWeekAgo = DateTime.now().minusDays(7)
 
 postRepository
     .getPosts()
-    .targetCommunity(communityId = "community-123")
-    .includeDeleted(includeDeleted = false)
-    .sortBy(sortOption = AmityCommunityFeedSortOption.LAST_CREATED)
+    .targetCommunity(communityId = communityId)
     .untilAt(oneWeekAgo)
     .build()
     .query()
-    .doOnNext { pagingData ->
-        // All posts will have createdAt >= oneWeekAgo
-    }
-    .subscribe()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
-  **Limitations**: `untilAt` does not affect posts already persisted in the local database — it only controls what appears in the live collection result. When not provided, pagination behaves normally with no time boundary.
+## Notes
 
-## Common Use Cases
+- For media galleries, set a data type filter and enable mixed media matching where the SDK supports it.
+- For moderation review queues, use review/feed status filters and apply your app's permission checks before showing restricted states.
+- Always dispose live collection subscriptions, notification tokens, or stream subscriptions when the screen is destroyed.
 
-    Display all posts in a community with real-time updates and customizable filtering options.
+## Related Topics
 
-    Show a user's post history with privacy controls and content type filtering.
-
-    Create image and video galleries by filtering posts with media attachments.
-
-## Best Practices
-
-    - Use specific post types instead of querying all types
-    - Implement pagination for large result sets
-    - Cache frequently accessed queries
-    - Dispose of live collections when no longer needed
-
-    - Show loading states during query execution
-    - Implement pull-to-refresh for live collections
-    - Provide empty states for no results
-    - Use skeleton screens for better perceived performance
-
-    - Handle network connectivity issues gracefully
-    - Implement retry mechanisms for failed queries
-    - Provide meaningful error messages to users
-    - Log query errors for debugging purposes
-
-    - Dispose of live collections when views are destroyed
-    - Implement proper lifecycle management
-    - Use weak references to prevent memory leaks
-    - Monitor memory usage in production
+    Retrieve one known post or a known set of post IDs
+    Render returned post content by type
+    Review approval and declined-post flows
 
 ---
 
 ### [Viewing Post Content](https://learn.social.plus/social-plus-sdk/social/content-management/posts/retrieval/viewing-content)
 
-> Display and render different post types with proper content handling and media optimization
+> Render post text, child media, polls, live stream data, room data, and local counts from returned SDK post objects.
 
-Understand how to properly display and render different types of posts in the social.plus SDK. Learn about the parent-child post structure and how to access various content types including images, files, videos, live streams, and polls.
+Posts can contain text directly and can also reference child posts for media attachments. Query and get APIs return composed post objects where each SDK exposes helpers for reading the post data.
 
-    Understand parent-child relationships in media posts
-    Access post data and media information efficiently
-    Handle images, videos, and files with multiple resolutions
-    Display polls and live streams in your application
+## Parent And Child Posts
 
-## Post Structure Overview
+Media posts commonly use a parent-child shape:
 
-In social.plus's SDK, posts with images, files, or videos follow a **Parent-Child relationship**, where each uploaded image/file is represented as a separate child post. When creating an image/file post, any text that is set will act as the Parent post.
+- The parent post carries the main feed item and text.
+- Child posts carry individual media attachments such as images, videos, and files.
+- SDK helpers expose composed children where the platform supports them.
 
-```mermaid
-graph TB
-    A[Parent Post - Text Content] --> B[Child Post 1 - Image]
-    A --> C[Child Post 2 - Image]
-    A --> D[Child Post 3 - Image]
-
-    B --> E[Image Info & Metadata]
-    C --> F[Image Info & Metadata]
-    D --> G[Image Info & Metadata]
-```
-
-The Parent post contains a `childrenPosts` property, which provides an array of Post instances for each child post. For more information about post structure, please refer to [Post Overview](../overview).
-
-### Key Concepts
-
-    - **Parent Post**: Contains the main text content and metadata
-    - **Child Posts**: Individual media items (images, files, videos)
-    - **Data Access**: Both parent and child posts use the same `data` property
-    - **Flexible Structure**: Allows efficient management of complex multimedia posts
-
-    - **Text Posts**: Access content directly through the `data` property
-    - **Media Posts**: Access media information through specialized functions
-    - **File Information**: Use `getFileInfo()` for file details and download URLs
-    - **Image Information**: Use `getImageInfo()` for image metadata and URLs
-
-## Accessing Children Posts
-
-Each instance of a Post holds several pieces of information, including data, reactions, comments, metadata, child posts, and more. Here's how to access parent and child post information:
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func accessPostAndItsChildrenInfo(liveObject: AmityObject<AmityPost>) {
-    token = liveObject.observe { liveObject, error in
-        guard let post = liveObject.snapshot else { return }
-
-        // 1. Accessing the post itself
-        let postId = post.postId
-        let postData = post.data
-        print("postId: \(postId), data: \(String(describing: postData))")
-
-        // 2. Accessing children posts
-        let childrenPosts = post.childrenPosts
-        guard !childrenPosts.isEmpty else {
-            print("This post has no children.")
-            return
-        }
-
-        for (index, childPost) in childrenPosts.enumerated() {
-            print("found [\(index)] child post")
-            print("- type: \(childPost.dataType)")
-
-            switch childPost.dataType {
-            case "file":
-                // This post is a file post. So we get file information
-                if let fileInfo = childPost.getFileInfo() {
-                    print("- fileInfo: \(fileInfo.fileId)")
-                }
-            case "image":
-                // This post is an image post. So we get image information
-                if let imageInfo = childPost.getImageInfo() {
-                    print("- imageInfo: \(imageInfo.fileId)")
-                }
-            default:
-                break
-            }
-        }
-    }
-}
-```
-
-```kotlin Android
-fun getPost(postId: String, postRepository: AmityPostRepository) {
-    postRepository.getPost(postId)
-        .doOnNext { amityPost: AmityPost ->
-            // AmityPost data is available
-            val children: List<AmityPost> = amityPost.getChildren()
-            // We check if this post has any children i.e file/image
-            if (children.isNotEmpty()) {
-                children.forEach { childPost ->
-                    when (childPost.getData()) {
-                        is AmityPost.Data.IMAGE -> {
-                            // This post is an image post. So we get image information
-                            val imageData: AmityImage? =
-                                (childPost.getData() as AmityPost.Data.IMAGE).getImage()
-                        }
-                        is AmityPost.Data.FILE -> {
-                            // This post is a file post. So we get file information
-                            val fileData: AmityFile? =
-                                (childPost.getData() as AmityPost.Data.FILE).getFile()
-                        }
-                        else -> { /* other post data types */ }
-                    }
-                }
-            }
-            // Since parent post contains text, we can access it as
-            val data: AmityPost.Data = amityPost.getData()
-            val text: String? = (amityPost.getData() as? AmityPost.Data.TEXT)?.getText()
-        }
-        .doOnError {
-            // handle error here
-        }.subscribe()
-}
-```
 
 ```typescript TypeScript
-import { PostRepository } from '@amityco/ts-sdk';
+function inspectPostContent(post: Amity.Post) {
+  const childCount = post.childrenPosts.length;
+  const localCommentCount = post.localCommentCount;
 
+  const image = post.getImageInfo();
+  const video = post.getVideoInfo();
+  const videoThumbnail = post.getVideoThumbnailInfo();
+  const file = post.getFileInfo();
+  const poll = post.getPollInfo();
+  const audio = post.getAudioInfo();
+  const clip = post.getClipInfo();
+  const room = post.getRoomInfo();
 
-// Get post only once by postId
-const getPost = async (postId: string): Promise<Amity.Post> => {
-  return new Promise<Amity.Post>((resolve) => {
-    const unsubscribe = PostRepository.getPost(postId, ({ data, loading }) => {
-      if (!loading) {
-        resolve(data);
-      }
-    });
-
-    // Unsubscribe immediately after getting the data to avoid memory leaks.
-    unsubscribe();
-  });
-};
-
-// Resolve information about the children of a post.
-const resolvePostChildrenInfo = async (postId: string): Promise<void> => {
-  const post = await getPost(postId);
-  const postChildren = post.children?.length ? await getPost(post.children[0]) : null;
-
-  // Check the type of the child post and handle accordingly.
-  if (postChildren) {
-    switch (postChildren.dataType) {
-      // Cast post data to the appropriate type using type assertion.
-      case 'image':
-        const imagePost = postChildren.data as Amity.Post<'image'>;
-        // Access imageFileId from the image post.
-        const imageFileId = imagePost.data?.fileId;
-        console.log('Image FileId:', imageFileId);
-        break;
-
-      case 'file':
-        const filePost = postChildren.data as Amity.Post<'file'>;
-        // Access fileId from the file post.
-        const fileId = filePost.data?.fileId;
-        console.log('FileId:', fileId);
-        break;
-
-      default:
-        // Handle other types or unknown cases.
-        console.log('Unknown or unsupported data type:', postChildren.dataType);
-        break;
-    }
-  }
-};
-```
-
-```dart Flutter
-void getPost(String postId) {
-  AmitySocialClient.newPostRepository()
-      .getPost(postId)
-      .then((AmityPost post) {
-    //parent post text is always TextData
-    //from this line you can get the post's text data
-    //eg 'Hello bob'
-    final textContent = post.data as TextData;
-    final childrenPosts = post.children;
-    //check if the chidren posts exist in the parent post
-    if (childrenPosts?.isNotEmpty == true) {
-      childrenPosts?.forEach((AmityPost childPost) {
-        //check if the current child post is an image post
-        if (childPost.type == AmityDataType.IMAGE) {
-          //if the current child post is an image post,
-          //we can cast its data to ImageData
-          final AmityPostData? amityPostData = childPost.data;
-          if (amityPostData != null) {
-            final imageData = amityPostData as ImageData;
-            //to get the full image url without transcoding
-            final largeImageUrl = imageData.getUrl(AmityImageSize.FULL);
-          }
-        }
-      });
-    }
-  }).onError((error, stackTrace) {
-    //handle error
+  renderResults({
+    childCount,
+    localCommentCount,
+    image,
+    video,
+    videoThumbnail,
+    file,
+    poll,
+    audio,
+    clip,
+    room,
   });
 }
 ```
 
-
-## Content Types
-
-### Image Posts
-
-Posting visual content such as photos, graphics, or images is facilitated by this type of post. Images are automatically transformed into four different sizes for versatile usage.
-
-    Thumbnail size for previews
-    Standard feed display
-    High-quality viewing
-    Original resolution
-
-**Maximum Size**: 1 GB per image. For more information about image handling, please refer to [Image Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling).
-
 ```swift iOS
-func getImageInfo(post: AmityPost) {
+func inspectPostContent(_ post: AmityPost) {
+    let childCount = post.childrenPosts.count
+    let localCommentCount = post.localCommentCount
+
     let image = post.getImageInfo()
-    print("FileId: \(image?.fileId)")
-    print("FileURL: \(image?.fileURL)")
-
-    // Use fileURL to download the image
-    // You can use fileDownload API from AmityFileRepository or
-    // other network clients to download the image
-}
-```
-
-```kotlin Android
-fun getImageInfo(
-    post: AmityPost
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.IMAGE -> {
-            val image = data.getImage()
-            val imageUrl = image?.getUrl(AmityImage.Size.MEDIUM)
-        }
-        else -> {}
-    }
-}
-```
-
-```typescript TypeScript
-import { FileRepository, PostRepository } from '@amityco/ts-sdk';
-// Get post data by postId
-const getPost = async (postId: string): Promise<Amity.Post> => {
-  return new Promise<Amity.Post>(resolve => {
-    const unsubscribe = PostRepository.getPost(postId, ({ data, loading }) => {
-      if (!loading) {
-        resolve(data);
-        unsubscribe();
-      }
-    });
-  });
-};
-
-// Get file information by fileId
-const getPostFile = async <T extends Amity.FileType>(fileId?: string): Promise<Amity.File<T> | null> => {
-  if (!fileId) return null;
-  const { data: file } = await FileRepository.getFile(fileId);
-  return file as Amity.File<T>;
-};
-
-// Get image post information along with its URL
-const getPostImageInfo = async (postId: string): Promise<Amity.File<'image'> | null> => {
-  const post = await getPost(postId);
-  const firstChildId = post.children?.[0];
-
-  if (firstChildId) {
-    const postChildren = await getPost(firstChildId);
-
-    // Ensure the post type is 'image' before attempting to get its image information
-    if (postChildren.dataType === 'image') {
-      const imagePost = postChildren as Amity.Post<'image'>;
-      const postImage = await getPostFile<'image'>(imagePost.data?.fileId);
-      console.log('Post Image URL:', postImage?.fileUrl);
-      console.log('Post ImageId:', postImage?.fileId);
-      return postImage;
-    }
-  }
-
-  return null;
-};
-```
-
-```dart Flutter
-void getImage(AmityPost post) {
-  final AmityPostData? amityPostData = post.data;
-  if (amityPostData != null) {
-    final imageData = amityPostData as ImageData;
-    //for large image url
-    final largeImageUrl = imageData.getUrl(AmityImageSize.LARGE);
-    //for small image url
-    final smallImageUrl = imageData.getUrl(AmityImageSize.SMALL);
-  }
-}
-```
-
-
-#### Image Size Parameters
-
-If you are using your own implementation to download the image of appropriate size, you need to construct the download URL yourself by appending size query parameter.
-
-**Example URL Construction:**
-```
-Base URL: https://my-image-download-link-from-amity/123/456
-Small Size: https://my-image-download-link-from-amity/123/456?size=small
-```
-
-### File Posts
-
-This is a post that contains a file attachment, such as a PDF, a Word document, or any other type of file. Useful for sharing documents, spreadsheets, presentations, and other file types within communities.
-
-
-For more information about file handling, please refer to [File Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/file).
-
-```swift iOS
-func getFileInfo(post: AmityPost) {
+    let video = post.getVideoInfo()
+    let videoThumbnail = post.getVideoThumbnailInfo()
     let file = post.getFileInfo()
-    print("FileId: \(file?.fileId)")
-    print("FileURL: \(file?.fileURL)")
+    let poll = post.getPollInfo()
+    let audio = post.getAudioInfo()
+    let clip = post.getClipInfo()
+    let room = post.getRoomInfo()
 
-    // Use fileURL to download the file
-    // You can use fileDownload API from AmityFileRepository or
-    // other network clients to download the file
+    showSuccessMessage([
+        childCount,
+        localCommentCount,
+        image?.fileId,
+        video?.fileId,
+        videoThumbnail?.fileId,
+        file?.fileId,
+        poll?.pollId,
+        audio?.fileId,
+        clip?.fileId,
+        room?.roomId
+    ])
 }
 ```
 
 ```kotlin Android
-fun getFileInfo(
-    post: AmityPost
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.FILE -> {
-            val file = data.getFile()
-            val fileUrl = file?.getUrl()
-            val fileName = file?.getFileName()
-            val fileSize = file?.getFileSize()
-            val mimeType = file?.getMimeType()
-        }
-        else -> {}
+fun inspectPostContent(post: AmityPost) {
+    val children = post.getChildren()
+    val localCommentCount = post.getLocalCommentCount()
+
+    when (val data = post.getData()) {
+        is AmityPost.Data.TEXT -> showSuccessMessage(data.getText())
+        is AmityPost.Data.IMAGE -> showSuccessMessage(data.getImage() ?: "")
+        is AmityPost.Data.FILE -> showSuccessMessage(data.getFile() ?: "")
+        is AmityPost.Data.AUDIO -> showSuccessMessage(data.getAudio() ?: "")
+        is AmityPost.Data.VIDEO -> showSuccessMessage(data.getThumbnailImage() ?: "")
+        is AmityPost.Data.CLIP -> showSuccessMessage(data.getThumbnailImage() ?: "")
+        is AmityPost.Data.LIVE_STREAM -> showSuccessMessage(data.getPostId())
+        is AmityPost.Data.ROOM -> showSuccessMessage(data.getRoom() ?: "")
+        is AmityPost.Data.POLL -> showSuccessMessage(data.getPollId())
+        is AmityPost.Data.CUSTOM -> showSuccessMessage(data.getDataType())
     }
+
+    showSuccessMessage(children.size + localCommentCount)
 }
-```
-
-```typescript TypeScript
-import { FileRepository, PostRepository } from '@amityco/ts-sdk';
-
-// Get post data by postId
-const getPost = async (postId: string): Promise<Amity.Post> => {
-  return new Promise<Amity.Post>(resolve => {
-    const unsubscribe = PostRepository.getPost(postId, ({ data, loading }) => {
-      if (!loading) {
-        resolve(data);
-        unsubscribe();
-      }
-    });
-  });
-};
-
-// Get file information by fileId
-const getPostFile = async <T extends Amity.FileType>(fileId?: string): Promise<Amity.File<T> | null> => {
-  if (!fileId) return null;
-  const { data: file } = await FileRepository.getFile(fileId);
-  return file as Amity.File<T>;
-};
-
-// Get file post information along with its URL
-const getPostFileInfo = async (postId: string): Promise<Amity.File<'file'> | null> => {
-  const post = await getPost(postId);
-  const firstChildId = post.children?.[0];
-
-  if (firstChildId) {
-    const postChildren = await getPost(firstChildId);
-
-    // Ensure the post type is 'file' before attempting to get its image information
-    if (postChildren.dataType === 'file') {
-      const filePost = postChildren as Amity.Post<'file'>;
-      const postFile = await getPostFile<'file'>(filePost.data?.fileId);
-      console.log('Post File URL:', postFile?.fileUrl);
-      console.log('Post FileId:', postFile?.fileId);
-      return postFile;
-    }
-  }
-
-  return null;
-};
 ```
 
 ```dart Flutter
-void getFile(AmityPost post) {
-  final AmityPostData? amityPostData = post.data;
-  if (amityPostData != null) {
-    final fileData = amityPostData as FileData;
-    final AmityFile amityFile = fileData.file!;
-    final String? fileUrl = amityFile.fileUrl;
-  }
-}
-```
+void inspectPostContent(AmityPost post) {
+  final children = post.children ?? <AmityPost>[];
+  final commentCount = post.commentCount ?? 0;
+  final data = post.data;
 
-### Video Posts
-
-Share video content within feeds, such as short clips or longer videos. Videos are automatically transcoded into different resolutions for optimal playback across devices.
-
-    Full HD quality
-    HD quality
-    Standard quality
-    Mobile-optimized
-    Source resolution
-
-**Maximum Size**: 1 GB per video. **Transcoding**: Videos undergo transcoding from their original resolution. Original size is accessible immediately, but transcoded resolutions take time to be ready.
-
-For more information about video handling, please refer to [Video Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling).
-
-```swift iOS
-func getVideoData(fromPost post: AmityPost) {
-    let childrenPosts = post.childrenPosts
-    let allVideosData = childrenPosts.compactMap { childPost in
-        childPost.getVideoInfo()
-    }
-
-    print("This post has \(allVideosData.count) videos.")
-
-    for (index, videoData) in allVideosData.enumerated() {
-        if let videoPath = videoData.getVideo(resolution: .original) {
-            print("The video[\(index)] can be watched or downloaded at \(videoPath).")
-        }
-    }
-}
-```
-
-```kotlin Android
-fun getVideoInfo(
-    post: AmityPost,
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.VIDEO -> {
-            val thumbnailUrl = data.getThumbnailImage()?.getUrl()
-            data.getVideo()
-                .doOnSuccess { video ->
-                    // resolution options
-                    val resolutions = video.getResolutions()
-                    val defaultResolution = resolutions.first()
-
-                    // url by selected resolution
-                    val videoUrl = video.getVideoUrl(defaultResolution)
-                }
-                .doOnError {
-                    // Exception
-                }
-                .subscribe()
-        }
-
-        else -> {}
-    }
-}
-```
-
-```typescript TypeScript
-import { FileRepository, PostRepository } from '@amityco/ts-sdk';
-
-// Get details of a video post's children.
-const getVideoPostChildren = async (postId: string): Promise<{ fileId?: string, thumbnailFileId?: string }> => {
-  const post = await new Promise<Amity.Post>((resolve, reject) => {
-    const unsubscribe = PostRepository.getPost(postId, ({ data, loading, error }) => {
-      if (!loading) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(data);
-        }
-        unsubscribe();
-      }
-    });
-  });
-
-  const postChildrenId = post.children[0];
-  const postChildren = await new Promise<Amity.Post<'video'>>((resolve, reject) => {
-    const unsubscribe = PostRepository.getPost(postChildrenId, ({ data, loading, error }) => {
-      if (!loading) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(data as Amity.Post<'video'>);
-        }
-        unsubscribe();
-      }
-    });
-  });
-
-  return {
-    fileId: postChildren.data?.videoFileId.original,
-    thumbnailFileId: postChildren.data?.thumbnailFileId,
-  };
-};
-
-// Get file information by fileId
-const getPostFile = async <T extends Amity.FileType>(fileId?: string): Promise<Amity.File<T> | null> => {
-  if (!fileId) return null;
-  const { data: file } = await FileRepository.getFile(fileId);
-  return file as Amity.File<T>;
-};
-
-// Retrieve URLs for video and its thumbnail.
-const fetchVideoAndThumbnail = async (postId: string) => {
-  const { fileId, thumbnailFileId } = await getVideoPostChildren(postId);
-  const videoFile = await getPostFile<'video'>(fileId);
-  const thumbnailFile = await getPostFile<'image'>(thumbnailFileId);
-
-  console.log('Video 360p URL:', videoFile?.videoUrl?.['360p']);
-  console.log('Video 480p URL:', videoFile?.videoUrl?.['480p']);
-  console.log('Video 360p URL:', videoFile?.videoUrl?.['720p']);
-  console.log('Video 360p URL:', videoFile?.videoUrl?.['1080p']);
-  console.log('Thumbnail URL:', thumbnailFile?.fileUrl);
-};
-```
-
-```dart Flutter
-void getVideo(AmityPost post) {
-  final AmityPostData? amityPostData = post.data;
-  if (amityPostData != null) {
-    final videoData = amityPostData as VideoData;
-    //for high quality video
-    videoData.getVideo(AmityVideoQuality.HIGH).then((AmityVideo video) {
-      //handle result
-    });
-    //for low quality video
-    videoData.getVideo(AmityVideoQuality.LOW).then((AmityVideo video) {
-      //handle result
-    });
-  }
-}
-```
-
-
-### Poll Posts
-
-Implement poll functionality in posts by leveraging the existing poll features in social.plus SDK. Polls can be created as child posts within the post thread, with poll data and options easily accessible to users.
-
-    Create polls with 2-10 answer options
-    Set custom voting deadlines or keep open indefinitely
-
-For more information about polls, please refer to [Polls](/social-plus-sdk/core-concepts/content-handling/poll).
-
-
-```swift iOS
-func getPoll(from post: AmityPost) {
-    let _ = post.getPollInfo()
-    // Access poll data, options, and voting results
-}
-```
-
-```kotlin Android
-fun getPollInfo(
-    post: AmityPost,
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.POLL -> {
-            data.getPoll()
-                .doOnNext { poll ->
-                    val pollQuestion = poll.getQuestion()
-                    val pollAnswerType = poll.getAnswerType()
-                    val pollAnswers = poll.getAnswers()
-                    val isPollOpen = poll.getStatus() == AmityPoll.Status.OPEN
-                    val pollClosingTime = poll.getClosedAt()
-                    val hasVoted = poll.isVoted()
-                }
-                .doOnError {
-                    // Exception
-                }
-                .subscribe()
-        }
-
-        else -> {}
-    }
-}
-```
-
-```typescript TypeScript
-import { PostRepository, PollRepository } from '@amityco/ts-sdk';
-
-// Get post data by postId
-const getPost = async (postId: string): Promise<Amity.Post> => {
-  return new Promise<Amity.Post>(resolve => {
-    const unsubscribe = PostRepository.getPost(postId, ({ data, loading }) => {
-      if (!loading) {
-        resolve(data);
-        unsubscribe();
-      }
-    });
-  });
-};
-
-// Get poll by pollId
-const getPoll = async (pollId: string): Promise<Amity.Poll | null> => {
-  return new Promise(resolve => {
-    const unsubscribe = PollRepository.getPoll(pollId, ({ data }) => {
-      resolve(data);
-      unsubscribe();
-    });
-  });
-};
-
-// Get poll post information along with its question and answers
-const getPostPollInfo = async (postId: string): Promise<Amity.Poll | null> => {
-  const post = await getPost(postId);
-  const firstChildId = post.children?.[0];
-
-  if (firstChildId) {
-    const postChildren = await getPost(firstChildId);
-
-    // Ensure the child post type is 'poll' before attempting to fetch its poll data.
-    if (postChildren.dataType === 'poll') {
-      const pollPost = postChildren as Amity.Post<'poll'>;
-      const pollId = pollPost.data?.pollId;
-      if (pollId) {
-        const postPoll = await getPoll(pollId);
-        console.log('Post Poll Question:', postPoll?.question);
-        console.log('Post Poll Answers:', postPoll?.answers);
-        return postPoll;
-      }
-    }
+  if (data is TextData) {
+    final text = data.text;
+  } else if (data is ImageData) {
+    final imageUrl = data.getUrl(AmityImageSize.MEDIUM);
+  } else if (data is FileData) {
+    final file = data.file;
+  } else if (data is VideoData) {
+    final thumbnail = data.thumbnail;
+  } else if (data is LiveStreamData) {
+    final streamId = data.streamId;
+  } else if (data is PollData) {
+    final pollId = data.pollId;
+  } else if (data is CustomData) {
+    final rawData = data.rawData;
   }
 
-  return null;
-};
-```
-
-```dart Flutter
-void getPollPost(AmityPost post) {
-  //parent post text is always TextData
-  //from this line you can get the post's text data
-  //eg 'What are your favorite songs?'
-  final textContent = post.data as TextData;
-  final childrenPosts = post.children;
-  //check if the chidren posts exist in the parent post
-  if (childrenPosts?.isNotEmpty == true) {
-    childrenPosts?.forEach((AmityPost childPost) {
-      //check if the current child post is an poll post
-      if (childPost.type == AmityDataType.POLL) {
-        //if the current child post is an poll post,
-        //we can cast its data to PollData
-        final AmityPostData? amityPostData = childPost.data;
-        if (amityPostData != null) {
-          final pollData = amityPostData as PollData;
-          pollData.getPoll().then((AmityPoll poll) {
-            //handle poll data here
-          });
-        }
-      }
-    });
-  }
+  final childCount = children.length;
+  final total = childCount + commentCount;
 }
 ```
 
 
-### Room Posts
+## Platform Notes
 
-Room posts enable interactive live room experiences with co-hosting capabilities. Rooms can be live (currently broadcasting) or recorded (playback available). Access room data to retrieve playback URLs based on the room status.
+| Platform | Content helpers |
+| --- | --- |
+| TypeScript | Linked post helpers include `childrenPosts`, `getImageInfo()`, `getVideoInfo()`, `getVideoThumbnailInfo()`, `getFileInfo()`, `getPollInfo()`, `getAudioInfo()`, `getClipInfo()`, and `getRoomInfo()` |
+| iOS | `AmityPost` exposes `childrenPosts` plus helper methods for image, video, thumbnail, file, poll, audio, clip, and room data |
+| Android | `AmityPost.getData()` returns a sealed data type; inspect it with `when` and use data-specific methods |
+| Flutter | Current public model exposes text, image, video, file, live stream, poll, and custom data classes; audio, clip, and room post data classes are not exposed in the current public model |
 
-    Stream live content in real-time
-    Access recorded sessions after broadcast ends
+## Rendering Guidance
 
-**Room Statuses**
-
-| Status | Description | Playback URL |
-|--------|-------------|--------------|
-| `live` | Room is currently broadcasting | Use `getLivePlaybackUrl()` |
-| `recorded` | Recording available for playback | Use `getRecordedPlaybackInfos()` |
-| `idle` | Room created but not yet live | No playback available |
-| `ended` | Broadcast ended, processing recording | No playback available yet |
-
-For more information about creating room posts, please refer to [Room Posts](/social-plus-sdk/social/content-management/posts/creation/room-post).
-
-#### Getting Room Playback URLs
-
-
-```swift iOS
-func getRoomPlaybackUrls(from post: AmityPost) {
-    guard let roomData = post.getRoomInfo() else { return }
-
-    let status = roomData.status
-    var playbackUrls: [String] = []
-
-    switch status {
-    case .live:
-        // Get live playback URL for active broadcast
-        if let liveUrl = roomData.livePlaybackUrl {
-            playbackUrls.append(liveUrl)
-        }
-    case .recorded:
-        // Get recorded playback URLs after broadcast ends
-        let recordedInfos = roomData.recordedData
-        playbackUrls = recordedInfos.compactMap { $0.playbackUrl }
-    default:
-        // Room is idle or ended, no playback available
-        break
-    }
-
-    print("Playback URLs: \(playbackUrls)")
-}
-```
-
-```kotlin Android
-fun getRoomPlaybackUrls(room: AmityRoom): List<String> {
-    val liveUrl = room.getLivePlaybackUrl()
-
-    val urls = if (room.getStatus() != AmityRoomStatus.RECORDED && !liveUrl.isNullOrBlank()) {
-        // Room is live, use live playback URL
-        listOf(liveUrl)
-    } else if (room.getStatus() == AmityRoomStatus.RECORDED) {
-        // Room has ended and recording is available
-        room.getRecordedPlaybackInfos()
-            ?.mapNotNull { it.url }
-            ?: emptyList()
-    } else {
-        // Room is idle or ended without recording
-        emptyList()
-    }
-
-    return urls
-}
-```
-
-```typescript TypeScript
-import { PostRepository, RoomRepository } from '@amityco/ts-sdk';
-
-async function getRoomPlaybackUrls(roomId: string): Promise<string[]> {
-  const room = await RoomRepository.getRoom(roomId);
-
-  let playbackUrls: string[] = [];
-
-  if (room.status === 'live') {
-    // Get live playback URL for active broadcast
-    const liveUrl = room.livePlaybackUrl;
-    if (liveUrl) {
-      playbackUrls.push(liveUrl);
-    }
-  } else if (room.status === 'recorded') {
-    // Get recorded playback URLs after broadcast ends
-    const recordedInfos = room.recordedPlaybackInfos || [];
-    playbackUrls = recordedInfos
-      .map(info => info.url)
-      .filter((url): url is string => !!url);
-  }
-
-  return playbackUrls;
-}
-```
-
-
-#### Rendering Video Playback
-
-Once you have the playback URL, use platform-specific video players to render the content.
-
-
-{/* doc-as-test: skip (truly-illustrative: present() is a UIViewController instance method — requires UIViewController subclass context, cannot compile in isolation) */}
-```swift iOS
-
-func playRoomVideo(url: String) {
-    guard let videoURL = URL(string: url) else { return }
-
-    // Create AVPlayer with the playback URL
-    let player = AVPlayer(url: videoURL)
-
-    // Create player view controller
-    let playerViewController = AVPlayerViewController()
-    playerViewController.player = player
-
-    // Present and play
-    present(playerViewController, animated: true) {
-        player.play()
-    }
-}
-
-// Usage with room post
-func playRoom(from post: AmityPost) {
-    guard let roomData = post.getRoomInfo() else { return }
-
-    if roomData.status == .live, let liveUrl = roomData.livePlaybackUrl {
-        playRoomVideo(url: liveUrl)
-    } else if roomData.status == .recorded {
-        if let firstRecordedUrl = roomData.recordedData.first?.playbackUrl {
-            playRoomVideo(url: firstRecordedUrl)
-        }
-    }
-}
-```
-
-{/* doc-as-test: skip(android-ui: requires media3/ExoPlayer not in compile classpath) */}
-```kotlin Android
-
-fun playRoomVideo(
-    context: Context,
-    urls: List<String>
-) {
-    if (urls.isEmpty()) return
-
-    // Create ExoPlayer instance
-    val exoPlayer = ExoPlayer.Builder(context).build()
-
-    // Add media items for each URL
-    urls.forEach { url ->
-        val mediaItem = MediaItem.fromUri(url)
-        exoPlayer.addMediaItem(mediaItem)
-    }
-
-    // Prepare and start playback
-    exoPlayer.prepare()
-    exoPlayer.playWhenReady = true
-}
-
-// Complete example with room data
-fun playRoomFromPost(
-    context: Context,
-    room: AmityRoom,
-    playerView: PlayerView
-) {
-    val urls = getRoomPlaybackUrls(room)
-
-    if (urls.isNotEmpty()) {
-        val exoPlayer = ExoPlayer.Builder(context).build()
-
-        // Bind player to view
-        playerView.player = exoPlayer
-
-        // Add all playback URLs as media items
-        urls.forEach { url ->
-            exoPlayer.addMediaItem(MediaItem.fromUri(url))
-        }
-
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
-    }
-}
-```
-
-```typescript TypeScript
-// Using HTML5 Video element or a video library like Video.js or HLS.js
-
-function playRoomVideo(url: string, videoElement: HTMLVideoElement) {
-  // For HLS streams, use HLS.js library
-  if (url.includes('.m3u8')) {
-    import('hls.js').then(({ default: Hls }) => {
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(videoElement);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoElement.play();
-        });
-      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        videoElement.src = url;
-        videoElement.play();
-      }
-    });
-  } else {
-    // For regular video URLs
-    videoElement.src = url;
-    videoElement.play();
-  }
-}
-
-// React example
-function RoomVideoPlayer({ roomId }: { roomId: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    async function loadVideo() {
-      const urls = await getRoomPlaybackUrls(roomId);
-      if (urls.length > 0 && videoRef.current) {
-        playRoomVideo(urls[0], videoRef.current);
-      }
-    }
-    loadVideo();
-  }, [roomId]);
-
-  return <video ref={videoRef} controls />;
-}
-```
-
-For Android, add Media3 ExoPlayer dependency to your `build.gradle`:
-```gradle
-dependencies {
-    implementation "androidx.media3:media3-exoplayer:1.+"
-    implementation "androidx.media3:media3-ui:1.+"
-    implementation "androidx.media3:media3-exoplayer-hls:1.+" // For HLS streams
-}
-```
-
-
-### Live Stream Posts (Deprecated)
-
-Live stream posts offer an effective means of creating captivating and interactive content that engages users and promotes deeper connections among them. The social.plus SDK enables developers to swiftly integrate live stream posts into social feeds.
-
-    Live engagement with audience
-    Easy integration into social feeds
-
-For more information about live streaming, please refer to [Video Streaming](/social-plus-sdk/video-new/broadcasting/overview).
-
-
-{/* doc-as-test: skip (truly-illustrative: references outer-scope 'post: AmityPost' variable — @_hasMissingDesignatedInitializers, cannot construct in type-check context) */}
-```swift iOS
-// Grab the stream object from the first child post
-if let firstChildPost = post.childrenPosts.first,
-   let _ = firstChildPost.getLiveStreamInfo() {
-    // Handle `stream` data here
-}
-```
-
-{/* doc-as-test: skip(android-ui: requires AmityVideoPlayer not in public API) */}
-```kotlin Android
-fun getLivestreamInfo(
-    post: AmityPost,
-    videoPlayer: AmityVideoPlayer
-) {
-    val data = post.getData()
-    when (data) {
-        is AmityPost.Data.LIVE_STREAM -> {
-            data.getStream()
-                .doOnNext { stream ->
-                    val title = stream.getTitle()
-                    val description = stream.getDescription()
-                    val thumbnailUrl = stream.getThumbnailImage()?.getUrl()
-
-                    val status = stream.getStatus()
-                    when (status) {
-                        AmityStream.Status.LIVE, AmityStream.Status.RECORDED  -> {
-                            videoPlayer.play(stream.getStreamId())
-                        }
-                        else -> {
-                            // content is not playable
-                        }
-                    }
-                }
-                .doOnError {
-                    // Exception
-                }
-                .subscribe()
-        }
-
-        else -> {}
-    }
-}
-```
-
-```typescript TypeScript
-import { StreamRepository } from '@amityco/ts-sdk';
-
-async function getStream() {
-  const stream = await StreamRepository.getStreamById('streamId');
-
-  return stream;
-}
-```
-
+- Prefer SDK helper methods over reading raw data maps when helpers exist.
+- Handle unknown or custom data types gracefully; custom post types are application-defined.
+- For video and clip playback, read the media object first and choose a URL or resolution your UI can render.
+- For room posts, check room status before presenting live or recorded playback UI.
+- Use `localCommentCount` where exposed when your UI should include replies in the visible comment count.
 
 ## Related Topics
 
-    Learn how to create basic text posts
-    Filter and retrieve posts by content type
-    Track visibility and engagement metrics
+    Query live post collections before rendering
+    Create posts with multiple media attachment types
+    Create room posts for live room experiences
 
 ---
 
