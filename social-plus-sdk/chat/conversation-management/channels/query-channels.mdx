@@ -1,238 +1,201 @@
 ---
 title: "Query Channels"
-description: "Search and retrieve channels based on various criteria including display name, tags, membership status, and channel type"
+description: "Query chat channels by type, membership, tags, deletion state, archive state, or known channel IDs."
 ---
 
-Use `getChannels` to search and retrieve channels filtered by display name, tags, membership status, and channel type. Results are returned as a Live Collection that updates automatically.
+Use channel queries to build inboxes, public channel discovery, event chat lists, and moderation views. Query support is similar across platforms, but not identical: TypeScript and Flutter expose keyword/display-name style searching, while Android's public channel query builder focuses on type, membership, tags, and deleted-state filters.
 
-## Query Capabilities
+## Filter Surface
 
-The query function returns a Live Collection of channels that match your search criteria, enabling you to display search results in your app or apply additional filtering as needed.
+| Filter | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Types | `types` | `types` | `.types(...)` or type helpers | `.types(...)` or type helpers |
+| Membership | `membership` | `filter` | `.filter(...)` where the builder exposes it | `.filter(...)` |
+| Tags | `tags`, `excludeTags` | `includingTags`, `excludingTags` | `.includingTags(...)`, `.excludingTags(...)` | `.includingTags(...)`, `.excludingTags(...)` |
+| Deleted state | `isDeleted` | `includeDeleted` | `.includeDeleted(...)` | `.includeDeleted(...)` |
+| Name or keyword | `displayName` | Not exposed on `AmityChannelQueryOptions` | Not exposed on public query builder | `.withKeyword(...)` |
+| Archive exclusion | `excludeArchives` | Not exposed | Not exposed | `.excludeArchives(...)` |
+| Sort | `sortBy` | Not exposed on current options | Not exposed on public query builder | `.sortBy(...)` with `LAST_ACTIVITY` |
+| Known IDs | `channelIds` | `getChannels(channelIds:)` | `getChannels(channelIds)` | Not exposed in the current public repository |
+
+## Query A Channel List
 
 <CardGroup cols={2}>
-  <Card title="Advanced Filtering" icon="filter">
-    **Multiple search criteria**
-    - Display name and tag-based searching
-    - Membership status filtering
-    - Channel type specification
-    - Include/exclude deleted channels
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    displayName: 'support',
+    membership: 'member',
+    types: ['community', 'live'],
+    tags: ['support'],
+    excludeTags: ['hidden'],
+    isDeleted: false,
+    excludeArchives: true,
+    sortBy: 'lastActivity',
+  },
+  ({ data: channels, onNextPage, hasNextPage, loading, error }) => {
+    if (error) handleError(error);
+
+    if (!loading && channels) {
+      renderResults(channels);
+    }
+
+    if (hasNextPage) onNextPage?.();
+  },
+);
+
+unsubscribe();
+```
   </Card>
-  <Card title="Live Collection Results" icon="bolt">
-    **Real-time search results**
-    - Automatic updates when channels change
-    - Pagination support for large result sets
-    - Efficient data loading and caching
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.community, AmityChannelQueryType.live]),
+    filter: .userIsMember,
+    includingTags: ["support"],
+    excludingTags: ["hidden"],
+    includeDeleted: false
+)
+
+let channels = channelRepository.getChannels(with: options)
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val includingTags = AmityTags().apply { add("support") }
+val excludingTags = AmityTags().apply { add("hidden") }
+
+val disposable = channelRepository
+    .getChannels()
+    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
+    .filter(AmityChannelFilter.MEMBER)
+    .includingTags(includingTags)
+    .excludingTags(excludingTags)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final liveCollection = AmityChatClient.newChannelRepository()
+    .getChannels()
+    .withKeyword('support')
+    .filter(AmityChannelFilter.MEMBER)
+    .types([AmityChannelType.COMMUNITY, AmityChannelType.LIVE])
+    .includingTags(['support'])
+    .excludingTags(['hidden'])
+    .includeDeleted(false)
+    .excludeArchives(true)
+    .sortBy(AmityChannelSortOption.LAST_ACTIVITY)
+    .getLiveCollection();
+
+liveCollection.getStreamController().stream.listen((channels) {
+  final count = channels.length;
+});
+
+await liveCollection.loadNext();
+```
   </Card>
 </CardGroup>
 
-## Channel Query Parameters
+## Query A Specific Type
 
-<Tabs>
-  <Tab title="Basic Search">
-    **Core search functionality**
-    
-    Search for channels using basic criteria such as display name and membership status.
+Use the type-specific helpers when the platform exposes them. Some helpers apply membership defaults: for example, Flutter's `conversationType()` and `liveType()` also set the filter to `MEMBER`.
 
-    ### Parameters
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ❌ | Search query for channel's public display name |
-    | `includeDeleted` | Boolean | ❌ | Include closed/deleted channels (`null` = both, `false` = active only) |
-    | `filter` | String | ❌ | Membership filter: `all` (default), `member`, `notMember`, `flagged` |
-    | `userId` | String | ❌ | Search channels created by specific user (admin only) |
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    types: ['conversation'],
+    membership: 'member',
+    isDeleted: false,
+  },
+  ({ data: channels }) => {
+    renderResults(channels);
+  },
+);
 
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    var token: AmityNotificationToken?
-
-    func queryChannelExample() {
-        
-        let query = AmityChannelQueryOptions(
-            types: [AmityChannelQueryType.conversation],
-            filter: .all,
-            includingTags: ["dog"],
-            excludingTags: ["cat"],
-            includeDeleted: false
-        )
-
-        token = channelRepository.getChannels(with: query).observe { liveCollection, error in
-            // ...
-        }
-        
-    }
-    ```
-
-    ```kotlin Android
-    fun queryChannel(channelRepository: AmityChannelRepository) {
-
-        channelRepository.getChannels()
-            // Choose specific types of channel
-            .types(listOf(AmityChannel.Type.LIVE, AmityChannel.Type.COMMUNITY))
-            // Filter by membership condition
-            .filter(AmityChannelFilter.ALL)
-            // Specify including or excluding tags
-            .includingTags(AmityTags().apply { add("dogs") })
-            .excludingTags(AmityTags().apply { add("cats") })
-            // Filter to include deleted channels default will return both
-            .includeDeleted(false)
-            .build()
-            .query()
-            .doOnNext {
-                // PagingData<AmityChannel>
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { ChannelRepository } from '@amityco/ts-sdk';
-
-    // Variables to handle pagination
-    let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-    let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
-
-    const unsubscriber = ChannelRepository.getChannels(
-      {},
-      ({ data: channels, onNextPage, hasNextPage, loading, error }) => {
-        if (error) {
-          // Handle any errors that occur during retrieving data
-        }
-        if (loading) {
-          // Handle the loading state, e.g., show a loading spinner
-        }
-        if (channels) {
-          // Process the data
-        }
-        hasMore = hasNextPage; // Update the hasMore flag
-        nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-      },
-    );
-
-    // Function to load more items (next page)
-    function loadMore() {
-      // Check if more pages are available to load
-      if (hasMore) {
-        nextPageFn?.(); // Execute the nextPage function if it's defined
-      }
-    }
-    ```
-
-    ```dart Flutter
-    List<AmityChannel> _amityChannel = <AmityChannel>[];
-    late ChannelLiveCollection liveCollection;
-    final scrollcontroller = ScrollController();
-
-    // Available Channel Type options
-    // AmityChannelType.COMMUNITY;
-    // AmityChannelType.LIVE;
-    // AmityChannelType.BROADCAST;
-    // AmityChannelType.CONVERSATION;
-
-    void queryChannels() {
-      // Query for Multiple types
-      final types = <AmityChannelType>[
-        AmityChannelType.LIVE,
-        AmityChannelType.COMMUNITY
-      ];
-      liveCollection = AmityChatClient.newChannelRepository()
-        .getChannels()
-        .types(types)
-        .excludeArchives(true) // boolean value to exclude archived channels, default is false
-        .getLiveCollection(); 
-
-    }
-    ```
-    </CodeGroup>
-  </Tab>
-  
-  <Tab title="Tag Filtering">
-    **Tag-based search capabilities**
-    
-    Filter channels using tag inclusion and exclusion criteria for precise search results.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `tags` | Array&lt;String&gt; | ❌ | Include channels with any of these tags |
-    | `excludeTags` | Array&lt;String&gt; | ❌ | Exclude channels containing any of these tags |
-
-    ### Tag Search Behavior
-
-    - **Including Tags**: When multiple tags are specified, the system searches for channels that contain **any** of those tags (OR logic)
-    - **Excluding Tags**: When multiple tags are specified, the system excludes channels that contain **any** of those tags (OR logic)
-    - **Combined Logic**: You can use both including and excluding tags together for precise filtering
-
-    <Note>
-    Tag filtering supports flexible search patterns. Including tags uses OR logic (channels with any specified tag), while excluding tags removes channels with any of the specified tags.
-    </Note>
-  </Tab>
-  
-  <Tab title="Channel Types">
-    **Filter by specific channel types**
-    
-    Limit search results to specific channel types based on your application needs.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `types` | Array&lt;ChannelType&gt; | ❌ | Channel types to include: `conversation`, `broadcast`, `live`, `community` |
-
-    ### Available Channel Types
-
-    - **`conversation`**: Private 1-on-1 and small group messaging
-    - **`community`**: Public channels discoverable by all users
-    - **`live`**: Event-focused channels with exclusive membership
-    - **`broadcast`**: One-way communication channels for announcements
-
-    <Tip>
-    You can specify multiple channel types in a single query to search across different channel categories simultaneously.
-    </Tip>
-  </Tab>
-</Tabs>
-
-## Filter Options Reference
-
-Understanding the available filter options helps you create precise channel queries:
-
-### Membership Filters
-
-| Filter | Description |
-|--------|-------------|
-| `all` | Search all channels (default) |
-| `member` | Search channels where user is a member |
-| `notMember` | Search channels where user is not a member |
-| `flagged` | Search channels that user has flagged |
-
-### Include Deleted Options
-
-| Value | Description |
-|-------|-------------|
-| `null` | Show both active and closed channels (default) |
-| `false` | Show only active/open channels |
-| `true` | Show only closed/deleted channels |
-
-## Next Steps
-
-<CardGroup cols={3}>
-  <Card title="Create Channels" href="/social-plus-sdk/chat/conversation-management/channels/create-channel" icon="plus">
-    Set up new channels with custom configurations
+unsubscribe();
+```
   </Card>
-  <Card title="Get Channels" href="/social-plus-sdk/chat/conversation-management/channels/get-channel" icon="file">
-    Retrieve specific channels by ID
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.conversation]),
+    filter: .userIsMember,
+    includeDeleted: false
+)
+
+let conversations = channelRepository.getChannels(with: options)
+showSuccessMessage(conversations)
+```
   </Card>
-  <Card title="Update Channels" href="/social-plus-sdk/chat/conversation-management/channels/update-channel" icon="pen">
-    Modify channel properties and settings
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = channelRepository
+    .getChannels()
+    .conversationType()
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final conversations = AmityChatClient.newChannelRepository()
+    .getChannels()
+    .conversationType()
+    .includeDeleted(false)
+    .excludeArchives(true)
+    .getLiveCollection();
+
+conversations.getStreamController().stream.listen((channels) {
+  final count = channels.length;
+});
+```
   </Card>
 </CardGroup>
 
-<Tip>
-**Search Strategy**: Combine multiple filter criteria for precise results. Use tag filtering for category-based searches, membership filters for user-specific queries, and channel types to focus on specific communication patterns.
-</Tip>
+## Known IDs
+
+If you already have channel IDs, use [Get Channels](./get-channel) instead of a filtered query. Batch get-by-IDs is currently exposed on TypeScript, iOS, and Android.
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Create Channels" href="./create-channel" icon="plus">
+    Create a channel before it appears in query results.
+  </Card>
+  <Card title="Get Channels" href="./get-channel" icon="file">
+    Retrieve a single channel or a known list of IDs.
+  </Card>
+  <Card title="Archive Channels" href="./archive-channels" icon="box-archive">
+    Hide or restore archived conversation channels where supported.
+  </Card>
+  <Card title="Query Members" href="../members/query-members" icon="users">
+    Query members after selecting a channel.
+  </Card>
+</CardGroup>
