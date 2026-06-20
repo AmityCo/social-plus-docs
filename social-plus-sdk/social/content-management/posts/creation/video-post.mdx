@@ -1,284 +1,102 @@
 ---
 title: "Video Posts"
-description: "Create posts with up to 10 videos (up to 2GB and 2 hours each). Videos must be uploaded before post creation. HDR not supported on iOS."
+description: "Create video posts with uploaded video files using the current Social+ SDKs."
 ---
 
-Use `PostRepository.createPost()` (TypeScript) or the platform post repository to publish video posts. Upload videos first to get file IDs, then reference them in the post. Each video becomes a child post with automatic thumbnail generation. Supports up to 10 videos, 2GB and 2 hours each. HDR video is not supported on iOS.
+Video posts combine uploaded videos with an optional text caption. Upload the videos first, then pass the uploaded video objects or file IDs to the post creation API.
+
+<Info>
+This page focuses on the SDK call that creates the post. See [Video Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling) for upload steps, supported file inputs, processing behavior, and upload constraints.
+</Info>
 
 <CardGroup cols={2}>
-  <Card title="Multi-Video Support" icon="video">
-    Upload up to 10 videos per post with automatic thumbnails
+  <Card title="Uploaded Videos" icon="video">
+    Create posts from video objects or file IDs returned by the file upload flow.
   </Card>
-  <Card title="Large File Support" icon="hard-drive">
-    Support for videos up to 2GB and 2 hours duration each
+  <Card title="Caption Support" icon="text">
+    Add text, metadata, mentions, or other SDK-supported post fields alongside the videos.
   </Card>
 </CardGroup>
 
-## Overview
+## Create a Video Post
 
-Video posts combine visual storytelling with descriptive text:
-
-- **Multiple Videos**: Up to 10 videos per post
-- **Rich Captions**: Text descriptions with mentions and hashtags
-- **File Size Limit**: Up to 2GB per video
-- **Duration Limit**: Maximum 2 hours per video
-- **Format Support**: Wide range of video formats
-- **Parent-Child Structure**: Each video becomes a child post
-- **Structure Type**: Pure video posts have `structureType = 'video'`
-
-<Info>
-Want to combine videos with other media types (images, audio, or files)? Check out [Mixed Media Posts](./mixed-media-post) which support up to 10 mixed attachments of any type.
-</Info>
-
-
-| Requirement | Limit | Notes |
-|-------------|-------|-------|
-| **File Size** | Up to 2GB per video | Platform may have lower limits |
-| **Duration** | Maximum 2 hours | Per individual video |
-| **Video Count** | Maximum 10 videos | Per single post |
-| **File Formats** | `mp4`, `mov`, `avi`, `mkv`, `webm`, `flv`, `3gp`, `wmv`, `vob`, `ogv`, `3g2`, `f4v`, `m4v` | Platform dependent |
-
-<Note>
-HDR video format uploads are not supported on iOS platform.
-</Note>
-
-<Warning>
-Videos must be uploaded first before creating the post. See [Video Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling) for upload instructions.
-</Warning>
-
-<Steps>
-  <Step title="Upload Videos">
-    Use the File Repository to upload your video files and get file IDs
-  </Step>
-  <Step title="Create Post">
-    Use the file IDs in your post creation request with captions
-  </Step>
-  <Step title="Handle Response">
-    The post will contain parent and child posts for each video
-  </Step>
-  <Step title="Monitor Progress">
-    Track video processing and thumbnail generation status
-  </Step>
-</Steps>
-
-## Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `text` | String | ✅ | Caption text (max 20,000 characters) |
-| `videos/videoFiles` | Array | ✅ | Video files or uploaded video data |
-| `targetType` | Enum | ✅ | Target type (`user` or `community`) |
-| `targetId` | String | ✅ | Target ID (`userId` or `communityId`) |
-| `metadata` | Object | ❌ | Custom metadata |
-| `attachmentProductTags` | AmityAttachmentProductTags | ❌ | Product tags on videos (max 20 per post) |
-
+The examples below create a video post in a community. Replace the target with the SDK's user-feed target when posting to a user.
 
 <CodeGroup>
 ```swift iOS
-func createVideoPost(videos: [AmityVideoData]) async throws {
-    let postRepository = AmityPostRepository(client: amityClient)
-
+func createVideoPost(
+    uploadedVideos: [AmityVideoData],
+    communityId: String
+) async throws -> AmityPost {
+    let postRepository = AmityPostRepository()
     let builder = AmityVideoPostBuilder()
-    builder.setVideos(videos)
-    builder.setText("Check out this video!")
+    builder.setVideos(uploadedVideos)
+    builder.setText("Video from today")
 
-    // Build attachment product tags: map fileId to media product tags
-    let attachmentProductTags = AmityAttachmentProductTags()
-    attachmentProductTags.add(
-        fileId: "video-file-id",
-        tag: AmityMediaProductTag(productId: "product-1")
-    )
-
-    let post = try await postRepository.createVideoPost(
+    return try await postRepository.createVideoPost(
         builder,
-        targetId: "userId1",
-        targetType: .user,
+        targetId: communityId,
+        targetType: .community,
         metadata: nil,
-        mentionees: nil,
-        attachmentProductTags: attachmentProductTags
+        mentionees: nil
     )
 }
 ```
 
 ```kotlin Android
 fun createVideoPost(
-    postRepository: AmityPostRepository,
-    videos: Set<AmityVideo>
+    uploadedVideos: Set<AmityVideo>,
+    communityId: String
 ) {
-    // Build attachment product tags: map each fileId to a list of product tags
-    val attachmentProductTags = AmityAttachmentProductTags.Builder()
-        .apply {
-            set(
-                "video-file-id",
-                listOf(AmityProductTag.Media(productId = "product-1"))
-            )
-        }
-        .build()
-
     postRepository.createVideoPost(
-        targetType = AmityPost.TargetType.USER,
-        targetId = "user1",
-        videos = videos,
-        text = "Check out this video!",
-        attachmentProductTags = attachmentProductTags
+        targetType = AmityPost.TargetType.COMMUNITY,
+        targetId = communityId,
+        videos = uploadedVideos,
+        text = "Video from today"
     )
-        .doOnSuccess { post: AmityPost ->
-            // Video post with product tags created successfully
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
+        .subscribe({ post ->
+            showSuccessMessage(post.getPostId())
+        }, { error ->
+            handleGeneralError(error)
+        })
 }
 ```
 
 ```typescript TypeScript
-import { PostRepository, PostContentType } from '@amityco/ts-sdk';
+import { PostRepository } from "@amityco/ts-sdk";
 
-async function createVideoPost(): Promise<Amity.Post> {
-  // Build attachment product tags
-  const attachmentTags = new AmityAttachmentProductTags();
-  attachmentTags.add("video-file-id", { productId: "product-1" });
-
-  const newPost = {
-    targetType: "user",
-    targetId: "userId1",
-    data: {
-      text: "Check out this video!",
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    text: "Video from today",
+  },
+  attachments: [
+    {
+      type: "video",
+      fileId,
     },
-    attachments: [
-      {
-        fileId: "video-file-id",
-        type: PostContentType.VIDEO,
-      },
-    ],
-    attachmentTags,
-  };
-
-  const { data: post } = await PostRepository.createPost(newPost);
-  return post;
-}
+  ],
+});
 ```
 
 ```dart Flutter
-late PagingController<AmityPost> _controller;
-
-void createVideoPost(List<AmityVideo> uploadedVideos) {
-  AmitySocialClient.newPostRepository()
+Future<AmityPost> createVideoPost(List<AmityVideo> uploadedVideos) {
+  return AmitySocialClient.newPostRepository()
       .createPost()
-      .targetUser('userId')
+      .targetCommunity(communityId)
       .video(uploadedVideos)
-      .text('Check out this video!')
-      .post()
-      .then((AmityPost post) {
-        // Success - add to feed
-        _controller.add(post);
-        print('Video post created successfully');
-      })
-      .onError((error, stackTrace) {
-        print('Error creating video post: $error');
-      });
+      .text('Video from today')
+      .post();
 }
 ```
-
 </CodeGroup>
 
-## Troubleshooting
+## Notes
 
-<AccordionGroup>
-  <Accordion title="Video Upload Failures" icon="upload">
-    **Problem**: Video uploads fail or timeout during upload
-    
-    **Solutions**:
-    - Check file size (must be under 2GB per video)
-    - Verify supported format (mp4, mov, avi, etc.)
-    - Ensure stable internet connection for large files
+- TypeScript accepts video attachments as `{ type: "video", fileId }`.
+- Android accepts a `Set<AmityVideo>`.
+- iOS accepts `[AmityVideoData]`.
+- Flutter accepts `List<AmityVideo>`.
 
-  </Accordion>
-  
-  <Accordion title="Video Quality Issues" icon="video">
-    **Problem**: Videos appear low quality or take long to load
-    
-    **Solutions**:
-    - Upload videos at optimal resolution (1080p recommended)
-    - Use appropriate bitrate (2-5 Mbps for 1080p)
-    - Choose efficient codecs (H.264 recommended)
-    - Consider adaptive bitrate streaming for large videos
-    
-  </Accordion>
-  
-  <Accordion title="HDR Video Support" icon="sun">
-    **Problem**: HDR videos not uploading on iOS
-
-    **Solution**: HDR video formats are not supported on iOS platform. Please convert to standard format.
-
-    ```typescript
-    // Check for HDR and convert if needed
-    if (Platform.OS === 'ios' && videoInfo.isHDR) {
-       convertToStandardFormat(videoFile)
-         .then(convertedFile => {
-           // Proceed with converted file
-         })
-         .catch(error => {
-           console.error('HDR conversion failed:', error);
-         });
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="Thumbnail Generation" icon="image">
-    **Problem**: Video thumbnails not generating or appearing incorrect
-    
-    **Solutions**:
-    - Wait for video processing to complete before displaying
-
-  </Accordion>
-  
-  <Accordion title="Duration Validation" icon="clock">
-    **Problem**: Videos exceed 2-hour duration limit
-    
-    **Solution**: Validate duration before upload and provide trimming options
-    
-    ```typescript
-    // Validate video duration
-    const validateDuration = (duration) => {
-      const maxDuration = 2 * 60 * 60; // 2 hours in seconds
-      if (duration > maxDuration) {
-        throw new Error('Video duration exceeds 2-hour limit. Please trim the video.');
-      }
-    };
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Common Use Cases
-
-- **Video Sharing**: Share personal videos and memories
-- **Tutorials**: Create step-by-step instructional content
-- **Live Updates**: Share real-time event footage
-- **Product Demos**: Showcase products in action
-- **Entertainment**: Share funny clips and entertainment content
-- **Educational Content**: Distribute learning materials and lectures
-
-## Related Topics
-
-<CardGroup cols={3}>
-  <Card title="Video Handling" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling" icon="upload">
-    Learn how to upload and manage video files before creating posts
-  </Card>
-  <Card title="Image Posts" href="./image-post" icon="image">
-    Create posts with photos and visual content
-  </Card>
-  <Card title="Audio Posts" href="./audio-post" icon="file-audio">
-    Create posts with audio attachments
-  </Card>
-  <Card title="File Posts" href="./file-post" icon="file">
-    Attach and share document files
-  </Card>
-  <Card title="Mixed Media Posts" href="./mixed-media-post" icon="layer-group">
-    Combine multiple media types in a single post
-  </Card>
-  <Card title="Live Streaming" href="/social-plus-sdk/video-new/broadcasting/overview" icon="circle-video">
-    Create real-time video broadcasts and live content
-  </Card>
-</CardGroup>
+For mixed attachment types, use [Mixed Media Posts](./mixed-media-post).
