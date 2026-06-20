@@ -38,6 +38,8 @@ import com.amity.socialcloud.sdk.api.social.post.AmityFeedRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityPostRepository
 import com.amity.socialcloud.sdk.api.social.community.AmityCommunityRepository
 import com.amity.socialcloud.sdk.api.social.community.query.AmityCommunitySortOption
+import com.amity.socialcloud.sdk.api.social.category.query.AmityCommunityCategorySortOption
+import com.amity.socialcloud.sdk.api.social.member.query.AmityCommunityMembershipSortOption
 import com.amity.socialcloud.sdk.api.core.user.AmityUserRepository
 import com.amity.socialcloud.sdk.api.core.user.search.AmityUserSortOption
 import com.amity.socialcloud.sdk.api.core.file.AmityFileRepository
@@ -52,6 +54,13 @@ import com.amity.socialcloud.sdk.model.social.community.AmityCommunity
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityFilter
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityPostSettings
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityStorySettings
+import com.amity.socialcloud.sdk.model.social.community.AmityJoinResult
+import com.amity.socialcloud.sdk.model.social.community.AmityJoinRequest
+import com.amity.socialcloud.sdk.model.social.community.AmityJoinRequestStatus
+import com.amity.socialcloud.sdk.model.social.category.AmityCommunityCategory
+import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMember
+import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMembership
+import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMembershipFilter
 import com.amity.socialcloud.sdk.model.social.comment.AmityComment
 import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotificationSettings
 import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotificationEvent
@@ -218,6 +227,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_social_entry", [])
         + pages_data.get("audited_community_lifecycle", [])
         + pages_data.get("audited_community_discovery", [])
+        + pages_data.get("audited_community_organization", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

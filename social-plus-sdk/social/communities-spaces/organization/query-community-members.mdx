@@ -1,413 +1,349 @@
 ---
 title: "Query Community Members"
-description: "Query community members using getMembers(). Filter by membership status, roles, keyword, and sort order. Returns a Live Collection."
+description: "Query and search community members by membership status, roles, keyword, and sort order"
 ---
 
-Use `getMembers()` to retrieve a filtered list of community members. Filter by membership status (member, banned, or all), role names, or keyword. Results update automatically via Live Collections when members join, leave, or change status.
-
-<CardGroup cols={2}>
-  <Card icon="filter" title="Member Filtering">
-    Filter members by status, roles, and membership criteria
-  </Card>
-  <Card icon="magnifying-glass" title="Keyword Search">
-    Search members by display name and user ID with live results
-  </Card>
-  <Card icon="user-crown" title="Role Management">
-    Query members by moderator roles and custom role assignments
-  </Card>
-  <Card icon="bolt" title="Live Collections">
-    Real-time member lists that update as membership changes
-  </Card>
-</CardGroup>
+Use member query APIs to list community members and member search APIs to find members by keyword. The available filters and sort values differ by SDK, so use the platform-specific values below.
 
 <Info>
-  Member queries return Live Collections that automatically update when members join, leave, change status, or receive role assignments.
+Member query APIs return paginated or live collection results depending on the platform. Use pagination controls for large communities.
 </Info>
 
 ## Query Community Members
 
-The `getMembers()` method retrieves community members with flexible filtering and sorting options, returning a Live Collection that updates in real-time as membership changes occur.
+### Common Parameters
 
-### Parameters
+| Parameter | Description |
+|-----------|-------------|
+| `communityId` | Community to query. |
+| `roles` | Optional role IDs to include, such as `community-moderator`. |
+| `includeDeleted` | Include deleted users when supported. |
+| `excludingRoles` | Exclude members with any role in the list. Available in TypeScript, iOS, and Android. |
+| `limit` / pagination token | Page-size and pagination controls where supported. |
 
-| Parameter        | Type    | Required | Description                                                                                                                              |
-| ---------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `communityId`    | String  | Yes      | Unique identifier of the community                                                                                                       |
-| `filter`         | Enum    | No       | Membership status filter: `.member`, `.banned`, `.all` (default: `.member`)                                                              |
-| `roles`          | Array   | No       | Filter by specific roles (e.g., `["community-moderator"]`, custom role IDs)                                                              |
-| `excludingRoles` | Array   | No       | Exclude members who hold any of the specified roles. Local-only filter — not sent to backend. Available on **iOS** and **Android** only. |
-| `sortBy`         | Enum    | No       | Sort order: `.displayName`, `.firstCreated`, `.lastCreated` (default: `.firstCreated`)                                                   |
-| `includeDeleted` | Boolean | No       | Include members whose users have been deleted (default: `false`)                                                                         |
+### Query Filters
 
-### Filter Options
+| Platform | Values |
+|----------|--------|
+| TypeScript | `memberships: ["member"]`, `["banned"]`, or omit `memberships` for all results |
+| iOS | `AmityCommunityMembership.QueryFilter.member`, `.banned`, `.all` |
+| Android | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
+| Flutter | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
 
-| Filter Type           | Options                                                     | Description                                                |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| **Membership Status** | `member`, `banned`, `all`                                   | Control which members are included based on ban status     |
-| **Role Filtering**    | `community-moderator`, `channel-moderator`, custom role IDs | Query members with specific roles                          |
-| **Deleted Users**     | `true`, `false`                                             | Include or exclude members whose user accounts are deleted |
+### Query Sort Options
 
-<Warning>
-  Querying banned members requires Admin role permissions. Moderators and regular users cannot access banned member lists for security reasons.
-</Warning>
+| Platform | Values |
+|----------|--------|
+| TypeScript | `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated`, `.lastJoin` |
+| Android | `DISPLAY_NAME`, `FIRST_CREATED`, `LAST_CREATED`, `LAST_JOIN` |
+| Flutter | `FIRST_CREATED`, `LAST_CREATED` |
 
 <CodeGroup>
-
 ```swift iOS
-var token: AmityNotificationToken?
+let communityMembership = AmityCommunityMembership(communityId: communityId)
 
-func getMembers(membershipOptions: AmityCommunityMembership.QueryFilter,
-                roles: [String],
-                sortBy: AmityCommunityMembershipSortOption) {
-    
-    let liveCollection = communityMembership.getMembers(
-        filter: membershipOptions,
-        roles: roles,
-        sortBy: sortBy,
-        includeDeleted: false
-    )
-    
-    token = liveCollection.observe { collection, change, error in
-        for _ in collection.allObjects() {
-            // For example, to handle each member in the list.
-        }
+let liveCollection = communityMembership.getMembers(
+    filter: .member,
+    roles: ["community-moderator"],
+    sortBy: .firstCreated,
+    includeDeleted: false,
+    excludingRoles: ["channel-moderator"]
+)
+
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
-    
+
+    let members = collection.snapshots
+    // Render members
 }
 ```
 
-
 ```kotlin Android
-fun queryCommunityMember(
-    communityRepository: AmityCommunityRepository
-) {
-    // ex. role filter
-    val roleFilter = listOf("moderator")
+fun queryCommunityMembers(communityRepository: AmityCommunityRepository) {
     communityRepository
         .membership(communityId = "communityId")
         .getMembers()
-        .filter(filter = AmityCommunityMembershipFilter.ALL)
-        .roles(roles = roleFilter)
+        .filter(filter = AmityCommunityMembershipFilter.MEMBER)
+        .roles(roles = listOf("community-moderator"))
+        .excludingRoles(excludingRoles = listOf("channel-moderator"))
         .includeDeleted(includeDeleted = false)
         .sortBy(sortBy = AmityCommunityMembershipSortOption.FIRST_CREATED)
         .build()
         .query()
         .doOnNext { members: PagingData<AmityCommunityMember> ->
-            // PagingData<AmityCommunityMember>
+            // Render members
         }
-        .doOnError {
-            // Exception
+        .doOnError { throwable ->
+            // Handle error
         }
         .subscribe()
 }
 ```
 
-
 ```typescript TypeScript
 import { CommunityRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let nextPageFn: (() => void) | undefined;
+let hasMore = false;
 
 const unsubscriber = CommunityRepository.Membership.getMembers(
-  { communityId: 'communityId' },
+  {
+    communityId,
+    memberships: ['member'],
+    roles: ['community-moderator'],
+    excludingRoles: ['channel-moderator'],
+    sortBy: 'firstCreated',
+    includeDeleted: false,
+    limit: 20,
+  },
   ({ data: members, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      // Handle error
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && members) {
+      // Render members
     }
-    if (members) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    hasMore = hasNextPage;
+    nextPageFn = onNextPage;
   },
 );
 
-// Function to load more items (next page)
-function loadMore() {
-  // Check if more pages are available to load
-  if (hasMore) {
-    nextPageFn?.(); // Execute the nextPage function if it's defined
-  }
+function loadMoreMembers() {
+  if (hasMore) nextPageFn?.();
 }
 ```
-
 
 ```dart Flutter
-final _amityCommunityMembers = <AmityCommunityMember>[];
-late PagingController<AmityCommunityMember> _communityMembersController;
+final members = <AmityCommunityMember>[];
+late PagingController<AmityCommunityMember> membersController;
 
-// Available sort options
-// AmityCommunityMembershipSortOption.LAST_CREATED;
-// AmityCommunityMembershipSortOption.FIRST_CREATED;
-
-// Available filter options
-// AmityCommunityMembershipFilter.ALL;
-// AmityCommunityMembershipFilter.MEMBER;
-
-void searchCommunityMembers(
-    String communityId,
-    String keyword,
-    AmityCommunityMembershipSortOption sortOption,
-    AmityCommunityMembershipFilter filter) {
-  _communityMembersController = PagingController(
+void queryCommunityMembers(String communityId) {
+  membersController = PagingController(
     pageFuture: (token) => AmitySocialClient.newCommunityRepository()
         .membership(communityId)
-        .searchMembers(keyword)
-        .filter(filter)
-        .sortBy(sortOption)
-        .includeDeleted(false) // optional to filter deleted users from the result
-        .roles([
-      'community-moderator'
-    ]) //optional to query specific members by roles
+        .getMembers()
+        .filter(AmityCommunityMembershipFilter.MEMBER)
+        .roles(['community-moderator'])
+        .includeDeleted(false)
+        .sortBy(AmityCommunityMembershipSortOption.FIRST_CREATED)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
-  )..addListener(
-      () {
-        if (_communityMembersController.error == null) {
-          //handle results, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _amityCommunityMembers.clear();
-          _amityCommunityMembers
-              .addAll(_communityMembersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
+  )..addListener(() {
+      if (membersController.error == null) {
+        members
+          ..clear()
+          ..addAll(membersController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
 }
 ```
-
 </CodeGroup>
 
 ## Search Community Members
 
-The `searchMembers()` method provides keyword-based member search with the same filtering and sorting capabilities as general queries, perfect for finding specific members within large communities.
+Search APIs use the same community and role controls, plus a keyword/display-name search input.
 
-### Parameters
+### Search Filters
 
-| Parameter        | Type    | Required | Description                                                                                                                              |
-| ---------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `keyword`        | String  | Yes      | Search term to match against display names and user IDs                                                                                  |
-| `communityId`    | String  | Yes      | Unique identifier of the community                                                                                                       |
-| `filter`         | Enum    | No       | Membership status filter: `.member`, `.banned`, `.all` (default: `.member`)                                                              |
-| `roles`          | Array   | No       | Filter search results by specific roles                                                                                                  |
-| `excludingRoles` | Array   | No       | Exclude members who hold any of the specified roles. Local-only filter — not sent to backend. Available on **iOS** and **Android** only. |
-| `sortBy`         | Enum    | No       | Sort order: `.displayName`, `.firstCreated`, `.lastCreated` (default: `.displayName`)                                                    |
-| `includeDeleted` | Boolean | No       | Include deleted users in search results (default: `false`)                                                                               |
+| Platform | Values |
+|----------|--------|
+| TypeScript | `memberships: ["member"]`, `["banned"]`, or omit `memberships` |
+| iOS | `AmityCommunityMembership.SearchFilter.member`, `.banned` |
+| Android | `AmityCommunityMembership.MEMBER`, `BANNED` |
+| Flutter | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
 
-### Search Behavior
+### Search Sort Options
 
-- **No Keyword**: Returns all members sorted by join date
-- **With Keyword**: Returns members with matching display names or user IDs, sorted by relevance
-- **Real-time Results**: Search results update automatically as members change
+| Platform | Values |
+|----------|--------|
+| TypeScript | `"displayName"`, `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated`, `.lastJoin` |
+| Android | `DISPLAY_NAME`, `FIRST_CREATED`, `LAST_CREATED`, `LAST_JOIN` |
+| Flutter | `FIRST_CREATED`, `LAST_CREATED` |
 
 <CodeGroup>
-
 ```swift iOS
-var searchToken: AmityNotificationToken?
-func searchMember(keyword: String,
-                  filter: [AmityCommunityMembership.SearchFilter],
-                  roles: [String],
-                  sortBy: AmityCommunityMembershipSortOption) {
-    
-    let liveCollection = communityMembership.searchMembers(
-        keyword: keyword,
-        filter: filter,
-        roles: roles,
-        sortBy: sortBy,
-        includeDeleted: false
-    )
-    
-    token = liveCollection.observe { collection, change, error in
-        for _ in collection.allObjects() {
-            // List of user with related keyword.
-        }
+let communityMembership = AmityCommunityMembership(communityId: communityId)
+
+let liveCollection = communityMembership.searchMembers(
+    keyword: "alex",
+    filter: [.member],
+    roles: ["community-moderator"],
+    sortBy: .displayName,
+    includeDeleted: false,
+    excludingRoles: ["channel-moderator"]
+)
+
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
-    
+
+    let members = collection.snapshots
+    // Render matching members
 }
 ```
 
-
 ```kotlin Android
-fun searchCommunityMember(
+fun searchCommunityMembers(
     communityRepository: AmityCommunityRepository,
     keyword: String
 ) {
-    // membership filter
-    val membershipFilters = listOf(AmityCommunityMembership.MEMBER, AmityCommunityMembership.BANNED)
-    // ex. role filter
-    val roleFilter = listOf("moderator")
-
     communityRepository
         .membership(communityId = "communityId")
         .searchMembers(keyword = keyword)
-        .roles(roles = roleFilter)
-        .membershipFilter(communityMembership = membershipFilters)
+        .roles(roles = listOf("community-moderator"))
+        .membershipFilter(
+            communityMembership = listOf(AmityCommunityMembership.MEMBER)
+        )
+        .excludingRoles(excludingRoles = listOf("channel-moderator"))
         .includeDeleted(includeDeleted = false)
         .sortBy(AmityCommunityMembershipSortOption.DISPLAY_NAME)
         .build()
         .query()
         .doOnNext { members: PagingData<AmityCommunityMember> ->
-            // PagingData<AmityCommunityMember>
-        }
-        .doOnError {
-            // Exception
+            // Render matching members
         }
         .subscribe()
 }
 ```
 
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
+
+function searchCommunityMembers(keyword: string) {
+  return CommunityRepository.Membership.searchMembers(
+    {
+      communityId,
+      search: keyword,
+      memberships: ['member'],
+      roles: ['community-moderator'],
+      excludingRoles: ['channel-moderator'],
+      sortBy: 'displayName',
+      includeDeleted: false,
+      limit: 20,
+    },
+    ({ data: members, loading, error }) => {
+      if (error) {
+        // Handle error
+        return;
+      }
+
+      if (!loading && members) {
+        // Render matching members
+      }
+    },
+  );
+}
+```
 
 ```dart Flutter
-final _amityCommunityMembers = <AmityCommunityMember>[];
-late PagingController<AmityCommunityMember> _communityMembersController;
+final searchResults = <AmityCommunityMember>[];
+late PagingController<AmityCommunityMember> searchController;
 
-void searchCommunityMembers(
-    String communityId,
-    String keyword,
-    AmityCommunityMembershipSortOption sortOption,
-    AmityCommunityMembershipFilter filter) {
-  _communityMembersController = PagingController(
+void searchCommunityMembers(String communityId, String keyword) {
+  searchController = PagingController(
     pageFuture: (token) => AmitySocialClient.newCommunityRepository()
         .membership(communityId)
         .searchMembers(keyword)
-        .filter(filter)
-        .sortBy(sortOption)
-        .includeDeleted(false) // optional to filter deleted users from the result
-        .roles([
-      'community-moderator'
-    ]) //optional to query specific members by roles
+        .filter(AmityCommunityMembershipFilter.MEMBER)
+        .roles(['community-moderator'])
+        .includeDeleted(false)
+        .sortBy(AmityCommunityMembershipSortOption.FIRST_CREATED)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
-  )..addListener(
-      () {
-        if (_communityMembersController.error == null) {
-          //handle results, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _amityCommunityMembers.clear();
-          _amityCommunityMembers
-              .addAll(_communityMembersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
+  )..addListener(() {
+      if (searchController.error == null) {
+        searchResults
+          ..clear()
+          ..addAll(searchController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
 }
 ```
-
 </CodeGroup>
 
-## Excluding Roles from Results
+## Excluding Roles
 
-<Info>
-  **Platform Availability**: The `excludingRoles` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
-</Info>
-
-The `excludingRoles` parameter lets you filter out members who hold specific roles from both `getMembers()` and `searchMembers()` results. This is useful for building member lists that exclude staff, bots, or other special-role users.
-
-- **ANY-match semantics** — A member is excluded if they hold **any** role from the exclusion list.
-- **`Combinable with roles`** — You can use both `roles` (inclusion) and `excludingRoles` (exclusion) together. Inclusion is applied first, then exclusion.
+Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. This filter is available in TypeScript, iOS, and Android. The current Flutter member query builder does not expose `excludingRoles`.
 
 <CodeGroup>
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
+
+const unsubscriber = CommunityRepository.Membership.getMembers(
+  {
+    communityId,
+    excludingRoles: ['community-moderator', 'channel-moderator'],
+    limit: 20,
+  },
+  ({ data: members }) => {
+    // Members do not include users with excluded roles
+  },
+);
+```
 
 ```swift iOS
-// Get community members excluding moderators
+let communityMembership = AmityCommunityMembership(communityId: communityId)
+
 let liveCollection = communityMembership.getMembers(
     filter: .member,
     roles: [],
-    excludingRoles: ["community-moderator", "channel-moderator"],
     sortBy: .firstCreated,
-    includeDeleted: false
+    includeDeleted: false,
+    excludingRoles: ["community-moderator", "channel-moderator"]
 )
 
-token = liveCollection.observe { collection, change, error in
-    // Members list will NOT include any moderators
+token = liveCollection.observe { collection, error in
+    let members = collection.snapshots
+    // Members do not include users with excluded roles
 }
 ```
 
-
 ```kotlin Android
-communityRepository
-    .membership(communityId = "communityId")
-    .getMembers()
-    .filter(filter = AmityCommunityMembershipFilter.MEMBER)
-    .excludingRoles(roles = listOf("community-moderator", "channel-moderator"))
-    .sortBy(sortBy = AmityCommunityMembershipSortOption.FIRST_CREATED)
-    .build()
-    .query()
-    .doOnNext { members: PagingData<AmityCommunityMember> ->
-        // Members list will NOT include any moderators
-    }
-    .subscribe()
+fun queryMembersExcludingRoles(communityRepository: AmityCommunityRepository) {
+    communityRepository
+        .membership(communityId = "communityId")
+        .getMembers()
+        .filter(filter = AmityCommunityMembershipFilter.MEMBER)
+        .excludingRoles(
+            excludingRoles = listOf("community-moderator", "channel-moderator")
+        )
+        .build()
+        .query()
+        .doOnNext { members: PagingData<AmityCommunityMember> ->
+            // Members do not include users with excluded roles
+        }
+        .subscribe()
+}
 ```
-
 </CodeGroup>
-
-<Warning>
-  If a role appears in both `roles` and `excludingRoles`, the exclusion takes precedence — members with that role will not appear in results.
-</Warning>
-
-## Role Management and Permissions
-
-### Default Roles
-
-| Role                    | ID                    | Permissions                 | Query Access       |
-| ----------------------- | --------------------- | --------------------------- | ------------------ |
-| **Community Moderator** | `community-moderator` | Full community management   | All members        |
-| **Channel Moderator**   | `channel-moderator`   | Channel-specific moderation | Channel members    |
-| **Member**              | N/A                   | Basic participation         | Cannot query roles |
-
-### Custom Roles
-
-- **SDK Assignment**: Custom roles can be assigned via SDK
-- **Community Level**: Roles apply only within specific communities
-- **Query Support**: Custom role IDs can be used in member queries
-
-<Warning>
-  Custom roles assigned via social.plus Console apply at the user level, not community level, and won't appear in community member role queries.
-</Warning>
-
-## Best Practices
-
-<Tip>
-  **Performance Optimization**: Use appropriate filters to reduce data transfer. Only query banned members when necessary, and cache frequently accessed member lists.
-</Tip>
-
-### Query Optimization
-
-1. **Filter Early**: Use specific filters to reduce result sets
-2. **Role Filtering**: Query specific roles only when needed
-3. **Pagination**: Implement proper pagination for large communities
-4. **Search Debouncing**: Debounce search queries to reduce API calls
-
-### User Experience Guidelines
-
-1. **Loading States**: Show skeleton screens during member data fetching
-2. **Search Feedback**: Provide clear search result counts and states
-3. **Permission Awareness**: Hide banned member queries from non-admin users
 
 ## Related Topics
 
 <CardGroup cols={2}>
-  <Card icon="user-plus" href="./join-leave-community" title="Community Membership">
+  <Card icon="user-plus" href="./join-leave-community" title="Join / Leave Community">
     Manage joining and leaving communities
   </Card>
-  <Card icon="shield-check" href="./community-moderation" title="Community Moderation">
-    Advanced member moderation and ban management
+  <Card icon="users-cog" href="./member-management" title="Member Management">
+    Add and remove community members
   </Card>
-  <Card icon="users" href="/social-plus-sdk/core-concepts/user-management/overview" title="User Management">
-    Core user identity and profile management
+  <Card icon="shield-check" href="./community-moderation" title="Community Moderation">
+    Manage roles, bans, and permissions
   </Card>
   <Card icon="key" href="/social-plus-sdk/core-concepts/user-management/roles-permissions" title="Roles & Permissions">
-    Understanding role-based access control
+    Understand role-based access control
   </Card>
 </CardGroup>

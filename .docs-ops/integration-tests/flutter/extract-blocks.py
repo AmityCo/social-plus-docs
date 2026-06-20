@@ -53,6 +53,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_social_entry", [])
         + pages_data.get("audited_community_lifecycle", [])
         + pages_data.get("audited_community_discovery", [])
+        + pages_data.get("audited_community_organization", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

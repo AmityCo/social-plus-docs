@@ -33850,6 +33850,180 @@ void getRecommendedCommunities() {
 
 ---
 
+### [Community Categories](https://learn.social.plus/social-plus-sdk/social/communities-spaces/organization/community-categories)
+
+> Query community categories and use them to filter community discovery
+
+Community categories are read through the SDK and managed in the social.plus Console. Client apps can query category lists, include or exclude deleted categories, and use category IDs when querying communities.
+
+Categories can only be created and updated from the social.plus Console. SDK access is limited to reading existing categories.
+
+## Query Categories
+
+Use `getCategories()` to retrieve community categories. The SDK returns paginated/live collection results depending on the platform.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `sortBy` | No | Sort order for categories. |
+| `includeDeleted` | No | Include deleted categories in the result. |
+| `limit` / pagination token | No | Page-size and pagination controls where supported by the platform. |
+
+### Sort Options
+
+| Platform | Sort values |
+|----------|-------------|
+| TypeScript | `"name"`, `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated` |
+| Android | `AmityCommunityCategorySortOption.NAME`, `FIRST_CREATED`, `LAST_CREATED` |
+| Flutter | `AmityCommunityCategorySortOption.NAME`, `FIRST_CREATED`, `LAST_CREATED` |
+
+```swift iOS
+let liveCollection = communityRepository.getCategories(
+    sortBy: .displayName,
+    includeDeleted: false
+)
+
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
+    }
+
+    let categories = collection.snapshots
+    // Render categories
+}
+```
+
+```kotlin Android
+fun queryCategories(communityRepository: AmityCommunityRepository) {
+    communityRepository
+        .getCategories()
+        .sortBy(sortOption = AmityCommunityCategorySortOption.NAME)
+        .includeDeleted(includeDeleted = false)
+        .build()
+        .query()
+        .doOnNext { categories: PagingData<AmityCommunityCategory> ->
+            // Render categories
+        }
+        .doOnError { throwable ->
+            // Handle error
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { CategoryRepository } from '@amityco/ts-sdk';
+
+let nextPageFn: (() => void) | undefined;
+let hasMore = false;
+
+const unsubscriber = CategoryRepository.getCategories(
+  {
+    sortBy: 'name',
+    includeDeleted: false,
+    limit: 20,
+  },
+  ({ data: categories, onNextPage, hasNextPage, loading, error }) => {
+    if (error) {
+      // Handle error
+      return;
+    }
+
+    if (!loading && categories) {
+      // Render categories
+    }
+
+    hasMore = hasNextPage;
+    nextPageFn = onNextPage;
+  },
+);
+
+function loadMoreCategories() {
+  if (hasMore) nextPageFn?.();
+}
+```
+
+```dart Flutter
+final categories = <AmityCommunityCategory>[];
+late PagingController<AmityCommunityCategory> categoryController;
+
+void queryCommunityCategories() {
+  categoryController = PagingController(
+    pageFuture: (token) => AmitySocialClient.newCommunityRepository()
+        .getCategories()
+        .sortBy(AmityCommunityCategorySortOption.NAME)
+        .includeDeleted(false)
+        .getPagingData(token: token, limit: 20),
+    pageSize: 20,
+  )..addListener(() {
+      if (categoryController.error == null) {
+        categories
+          ..clear()
+          ..addAll(categoryController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
+
+  categoryController.fetchNextPage();
+}
+```
+
+## Using Categories With Community Queries
+
+After retrieving categories, pass a category ID into community query APIs to filter community discovery.
+
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
+
+const unsubscriber = CommunityRepository.getCommunities(
+  {
+    categoryId: 'category-id',
+    sortBy: 'lastCreated',
+  },
+  ({ data: communities }) => {
+    // Render communities in this category
+  },
+);
+```
+
+```kotlin Android
+fun queryCommunitiesByCategory(categoryId: String) {
+    AmitySocialClient.newCommunityRepository()
+        .getCommunities()
+        .categoryId(categoryId = categoryId)
+        .build()
+        .query()
+        .subscribe { communities: PagingData<AmityCommunity> ->
+            // Render communities in this category
+        }
+}
+```
+
+```dart Flutter
+void queryCommunitiesByCategory(String categoryId) {
+  AmitySocialClient.newCommunityRepository()
+      .getCommunities()
+      .categoryId(categoryId)
+      .getLiveCollection(pageSize: 20)
+      .getStreamController()
+      .stream
+      .listen((communities) {
+        // Render communities in this category
+      });
+}
+```
+
+## Related Topics
+
+    Filter communities by category, membership, keyword, and sort order
+    Assign categories when creating a community
+
+---
+
 ### [Community Invitation Management](https://learn.social.plus/social-plus-sdk/social/communities-spaces/organization/community-invitation)
 
 > Manage community invitations to control membership growth and provide a personalized joining experience for users.
@@ -34670,47 +34844,18 @@ void checkPermssion(AmityPermission permission, String communityId) {
 
 ### [Join/Leave Community](https://learn.social.plus/social-plus-sdk/social/communities-spaces/organization/join-leave-community)
 
-> Join or leave communities using join() and leave(). Private communities create join requests that moderators approve or reject.
+> Join or leave communities, handle join requests, and manage approval flows
 
-Use `join()` to add the current user to a community and `leave()` to remove them. Public communities grant membership immediately. Private communities create a join request that a moderator must approve or reject before the user gains access.
+Use community membership APIs to let the active user join or leave a community. Communities that require approval return a pending join request instead of immediate membership.
 
-    Add users to communities with immediate or approval-based joining
-    Handle pending requests with user and moderator workflows
-    Remove users from communities and revoke access
-    Manage different community types and membership requirements
-
-Users automatically become members when joining a community and lose access when leaving. Private communities may require invitations or approval, creating join requests that moderators can approve or reject.
-
-## Community Types and Access Control
-
-Understanding community types is essential for implementing proper membership workflows:
-
-| Community Type | Visibility | Join Behavior | Use Case |
-|----------------|------------|---------------|----------|
-| **Public (No Approval)** | Discoverable | Immediate membership | Open communities, public discussions |
-| **Public (Requires Approval)** | Discoverable | Pending approval required | Moderated public communities |
-| **Private & Visible** | Discoverable, content hidden | Approval required | Semi-private groups with controlled access |
-| **Private & Hidden** | Not discoverable | Invitation/approval only | Exclusive communities, private groups |
-
-### Network-Level Membership Settings
-
-Your network can be configured with different membership acceptance modes:
-
-- **Automatic Membership** (default): Users become members immediately when added
-- **Invitation Acceptance**: Users receive invitations and must explicitly accept before joining
+iOS, Android, and TypeScript support object-based `community.join()` flows that return a success or pending result. Flutter currently exposes repository-level `joinCommunity()` and `leaveCommunity()` methods.
 
 ## Join Community
 
-The `join()` method adds the active user as a member of the specified community, enabling access to community content and participation privileges. The joining process varies based on community type and approval requirements.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `communityId` | String | Yes | Unique identifier of the community to join |
+For approval-aware flows, fetch a community object first and call `join()` where the platform supports it. The result tells you whether membership was granted immediately or a join request is pending.
 
 ```swift iOS
-var community: AmityCommunity! // Fetched Community
+var community: AmityCommunity! // Fetched community
 
 Task { @MainActor in
     do {
@@ -34718,34 +34863,42 @@ Task { @MainActor in
 
         switch result {
         case .success:
-            // Community does not require join approval & is joined immediately
-            // ...
+            // Joined immediately
             break
         case .pending(let joinRequest):
-            // Community requires join approval & joinRequest status is now in pending state
-            let joinRequestStatus = joinRequest.status
+            let status = joinRequest.status
+            // Show pending state
         }
     } catch let error {
-        // Handle error
+        handleError(error)
     }
 }
 ```
 
 ```kotlin Android
-fun joinCommunity(communityRepository: AmityCommunityRepository) {
-    communityRepository
-        .joinCommunity(communityId = "community1")
-        .doOnComplete {
-            //successfully joined community
-        }
-        .doOnError { throwable: Throwable ->
-            //Amity Error example
-            when {
-                AmityError.from(throwable) == AmityError.ITEM_NOT_FOUND -> {
-                    // Community doesn't exist
+fun joinCommunity(community: AmityCommunity) {
+    community.join()
+        .doOnSuccess { result ->
+            when (result) {
+                is AmityJoinResult.Success -> {
+                    // Joined immediately
                 }
-                AmityError.from(throwable) == AmityError.USER_IS_BANNED -> {
-                    // User is banned
+                is AmityJoinResult.Pending -> {
+                    val joinRequest = result.request
+                    // Show pending state
+                }
+            }
+        }
+        .doOnError { throwable ->
+            when (AmityError.from(throwable)) {
+                AmityError.ITEM_NOT_FOUND -> {
+                    // Community does not exist
+                }
+                AmityError.USER_IS_BANNED -> {
+                    // Current user is banned
+                }
+                else -> {
+                    // Handle other errors
                 }
             }
         }
@@ -34754,72 +34907,53 @@ fun joinCommunity(communityRepository: AmityCommunityRepository) {
 ```
 
 ```typescript TypeScript
-import { CommunityRepository } from '@amityco/ts-sdk';
+async function joinCommunity(community: Amity.Community): Promise<Amity.JoinResult> {
+  const result = await community.join();
 
-async function joinCommunity(
-  communityId: Amity.Community['communityId'],
-): Promise<Amity.JoinResult> {
-  return new Promise((resolve, reject) => {
-    const unsub = CommunityRepository.getCommunity(communityId, async response => {
-      try {
-        const community = response.data;
-        const joinCommunity = await community.join();
-        resolve(joinCommunity);
-        unsub();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  if (result.status === 'pending') {
+    const joinRequest = result.request;
+    // Show pending state
+  }
+
+  return result;
 }
 ```
 
 ```dart Flutter
-void joinCommunity(String communityId) {
-  AmitySocialClient.newCommunityRepository()
-      .joinCommunity(communityId)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+Future<void> joinCommunity(String communityId) async {
+  await AmitySocialClient.newCommunityRepository()
+      .joinCommunity(communityId);
 }
 ```
 
-## Join Request Management
+## Join Requests
 
-For communities requiring approval, join requests provide a workflow for users to request membership and moderators to control access.
+When a community requires approval, the SDK exposes the active user's request and moderator review flows.
 
-### User Operations
-
-#### Check Join Request Status
-
-Users can monitor the status of their submitted join requests:
+### Check My Join Request
 
 ```swift iOS
-var community: AmityCommunity! // Fetched Community
+var community: AmityCommunity! // Fetched community
 
 Task { @MainActor in
     do {
-        let joinRequest: AmityJoinRequest = try await community.getMyJoinRequest()
-
+        let joinRequest = try await community.getMyJoinRequest()
+        let status = joinRequest.status
+        // Render status
     } catch let error {
-        // Handle error
+        handleError(error)
     }
-
 }
 ```
 
 ```kotlin Android
-fun getJoinRequestsStatus(
-    community: AmityCommunity,
-) {
+fun getMyJoinRequest(community: AmityCommunity) {
     community.getMyJoinRequest()
         .doOnSuccess { joinRequest ->
-            // AmityJoinRequest
+            val status = joinRequest.getStatus()
+            // Render status
         }
-        .doOnError {
+        .doOnError { throwable ->
             // Handle error
         }
         .subscribe()
@@ -34828,30 +34962,102 @@ fun getJoinRequestsStatus(
 
 ```typescript TypeScript
 async function getMyJoinRequest(community: Amity.Community) {
-  try {
-    await community.getMyJoinRequest();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
+  const joinRequest = await community.getMyJoinRequest();
+
+  if (joinRequest?.status === 'pending') {
+    // Render pending state
   }
+
+  return joinRequest;
 }
 ```
 
-#### Cancel Join Request
+### Observe Pending Join Requests
 
-Users can cancel pending join requests:
+Moderators can observe join requests for a community and approve or reject individual requests.
 
 ```swift iOS
-var joinRequest: AmityJoinRequest! // Retrieved join request
+var community: AmityCommunity! // Fetched community
 
-func cancelJoinRequest() {
+token = community.getJoinRequests(status: .pending).observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
+    }
+
+    let joinRequests = collection.snapshots
+    // Render pending requests
+}
+```
+
+```kotlin Android
+fun observePendingJoinRequests(community: AmityCommunity) {
+    community.getJoinRequests(status = AmityJoinRequestStatus.PENDING)
+        .doOnNext { joinRequests: PagingData<AmityJoinRequest> ->
+            // Render pending requests
+        }
+        .doOnError { throwable ->
+            // Handle error
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { JoinRequestStatusEnum } from '@amityco/ts-sdk';
+
+function observePendingJoinRequests(community: Amity.Community) {
+  return community.getJoinRequests(
+    {
+      communityId: community.communityId,
+      type: 'communityJoinRequest',
+      targetType: 'community',
+      status: JoinRequestStatusEnum.Pending,
+      options: { limit: 20 },
+    },
+    ({ data: joinRequests, loading, error }) => {
+      if (error) {
+        // Handle error
+        return;
+      }
+
+      if (!loading && joinRequests) {
+        // Render pending requests
+      }
+    },
+  );
+}
+```
+
+### Cancel, Approve, Or Reject
+
+```swift iOS
+func cancelJoinRequest(_ joinRequest: AmityJoinRequest) {
     Task { @MainActor in
         do {
             try await joinRequest.cancel()
-            print("Join request cancelled successfully")
-            updateUIForCancelledRequest()
         } catch let error {
-            print("Error cancelling join request: \(error)")
+            handleError(error)
+        }
+    }
+}
+
+func approveJoinRequest(_ joinRequest: AmityJoinRequest) {
+    Task { @MainActor in
+        do {
+            try await joinRequest.approve()
+        } catch let error {
+            handleError(error)
+        }
+    }
+}
+
+func rejectJoinRequest(_ joinRequest: AmityJoinRequest) {
+    Task { @MainActor in
+        do {
+            try await joinRequest.reject()
+        } catch let error {
+            handleError(error)
         }
     }
 }
@@ -34861,134 +35067,15 @@ func cancelJoinRequest() {
 fun cancelJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.cancel()
         .doOnComplete {
-            println("Join request cancelled successfully")
-            updateUIForCancelledRequest()
-        }
-        .doOnError { error ->
-            println("Error cancelling join request: ${error.message}")
+            // Cancelled
         }
         .subscribe()
 }
-```
 
-```typescript TypeScript
-async function cancelJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.cancel();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
-}
-```
-
-### Moderator Operations
-
-#### Get Pending Join Requests
-
-Moderators can retrieve all pending join requests for their communities:
-
-```swift iOS
-var token: AmityNotificationToken?
-var community: AmityCommunity! // Fetched Community
-
-func getPendingJoinRequests() {
-    token = community.getJoinRequests(status: .pending).observe { liveCollection, _, error in
-        if let error = error {
-            print("Error fetching join requests: \(error)")
-            return
-        }
-
-        let joinRequests: [AmityJoinRequest] = liveCollection.snapshots
-
-        // Update UI with pending requests
-        updateJoinRequestsList(joinRequests)
-
-        print("Found \(joinRequests.count) pending join requests")
-    }
-}
-```
-
-```kotlin Android
-fun getPendingJoinRequests(community: AmityCommunity) {
-    community.getJoinRequests(status = AmityJoinRequestStatus.PENDING)
-        .doOnNext { joinRequests ->
-            // Handle pending join requests
-            println("Found ${joinRequests.size} pending join requests")
-            updateJoinRequestsList(joinRequests)
-        }
-        .doOnError { error ->
-            println("Error fetching join requests: ${error.message}")
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { JoinRequestStatusEnum } from '@amityco/ts-sdk';
-
-async function getJoinRequests(community: Amity.Community) {
-  try {
-    await community.getJoinRequests(
-      {
-        communityId: community.communityId,
-        type: 'communityJoinRequest',
-        targetType: 'community',
-        status: JoinRequestStatusEnum.Pending,
-        options: {
-          limit: 20,
-        },
-      },
-      response => {
-        console.log(response.data);
-        // Handle successful rejection, e.g., show a success message or update UI
-      },
-    );
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
-}
-```
-
-#### Approve/Reject Join Requests
-
-Moderators can approve or reject join requests:
-
-```swift iOS
-func approveJoinRequest(_ joinRequest: AmityJoinRequest) {
-    Task { @MainActor in
-        do {
-            try await joinRequest.approve()
-            print("Join request approved successfully")
-            refreshJoinRequestsList()
-        } catch let error {
-            print("Error approving join request: \(error)")
-        }
-    }
-}
-
-func rejectJoinRequest(_ joinRequest: AmityJoinRequest) {
-    Task { @MainActor in
-        do {
-            try await joinRequest.reject()
-            print("Join request rejected successfully")
-            refreshJoinRequestsList()
-        } catch let error {
-            print("Error rejecting join request: \(error)")
-        }
-    }
-}
-```
-
-```kotlin Android
 fun approveJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.approve()
         .doOnComplete {
-            println("Join request approved successfully")
-            refreshJoinRequestsList()
-        }
-        .doOnError { error ->
-            println("Error approving join request: ${error.message}")
+            // Approved
         }
         .subscribe()
 }
@@ -34996,71 +35083,57 @@ fun approveJoinRequest(joinRequest: AmityJoinRequest) {
 fun rejectJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.reject()
         .doOnComplete {
-            println("Join request rejected successfully")
-            refreshJoinRequestsList()
-        }
-        .doOnError { error ->
-            println("Error rejecting join request: ${error.message}")
+            // Rejected
         }
         .subscribe()
 }
 ```
 
 ```typescript TypeScript
+async function cancelJoinRequest(joinRequest: Amity.JoinRequest) {
+  await joinRequest.cancel();
+}
+
 async function approveJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.approve();
-    // Handle successful acceptance, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
+  await joinRequest.approve();
 }
 
 async function rejectJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.reject();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
+  await joinRequest.reject();
 }
 ```
 
 ## Leave Community
 
-The `leaveCommunity()` method removes the active user from a community, revoking access to community content and participation privileges.
+Use `leaveCommunity()` to remove the active user from a community.
 
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `communityId` | String | Yes | Unique identifier of the community to leave |
-
-Leaving a community immediately removes access to all community content, posts, and conversations. This action cannot be undone without rejoining.
+Leaving removes the current user's community membership. If the community requires approval, the user may need to request access again before rejoining.
 
 ```swift iOS
 do {
-    let success = try await communityRepository.leaveCommunity(withId: "community-id")
-} catch {
-    // Handle error here
+    try await communityRepository.leaveCommunity(withId: communityId)
+} catch let error {
+    handleError(error)
 }
 ```
 
 ```kotlin Android
-fun leaveCommunity(communityRepository: AmityCommunityRepository) {
+fun leaveCommunity(communityRepository: AmityCommunityRepository, communityId: String) {
     communityRepository
-        .leaveCommunity(communityId = "community1")
+        .leaveCommunity(communityId = communityId)
         .doOnComplete {
-            //successfully left community
+            // Left community
         }
-        .doOnError { throwable: Throwable ->
-            //Amity Error example
-            when {
-                AmityError.from(throwable) == AmityError.ITEM_NOT_FOUND -> {
-                    // Community doesn't exist
+        .doOnError { throwable ->
+            when (AmityError.from(throwable)) {
+                AmityError.ITEM_NOT_FOUND -> {
+                    // Community does not exist
                 }
-                AmityError.from(throwable) == AmityError.PERMISSION_DENIED -> {
+                AmityError.PERMISSION_DENIED -> {
                     // Permission denied
+                }
+                else -> {
+                    // Handle other errors
                 }
             }
         }
@@ -35071,49 +35144,24 @@ fun leaveCommunity(communityRepository: AmityCommunityRepository) {
 ```typescript TypeScript
 import { CommunityRepository } from '@amityco/ts-sdk';
 
-async function leaveCommunity(communityId: Amity.Community['communityId']): Promise<Boolean> {
+async function leaveCommunity(communityId: Amity.Community['communityId']) {
   const hasLeft = await CommunityRepository.leaveCommunity(communityId);
-
   return hasLeft;
 }
 ```
 
 ```dart Flutter
-void leaveCommunity(String communityId) {
-  AmitySocialClient.newCommunityRepository()
-      .leaveCommunity(communityId)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+Future<void> leaveCommunity(String communityId) async {
+  await AmitySocialClient.newCommunityRepository()
+      .leaveCommunity(communityId);
 }
 ```
 
-## Best Practices
-
-**User Experience**: Always provide clear feedback about membership status changes and explain any waiting periods for approval-based communities.
-
-### UI/UX Guidelines
-
-1. **Clear Status Indicators**: Show membership status and pending request states
-2. **Action Feedback**: Provide immediate feedback for join/leave actions
-3. **Error Handling**: Display user-friendly error messages with next steps
-4. **Confirmation Dialogs**: Confirm leave actions to prevent accidental departures
-
-### Implementation Patterns
-
-1. **Real-time Updates**: Use Live Objects to reflect membership changes immediately
-2. **Optimistic UI**: Update UI immediately, rollback on error
-3. **Request Management**: Implement proper join request workflows for moderators
-4. **Navigation Logic**: Handle post-leave navigation appropriately
-
 ## Related Topics
 
-    Administrative tools for adding and removing community members
-    Role management, banning, and permission controls
     View and search community member lists
+    Add and remove community members
+    Manage roles, bans, and permissions
     Invitation-based member onboarding workflows
 
 ---
@@ -35302,378 +35350,334 @@ void removeMembers(String communityId, List<String> removingMemberIds) {
 
 ### [Query Community Members](https://learn.social.plus/social-plus-sdk/social/communities-spaces/organization/query-community-members)
 
-> Query community members using getMembers(). Filter by membership status, roles, keyword, and sort order. Returns a Live Collection.
+> Query and search community members by membership status, roles, keyword, and sort order
 
-Use `getMembers()` to retrieve a filtered list of community members. Filter by membership status (member, banned, or all), role names, or keyword. Results update automatically via Live Collections when members join, leave, or change status.
+Use member query APIs to list community members and member search APIs to find members by keyword. The available filters and sort values differ by SDK, so use the platform-specific values below.
 
-    Filter members by status, roles, and membership criteria
-    Search members by display name and user ID with live results
-    Query members by moderator roles and custom role assignments
-    Real-time member lists that update as membership changes
-
-  Member queries return Live Collections that automatically update when members join, leave, change status, or receive role assignments.
+Member query APIs return paginated or live collection results depending on the platform. Use pagination controls for large communities.
 
 ## Query Community Members
 
-The `getMembers()` method retrieves community members with flexible filtering and sorting options, returning a Live Collection that updates in real-time as membership changes occur.
+### Common Parameters
 
-### Parameters
+| Parameter | Description |
+|-----------|-------------|
+| `communityId` | Community to query. |
+| `roles` | Optional role IDs to include, such as `community-moderator`. |
+| `includeDeleted` | Include deleted users when supported. |
+| `excludingRoles` | Exclude members with any role in the list. Available in TypeScript, iOS, and Android. |
+| `limit` / pagination token | Page-size and pagination controls where supported. |
 
-| Parameter        | Type    | Required | Description                                                                                                                              |
-| ---------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `communityId`    | String  | Yes      | Unique identifier of the community                                                                                                       |
-| `filter`         | Enum    | No       | Membership status filter: `.member`, `.banned`, `.all` (default: `.member`)                                                              |
-| `roles`          | Array   | No       | Filter by specific roles (e.g., `["community-moderator"]`, custom role IDs)                                                              |
-| `excludingRoles` | Array   | No       | Exclude members who hold any of the specified roles. Local-only filter — not sent to backend. Available on **iOS** and **Android** only. |
-| `sortBy`         | Enum    | No       | Sort order: `.displayName`, `.firstCreated`, `.lastCreated` (default: `.firstCreated`)                                                   |
-| `includeDeleted` | Boolean | No       | Include members whose users have been deleted (default: `false`)                                                                         |
+### Query Filters
 
-### Filter Options
+| Platform | Values |
+|----------|--------|
+| TypeScript | `memberships: ["member"]`, `["banned"]`, or omit `memberships` for all results |
+| iOS | `AmityCommunityMembership.QueryFilter.member`, `.banned`, `.all` |
+| Android | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
+| Flutter | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
 
-| Filter Type           | Options                                                     | Description                                                |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| **Membership Status** | `member`, `banned`, `all`                                   | Control which members are included based on ban status     |
-| **Role Filtering**    | `community-moderator`, `channel-moderator`, custom role IDs | Query members with specific roles                          |
-| **Deleted Users**     | `true`, `false`                                             | Include or exclude members whose user accounts are deleted |
+### Query Sort Options
 
-  Querying banned members requires Admin role permissions. Moderators and regular users cannot access banned member lists for security reasons.
-
+| Platform | Values |
+|----------|--------|
+| TypeScript | `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated`, `.lastJoin` |
+| Android | `DISPLAY_NAME`, `FIRST_CREATED`, `LAST_CREATED`, `LAST_JOIN` |
+| Flutter | `FIRST_CREATED`, `LAST_CREATED` |
 
 ```swift iOS
-var token: AmityNotificationToken?
+let communityMembership = AmityCommunityMembership(communityId: communityId)
 
-func getMembers(membershipOptions: AmityCommunityMembership.QueryFilter,
-                roles: [String],
-                sortBy: AmityCommunityMembershipSortOption) {
+let liveCollection = communityMembership.getMembers(
+    filter: .member,
+    roles: ["community-moderator"],
+    sortBy: .firstCreated,
+    includeDeleted: false,
+    excludingRoles: ["channel-moderator"]
+)
 
-    let liveCollection = communityMembership.getMembers(
-        filter: membershipOptions,
-        roles: roles,
-        sortBy: sortBy,
-        includeDeleted: false
-    )
-
-    token = liveCollection.observe { collection, change, error in
-        for _ in collection.allObjects() {
-            // For example, to handle each member in the list.
-        }
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
 
+    let members = collection.snapshots
+    // Render members
 }
 ```
 
-
 ```kotlin Android
-fun queryCommunityMember(
-    communityRepository: AmityCommunityRepository
-) {
-    // ex. role filter
-    val roleFilter = listOf("moderator")
+fun queryCommunityMembers(communityRepository: AmityCommunityRepository) {
     communityRepository
         .membership(communityId = "communityId")
         .getMembers()
-        .filter(filter = AmityCommunityMembershipFilter.ALL)
-        .roles(roles = roleFilter)
+        .filter(filter = AmityCommunityMembershipFilter.MEMBER)
+        .roles(roles = listOf("community-moderator"))
+        .excludingRoles(excludingRoles = listOf("channel-moderator"))
         .includeDeleted(includeDeleted = false)
         .sortBy(sortBy = AmityCommunityMembershipSortOption.FIRST_CREATED)
         .build()
         .query()
         .doOnNext { members: PagingData<AmityCommunityMember> ->
-            // PagingData<AmityCommunityMember>
+            // Render members
         }
-        .doOnError {
-            // Exception
+        .doOnError { throwable ->
+            // Handle error
         }
         .subscribe()
 }
 ```
 
-
 ```typescript TypeScript
 import { CommunityRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let nextPageFn: (() => void) | undefined;
+let hasMore = false;
 
 const unsubscriber = CommunityRepository.Membership.getMembers(
-  { communityId: 'communityId' },
+  {
+    communityId,
+    memberships: ['member'],
+    roles: ['community-moderator'],
+    excludingRoles: ['channel-moderator'],
+    sortBy: 'firstCreated',
+    includeDeleted: false,
+    limit: 20,
+  },
   ({ data: members, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      // Handle error
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && members) {
+      // Render members
     }
-    if (members) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    hasMore = hasNextPage;
+    nextPageFn = onNextPage;
   },
 );
 
-// Function to load more items (next page)
-function loadMore() {
-  // Check if more pages are available to load
-  if (hasMore) {
-    nextPageFn?.(); // Execute the nextPage function if it's defined
-  }
+function loadMoreMembers() {
+  if (hasMore) nextPageFn?.();
 }
 ```
-
 
 ```dart Flutter
-final _amityCommunityMembers = <AmityCommunityMember>[];
-late PagingController<AmityCommunityMember> _communityMembersController;
+final members = <AmityCommunityMember>[];
+late PagingController<AmityCommunityMember> membersController;
 
-// Available sort options
-// AmityCommunityMembershipSortOption.LAST_CREATED;
-// AmityCommunityMembershipSortOption.FIRST_CREATED;
-
-// Available filter options
-// AmityCommunityMembershipFilter.ALL;
-// AmityCommunityMembershipFilter.MEMBER;
-
-void searchCommunityMembers(
-    String communityId,
-    String keyword,
-    AmityCommunityMembershipSortOption sortOption,
-    AmityCommunityMembershipFilter filter) {
-  _communityMembersController = PagingController(
+void queryCommunityMembers(String communityId) {
+  membersController = PagingController(
     pageFuture: (token) => AmitySocialClient.newCommunityRepository()
         .membership(communityId)
-        .searchMembers(keyword)
-        .filter(filter)
-        .sortBy(sortOption)
-        .includeDeleted(false) // optional to filter deleted users from the result
-        .roles([
-      'community-moderator'
-    ]) //optional to query specific members by roles
+        .getMembers()
+        .filter(AmityCommunityMembershipFilter.MEMBER)
+        .roles(['community-moderator'])
+        .includeDeleted(false)
+        .sortBy(AmityCommunityMembershipSortOption.FIRST_CREATED)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
-  )..addListener(
-      () {
-        if (_communityMembersController.error == null) {
-          //handle results, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _amityCommunityMembers.clear();
-          _amityCommunityMembers
-              .addAll(_communityMembersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
+  )..addListener(() {
+      if (membersController.error == null) {
+        members
+          ..clear()
+          ..addAll(membersController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
 }
 ```
-
 
 ## Search Community Members
 
-The `searchMembers()` method provides keyword-based member search with the same filtering and sorting capabilities as general queries, perfect for finding specific members within large communities.
+Search APIs use the same community and role controls, plus a keyword/display-name search input.
 
-### Parameters
+### Search Filters
 
-| Parameter        | Type    | Required | Description                                                                                                                              |
-| ---------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `keyword`        | String  | Yes      | Search term to match against display names and user IDs                                                                                  |
-| `communityId`    | String  | Yes      | Unique identifier of the community                                                                                                       |
-| `filter`         | Enum    | No       | Membership status filter: `.member`, `.banned`, `.all` (default: `.member`)                                                              |
-| `roles`          | Array   | No       | Filter search results by specific roles                                                                                                  |
-| `excludingRoles` | Array   | No       | Exclude members who hold any of the specified roles. Local-only filter — not sent to backend. Available on **iOS** and **Android** only. |
-| `sortBy`         | Enum    | No       | Sort order: `.displayName`, `.firstCreated`, `.lastCreated` (default: `.displayName`)                                                    |
-| `includeDeleted` | Boolean | No       | Include deleted users in search results (default: `false`)                                                                               |
+| Platform | Values |
+|----------|--------|
+| TypeScript | `memberships: ["member"]`, `["banned"]`, or omit `memberships` |
+| iOS | `AmityCommunityMembership.SearchFilter.member`, `.banned` |
+| Android | `AmityCommunityMembership.MEMBER`, `BANNED` |
+| Flutter | `AmityCommunityMembershipFilter.MEMBER`, `BANNED`, `ALL` |
 
-### Search Behavior
+### Search Sort Options
 
-- **No Keyword**: Returns all members sorted by join date
-- **With Keyword**: Returns members with matching display names or user IDs, sorted by relevance
-- **Real-time Results**: Search results update automatically as members change
-
+| Platform | Values |
+|----------|--------|
+| TypeScript | `"displayName"`, `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated`, `.lastJoin` |
+| Android | `DISPLAY_NAME`, `FIRST_CREATED`, `LAST_CREATED`, `LAST_JOIN` |
+| Flutter | `FIRST_CREATED`, `LAST_CREATED` |
 
 ```swift iOS
-var searchToken: AmityNotificationToken?
-func searchMember(keyword: String,
-                  filter: [AmityCommunityMembership.SearchFilter],
-                  roles: [String],
-                  sortBy: AmityCommunityMembershipSortOption) {
+let communityMembership = AmityCommunityMembership(communityId: communityId)
 
-    let liveCollection = communityMembership.searchMembers(
-        keyword: keyword,
-        filter: filter,
-        roles: roles,
-        sortBy: sortBy,
-        includeDeleted: false
-    )
+let liveCollection = communityMembership.searchMembers(
+    keyword: "alex",
+    filter: [.member],
+    roles: ["community-moderator"],
+    sortBy: .displayName,
+    includeDeleted: false,
+    excludingRoles: ["channel-moderator"]
+)
 
-    token = liveCollection.observe { collection, change, error in
-        for _ in collection.allObjects() {
-            // List of user with related keyword.
-        }
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
 
+    let members = collection.snapshots
+    // Render matching members
 }
 ```
 
-
 ```kotlin Android
-fun searchCommunityMember(
+fun searchCommunityMembers(
     communityRepository: AmityCommunityRepository,
     keyword: String
 ) {
-    // membership filter
-    val membershipFilters = listOf(AmityCommunityMembership.MEMBER, AmityCommunityMembership.BANNED)
-    // ex. role filter
-    val roleFilter = listOf("moderator")
-
     communityRepository
         .membership(communityId = "communityId")
         .searchMembers(keyword = keyword)
-        .roles(roles = roleFilter)
-        .membershipFilter(communityMembership = membershipFilters)
+        .roles(roles = listOf("community-moderator"))
+        .membershipFilter(
+            communityMembership = listOf(AmityCommunityMembership.MEMBER)
+        )
+        .excludingRoles(excludingRoles = listOf("channel-moderator"))
         .includeDeleted(includeDeleted = false)
         .sortBy(AmityCommunityMembershipSortOption.DISPLAY_NAME)
         .build()
         .query()
         .doOnNext { members: PagingData<AmityCommunityMember> ->
-            // PagingData<AmityCommunityMember>
-        }
-        .doOnError {
-            // Exception
+            // Render matching members
         }
         .subscribe()
 }
 ```
 
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
+
+function searchCommunityMembers(keyword: string) {
+  return CommunityRepository.Membership.searchMembers(
+    {
+      communityId,
+      search: keyword,
+      memberships: ['member'],
+      roles: ['community-moderator'],
+      excludingRoles: ['channel-moderator'],
+      sortBy: 'displayName',
+      includeDeleted: false,
+      limit: 20,
+    },
+    ({ data: members, loading, error }) => {
+      if (error) {
+        // Handle error
+        return;
+      }
+
+      if (!loading && members) {
+        // Render matching members
+      }
+    },
+  );
+}
+```
 
 ```dart Flutter
-final _amityCommunityMembers = <AmityCommunityMember>[];
-late PagingController<AmityCommunityMember> _communityMembersController;
+final searchResults = <AmityCommunityMember>[];
+late PagingController<AmityCommunityMember> searchController;
 
-void searchCommunityMembers(
-    String communityId,
-    String keyword,
-    AmityCommunityMembershipSortOption sortOption,
-    AmityCommunityMembershipFilter filter) {
-  _communityMembersController = PagingController(
+void searchCommunityMembers(String communityId, String keyword) {
+  searchController = PagingController(
     pageFuture: (token) => AmitySocialClient.newCommunityRepository()
         .membership(communityId)
         .searchMembers(keyword)
-        .filter(filter)
-        .sortBy(sortOption)
-        .includeDeleted(false) // optional to filter deleted users from the result
-        .roles([
-      'community-moderator'
-    ]) //optional to query specific members by roles
+        .filter(AmityCommunityMembershipFilter.MEMBER)
+        .roles(['community-moderator'])
+        .includeDeleted(false)
+        .sortBy(AmityCommunityMembershipSortOption.FIRST_CREATED)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
-  )..addListener(
-      () {
-        if (_communityMembersController.error == null) {
-          //handle results, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _amityCommunityMembers.clear();
-          _amityCommunityMembers
-              .addAll(_communityMembersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
+  )..addListener(() {
+      if (searchController.error == null) {
+        searchResults
+          ..clear()
+          ..addAll(searchController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
 }
 ```
 
+## Excluding Roles
 
-## Excluding Roles from Results
+Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. This filter is available in TypeScript, iOS, and Android. The current Flutter member query builder does not expose `excludingRoles`.
 
-  **Platform Availability**: The `excludingRoles` parameter is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
 
-The `excludingRoles` parameter lets you filter out members who hold specific roles from both `getMembers()` and `searchMembers()` results. This is useful for building member lists that exclude staff, bots, or other special-role users.
-
-- **ANY-match semantics** — A member is excluded if they hold **any** role from the exclusion list.
-- **`Combinable with roles`** — You can use both `roles` (inclusion) and `excludingRoles` (exclusion) together. Inclusion is applied first, then exclusion.
-
+const unsubscriber = CommunityRepository.Membership.getMembers(
+  {
+    communityId,
+    excludingRoles: ['community-moderator', 'channel-moderator'],
+    limit: 20,
+  },
+  ({ data: members }) => {
+    // Members do not include users with excluded roles
+  },
+);
+```
 
 ```swift iOS
-// Get community members excluding moderators
+let communityMembership = AmityCommunityMembership(communityId: communityId)
+
 let liveCollection = communityMembership.getMembers(
     filter: .member,
     roles: [],
-    excludingRoles: ["community-moderator", "channel-moderator"],
     sortBy: .firstCreated,
-    includeDeleted: false
+    includeDeleted: false,
+    excludingRoles: ["community-moderator", "channel-moderator"]
 )
 
-token = liveCollection.observe { collection, change, error in
-    // Members list will NOT include any moderators
+token = liveCollection.observe { collection, error in
+    let members = collection.snapshots
+    // Members do not include users with excluded roles
 }
 ```
 
-
 ```kotlin Android
-communityRepository
-    .membership(communityId = "communityId")
-    .getMembers()
-    .filter(filter = AmityCommunityMembershipFilter.MEMBER)
-    .excludingRoles(roles = listOf("community-moderator", "channel-moderator"))
-    .sortBy(sortBy = AmityCommunityMembershipSortOption.FIRST_CREATED)
-    .build()
-    .query()
-    .doOnNext { members: PagingData<AmityCommunityMember> ->
-        // Members list will NOT include any moderators
-    }
-    .subscribe()
+fun queryMembersExcludingRoles(communityRepository: AmityCommunityRepository) {
+    communityRepository
+        .membership(communityId = "communityId")
+        .getMembers()
+        .filter(filter = AmityCommunityMembershipFilter.MEMBER)
+        .excludingRoles(
+            excludingRoles = listOf("community-moderator", "channel-moderator")
+        )
+        .build()
+        .query()
+        .doOnNext { members: PagingData<AmityCommunityMember> ->
+            // Members do not include users with excluded roles
+        }
+        .subscribe()
+}
 ```
-
-
-  If a role appears in both `roles` and `excludingRoles`, the exclusion takes precedence — members with that role will not appear in results.
-
-## Role Management and Permissions
-
-### Default Roles
-
-| Role                    | ID                    | Permissions                 | Query Access       |
-| ----------------------- | --------------------- | --------------------------- | ------------------ |
-| **Community Moderator** | `community-moderator` | Full community management   | All members        |
-| **Channel Moderator**   | `channel-moderator`   | Channel-specific moderation | Channel members    |
-| **Member**              | N/A                   | Basic participation         | Cannot query roles |
-
-### Custom Roles
-
-- **SDK Assignment**: Custom roles can be assigned via SDK
-- **Community Level**: Roles apply only within specific communities
-- **Query Support**: Custom role IDs can be used in member queries
-
-  Custom roles assigned via social.plus Console apply at the user level, not community level, and won't appear in community member role queries.
-
-## Best Practices
-
-  **Performance Optimization**: Use appropriate filters to reduce data transfer. Only query banned members when necessary, and cache frequently accessed member lists.
-
-### Query Optimization
-
-1. **Filter Early**: Use specific filters to reduce result sets
-2. **Role Filtering**: Query specific roles only when needed
-3. **Pagination**: Implement proper pagination for large communities
-4. **Search Debouncing**: Debounce search queries to reduce API calls
-
-### User Experience Guidelines
-
-1. **Loading States**: Show skeleton screens during member data fetching
-2. **Search Feedback**: Provide clear search result counts and states
-3. **Permission Awareness**: Hide banned member queries from non-admin users
 
 ## Related Topics
 
     Manage joining and leaving communities
-    Advanced member moderation and ban management
-    Core user identity and profile management
-    Understanding role-based access control
+    Add and remove community members
+    Manage roles, bans, and permissions
+    Understand role-based access control
 
 ---
 

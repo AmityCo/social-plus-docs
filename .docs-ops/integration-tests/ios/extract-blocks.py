@@ -52,6 +52,7 @@ var token: AmityNotificationToken? = nil
 let initialAccessToken: String = ""
 let imageData = Data()
 let channelId: String = ""
+let communityId: String = ""
 let signature: String = ""
 let expiresAt: Date? = Date()
 let channelMembership = AmityChannelMembership(channelId: "")

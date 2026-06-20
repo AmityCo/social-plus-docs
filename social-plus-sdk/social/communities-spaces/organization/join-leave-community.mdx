@@ -1,95 +1,64 @@
 ---
 title: "Join/Leave Community"
-description: "Join or leave communities using join() and leave(). Private communities create join requests that moderators approve or reject."
+description: "Join or leave communities, handle join requests, and manage approval flows"
 ---
 
-Use `join()` to add the current user to a community and `leave()` to remove them. Public communities grant membership immediately. Private communities create a join request that a moderator must approve or reject before the user gains access.
-
-<CardGroup cols={2}>
-  <Card title="Join Communities" icon="user-plus">
-    Add users to communities with immediate or approval-based joining
-  </Card>
-  <Card title="Join Request Management" icon="clock">
-    Handle pending requests with user and moderator workflows
-  </Card>
-  <Card title="Leave Communities" icon="user-minus">
-    Remove users from communities and revoke access
-  </Card>
-  <Card title="Community Access Control" icon="shield-check">
-    Manage different community types and membership requirements
-  </Card>
-</CardGroup>
+Use community membership APIs to let the active user join or leave a community. Communities that require approval return a pending join request instead of immediate membership.
 
 <Info>
-Users automatically become members when joining a community and lose access when leaving. Private communities may require invitations or approval, creating join requests that moderators can approve or reject.
+iOS, Android, and TypeScript support object-based `community.join()` flows that return a success or pending result. Flutter currently exposes repository-level `joinCommunity()` and `leaveCommunity()` methods.
 </Info>
-
-## Community Types and Access Control
-
-Understanding community types is essential for implementing proper membership workflows:
-
-| Community Type | Visibility | Join Behavior | Use Case |
-|----------------|------------|---------------|----------|
-| **Public (No Approval)** | Discoverable | Immediate membership | Open communities, public discussions |
-| **Public (Requires Approval)** | Discoverable | Pending approval required | Moderated public communities |
-| **Private & Visible** | Discoverable, content hidden | Approval required | Semi-private groups with controlled access |
-| **Private & Hidden** | Not discoverable | Invitation/approval only | Exclusive communities, private groups |
-
-### Network-Level Membership Settings
-
-Your network can be configured with different membership acceptance modes:
-
-- **Automatic Membership** (default): Users become members immediately when added
-- **Invitation Acceptance**: Users receive invitations and must explicitly accept before joining
 
 ## Join Community
 
-The `join()` method adds the active user as a member of the specified community, enabling access to community content and participation privileges. The joining process varies based on community type and approval requirements.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `communityId` | String | Yes | Unique identifier of the community to join |
+For approval-aware flows, fetch a community object first and call `join()` where the platform supports it. The result tells you whether membership was granted immediately or a join request is pending.
 
 <CodeGroup>
 ```swift iOS
-var community: AmityCommunity! // Fetched Community
+var community: AmityCommunity! // Fetched community
 
 Task { @MainActor in
     do {
         let result = try await community.join()
-        
+
         switch result {
         case .success:
-            // Community does not require join approval & is joined immediately
-            // ...
+            // Joined immediately
             break
         case .pending(let joinRequest):
-            // Community requires join approval & joinRequest status is now in pending state
-            let joinRequestStatus = joinRequest.status
+            let status = joinRequest.status
+            // Show pending state
         }
     } catch let error {
-        // Handle error
+        handleError(error)
     }
 }
 ```
 
 ```kotlin Android
-fun joinCommunity(communityRepository: AmityCommunityRepository) {
-    communityRepository
-        .joinCommunity(communityId = "community1")
-        .doOnComplete {
-            //successfully joined community
-        }
-        .doOnError { throwable: Throwable ->
-            //Amity Error example
-            when {
-                AmityError.from(throwable) == AmityError.ITEM_NOT_FOUND -> {
-                    // Community doesn't exist
+fun joinCommunity(community: AmityCommunity) {
+    community.join()
+        .doOnSuccess { result ->
+            when (result) {
+                is AmityJoinResult.Success -> {
+                    // Joined immediately
                 }
-                AmityError.from(throwable) == AmityError.USER_IS_BANNED -> {
-                    // User is banned
+                is AmityJoinResult.Pending -> {
+                    val joinRequest = result.request
+                    // Show pending state
+                }
+            }
+        }
+        .doOnError { throwable ->
+            when (AmityError.from(throwable)) {
+                AmityError.ITEM_NOT_FOUND -> {
+                    // Community does not exist
+                }
+                AmityError.USER_IS_BANNED -> {
+                    // Current user is banned
+                }
+                else -> {
+                    // Handle other errors
                 }
             }
         }
@@ -98,74 +67,55 @@ fun joinCommunity(communityRepository: AmityCommunityRepository) {
 ```
 
 ```typescript TypeScript
-import { CommunityRepository } from '@amityco/ts-sdk';
+async function joinCommunity(community: Amity.Community): Promise<Amity.JoinResult> {
+  const result = await community.join();
 
-async function joinCommunity(
-  communityId: Amity.Community['communityId'],
-): Promise<Amity.JoinResult> {
-  return new Promise((resolve, reject) => {
-    const unsub = CommunityRepository.getCommunity(communityId, async response => {
-      try {
-        const community = response.data;
-        const joinCommunity = await community.join();
-        resolve(joinCommunity);
-        unsub();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  if (result.status === 'pending') {
+    const joinRequest = result.request;
+    // Show pending state
+  }
+
+  return result;
 }
 ```
 
 ```dart Flutter
-void joinCommunity(String communityId) {
-  AmitySocialClient.newCommunityRepository()
-      .joinCommunity(communityId)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+Future<void> joinCommunity(String communityId) async {
+  await AmitySocialClient.newCommunityRepository()
+      .joinCommunity(communityId);
 }
 ```
 </CodeGroup>
 
-## Join Request Management
+## Join Requests
 
-For communities requiring approval, join requests provide a workflow for users to request membership and moderators to control access.
+When a community requires approval, the SDK exposes the active user's request and moderator review flows.
 
-### User Operations
-
-#### Check Join Request Status
-
-Users can monitor the status of their submitted join requests:
+### Check My Join Request
 
 <CodeGroup>
 ```swift iOS
-var community: AmityCommunity! // Fetched Community
+var community: AmityCommunity! // Fetched community
 
 Task { @MainActor in
     do {
-        let joinRequest: AmityJoinRequest = try await community.getMyJoinRequest()
-        
+        let joinRequest = try await community.getMyJoinRequest()
+        let status = joinRequest.status
+        // Render status
     } catch let error {
-        // Handle error
+        handleError(error)
     }
-    
 }
 ```
 
 ```kotlin Android
-fun getJoinRequestsStatus(
-    community: AmityCommunity,
-) {
+fun getMyJoinRequest(community: AmityCommunity) {
     community.getMyJoinRequest()
         .doOnSuccess { joinRequest ->
-            // AmityJoinRequest
+            val status = joinRequest.getStatus()
+            // Render status
         }
-        .doOnError {
+        .doOnError { throwable ->
             // Handle error
         }
         .subscribe()
@@ -174,32 +124,106 @@ fun getJoinRequestsStatus(
 
 ```typescript TypeScript
 async function getMyJoinRequest(community: Amity.Community) {
-  try {
-    await community.getMyJoinRequest();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
+  const joinRequest = await community.getMyJoinRequest();
+
+  if (joinRequest?.status === 'pending') {
+    // Render pending state
   }
+
+  return joinRequest;
 }
 ```
 </CodeGroup>
 
-#### Cancel Join Request
+### Observe Pending Join Requests
 
-Users can cancel pending join requests:
+Moderators can observe join requests for a community and approve or reject individual requests.
 
 <CodeGroup>
 ```swift iOS
-var joinRequest: AmityJoinRequest! // Retrieved join request
+var community: AmityCommunity! // Fetched community
 
-func cancelJoinRequest() {
+token = community.getJoinRequests(status: .pending).observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
+    }
+
+    let joinRequests = collection.snapshots
+    // Render pending requests
+}
+```
+
+```kotlin Android
+fun observePendingJoinRequests(community: AmityCommunity) {
+    community.getJoinRequests(status = AmityJoinRequestStatus.PENDING)
+        .doOnNext { joinRequests: PagingData<AmityJoinRequest> ->
+            // Render pending requests
+        }
+        .doOnError { throwable ->
+            // Handle error
+        }
+        .subscribe()
+}
+```
+
+```typescript TypeScript
+import { JoinRequestStatusEnum } from '@amityco/ts-sdk';
+
+function observePendingJoinRequests(community: Amity.Community) {
+  return community.getJoinRequests(
+    {
+      communityId: community.communityId,
+      type: 'communityJoinRequest',
+      targetType: 'community',
+      status: JoinRequestStatusEnum.Pending,
+      options: { limit: 20 },
+    },
+    ({ data: joinRequests, loading, error }) => {
+      if (error) {
+        // Handle error
+        return;
+      }
+
+      if (!loading && joinRequests) {
+        // Render pending requests
+      }
+    },
+  );
+}
+```
+</CodeGroup>
+
+### Cancel, Approve, Or Reject
+
+<CodeGroup>
+```swift iOS
+func cancelJoinRequest(_ joinRequest: AmityJoinRequest) {
     Task { @MainActor in
         do {
             try await joinRequest.cancel()
-            print("Join request cancelled successfully")
-            updateUIForCancelledRequest()
         } catch let error {
-            print("Error cancelling join request: \(error)")
+            handleError(error)
+        }
+    }
+}
+
+func approveJoinRequest(_ joinRequest: AmityJoinRequest) {
+    Task { @MainActor in
+        do {
+            try await joinRequest.approve()
+        } catch let error {
+            handleError(error)
+        }
+    }
+}
+
+func rejectJoinRequest(_ joinRequest: AmityJoinRequest) {
+    Task { @MainActor in
+        do {
+            try await joinRequest.reject()
+        } catch let error {
+            handleError(error)
         }
     }
 }
@@ -209,138 +233,15 @@ func cancelJoinRequest() {
 fun cancelJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.cancel()
         .doOnComplete {
-            println("Join request cancelled successfully")
-            updateUIForCancelledRequest()
-        }
-        .doOnError { error ->
-            println("Error cancelling join request: ${error.message}")
+            // Cancelled
         }
         .subscribe()
 }
-```
 
-```typescript TypeScript
-async function cancelJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.cancel();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
-}
-```
-</CodeGroup>
-
-### Moderator Operations
-
-#### Get Pending Join Requests
-
-Moderators can retrieve all pending join requests for their communities:
-
-<CodeGroup>
-```swift iOS
-var token: AmityNotificationToken?
-var community: AmityCommunity! // Fetched Community
-
-func getPendingJoinRequests() {
-    token = community.getJoinRequests(status: .pending).observe { liveCollection, _, error in
-        if let error = error {
-            print("Error fetching join requests: \(error)")
-            return
-        }
-        
-        let joinRequests: [AmityJoinRequest] = liveCollection.snapshots
-        
-        // Update UI with pending requests
-        updateJoinRequestsList(joinRequests)
-        
-        print("Found \(joinRequests.count) pending join requests")
-    }
-}
-```
-
-```kotlin Android
-fun getPendingJoinRequests(community: AmityCommunity) {
-    community.getJoinRequests(status = AmityJoinRequestStatus.PENDING)
-        .doOnNext { joinRequests ->
-            // Handle pending join requests
-            println("Found ${joinRequests.size} pending join requests")
-            updateJoinRequestsList(joinRequests)
-        }
-        .doOnError { error ->
-            println("Error fetching join requests: ${error.message}")
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { JoinRequestStatusEnum } from '@amityco/ts-sdk';
-
-async function getJoinRequests(community: Amity.Community) {
-  try {
-    await community.getJoinRequests(
-      {
-        communityId: community.communityId,
-        type: 'communityJoinRequest',
-        targetType: 'community',
-        status: JoinRequestStatusEnum.Pending,
-        options: {
-          limit: 20,
-        },
-      },
-      response => {
-        console.log(response.data);
-        // Handle successful rejection, e.g., show a success message or update UI
-      },
-    );
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
-}
-```
-</CodeGroup>
-
-#### Approve/Reject Join Requests
-
-Moderators can approve or reject join requests:
-
-<CodeGroup>
-```swift iOS
-func approveJoinRequest(_ joinRequest: AmityJoinRequest) {
-    Task { @MainActor in
-        do {
-            try await joinRequest.approve()
-            print("Join request approved successfully")
-            refreshJoinRequestsList()
-        } catch let error {
-            print("Error approving join request: \(error)")
-        }
-    }
-}
-
-func rejectJoinRequest(_ joinRequest: AmityJoinRequest) {
-    Task { @MainActor in
-        do {
-            try await joinRequest.reject()
-            print("Join request rejected successfully")
-            refreshJoinRequestsList()
-        } catch let error {
-            print("Error rejecting join request: \(error)")
-        }
-    }
-}
-```
-
-```kotlin Android
 fun approveJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.approve()
         .doOnComplete {
-            println("Join request approved successfully")
-            refreshJoinRequestsList()
-        }
-        .doOnError { error ->
-            println("Error approving join request: ${error.message}")
+            // Approved
         }
         .subscribe()
 }
@@ -348,75 +249,61 @@ fun approveJoinRequest(joinRequest: AmityJoinRequest) {
 fun rejectJoinRequest(joinRequest: AmityJoinRequest) {
     joinRequest.reject()
         .doOnComplete {
-            println("Join request rejected successfully")
-            refreshJoinRequestsList()
-        }
-        .doOnError { error ->
-            println("Error rejecting join request: ${error.message}")
+            // Rejected
         }
         .subscribe()
 }
 ```
 
 ```typescript TypeScript
+async function cancelJoinRequest(joinRequest: Amity.JoinRequest) {
+  await joinRequest.cancel();
+}
+
 async function approveJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.approve();
-    // Handle successful acceptance, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
+  await joinRequest.approve();
 }
 
 async function rejectJoinRequest(joinRequest: Amity.JoinRequest) {
-  try {
-    await joinRequest.reject();
-    // Handle successful rejection, e.g., show a success message or update UI
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
+  await joinRequest.reject();
 }
 ```
 </CodeGroup>
 
 ## Leave Community
 
-The `leaveCommunity()` method removes the active user from a community, revoking access to community content and participation privileges.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `communityId` | String | Yes | Unique identifier of the community to leave |
+Use `leaveCommunity()` to remove the active user from a community.
 
 <Warning>
-Leaving a community immediately removes access to all community content, posts, and conversations. This action cannot be undone without rejoining.
+Leaving removes the current user's community membership. If the community requires approval, the user may need to request access again before rejoining.
 </Warning>
 
 <CodeGroup>
 ```swift iOS
 do {
-    let success = try await communityRepository.leaveCommunity(withId: "community-id")
-} catch {
-    // Handle error here
+    try await communityRepository.leaveCommunity(withId: communityId)
+} catch let error {
+    handleError(error)
 }
 ```
 
 ```kotlin Android
-fun leaveCommunity(communityRepository: AmityCommunityRepository) {
+fun leaveCommunity(communityRepository: AmityCommunityRepository, communityId: String) {
     communityRepository
-        .leaveCommunity(communityId = "community1")
+        .leaveCommunity(communityId = communityId)
         .doOnComplete {
-            //successfully left community
+            // Left community
         }
-        .doOnError { throwable: Throwable ->
-            //Amity Error example
-            when {
-                AmityError.from(throwable) == AmityError.ITEM_NOT_FOUND -> {
-                    // Community doesn't exist
+        .doOnError { throwable ->
+            when (AmityError.from(throwable)) {
+                AmityError.ITEM_NOT_FOUND -> {
+                    // Community does not exist
                 }
-                AmityError.from(throwable) == AmityError.PERMISSION_DENIED -> {
+                AmityError.PERMISSION_DENIED -> {
                     // Permission denied
+                }
+                else -> {
+                    // Handle other errors
                 }
             }
         }
@@ -427,58 +314,31 @@ fun leaveCommunity(communityRepository: AmityCommunityRepository) {
 ```typescript TypeScript
 import { CommunityRepository } from '@amityco/ts-sdk';
 
-async function leaveCommunity(communityId: Amity.Community['communityId']): Promise<Boolean> {
+async function leaveCommunity(communityId: Amity.Community['communityId']) {
   const hasLeft = await CommunityRepository.leaveCommunity(communityId);
-
   return hasLeft;
 }
 ```
 
 ```dart Flutter
-void leaveCommunity(String communityId) {
-  AmitySocialClient.newCommunityRepository()
-      .leaveCommunity(communityId)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+Future<void> leaveCommunity(String communityId) async {
+  await AmitySocialClient.newCommunityRepository()
+      .leaveCommunity(communityId);
 }
 ```
 </CodeGroup>
 
-## Best Practices
-
-<Tip>
-**User Experience**: Always provide clear feedback about membership status changes and explain any waiting periods for approval-based communities.
-</Tip>
-
-### UI/UX Guidelines
-
-1. **Clear Status Indicators**: Show membership status and pending request states
-2. **Action Feedback**: Provide immediate feedback for join/leave actions
-3. **Error Handling**: Display user-friendly error messages with next steps
-4. **Confirmation Dialogs**: Confirm leave actions to prevent accidental departures
-
-### Implementation Patterns
-
-1. **Real-time Updates**: Use Live Objects to reflect membership changes immediately
-2. **Optimistic UI**: Update UI immediately, rollback on error
-3. **Request Management**: Implement proper join request workflows for moderators
-4. **Navigation Logic**: Handle post-leave navigation appropriately
-
 ## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="Member Management" href="./member-management" icon="users-cog">
-    Administrative tools for adding and removing community members
-  </Card>
-  <Card title="Community Moderation" href="./community-moderation" icon="shield-check">
-    Role management, banning, and permission controls
-  </Card>
   <Card title="Query Community Members" href="./query-community-members" icon="magnifying-glass">
     View and search community member lists
+  </Card>
+  <Card title="Member Management" href="./member-management" icon="users-cog">
+    Add and remove community members
+  </Card>
+  <Card title="Community Moderation" href="./community-moderation" icon="shield-check">
+    Manage roles, bans, and permissions
   </Card>
   <Card title="Community Invitation" href="./community-invitation" icon="inbox-out">
     Invitation-based member onboarding workflows
