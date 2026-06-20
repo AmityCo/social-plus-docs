@@ -69,6 +69,8 @@ import com.amity.socialcloud.sdk.model.social.category.AmityCommunityCategory
 import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMember
 import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMembership
 import com.amity.socialcloud.sdk.model.social.member.AmityCommunityMembershipFilter
+import com.amity.socialcloud.sdk.model.core.notificationtray.AmityNotificationTrayItem
+import com.amity.socialcloud.sdk.model.core.notificationtray.AmityNotificationTraySeen
 import com.amity.socialcloud.sdk.model.core.invitation.AmityInvitation
 import com.amity.socialcloud.sdk.model.core.invitation.AmityInvitationStatus
 import com.amity.socialcloud.sdk.model.chat.settings.AmityMembershipAcceptanceType
@@ -257,6 +259,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_comment_actions", [])
         + pages_data.get("audited_stories", [])
         + pages_data.get("audited_discovery_search", [])
+        + pages_data.get("audited_notifications", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
