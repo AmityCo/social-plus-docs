@@ -72,6 +72,10 @@ def build_classpath():
         GRADLE_CACHE / "io.reactivex.rxjava3/rxjava",
         "rxjava-3.1*.jar",
     )
+    rxjava2 = find_jar(
+        GRADLE_CACHE / "io.reactivex.rxjava2/rxjava",
+        "rxjava-2.2*.jar",
+    )
     rxandroid_aar = find_jar(
         GRADLE_CACHE / "io.reactivex.rxjava3/rxandroid",
         "rxandroid-3.0*.aar",
@@ -117,6 +121,7 @@ def build_classpath():
         (kotlin_stdlib, "kotlin-stdlib"),
         (annotations, "annotations"),
         (rxjava3, "rxjava3"),
+        (rxjava2, "rxjava2"),
         (rxandroid, "rxandroid"),
         (reactive_streams, "reactive-streams"),
         (paging_common, "paging-common"),
@@ -131,7 +136,7 @@ def build_classpath():
         raise FileNotFoundError(f"Missing required JARs: {missing}")
 
     compile_cp = ":".join(str(j) for j in [
-        amity_sdk, amity_rxbridge, amity_log, rxjava3, kotlin_stdlib, android_jar, annotations,
+        amity_sdk, amity_rxbridge, amity_log, rxjava3, rxjava2, kotlin_stdlib, android_jar, annotations,
         rxandroid, reactive_streams, paging_common, gson, joda_time,
     ])
     return compile_cp, kotlin_stdlib, annotations

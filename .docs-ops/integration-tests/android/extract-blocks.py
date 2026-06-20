@@ -37,6 +37,7 @@ import com.amity.socialcloud.sdk.api.chat.message.AmityMessageRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityFeedRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityPostRepository
 import com.amity.socialcloud.sdk.api.core.user.AmityUserRepository
+import com.amity.socialcloud.sdk.api.core.user.search.AmityUserSortOption
 import com.amity.socialcloud.sdk.api.core.file.AmityFileRepository
 import com.amity.socialcloud.sdk.model.chat.channel.AmityChannel
 import com.amity.socialcloud.sdk.model.chat.channel.AmityChannelFilter
@@ -51,6 +52,7 @@ import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotific
 import com.amity.socialcloud.sdk.model.social.notification.AmityCommunityNotificationEvent
 import com.amity.socialcloud.sdk.model.core.user.AmityUser
 import com.amity.socialcloud.sdk.model.core.user.AmityUserType
+import com.amity.socialcloud.sdk.model.core.permission.AmityPermission
 import com.amity.socialcloud.sdk.model.social.poll.AmityPoll
 import com.amity.socialcloud.sdk.model.core.file.AmityImage
 import com.amity.socialcloud.sdk.model.core.file.AmityFile
@@ -72,6 +74,7 @@ import com.amity.socialcloud.sdk.model.core.producttag.AmityAttachmentProductTag
 import com.amity.socialcloud.sdk.model.core.content.AmityContentFeedType
 import com.amity.socialcloud.sdk.model.core.session.SessionHandler
 import com.amity.socialcloud.sdk.model.core.session.AccessTokenHandler
+import com.amity.socialcloud.sdk.model.core.session.AmityUserToken
 import com.google.gson.JsonObject
 import com.amity.socialcloud.sdk.model.video.room.AmityRoom
 import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
@@ -205,6 +208,7 @@ def resolve_pages(pages_data):
     all_entries = (
         pages_data.get("android_specific", [])
         + pages_data.get("audited_getting_started", [])
+        + pages_data.get("audited_user_management", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
