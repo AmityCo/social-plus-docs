@@ -1,455 +1,226 @@
 ---
 title: "Query Channel Members"
-description: "Search and retrieve channel members with advanced filtering by membership status, roles, and sorting options"
+description: "Retrieve and search chat channel members with the current SDK filters, roles, deletion, and sorting APIs."
 ---
 
-Query channel members filtered by membership status (active, muted, banned), role, or deletion status. Results are paginated and returned as a Live Collection.
+Use member queries for member lists, mention pickers, moderation screens, and channel participant management. All current SDKs expose channel member query and search APIs, but the filter names are not identical across platforms.
 
-## Query Capabilities
+## Platform Surface
 
-Member querying supports filtering by status, role, and deletion state, with configurable sorting. Results paginate automatically via Live Collections.
+| Capability | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Query members | `ChannelRepository.Membership.getMembers(params, callback)` | `AmityChannelMembership.getMembers(...)` | `membership(channelId).getMembers()` | `membership(channelId).getMembers()` |
+| Search members | `searchMembers({ search })` | `searchMembers(displayName:filterBuilder:roles:)` | `searchMembers(keyword)` | `searchMembers(keyword)` |
+| Status filter | `memberships` | `AmityChannelMembershipFilter` | `AmityChannelMembershipFilter` | Query: `AmityChannelMembershipFilter`; search: `AmityChannelMembership` |
+| Role filter | `roles` | `roles` | `roles(...)` | `roles(...)` |
+| Include deleted users | `includeDeleted` | `includeDeleted` | `includeDeleted(...)` | `includeDeleted(...)` |
+| Sort | `firstCreated`, `lastCreated` | `.firstCreated`, `.lastCreated` | `FIRST_CREATED`, `LAST_CREATED` | `FIRST_CREATED`, `LAST_CREATED` |
+
+## Query Members
+
+Query members when you need a paginated channel member list. The default sort is newest first on platforms that define a default.
 
 <CardGroup cols={2}>
-  <Card title="Advanced Filtering" icon="filter">
-    **Multiple filter criteria**
-    - Membership status filtering (active, muted, banned)
-    - Role-based member filtering
-    - Include/exclude deleted users
-    - Configurable sorting options
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = ChannelRepository.Membership.getMembers(
+  {
+    channelId,
+    memberships: ['member'],
+    roles: ['moderator'],
+    sortBy: 'lastCreated',
+    includeDeleted: false,
+    limit: 20,
+  },
+  ({ data: members, loading, error, hasNextPage, onNextPage }) => {
+    if (error) handleError(error);
+
+    if (!loading && members) {
+      renderResults({ members, hasNextPage, onNextPage });
+    }
+  },
+);
+
+unsubscribe();
+```
   </Card>
-  <Card title="Paginated Results" icon="list">
-    **Efficient data loading**
-    - Pagination support for large member lists
-    - Real-time updates with Live Collections
-    - Search functionality with keyword matching
-    - Customizable page sizes and limits
-  </Card>
-</CardGroup>
-
-## Implementation Guide
-
-<Tabs>
-  <Tab title="Basic Query">
-    **Essential member retrieval functionality**
-    
-    Query members within a chat channel with flexible filtering and sorting options. This enables comprehensive member discovery and management within your chat application.
-
-    ### Required Parameters
-
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `channelId` | String | Unique identifier of the channel to query members from |
-
-    ### Optional Parameters
-
-    | Parameter | Type | Default | Description |
-    |-----------|------|---------|-------------|
-    | `filter` | FilterEnum | `ALL` | Filter members by membership status (ALL, MEMBER, MUTED, BANNED) |
-    | `roles` | Array&lt;String&gt; | `[]` | Filter members by specific roles assigned in the channel |
-    | `includeDeleted` | Boolean | `false` | Include members whose user accounts have been deleted |
-    | `sortBy` | SortEnum | `LAST_CREATED` | Sort order for member results (FIRST_CREATED, LAST_CREATED) |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    var token: AmityNotificationToken?
-
-    func queryMemberExample() {
-      let membershipParticipation = AmityChannelMembership(channelId: "channel1")
-        token = membershipParticipation
-                    .getMembers(filter: .all, sortBy: .firstCreated, roles: [])
-                    .observe { collection, error in
-            // ...
-        }
-    }
-    ```
-
-    ```kotlin Android
-    fun queryMembers(
-        channelRepository: AmityChannelRepository,
-        channel: AmityChannel
-    ) {
-
-        // ex. role filter
-        val roleFilter = listOf("moderator")
-
-        channelRepository.membership(channelId = channel.getChannelId())
-            .getMembers()
-            .filter(filter = AmityChannelMembershipFilter.ALL)
-            .roles(roles = roleFilter)
-            .includeDeleted(includeDeleted = false)
-            .sortBy(sortOption = AmityChannelMembershipSortOption.LAST_CREATED)
-            .build()
-            .query()
-            .doOnNext {
-                // PagingData<AmityChannel>
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { ChannelRepository } from '@amityco/ts-sdk';
-
-    // Variables to handle pagination
-    let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-    let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
-
-    const unsubscriber = ChannelRepository.Membership.getMembers(
-      { channelId: 'channelId' },
-      ({ data: members, onNextPage, hasNextPage, loading, error }) => {
-        if (error) {
-          // Handle any errors that occur during retrieving data
-        }
-        if (loading) {
-          // Handle the loading state, e.g., show a loading spinner
-        }
-        if (members) {
-          // Process the data
-        }
-        nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-        hasMore = hasNextPage; // Update the hasMore flag
-      },
-    );
-
-    // Function to load more items (next page)
-    function loadMore() {
-      // Check if more pages are available to load
-      if (hasMore) {
-        nextPageFn?.(); // Execute the nextPage function if it's defined
-      }
-    }
-    ```
-
-    ```dart Flutter
-    final _amityChannelMembers = <AmityChannelMember>[];
-    late PagingController<AmityChannelMember> _channelMembersController;
-
-    void queryChannelMembers(String channelId, String keyword) {
-      _channelMembersController = PagingController(
-        pageFuture: (token) => AmityChatClient.newChannelRepository()
-            .membership(channelId)
-            .searchMembers(keyword)
-            .includeDeleted(false) // optional to filter deleted users from the result
-            .getPagingData(token: token, limit: 20),
-        pageSize: 20,
-      )..addListener(
-          () {
-            if (_channelMembersController.error == null) {
-              //handle results, we suggest to clear the previous items
-              //and add with the latest _controller.loadedItems
-              _amityChannelMembers.clear();
-              _amityChannelMembers.addAll(_channelMembersController.loadedItems);
-              //update widgets
-            } else {
-              //error on pagination controller
-              //update widgets
-            }
-          },
-        );
-    }
-    ```
-    </CodeGroup>
-
-    <Info>
-    **Member Count Calculation**: Channel member count value is based on all members in the channel including the members whose user has been deleted.
-    </Info>
-  </Tab>
-
-  <Tab title="Advanced Filtering">
-    **Role-based and status-specific queries**
-    
-    Implement sophisticated member filtering to find specific member categories or user roles within your channels.
-
-    ### Filter by Membership Status
-
-    <CodeGroup>
-    ```swift iOS
-    // Query only active members
-    let activeMembers = membershipParticipation
-        .getMembers(filter: .all, sortBy: .lastCreated, roles: [])
-        .observe { collection, error in
-            // Handle active members only
-        }
-
-    // Query muted members for moderation
-    let mutedMembers = membershipParticipation
-        .getMembers(filter: .mute, sortBy: .firstCreated, roles: [])
-        .observe { collection, error in
-            // Handle muted members
-        }
-    ```
-
-    ```kotlin Android
-    // Query members by status with role filtering
-    channelRepository.membership(channelId = channelId)
-        .getMembers()
-        .filter(filter = AmityChannelMembershipFilter.MEMBER)
-        .roles(roles = listOf("moderator", "admin"))
-        .includeDeleted(includeDeleted = false)
-        .sortBy(sortOption = AmityChannelMembershipSortOption.LAST_CREATED)
-        .build()
-        .query()
-        .subscribe()
-    ```
-
-    ```typescript TypeScript
-    // Advanced filtering with multiple criteria
-    const unsubscriber = ChannelRepository.Membership.getMembers(
-      { 
-        channelId: 'channelId',
-        filter: 'member',
-        roles: ['moderator', 'admin'],
-        sortBy: 'lastCreated'
-      },
-      ({ data: members, onNextPage, hasNextPage }) => {
-        // Handle filtered member results
-      }
-    );
-    ```
-
-    ```dart Flutter
-    // Query with specific role and status filters
-    final controller = PagingController(
-      pageFuture: (token) => AmityChatClient.newChannelRepository()
-          .membership(channelId)
-          .getMembers()
-          .filter(AmityChannelMembershipFilter.member)
-          .roles(['moderator'])
-          .includeDeleted(false)
-          .sortBy(AmityChannelMembershipSortOption.lastCreated)
-          .getPagingData(token: token, limit: 20),
-      pageSize: 20,
-    );
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Search Members">
-    **Keyword-based member discovery**
-    
-    Enable users to search for specific members by name or username within channels for enhanced user experience.
-
-    ### Search Implementation
-
-    <CodeGroup>
-    ```swift iOS
-    // Search members by keyword
+  <Card title="iOS" icon="mobile">
+```swift
 var token: AmityNotificationToken?
 
-let builder = AmityChannelMembershipFilterBuilder()
-builder.add(filter: .member)
-
-token = channelMembership.searchMembers(
-    displayName: "<display-Name>", 
-    filterBuilder: builder, 
-    roles: [], 
+let membership = AmityChannelMembership(channelId: channelId)
+let members = membership.getMembers(
+    filter: .all,
+    sortBy: .lastCreated,
+    roles: ["moderator"],
     includeDeleted: false
 )
-.observe({ collection, error in
-    //..
-})
-    ```
 
-    ```kotlin Android
-    // Implement member search functionality
-    fun searchChannelMembers(keyword: String) {
-        channelRepository.membership(channelId = channelId)
-            .searchMembers(keyword = keyword)
-            .includeDeleted(false)
-            .build()
-            .query()
-            .doOnNext { pagingData ->
-                // Handle search results
-            }
-            .subscribe()
+token = members.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
     }
-    ```
 
-    ```typescript TypeScript
-    // Search members with keyword filtering
-    const searchMembers = (keyword: string) => {
-      return ChannelRepository.Membership.searchMembers(
-        { channelId: 'channelId', keyword },
-        ({ data: searchResults, hasNextPage, onNextPage }) => {
-          // Process search results
-        }
-      );
-    };
-    ```
-
-    ```dart Flutter
-    // Search implementation with keyword
-    void searchChannelMembers(String channelId, String keyword) {
-      final searchController = PagingController(
-        pageFuture: (token) => AmityChatClient.newChannelRepository()
-            .membership(channelId)
-            .searchMembers(keyword)
-            .includeDeleted(false)
-            .getPagingData(token: token, limit: 20),
-        pageSize: 20,
-      );
-    }
-    ```
-    </CodeGroup>
-
-    <Note>
-    **Search Performance**: Implement debounced search input to optimize API calls and improve user experience during member discovery.
-    </Note>
-  </Tab>
-</Tabs>
-
-## API Reference
-
-<CardGroup cols={2}>
-  <Card title="Filter Options" icon="filter">
-    **Membership status filtering**
-    - `ALL`: Members with any membership status
-    - `MEMBER`: Only active members
-    - `MUTED`: Only muted members
-    - `BANNED`: Only banned members
+    showSuccessMessage(collection.snapshots.count)
+}
+```
   </Card>
-  <Card title="Sort Options" icon="sort">
-    **Result ordering**
-    - `FIRST_CREATED`: Oldest members first
-    - `LAST_CREATED`: Newest members first
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = AmityChatClient.newChannelRepository()
+    .membership(channelId = channelId)
+    .getMembers()
+    .filter(filter = AmityChannelMembershipFilter.ALL)
+    .roles(roles = listOf("moderator"))
+    .includeDeleted(includeDeleted = false)
+    .sortBy(sortOption = AmityChannelMembershipSortOption.LAST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { members: PagingData<AmityChannelMember> -> showSuccessMessage(members) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final controller = PagingController<AmityChannelMember>(
+  pageFuture: (token) => AmityChatClient.newChannelRepository()
+      .membership(channelId)
+      .getMembers()
+      .filter(AmityChannelMembershipFilter.ALL)
+      .roles(['moderator'])
+      .includeDeleted(false)
+      .sortBy(AmityMembershipSortOption.LAST_CREATED)
+      .getPagingData(token: token, limit: 20),
+  pageSize: 20,
+);
+
+controller.fetchNextPage();
+```
   </Card>
 </CardGroup>
 
-### Membership Status Filters
+## Search Members
 
-| Filter | Description | Use Case |
-|--------|-------------|----------|
-| `ALL` | Members with any membership status | General member lists, comprehensive views |
-| `MEMBER` | Only active members | User-facing member lists, active participant views |
-| `MUTED` | Only muted members | Moderation interfaces, review muted users |
-| `BANNED` | Only banned members | Administrative tools, ban management |
+Search members when the user enters a display-name keyword, such as in a mention picker. TypeScript names this parameter `search`; Android and Flutter name it `keyword`; iOS names it `displayName`.
 
-### Role-Based Filtering
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `roles` | Array&lt;String&gt; | Filter members by specific roles (e.g., "moderator", "admin") |
+const unsubscribe = ChannelRepository.Membership.searchMembers(
+  {
+    channelId,
+    search: 'alex',
+    memberships: ['member'],
+    roles: ['moderator'],
+    includeDeleted: false,
+    limit: 20,
+  },
+  ({ data: members, error }) => {
+    if (error) handleError(error);
 
-### Data Inclusion Options
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `includeDeleted` | Boolean | Whether to include members whose user accounts have been deleted |
-
-### Sorting Options
-
-| Sort Option | Description | Behavior |
-|-------------|-------------|----------|
-| `FIRST_CREATED` | Sort by membership creation date ascending | Shows oldest members first |
-| `LAST_CREATED` | Sort by membership creation date descending | Shows newest members first |
-
-<Note>
-**Membership Creation Date**: The membership creation date refers to when the user joined the channel, not when their user account was created.
-</Note>
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Query Optimization" icon="rocket">
-    **Performance and efficiency strategies**
-    
-    **Targeted Filtering**
-    - Use specific filters to reduce result set size and improve load times
-    - Combine multiple filter criteria when searching for specific member types
-    - Consider your use case when deciding whether to include deleted users
-    
-    **Pagination Management**
-    - Implement proper pagination for channels with large member counts (>20 members)
-    - Use appropriate page sizes (20-50 items) to balance performance and UX
-    - Load additional pages only when needed to conserve bandwidth
-    
-  </Accordion>
-
-  <Accordion title="Member Status Management" icon="user-check">
-    **Handling different member states effectively**
-    
-    **Status-Specific UI Design**
-    - **Active Members**: Primary focus for user-facing features and interactions
-    - **Muted Members**: Separate moderation views with clear status indicators
-    - **Banned Members**: Administrative interfaces with appropriate warnings
-    - **Deleted Users**: Consider data retention and privacy requirements
-    
-    **Real-Time Status Updates**
-    - Utilize live collections to receive instant status changes
-    - Update UI immediately when member status changes
-    - Handle status transitions gracefully in your interface
-    
-    **Privacy Considerations**
-    - Respect user privacy when displaying member information
-    - Implement appropriate access controls for sensitive member data
-    - Consider anonymization for deleted user accounts
- 
-  </Accordion>
-
-  <Accordion title="Search & Discovery UX" icon="magnifying-glass">
-    **User experience optimization for member discovery**
-    
-    **Search Implementation**
-    - Implement debounced search (300-500ms delay) to reduce API calls
-    - Provide real-time search results as users type
-    - Show search suggestions or recent searches for better UX
-    
-    **Filter Interface Design**
-    - Provide intuitive filter controls for membership status and roles
-    - Show active filter indicators and easy reset options
-    
-    **Loading States & Feedback**
-    - Show appropriate loading indicators during queries
-    - Implement skeleton screens for better perceived performance
-    - Provide clear error messages when queries fail
-    
-    **Progressive Enhancement**
-    - Load basic member list first, then apply filters
-    - Implement infinite scroll for seamless browsing
-    - Cache search results for faster subsequent queries
-    
-  </Accordion>
-
-  <Accordion title="Role-Based Access" icon="shield">
-    **Implementing proper access controls**
-    
-    **Permission-Based Queries**
-    - Filter query results based on user permissions
-    - Restrict sensitive member information to authorized users only
-    - Implement role-based visibility controls
-    
-    **Administrative Features**
-    - Provide comprehensive member management for admins and moderators
-    - Include banned and muted member views for moderation purposes
-    - Implement bulk actions for efficient member management
-    
-    **User Privacy**
-    - Respect channel privacy settings when displaying members
-    - Implement appropriate member visibility controls
-    - Consider opt-out preferences for member discovery
-    
-    ```kotlin Example: Permission-Based Filtering
-    fun getVisibleMembers(userRole: String): Flowable<PagingData<AmityChannelMember>> {
-        val filter = when (userRole) {
-            "admin", "moderator" -> AmityChannelMembershipFilter.ALL
-            else -> AmityChannelMembershipFilter.MEMBER
-        }
-        
-        return channelRepository.membership(channelId)
-            .getMembers()
-            .filter(filter)
-            .build()
-            .query()
+    if (members) {
+      renderResults(members);
     }
-    ```
-  </Accordion>
-</AccordionGroup>
+  },
+);
 
-<Tip>
-**Implementation Strategy**: Start with basic member queries using default parameters, then progressively add filtering, search, and role-based access as your application grows. Use specific filters and pagination to optimize performance for channels with large member counts.
-</Tip>
+unsubscribe();
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+var token: AmityNotificationToken?
+
+let membership = AmityChannelMembership(channelId: channelId)
+let filterBuilder = AmityChannelMembershipFilterBuilder()
+filterBuilder.add(filter: .member)
+
+let searchResults = membership.searchMembers(
+    displayName: "alex",
+    filterBuilder: filterBuilder,
+    roles: ["moderator"],
+    includeDeleted: false
+)
+
+token = searchResults.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+import com.amity.socialcloud.sdk.api.chat.member.query.AmityChannelMembership
+
+val disposable = AmityChatClient.newChannelRepository()
+    .membership(channelId = channelId)
+    .searchMembers(keyword = "alex")
+    .membershipFilter(channelMembership = listOf(AmityChannelMembership.MEMBER))
+    .roles(roles = listOf("moderator"))
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { members: PagingData<AmityChannelMember> -> showSuccessMessage(members) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final members = await AmityChatClient.newChannelRepository()
+    .membership(channelId)
+    .searchMembers('alex')
+    .membershipFilter([AmityChannelMembership.MEMBER])
+    .roles(['moderator'])
+    .includeDeleted(false)
+    .sortBy(AmityMembershipSortOption.LAST_CREATED)
+    .query(limit: 20);
+```
+  </Card>
+</CardGroup>
+
+## Filter Notes
+
+<CardGroup cols={2}>
+  <Card title="Status Filters" icon="filter">
+    TypeScript accepts `memberships: ['member' | 'banned' | 'muted']`. Android query uses `AmityChannelMembershipFilter.ALL`, `MEMBER`, or `BANNED`; Android search uses `AmityChannelMembership`. Flutter query uses `AmityChannelMembershipFilter.ALL`, `MUTED`, or `BANNED`; Flutter search uses `AmityChannelMembership`.
+  </Card>
+  <Card title="Deleted Users" icon="user-x">
+    `includeDeleted: false` filters deleted users out of the result. iOS defaults this argument to `true`, so pass `false` when you want only active user records.
+  </Card>
+  <Card title="Roles" icon="shield">
+    Role filters match channel roles assigned to members, such as `moderator` or custom roles configured for your app.
+  </Card>
+  <Card title="Paging" icon="list-end">
+    TypeScript live collections expose `hasNextPage` and `onNextPage`; Android returns `PagingData`; Flutter uses `PagingController` or `getPagingData`.
+  </Card>
+</CardGroup>
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Join and Leave Channels" href="./join-leave-channel" icon="door-open">
+    Manage the current user's channel membership.
+  </Card>
+  <Card title="Preview Members" href="./preview-members" icon="user-round-search">
+    Display a lightweight set of participant avatars.
+  </Card>
+  <Card title="Member Management" href="../channels/governance/member-management" icon="user-plus">
+    Add or remove other users from a channel.
+  </Card>
+  <Card title="Ban Management" href="../channels/governance/ban-management" icon="user-slash">
+    Moderate channel membership state.
+  </Card>
+</CardGroup>
