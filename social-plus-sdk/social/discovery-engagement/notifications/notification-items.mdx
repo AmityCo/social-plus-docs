@@ -1,107 +1,124 @@
 ---
 title: "Notification Tray Items"
-description: "Query, filter, and manage individual notification items with comprehensive tracking and user interaction capabilities"
+description: "Query notification tray items and mark individual items as seen."
 ---
 
-Notification items represent individual notifications within the notification tray. This page covers how to query, filter, and manage the seen status of individual notification items, providing fine-grained control over notification tracking and user interaction.
+Notification tray items are paginated notification records for the signed-in user. Use this API to render an in-app notification tray and then mark individual items as seen when the user opens or views them.
 
-<CardGroup cols={3}>
-  <Card title="Query Items" icon="magnifying-glass">
-    Retrieve notifications with options
-  </Card>
-  <Card title="Mark Individual Items" icon="check">
-    Update seen status for specific notification items
-  </Card>
-  <Card title="Pagination Support" icon="list">
-    Efficiently handle large notification sets with built-in pagination
-  </Card>
-</CardGroup>
-
-## Data Model
-
-Each notification item contains comprehensive information about the notification:
-
-<Tabs>
-  <Tab title="Core Properties">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `notificationId` | `String` | Unique identifier for the notification |
-    | `userId` | `String` | ID of the user who received the notification |
-    | `actorId` | `String` | ID of the user who triggered the notification |
-    | `type` | `String` | Type/category of the notification |
-    | `isSeen` | `Boolean` | Whether the user has seen this notification |
-    | `lastSeenAt` | `Datetime` | Timestamp when the notification was last seen |
-    | `occurredAt` | `Datetime` | Timestamp when the notification occurred |
-    | `data` | `Object` | Additional notification-specific data |
-  </Tab>
-  
-  <Tab title="Status Properties">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `isSeen` | `Boolean` | Individual item seen status |
-    | `lastSeenAt` | `Datetime` | When this specific item was marked as seen |
-    | `isRead` | `Boolean` | Whether the notification has been read |
-    | `isClicked` | `Boolean` | Whether the user has clicked on this notification |
-  </Tab>
-  
-  <Tab title="Content Properties">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `title` | `String` | Display title of the notification |
-    | `message` | `String` | Notification message content |
-    | `imageUrl` | `String` | URL for notification image/avatar |
-    | `actionUrl` | `String` | Deep link or action URL |
-    | `metadata` | `Object` | Additional structured data |
-  </Tab>
-</Tabs>
-
-## Query Notification Items
-
-import GetNotificationTrayItems from '/snippets/social/notifications/get-notification-tray-items.mdx';
-
-<GetNotificationTrayItems />
-
-## Mark Individual Items as Seen
+## Query Items
 
 <CodeGroup>
-```swift iOS
-var item: AmityNotificationTrayItem! // Item returned from live collection
 
-Task { @MainActor in
-    try await item.markSeen()
+```typescript TypeScript
+import { notificationTray } from '@amityco/ts-sdk';
+
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
+
+const unsubscribe = notificationTray.getNotificationTrayItems(
+  { limit: 20 },
+  ({ data: items, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(items);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
+  },
+);
+
+function loadMoreNotificationItems() {
+  if (canLoadMore) {
+    loadNextPage?.();
+  }
 }
+
+unsubscribe();
+```
+
+```swift iOS
+token = client.notificationTray
+    .getNotificationTrayItems()
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        showSuccessMessage(collection.snapshots.count)
+    }
+```
+
+```kotlin Android
+AmityCoreClient.notificationTray()
+    .getNotificationTrayItems()
+    .subscribe(
+        { pagingData: PagingData<AmityNotificationTrayItem> -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+## Mark An Item Seen
+
+<CodeGroup>
+
+```typescript TypeScript
+import { notificationTray } from '@amityco/ts-sdk';
+
+async function markNotificationItemSeen(notificationId: string) {
+  await notificationTray.markItemsSeen([
+    {
+      id: notificationId,
+      lastSeenAt: new Date().toISOString(),
+    },
+  ]);
+}
+```
+
+```swift iOS
+token = client.notificationTray
+    .getNotificationTrayItems()
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        guard let firstItem = collection.snapshots.first else { return }
+
+        Task { @MainActor in
+            do {
+                try await firstItem.markSeen()
+            } catch {
+                handleError(error)
+            }
+        }
+    }
 ```
 
 ```kotlin Android
 fun markNotificationItemSeen(item: AmityNotificationTrayItem) {
     item.markSeen()
-        .doOnComplete { }
-        .doOnError { }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { notificationTray } from '@amityco/ts-sdk';
-
-async function markItemsSeen(
-  trayItems: {
-    id: string; // The ID of the notification item to mark as seen
-    lastSeenAt: string; // The timestamp of when the item was last seen
-  }[],
-) {
-  const markItemsSeen = await notificationTray.markItemsSeen([
-    {
-      id: trayItems[0].id, // The ID of the notification item to mark as seen
-      lastSeenAt: new Date().toISOString(), // The timestamp of when the item was last seen
-    },
-  ]);
-
-  return markItemsSeen;
+        .subscribe(
+            { showSuccessMessage("seen") },
+            { error -> handleGeneralError(error) }
+        )
 }
 ```
 
 </CodeGroup>
+
+## Notes
+
+- TypeScript marks one or more items by ID through `markItemsSeen`.
+- iOS and Android expose `markSeen()` on the `AmityNotificationTrayItem` model returned by the tray item query.
+- Use the platform-specific item ID field when routing from a tray item to a target screen: TypeScript `_id`, iOS `notificationId`, and Android `getId()`.
+- Dispose live collection subscriptions or notification tokens when the notification tray screen is destroyed.
 
 ## Related Documentation
 
@@ -110,12 +127,6 @@ async function markItemsSeen(
     Manage overall notification tray seen status
   </Card>
   <Card title="Notification Events" href="./notification-events-reference" icon="bolt">
-    Reference for notification event types and triggers
-  </Card>
-  <Card title="Notification Overview" href="./overview" icon="bell">
-    Complete guide to notification tray implementation
-  </Card>
-  <Card title="Realtime Events" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/overview" icon="clock">
-    Learn how real-time events power notification delivery
+    Reference action and category values returned on tray items
   </Card>
 </CardGroup>
