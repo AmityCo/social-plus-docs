@@ -1,9 +1,9 @@
 ---
 title: "Update Community"
-description: "Update a community's display name, description, privacy, avatar, categories, post moderation, and metadata using updateCommunity()."
+description: "Update community profile, visibility, categories, moderation, story, and metadata settings with the SDK."
 ---
 
-Call `updateCommunity()` to change a community's display name, description, avatar, category IDs, privacy mode, post moderation setting, story settings, or custom metadata. Only community creators, moderators, and administrators can update community settings. Changes take effect immediately.
+Use the update API for your platform to change a community's display name, description, avatar, category IDs, privacy mode, post moderation setting, story settings, or custom metadata. TypeScript and Flutter use `updateCommunity()`, while iOS and Android use `editCommunity`.
 
 <CardGroup cols={2}>
   <Card title="Basic Information" icon="pencil">
@@ -21,35 +21,33 @@ Call `updateCommunity()` to change a community's display name, description, avat
 </CardGroup>
 
 <Warning>
-Only community creators, moderators, and administrators can update community settings. Regular members cannot modify community information. Changes take effect immediately and may affect member access and experience.
+The backend enforces who can update a community. In your UI, expose these controls only to users who can manage community settings, such as creators, moderators, or administrators in your product model.
 </Warning>
 
 ## Update Community
 
-The `updateCommunity()` method enables authorized users to modify community settings and configuration while preserving member relationships and content. Update communities to reflect evolving needs, rebrand, or adjust moderation policies.
+Community updates modify the community record while preserving the same `communityId`. Use them for profile changes, visibility changes, category changes, and moderation-setting changes.
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `communityId` | String | Unique identifier of the community to update |
-| `displayName` | String | Updated public display name visible to all users |
-| `description` | String | Updated community description and purpose |
-| `isPublic` | Boolean | Change community visibility: `true` for public, `false` for private |
-| `avatar` | Image | Updated community avatar image for visual branding |
-| `categoryIds` | Array | Updated list of category IDs for organization |
-| `postSettings` | Enum | Updated content moderation settings for posts |
-| `storySettings` | Object | Updated story interaction and moderation configuration |
-| `metadata` | Object | Updated custom fields and properties |
+| Setting | Platforms | Description |
+|---------|-----------|-------------|
+| `communityId` | TypeScript, iOS, Android, Flutter | Required community ID |
+| `displayName` | TypeScript, iOS, Android, Flutter | Updated display name |
+| `description` | TypeScript, iOS, Android, Flutter | Updated description |
+| `isPublic` | TypeScript, iOS, Android, Flutter | Updated public/private visibility |
+| `avatarFileId` / `avatar` | TypeScript / iOS, Android, Flutter | Updated avatar file ID or uploaded SDK image object |
+| `categoryIds` | TypeScript, iOS, Android, Flutter | Updated category IDs |
+| `postSetting` / `postSettings` | TypeScript, iOS, Android, Flutter | Updated post creation and review setting |
+| `storySetting` / `storySettings` | TypeScript, iOS, Android, Flutter | Updated story comment setting |
+| `metadata` | TypeScript, iOS, Android, Flutter | Updated custom metadata object |
+| `tags` | TypeScript, Android, Flutter | Updated search/filter tags |
+| `isDiscoverable` | TypeScript, iOS, Android | Updated discoverability setting |
+| `requiresJoinApproval` | TypeScript, iOS, Android | Updated join approval setting |
 
 ### Permission Requirements
 
-| Role | Update Permissions | Restrictions |
-|------|-------------------|--------------|
-| **Community Creator** | Full update access | Cannot transfer ownership |
-| **Community Moderator** | Most settings | Cannot change ownership |
-| **Administrator** | Full access | Network-level permissions |
-| **Regular Member** | No access | Cannot modify community settings |
+Do not treat client-side role checks as the source of truth. They are useful for hiding or showing controls, but the SDK call still depends on the permissions enforced by your social.plus backend configuration.
 
 <CodeGroup>
 ```swift iOS
@@ -57,34 +55,43 @@ let updateOptions = AmityCommunityUpdateOptions()
 updateOptions.setDisplayName("updated-name")
 updateOptions.setCommunityDescription("updated-description")
 updateOptions.setIsPublic(false)
+updateOptions.setCategoryIds(["categoryId"])
+updateOptions.setPostSettings(.adminReviewPostRequired)
+updateOptions.setStorySettings(allowComment: true)
+updateOptions.setIsDiscoverable(true)
+updateOptions.setRequiresJoinApproval(false)
+updateOptions.setMetadata(["topic": "product"])
 
-do {
-    let community = try await communityRepository.editCommunity(withId: "community-id", options: updateOptions)
-} catch {
-    // Handle error here
-}
+let community = try await communityRepository.editCommunity(withId: "community-id", options: updateOptions)
 ```
 
 ```kotlin Android
-fun editCommunity(
-    communityRepository: AmityCommunityRepository,
-    avatar: AmityImage
-) {
-    communityRepository
-        .editCommunity(communityId = "communityId1")
-        .avatar(avatar = avatar)
+fun editCommunity() {
+    val metadata = JsonObject().apply {
+        addProperty("topic", "product")
+    }
+
+    AmitySocialClient.newCommunityRepository()
+        .editCommunity(
+            communityId = "communityId1",
+            isDiscoverable = true,
+            requiresJoinApproval = false
+        )
+        .displayName("Updated community name")
         .isPublic(isPublic = true)
-        .description(description = "hello and welcome!")
+        .description(description = "Updated community description")
         .categoryIds(categoryIds = listOf("categoryId1", "categoryId2"))
-        .postSettings(AmityCommunityPostSettings.ANYONE_CAN_POST)
-        .storySettings(AmityCommunityStorySettings(allowComment = false))
+        .tags(tags = listOf("product"))
+        .metadata(metadata)
+        .postSettings(AmityCommunityPostSettings.ADMIN_REVIEW_POST_REQUIRED)
+        .storySettings(AmityCommunityStorySettings(allowComment = true))
         .build()
         .apply()
         .doOnSuccess { community: AmityCommunity ->
-            // AmityCommunity
+            // Community updated.
         }
-        .doOnError {
-            // Exception
+        .doOnError { error ->
+            // Handle error.
         }
         .subscribe()
 }
@@ -94,18 +101,14 @@ fun editCommunity(
 import { CommunityPostSettings, CommunityRepository } from '@amityco/ts-sdk';
 
 async function updateCommunity() {
-  const updatedCommunity = {
+  const updatedCommunity: Parameters<typeof CommunityRepository.updateCommunity>[1] = {
     avatarFileId: 'fileId',
-    description: 'hi this is a community',
-    displayName: 'My new community name',
+    description: 'Updated community description',
+    displayName: 'Updated community name',
     isPublic: true,
-    needApprovalOnPostCreation: false,
-    onlyAdminCanPost: true,
     categoryIds: ['news'],
-    tags: ['new'],
-    metadata: {
-      data: 'anything',
-    },
+    tags: ['product'],
+    metadata: { topic: 'product' },
     postSetting: CommunityPostSettings.ADMIN_REVIEW_POST_REQUIRED,
     storySetting: { enableComment: true },
     isDiscoverable: true,
@@ -126,41 +129,38 @@ void updateCommunity(String communityId, AmityImage updatingAvatar) {
   AmitySocialClient.newCommunityRepository()
       .updateCommunity(communityId)
       .avatar(updatingAvatar)
-      .displayName('updated name')
-      .description('updated description')
-      .tags(['tag1', 'tag2'])
+      .displayName('Updated community name')
+      .description('Updated community description')
+      .tags(['product'])
       .categoryIds(['categoryId1', 'categoryId2'])
       .isPublic(false)
-      .postSetting(AmityCommunityPostSettings.ANYONE_CAN_POST)
-      .metadata({'updateKey': 'updateValue'})
+      .postSetting(AmityCommunityPostSettings.ADMIN_REVIEW_POST_REQUIRED)
+      .storySettings(AmityCommunityStorySettings(allowComment: true))
+      .metadata({'topic': 'product'})
       .update()
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+      .then((AmityCommunity community) {
+        // Community updated.
+      })
+      .onError((error, stackTrace) {
+        // Handle error.
+      });
 }
 ```
 </CodeGroup>
 
 ## Privacy and Visibility Updates
 
-### Public to Private Conversion
+### Public to Private Changes
 
-Converting a public community to private affects member access and discovery:
+Changing a public community to private affects how users discover and join it:
 
-<Warning>
-Converting a public community to private immediately hides it from discovery and may require existing members to be manually approved to maintain access.
-</Warning>
+Changing visibility affects discovery and join flows. Check the resulting community state and update your UI accordingly.
 
-### Private to Public Conversion
+### Private to Public Changes
 
-Making a private community public opens it to discovery and new memberships:
+Changing a private community to public can affect discovery and new membership flows:
 
-<Info>
-Converting a private community to public makes it discoverable to all users and may significantly increase membership requests and activity.
-</Info>
+Making a community public can make it available to a wider audience, depending on your discovery query and backend configuration.
 
 ## Best Practices
 
@@ -183,7 +183,7 @@ Converting a private community to public makes it discoverable to all users and 
     Learn about initial community creation and setup
   </Card>
   <Card title="Delete Community" href="./delete-community" icon="trash">
-    Permanently remove communities and handle data cleanup
+    Delete a community and handle client-side cleanup
   </Card>
   <Card title="Community Moderation" href="../organization/community-moderation" icon="shield-check">
     Advanced moderation features and member management
@@ -192,5 +192,3 @@ Converting a private community to public makes it discoverable to all users and 
     Organize communities with category management
   </Card>
 </CardGroup>
-
-
