@@ -59,6 +59,7 @@ import com.amity.socialcloud.sdk.model.social.story.AmityStoryItem
 import com.amity.socialcloud.sdk.model.social.story.AmityStoryTarget
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunity
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityFilter
+import com.amity.socialcloud.sdk.model.social.community.AmityCommunityMembershipStatusFilter
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityPostSettings
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityStorySettings
 import com.amity.socialcloud.sdk.model.social.community.AmityJoinResult
@@ -255,6 +256,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_comment_retrieval", [])
         + pages_data.get("audited_comment_actions", [])
         + pages_data.get("audited_stories", [])
+        + pages_data.get("audited_discovery_search", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
