@@ -1,75 +1,66 @@
 ---
 title: "Community Categories"
-description: "Query and organize communities with categories for enhanced discovery and streamlined management"
+description: "Query community categories and use them to filter community discovery"
 ---
 
-Community categories enable organized discovery and management of communities by grouping them into logical classifications. When communities are placed into categories, users can easily sort and filter communities based on their category, allowing for more efficient and effective community management.
-
-<CardGroup cols={2}>
-  <Card title="Category Discovery" icon="folder">
-    Query all available community categories with sorting options
-  </Card>
-  <Card title="Flexible Sorting" icon="sort">
-    Sort by creation date, alphabetical order, or custom criteria
-  </Card>
-  <Card title="Deletion Management" icon="trash">
-    Include or exclude deleted categories from query results
-  </Card>
-  <Card title="Live Collections" icon="bolt">
-    Real-time updates when categories are modified
-  </Card>
-</CardGroup>
+Community categories are read through the SDK and managed in the social.plus Console. Client apps can query category lists, include or exclude deleted categories, and use category IDs when querying communities.
 
 <Callout type="warning">
-Categories can only be created and updated from the social.plus Console. SDK access is limited to reading and querying existing categories.
+Categories can only be created and updated from the social.plus Console. SDK access is limited to reading existing categories.
 </Callout>
 
-## Category Query
+## Query Categories
 
-The `getCategories()` function retrieves all available community categories with flexible sorting and filtering options. This method returns a Live Collection that automatically updates when categories are modified.
+Use `getCategories()` to retrieve community categories. The SDK returns paginated/live collection results depending on the platform.
 
 ### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `sortBy` | Enum | No | Sort order for categories |
-| `includeDeleted` | Boolean | No | Include deleted categories in results |
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `sortBy` | No | Sort order for categories. |
+| `includeDeleted` | No | Include deleted categories in the result. |
+| `limit` / pagination token | No | Page-size and pagination controls where supported by the platform. |
 
 ### Sort Options
 
-| Option | Description |
-|--------|-------------|
-| `displayName` | Alphabetical order by category name |
-| `firstCreated` | Oldest categories first |
-| `lastCreated` | Newest categories first |
+| Platform | Sort values |
+|----------|-------------|
+| TypeScript | `"name"`, `"firstCreated"`, `"lastCreated"` |
+| iOS | `.displayName`, `.firstCreated`, `.lastCreated` |
+| Android | `AmityCommunityCategorySortOption.NAME`, `FIRST_CREATED`, `LAST_CREATED` |
+| Flutter | `AmityCommunityCategorySortOption.NAME`, `FIRST_CREATED`, `LAST_CREATED` |
 
 <CodeGroup>
 ```swift iOS
-var token: AmityNotificationToken?
+let liveCollection = communityRepository.getCategories(
+    sortBy: .displayName,
+    includeDeleted: false
+)
 
-func getCategoriesExample() {
-    let liveCollection = communityRepository.getCategories(
-        sortBy: .displayName,
-        includeDeleted: true
-    )
-    token = liveCollection.observe { collection, change, error in
-        for category in collection.allObjects() {
-            // Handle each category in the list
-        }
+token = liveCollection.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
+
+    let categories = collection.snapshots
+    // Render categories
 }
 ```
 
 ```kotlin Android
 fun queryCategories(communityRepository: AmityCommunityRepository) {
-
     communityRepository
         .getCategories()
-        .sortBy(sortOption = AmityCommunityCategorySortOption.LAST_CREATED)
+        .sortBy(sortOption = AmityCommunityCategorySortOption.NAME)
+        .includeDeleted(includeDeleted = false)
         .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityCommunityCategory> ->
-            // Handle results
+        .query()
+        .doOnNext { categories: PagingData<AmityCommunityCategory> ->
+            // Render categories
+        }
+        .doOnError { throwable ->
+            // Handle error
         }
         .subscribe()
 }
@@ -78,112 +69,116 @@ fun queryCategories(communityRepository: AmityCommunityRepository) {
 ```typescript TypeScript
 import { CategoryRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let nextPageFn: (() => void) | undefined;
+let hasMore = false;
 
 const unsubscriber = CategoryRepository.getCategories(
-  {},
+  {
+    sortBy: 'name',
+    includeDeleted: false,
+    limit: 20,
+  },
   ({ data: categories, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      // Handle error
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && categories) {
+      // Render categories
     }
-    if (categories) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    hasMore = hasNextPage;
+    nextPageFn = onNextPage;
   },
 );
 
-// Function to load more items (next page)
-function loadMore() {
-  // Check if more pages are available to load
-  if (hasMore) {
-    nextPageFn?.(); // Execute the nextPage function if it's defined
-  }
+function loadMoreCategories() {
+  if (hasMore) nextPageFn?.();
 }
 ```
 
 ```dart Flutter
-final _amityCategories = <AmityCommunityCategory>[];
-late PagingController<AmityCommunityCategory> _communityCategoryController;
-final scrollcontroller = ScrollController();
+final categories = <AmityCommunityCategory>[];
+late PagingController<AmityCommunityCategory> categoryController;
 
-void queryCommunityCategories(AmityCommunityCategorySortOption sortOption) {
-  _communityCategoryController = PagingController(
+void queryCommunityCategories() {
+  categoryController = PagingController(
     pageFuture: (token) => AmitySocialClient.newCommunityRepository()
         .getCategories()
-        .sortBy(sortOption)
-        .includeDeleted(true)
+        .sortBy(AmityCommunityCategorySortOption.NAME)
+        .includeDeleted(false)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
-  )..addListener(
-      () {
-        if (_communityCategoryController.error == null) {
-          // Handle results, we suggest to clear the previous items
-          // and add with the latest _controller.loadedItems
-          _amityCategories.clear();
-          _amityCategories.addAll(_communityCategoryController.loadedItems);
-          // Update widgets
-        } else {
-          // Error on pagination controller
-          // Update widgets
-        }
-      },
-    );
-  
-  // Fetch the data for the first page
-  _communityCategoryController.fetchNextPage();
+  )..addListener(() {
+      if (categoryController.error == null) {
+        categories
+          ..clear()
+          ..addAll(categoryController.loadedItems);
+      } else {
+        // Handle pagination error
+      }
+    });
 
-  scrollcontroller.addListener(pagination);
-}
-
-void pagination() {
-  if ((scrollcontroller.position.pixels ==
-          scrollcontroller.position.maxScrollExtent) &&
-      _communityCategoryController.hasMoreItems) {
-      _communityCategoryController.fetchNextPage();
-  }
+  categoryController.fetchNextPage();
 }
 ```
 </CodeGroup>
 
-## User Experience
+## Using Categories With Community Queries
+
+After retrieving categories, pass a category ID into community query APIs to filter community discovery.
+
+<CodeGroup>
+```typescript TypeScript
+import { CommunityRepository } from '@amityco/ts-sdk';
+
+const unsubscriber = CommunityRepository.getCommunities(
+  {
+    categoryId: 'category-id',
+    sortBy: 'lastCreated',
+  },
+  ({ data: communities }) => {
+    // Render communities in this category
+  },
+);
+```
+
+```kotlin Android
+fun queryCommunitiesByCategory(categoryId: String) {
+    AmitySocialClient.newCommunityRepository()
+        .getCommunities()
+        .categoryId(categoryId = categoryId)
+        .build()
+        .query()
+        .subscribe { communities: PagingData<AmityCommunity> ->
+            // Render communities in this category
+        }
+}
+```
+
+```dart Flutter
+void queryCommunitiesByCategory(String categoryId) {
+  AmitySocialClient.newCommunityRepository()
+      .getCommunities()
+      .categoryId(categoryId)
+      .getLiveCollection(pageSize: 20)
+      .getStreamController()
+      .stream
+      .listen((communities) {
+        // Render communities in this category
+      });
+}
+```
+</CodeGroup>
+
+## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="Category Display" icon="table-layout">
-    - Show category names clearly in navigation
-    - Display community counts per category
-    - Provide search/filter within categories
+  <Card title="Query Communities" href="../discovery/query-communities" icon="magnifying-glass">
+    Filter communities by category, membership, keyword, and sort order
   </Card>
-  <Card title="Navigation Design" icon="compass">
-    - Use categories for intuitive community browsing
-    - Implement breadcrumb navigation
-    - Allow quick category switching
-  </Card>
-</CardGroup>
-
-
-## Common Use Cases
-
-<CardGroup cols={3}>
-  <Card title="Community Organization" icon="folder-tree">
-    - Create category-based navigation menus
-    - Filter communities by topic or interest
-    - Build hierarchical community structures
-  </Card>
-  <Card title="Discovery Enhancement" icon="magnifying-glass">
-    - Implement category-based search filters
-    - Create topic-specific community recommendations
-    - Build category landing pages
-  </Card>
-  <Card title="Administrative Tools" icon="gears">
-    - Track community distribution across categories
-    - Monitor category usage and popularity
-    - Manage category-based permissions
+  <Card title="Create Community" href="../community-lifecycle/create-community" icon="plus">
+    Assign categories when creating a community
   </Card>
 </CardGroup>
