@@ -38094,247 +38094,171 @@ await reviewQueue.loadNext();
 
 ### [Post Impressions](https://learn.social.plus/social-plus-sdk/social/content-management/posts/analytics/post-impressions)
 
-> Track post views and reach with impression analytics. Mark posts as viewed and query which users have seen a post.
+> Record post view analytics, read impression and reach counts, and query users who viewed a post.
 
-Use `post.analytics.markAsViewed()` to record when a user sees a post, then read `impression` (total views) and `reach` (unique viewers) from the post object. You can also query the list of users who have viewed a specific post.
+Post impression analytics has three SDK-facing pieces:
 
-    Mark posts as viewed and collect impression data
-    Monitor unique user engagement and content reach
-    Query detailed information about who viewed your posts
+- Mark a post as viewed when your app decides it was visible enough to count.
+- Read `impression` and `reach` from the post model returned by retrieval or query APIs.
+- Query reached users when you need the list of unique viewers for a post.
 
-**Impressions** represent the total number of times a post has been viewed, while **reach** represents the number of unique users who have viewed the post. Post impression data is updated in near real-time for optimal performance.
+  The SDK exposes impression and reach counters, but it does not expose a ready-made view-rate metric. Calculate product-specific ratios in your app from the counters and audience size that matter to your experience.
+
+## Metrics
+
+| Metric | TypeScript / iOS / Flutter | Android | Meaning |
+| --- | --- | --- | --- |
+| Impression | `post.impression` | `post.getImpression()` | Total view events recorded for the post |
+| Reach | `post.reach` | `post.getReach()` | Unique users who viewed the post |
+
+## Platform APIs
+
+| Operation | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Mark viewed | `post.analytics.markAsViewed()` | `post.analytics.markAsViewed()` | `post.analytics().markAsViewed()` | `post.analytics().markPostAsViewed()` |
+| Query reached users | `UserRepository.getReachedUsers({ viewId, viewedType: "post" }, callback)` | `userRepository.getReachedUsers(viewedType: .post, viewedId: postId)` | `userRepository.getReachedUsers(AmityViewedType.POST, postId)` | `userRepository.getViewedUsers(viewedType: AmityViewedType.POST, viewedId: postId)` |
+
+## Mark A Post As Viewed
+
+Call the analytics method from your own visibility logic, such as a post detail screen opening or a feed cell crossing your viewability threshold. Do not call it from every render or rebuild.
 
 
-## Analytics Metrics
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
 
-Impression tracking provides essential metrics for content performance analysis and user engagement insights.
+const unsubscribe = PostRepository.getPost(
+  postId,
+  ({ data: post, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+    if (!post) return;
 
-| Metric | Description | Use Case |
-|--------|-------------|----------|
-| **Impressions** | Total number of times a post has been viewed | Track overall content visibility and exposure |
-| **Reach** | Number of unique users who viewed the post | Measure audience size and content distribution |
-| **View Rate** | Percentage of users who viewed vs. total followers | Assess content relevance and engagement quality |
+    post.analytics.markAsViewed();
 
-
-## Marking Posts as Viewed
-
-Track user interactions by marking posts as viewed when they appear in the user's feed or are specifically opened.
-
-### Implementation
-
-    Determine when a post should be considered "viewed" (e.g., visible in feed, opened in detail).
-    Call the analytics method to record the impression.
-    Retrieve updated impression and reach counts from the post object.
-    Display analytics data in your interface.
+    renderResults({
+      impression: post.impression,
+      reach: post.reach,
+    });
+  },
+);
+```
 
 ```swift iOS
-// To mark a post as viewed.
-post.analytics.markAsViewed()
-//
-// ...
-//
-// To view the number of impression and reach
-let impression = post.impression
-let reach = post.reach
+let postRepository = AmityPostRepository()
+var token: AmityNotificationToken?
+
+token = postRepository.getPost(withId: "post-id").observe { liveObject, error in
+    guard let post = liveObject.snapshot else { return }
+
+    post.analytics.markAsViewed()
+
+    let impression = post.impression
+    let reach = post.reach
+    showSuccessMessage("Impressions: \(impression), reach: \(reach)")
+}
 ```
 
 ```kotlin Android
-fun markPostAsViewed(
-    post: AmityPost
-) {
-    // mark post as viewed
-    post.analytics()
-        .markAsViewed()
+postRepository.getPost(postId)
+    .subscribe(
+        { post ->
+            post.analytics().markAsViewed()
 
-    // post impression and reach count
-    post.getImpression()
-    post.getReach()
-}
-```
-
-```typescript TypeScript
-import { PostRepository } from '@amityco/ts-sdk';
-
-const subscribeToPosts = (targetId: Amity.Post['targetId'], targetType: Amity.Post['targetType']) => {
-  const unsubscribe = PostRepository.getPosts(
-    { targetId, targetType },
-    ({ data: posts }) => {
-      if (posts) {
-        posts.forEach(post => post.analytics.markAsViewed());
-      }
-    },
-  );
-
-  return unsubscribe;
-};
+            val impression = post.getImpression()
+            val reach = post.getReach()
+            showSuccessMessage("Impressions: $impression, reach: $reach")
+        },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-void markPostAsViewed(AmityPost post) {
-  // To mark post as viewed
-  post.analytics().markPostAsViewed();
-  // To get Impressions
-  post.impression;
-  // To get Reach
-  post.reach;
-}
+final subscription = AmitySocialClient.newPostRepository()
+    .live
+    .getPost(postId)
+    .listen((AmityPost post) {
+      post.analytics().markPostAsViewed();
+
+      final impression = post.impression ?? 0;
+      final reach = post.reach ?? 0;
+    });
+
+await subscription.cancel();
 ```
+
 
 ## Query Reached Users
 
-Retrieve detailed information about which users have viewed specific posts to gain insights into your audience and content performance.
+Use reached-user queries when you need the user list behind the reach count. TypeScript names the ID parameter `viewId`; iOS, Android, and Flutter name it `viewedId`.
 
-### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `viewedType` | AmityViewedType / string | Yes | Type of content viewed (use `.post` / `'post'` for posts) |
-| `viewedId` / `viewId` | String | Yes | ID of the post to query reached users for (`viewedId` on iOS/Android/Flutter; `viewId` on TypeScript) |
+```typescript TypeScript
+import { UserRepository } from "@amityco/ts-sdk";
+
+const unsubscribe = UserRepository.getReachedUsers(
+  {
+    viewId: postId,
+    viewedType: "post",
+    limit: 10,
+  },
+  ({ data: users, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(users);
+  },
+);
+```
 
 ```swift iOS
-let token = userRepository.getReachedUsers(viewedType: .post, viewedId: "post-id").observe { Collection, change, error in
-    // Handle list of reach users here.
-}
+let userRepository = AmityUserRepository()
+var token: AmityNotificationToken?
+
+token = userRepository
+    .getReachedUsers(viewedType: .post, viewedId: "post-id")
+    .observe { collection, error in
+        showSuccessMessage(collection.snapshots.count)
+    }
 ```
 
 ```kotlin Android
-fun queryPostReachedUsers(
-    userRepository: AmityUserRepository,
-    postId: String
-) {
-    //Query viewed users
-    userRepository
-        .getReachedUsers(viewedType = AmityViewedType.POST, viewedId = postId)
-        .doOnNext { users: PagingData<AmityUser> ->
-            // PagingData<AmityUser>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
+import com.amity.socialcloud.sdk.model.core.analytics.AmityViewedType
 
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const GetReachedUsers: FC<{ postId: string }> = ({ postId }) => {
-  const [users, setUsers] = useState<(Amity.User | undefined)[]>([]);
-  const [onNextPage, setOnNextPage] = useState<(() => void) | undefined>();
-
-  useEffect(() => {
-    const unsubscribe = UserRepository.getReachedUsers(
-      { viewId: postId, viewedType: 'post', limit: 10 },
-      ({ data, hasNextPage, onNextPage: nextPageFn, loading }) => {
-        if (!loading) {
-          setUsers(data);
-          setOnNextPage(hasNextPage ? () => nextPageFn : undefined);
-        }
-      },
-    );
-
-    return () => unsubscribe();
-  }, [postId]);
-
-  return null;
-};
+AmityCoreClient.newUserRepository()
+    .getReachedUsers(viewedType = AmityViewedType.POST, viewedId = postId)
+    .subscribe(
+        { users: PagingData<AmityUser> -> showSuccessMessage(users) },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-final _amityUsers = <AmityUser>[];
-late PagingController<AmityUser> _amityUsersController;
-final scrollcontroller = ScrollController();
+final users = await AmityCoreClient.newUserRepository()
+    .getViewedUsers(viewedType: AmityViewedType.POST, viewedId: postId)
+    .query();
 
-void getPostReachedUsers(String postId) {
-  _amityUsersController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .getViewedUsers(viewedId: postId, viewedType: AmityViewedType.POST)
-        .getPagingData(token: token, limit: 10),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_amityUsersController.error == null) {
-          //handle _amityUsersController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _amityUsers.clear();
-          _amityUsers.addAll(_amityUsersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-
-  // To fetch the first page
-  _amityUsersController.fetchNextPage();
-  _amityUsersController.addListener(pagination);
-}
-
-void pagination() {
-  if ((scrollcontroller.position.pixels ==
-          scrollcontroller.position.maxScrollExtent) &&
-      _amityUsersController.hasMoreItems) {
-    _amityUsersController.fetchNextPage();
-  }
-}
+final reachedUserCount = users.length;
 ```
 
-## Best Practices
 
-    - **Debounce View Events**: Prevent multiple impressions from rapid scrolling
-    - **Batch Analytics Calls**: Group multiple post views for efficient API usage
-    - **Cache Analytics Data**: Store impression counts locally to reduce API calls
-    - **Background Processing**: Handle analytics operations asynchronously
-    - **Memory Management**: Properly dispose of observation tokens
+## Notes
 
-    - **Non-blocking Operations**: Don't let analytics calls slow down the UI
-    - **Privacy Considerations**: Respect user privacy when tracking view data
-    - **Graceful Degradation**: Handle analytics failures without affecting core functionality
-
-    - **View Threshold**: Define minimum view time before marking as viewed
-    - **Unique Tracking**: Ensure each user is counted only once per post
-    - **Validation**: Verify analytics data integrity before displaying
-
-    - **Meaningful Metrics**: Focus on metrics that drive business decisions
-    - **Trend Analysis**: Track changes over time rather than absolute numbers
-    - **Segmentation**: Analyze performance by user groups or content types
-    - **A/B Testing**: Use analytics to validate content strategy changes
-
-## Troubleshooting
-
-    - Verify that `markAsViewed()` is being called correctly
-    - Check network connectivity for analytics data sync
-    - Ensure user has proper permissions to view the post
-    - Test with different posts to isolate the issue
-
-    - Confirm post exists and is accessible
-    - Check if the post has any actual impressions
-    - Test with posts that have known viewers
-
-    - Allow time for near real-time updates to propagate
-    - Check if users are being counted multiple times
-    - Verify that view tracking is working across different entry points
-    - Review analytics implementation for race conditions
-
-
-## Practical Examples
-
-    Build comprehensive dashboards showing post performance, reach trends, and audience insights for content creators.
-
-    Analyze user demographics and engagement patterns to better understand your community audience and optimize content strategy.
-
-    Compare impression rates between different post formats, content types, or posting times to optimize engagement.
-
-    Calculate post engagement scores based on reach, impressions, and user interaction patterns for content ranking.
+- Keep the unsubscriber, notification token, or stream subscription so you can dispose it when the screen is destroyed.
+- Refresh or re-query the post if your UI needs updated `impression` and `reach` values after marking a view.
+- Treat analytics failures as non-blocking; viewing a post should not depend on the analytics event being accepted.
+- Apply your own viewability threshold and debounce rules before calling the SDK method.
 
 ## Related Topics
 
-    Discover how to query and filter posts for analytics
-    Learn about tracking ephemeral story performance
-
-    Understand how to create posts with built-in analytics tracking
+    Query posts by feed target, post type, review status, or tags
+    Render post data and child media safely
+    Track story views and query reached users for stories
 
 ## Social — Comments
 
