@@ -1,378 +1,177 @@
 ---
 title: "Get Follower/Following List"
-description: "Retrieve live collections of followers and following users via UserRepository. Filter by status: accepted or pending."
+description: "Query paginated follower and following lists with the social.plus SDKs."
 ---
 
-Use `UserRepository` to retrieve paginated live collections of a user's followers or following. Filter by connection status (`accepted` or `pending`). Deleted users are automatically excluded and lists are ordered newest-first.
+Use follower and following list APIs when you need to show people lists, pending requests, or accepted relationships. Results are paginated or live depending on the platform.
 
-<CardGroup cols={3}>
-  <Card title="Live Collections" icon="arrows-rotate">
-    Auto-updates when relationships change; no manual refresh required
-  </Card>
-  <Card title="Status Filtering" icon="filter">
-    Filter by accepted or pending; only available when request-based following is enabled
-  </Card>
-  <Card title="Pagination Support" icon="list">
-    Built-in pagination handled by the live collection; call nextPage() to load more
-  </Card>
-</CardGroup>
+| List | Description |
+| --- | --- |
+| Followers | Users who follow the target user |
+| Following | Users the target user follows |
 
-## Key Features
+<Info>
+Status filters use `accepted`, `pending`, or `all` where the platform exposes them. Android supports status filters on the current user's follower/following builders. TypeScript, iOS, and Flutter expose status filters for the list APIs shown below.
+</Info>
 
-<AccordionGroup>
-  <Accordion title="List Types and Filtering">
-    <CardGroup cols={2}>
-      <Card title="Follower Lists" icon="users">
-        Retrieve users who are following a specific user, with status-based filtering
-      </Card>
-      <Card title="Following Lists" icon="user-plus">
-        Get users that a specific user is following, including pending requests
-      </Card>
-      <Card title="Status-based Filtering" icon="filter">
-        Filter by connection status: accepted connections or pending requests
-      </Card>
-      <Card title="Real-time Updates" icon="bolt">
-        Live collections automatically update when relationships change
-      </Card>
-    </CardGroup>
-  </Accordion>
-
-  <Accordion title="Data Structure">
-    **Follow Relationship Object Properties:**
-    
-    - `sourceUser`: The user who initiated the follow action
-    - `targetUser`: The user being followed
-    - `status`: Connection status (accepted, pending, blocked)
-    - `createdAt`: Timestamp when the relationship was created
-    - `updatedAt`: Timestamp of the last status change
-  </Accordion>
-
-  <Accordion title="Privacy and Access Control">
-    - **Own Lists**: Full access to your follower/following lists
-    - **Other User Lists**: Access based on privacy settings
-    - **Pending Requests**: Only visible to relevant users
-    - **Blocked Users**: Automatically excluded from results
-  </Accordion>
-</AccordionGroup>
-
-## Get Followers List
+## Get Followers
 
 <CodeGroup>
-```swift iOS 
-var token: AmityNotificationToken?
+```swift iOS
+let relationship = AmityUserRelationship()
+let followers = relationship.getMyFollowers(with: .accepted)
 
-// Get My Followers List
-func getMyFollowerList() {
-    let followers = userRelationship.getMyFollowers(with: .accepted)
-    token = followers.observe { collection, changes, error in
-        // Handle the result
+_ = followers.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
     }
+
+    let relationships = collection.snapshots
+    _ = relationships.first?.sourceUser
 }
 
-//Get Other User Followers List
-func getFollowerList() {
-    let followers = userRelationship.getFollowers(withUserId: "<user-id>")
-    token = followers.observe { collection, changes, error in
-        // Handle the result
-    }
-}
+followers.nextPage()
 ```
 
 ```kotlin Android
-// Get My Followers List
-fun queryFollowers(userRepository: AmityUserRepository) {
-    userRepository
-        .relationship()
-        .me()
-        .getFollowers()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
-
-//Get Other User Followers List
-fun queryFollowers(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .user(userId = userId)
-        .getFollowers()
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getMyFollowers()
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityFollowRelationship> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let loadMoreFollowers: (() => void) | undefined;
 
-//Get My Followers List
-const unsubscriber = UserRepository.Relationship.getFollowers(
-  { userId: 'my-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-  },
-);
-
-//Get Other User Followers List
 const unsubscribe = UserRepository.Relationship.getFollowers(
-  { userId: 'target-user-id' },
+  { userId, status: 'accepted' },
   ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && followers) {
+      renderResults(followers);
     }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    loadMoreFollowers = hasNextPage ? onNextPage : undefined;
   },
 );
 ```
 
 ```dart Flutter
-// Get My Followers List
-final _followRelationships = <AmityFollowRelationship>[];
-late PagingController<AmityFollowRelationship> _followerController;
+final page = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowers(targetUserId)
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .getPagingData(limit: 20);
 
-void queryMyFollowers() {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getMyFollowers()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
-
-//Get Other User Followers List
-void queryFollowers(String userId) {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getFollowers(userId)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
+final relationships = page.data;
 ```
-
 </CodeGroup>
 
-## Get Following List
+## Get Following
 
 <CodeGroup>
-```swift iOS 
-var token: AmityNotificationToken?
+```swift iOS
+let relationship = AmityUserRelationship()
+let followings = relationship.getMyFollowings(with: .accepted)
 
-// Get My Followers List
-func getMyFollowerList() {
-    let followers = userRelationship.getMyFollowings(with: .accepted)
-    token = followers.observe { collection, changes, error in
-        // Handle the result
+_ = followings.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
     }
+
+    let relationships = collection.snapshots
+    _ = relationships.first?.targetUser
 }
 
-//Get Other User Followers List
-func getFollowerList() {
-    let followers = userRelationship.getFollowings(withUserId: "<user-id>")
-    token = followers.observe { collection, changes, error in
-        // Handle the result
-    }
-}
+followings.nextPage()
 ```
 
 ```kotlin Android
-// Get My Followers List
-fun queryFollowers(userRepository: AmityUserRepository) {
-    userRepository
-        .relationship()
-        .me()
-        .getFollowings()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
-
-//Get Other User Followers List
-fun queryFollowers(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .user(userId = userId)
-        .getFollowings()
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowings(userId = targetUserId)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityFollowRelationship> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let loadMoreFollowings: (() => void) | undefined;
 
-//Get My Followers List
-const unsubscriber = UserRepository.Relationship.getFollowings(
-  { userId: 'my-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-  },
-);
-
-//Get Other User Followers List
 const unsubscribe = UserRepository.Relationship.getFollowings(
-  { userId: 'target-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
+  { userId, status: 'accepted' },
+  ({ data: followings, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && followings) {
+      renderResults(followings);
     }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    loadMoreFollowings = hasNextPage ? onNextPage : undefined;
   },
 );
 ```
 
 ```dart Flutter
-// Get My Followers List
-final _followRelationships = <AmityFollowRelationship>[];
-late PagingController<AmityFollowRelationship> _followerController;
+final page = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowings(targetUserId)
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .getPagingData(limit: 20);
 
-void queryMyFollowers() {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getMyFollowings()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
-
-//Get Other User Followers List
-void queryFollowers(String userId) {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getFollowings(userId)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
+final relationships = page.data;
 ```
-
 </CodeGroup>
 
+## Follow Relationship Fields
 
+| Platform | Common fields |
+| --- | --- |
+| TypeScript | `from`, `to`, `status`, `createdAt`, `updatedAt` |
+| iOS | `sourceUserId`, `targetUserId`, `sourceUser`, `targetUser`, `status` |
+| Android | `getSourceUser()`, `getTargetUser()`, `getStatus()` |
+| Flutter | `sourceUserId`, `targetUserId`, `sourceUser`, `targetUser`, `status`, `createdAt` |
 
 ## Related Topics
 
 <CardGroup cols={3}>
   <Card title="Follow/Unfollow User" href="./follow-unfollow-user" icon="user-plus">
-    Learn how to implement basic follow and unfollow functionality
+    Change a relationship.
   </Card>
-  <Card title="Connections & Counts" href="./get-follower-following-list" icon="signal">
-    Check relationship status and connection counters between users
+  <Card title="Connection Status" href="./get-connection-status" icon="signal">
+    Read counts and status.
   </Card>
   <Card title="Accept/Decline Requests" href="./accept-decline-follow-request" icon="handshake">
-    Handle incoming follow requests with approval workflows
+    Process pending followers.
   </Card>
 </CardGroup>

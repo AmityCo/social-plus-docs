@@ -35382,95 +35382,63 @@ fun queryMembersExcludingRoles(communityRepository: AmityCommunityRepository) {
 
 ### [User Relationship](https://learn.social.plus/social-plus-sdk/social/user-relationship/overview)
 
-> Overview of user relationship features: following, blocking, connection status, and follower/following list management.
+> SDK overview for follow, unfollow, follow requests, follower lists, and blocking.
 
-Use `UserRepository` to follow or unfollow users, block or unblock users, check connection status, and retrieve follower or following lists. This guide covers the two core systems (Following and Blocking) and their behavior.
+User relationship APIs let a signed-in user build and manage their social graph. Use them for follow/unfollow actions, incoming follow requests, follower and following lists, follow counts, and blocked-user management.
 
-**Looking for a step-by-step walkthrough?** The [User Profiles & Social Graph](/use-cases/social/user-profiles-and-social-graph) guide walks you through building follow/unfollow, blocking, and social graph features end-to-end.
+For an end-to-end product walkthrough, see [User Profiles & Social Graph](/use-cases/social/user-profiles-and-social-graph). This section focuses on SDK calls and return shapes.
 
-## Overview
+## Relationship Systems
 
-User relationships in social.plus are built on two core systems: **Following** and **Blocking**. These systems work together to provide users with control over their social experience, privacy, and safety.
+| System | What it manages | Main SDK surface |
+| --- | --- | --- |
+| Following | Follow requests, accepted follows, pending requests, follower/following lists, and follow counts | `UserRepository.Relationship` on TypeScript, `relationship()` on Android and Flutter, `AmityUserRelationship` on iOS |
+| Blocking | Block/unblock actions and the current user's blocked-user list | Relationship block APIs plus `getBlockedUsers()` on the user repository |
 
----
+Follow status values are platform-specific enum or string values, but the shared meanings are:
 
-## Blocking & Unblocking Users
+| Status | Meaning |
+| --- | --- |
+| `none` | No active follow relationship |
+| `pending` | A follow request exists and is waiting for action |
+| `accepted` | The follow relationship is active |
+| `blocked` | The relationship is blocked |
 
-Blocking allows users to protect themselves from unwanted interactions, harassment, or spam. When a user is blocked:
-- Their content is hidden from the blocker's feeds (global, community, user feed)
-- They cannot comment, react, or post on the blocker's content
-- The connection status becomes `none` and following is disabled
-- Search visibility remains, but interactions are restricted
+Whether a follow becomes `accepted` immediately or starts as `pending` is determined by your network's follow configuration. The same SDK follow call is used in both cases.
 
-Unblocking restores content visibility and re-enables interactions, but the connection status remains `none` until a new follow is initiated.
+## Platform Coverage
 
-    Protect users from harassment and unwanted interactions. Blocked users cannot engage or view private content.
-    Blocked users' content is filtered from all feeds and interactions are disabled.
+| Capability | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Follow and unfollow | Yes | Yes | Yes | Yes |
+| Accept and decline incoming follow requests | Yes | Yes | Yes | Yes |
+| Get current user's follow counts | Yes | Yes | Yes | Yes |
+| Get another user's follow counts and status | Yes | Yes | Yes | Yes |
+| Query followers and following | Yes | Yes | Yes | Yes |
+| Block and unblock users | Yes | Yes | Yes | Yes |
+| Query paginated blocked users | Yes | Yes | Yes | Yes |
+| Get all blocked users as a one-shot list | Yes | Yes | Yes | Not available in the Flutter public repository |
 
-Blocking is a permanent action until reversed. Always provide clear feedback and management options for users.
+## Use The Right Read API
 
-### Product Behavior for Blocked/Unblocked Users
-- Blocked users' content is hidden from all feeds
-- Search still shows blocked users, but interactions are disabled
-- Blocked users cannot follow, comment, or react to the blocker's content
-- Unblocking restores visibility and interaction, but does not restore previous connection status
+Use the live or paginated APIs for user-facing screens:
 
----
+- Follow info: profile headers, follow buttons, counters, and relationship badges.
+- Follower/following lists: people lists with pagination and refresh behavior.
+- Blocked users: a settings screen where users can review and unblock accounts.
 
-## Following & Unfollowing Users
+Use `getAllBlockedUsers()` only when you need a one-shot block list for local decisions. It returns up to 100 blocked users on TypeScript, iOS, and Android, and the SDK caches the result briefly.
 
-Following relationships are one-directional. When User A follows User B:
-- User A is a follower of User B
-- User B is not automatically following User A
-- Connections can be direct or request-based, depending on network settings
-
-    Instant connection, no approval required. Suitable for public or open networks.
-    Requires approval from the target user. Suitable for privacy-focused or professional networks.
-
-### Connection Methods
-- **Direct**: Follow action creates immediate connection
-- **Request-based**: Follow action sends a request, target user must approve
-
-Network settings determine whether following is direct or request-based. This can be configured via API.
-
----
-
-## User Experience & Best Practices
-
-    - Clear status indicators (Follow, Following, Pending, Blocked)
-    - Easy approve/decline for requests
-    - Discovery tools and privacy respect
-    - Confirmation dialogs for blocking
-    - Clear feedback and unblock options
-    - Simple blocked user management
-
-    - Always provide clear feedback for blocking actions
-    - Allow users to manage their blocked list easily
-    - Respect privacy and content visibility settings
-    - Efficiently filter content and manage large block lists
-    - Track relationship metrics and user engagement
-    - Handle network and permission errors gracefully
-    - Provide actionable error messages for failed actions
-
----
-
-## Quick Start
-
-    Decide between direct or request-based following for your app.
-    Enable follow/unfollow and connection status tracking.
-    Add block/unblock functionality and content filtering.
-    Set up privacy controls and monitor relationship metrics.
-
----
+Do not rely on this overview for feed visibility, search visibility, comment permissions, or other product policy details. Those behaviors can depend on backend configuration and feature area. Handle SDK errors from the affected feature API and keep the UI state in sync with relationship status.
 
 ## Related Guides
 
-    Learn how to block and unblock users
-    Manage and view blocked user lists
-    Implement follow and unfollow functionality
-    Handle incoming follow requests
-    Check relationship status between users
-    Retrieve and display follower/following lists
+    Create or remove a follow relationship.
+    Approve or reject incoming follow requests.
+    Read follow status and follow counts.
+    Query paginated relationship lists.
+    Block or unblock another user.
+    Query the current user's blocked-user list.
 
 ## Social — Content Management Overview
 
@@ -42198,1041 +42166,730 @@ AmitySocialClient.newEventRepository()
 
 ### [Follow/Unfollow User](https://learn.social.plus/social-plus-sdk/social/user-relationship/following/follow-unfollow-user)
 
-> Implement follow and unfollow functionality for user relationships
+> Follow or unfollow another user with the social.plus SDKs.
 
-The **Follow/Unfollow User** functionality is the core mechanism for establishing and managing relationships between users in your social platform. This feature enables users to connect with others, creating networks that drive content discovery, engagement, and community building.
+Use the follow API to create a relationship from the current user to another user. The SDK returns the resulting follow status where the platform exposes one. Depending on network configuration, the status can become `accepted` immediately or remain `pending` until the target user accepts the request.
 
-    Create meaningful connections between users with simple follow/unfollow actions
-    Support both direct following and request-based workflows
+Use the unfollow API to cancel a pending request or remove an accepted follow relationship.
 
-You can follow any user by their user ID. The SDK will handle whether the follow is direct or request-based, depending on your network configuration.
+If the relationship is blocked, follow and unfollow calls can fail or return a blocked status. Read the connection status before rendering a follow button when the UI needs to distinguish blocked users.
 
-### Product Behavior
-- If direct following is enabled, the connection is established instantly.
-- If request-based following is enabled, the target user must accept the request before the connection is established.
-- The follow status can be: `accepted`, `pending`, `none`, or `blocked`.
+## Follow User
 
+```swift iOS
+let relationship = AmityUserRelationship()
+let response = try await relationship.follow(withUserId: "target-user-id")
+_ = response
+```
 
-### Follow User
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .follow(userId = targetUserId)
+    .subscribe(
+        { status: AmityFollowStatus ->
+            showSuccessMessage(status.apiKey)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const { data: followStatus } = await UserRepository.Relationship.follow(userId);
+
+if (followStatus.status === 'accepted') {
+  showSuccessMessage('Following');
+}
+```
+
+```dart Flutter
+final status = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .follow(targetUserId);
+
+final statusValue = status.value;
+```
 
 ## Unfollow User
 
+```swift iOS
+let relationship = AmityUserRelationship()
+let response = try await relationship.unfollow(withUserId: "target-user-id")
+_ = response
+```
 
-Unfollowing a user is immediate and does not require confirmation from the other user. The connection is removed and counters are updated.
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .unfollow(userId = targetUserId)
+    .subscribe(
+        {
+            showSuccessMessage()
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
 
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const didUnfollow = await UserRepository.Relationship.unfollow(userId);
+
+if (didUnfollow) {
+  showSuccessMessage('Unfollowed');
+}
+```
+
+```dart Flutter
+final status = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .unfollow(targetUserId);
+
+final statusValue = status.value;
+```
 
 ## Related Topics
 
-    Handle incoming follow requests with approval workflows
-    Check relationship status and connection counters between users
-    Retrieve and display follower and following lists for users
+    Handle incoming follow requests.
+    Read status and counters.
+    Query followers and following.
 
 ---
 
 ### [Accept/Decline Follow Request](https://learn.social.plus/social-plus-sdk/social/user-relationship/following/accept-decline-follow-request)
 
-> Manage incoming follow requests with accept and decline actions, including multi-platform code examples.
+> Accept or decline incoming follow requests with the social.plus SDKs.
 
-Enable users to manage their incoming follow requests for a more personalized and secure social experience. Accepting or declining requests gives users control over who can follow them and see their updates.
+When follow approval is enabled, a follow call creates a pending request. The target user can accept the request to make the relationship active, or decline it to remove the request.
 
-    Approve follow requests to allow new followers and expand your network.
-    Decline requests to maintain privacy and control your audience.
-
-Accepting a follow request adds the user to your followers and allows them to see your updates. Declining removes the request and prevents updates from being shared.
-
-## Product Behavior
-- Accepting a request adds the user to your followers and enables feed updates.
-- Declining a request removes the request and blocks feed updates for that user.
-- If a request is no longer available (withdrawn, already accepted/declined), the SDK returns an error.
+Accept and decline methods operate on requests received by the current user. If the request has already been withdrawn, accepted, or declined, handle the SDK error and refresh the request list or follow info.
 
 ## Accept Follow Request
 
-Approve a follow request to add a user to your followers and allow them to receive your updates.
-
 ```swift iOS
-// Accept a follow request
-do {
-    let result = try await userRelationship.acceptMyFollower(withUserId: "<user-id>")
-} catch {
-    // Handle error here
-}
+let relationship = AmityUserRelationship()
+let response = try await relationship.acceptMyFollower(withUserId: "requester-user-id")
+_ = response
 ```
 
 ```kotlin Android
-fun acceptFollowRequest(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .me()
-        .accept(userId = userId)
-        .doOnComplete {
-            //success
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .acceptMyFollower(userId = targetUserId)
+    .subscribe(
+        {
+            showSuccessMessage()
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-async function acceptFollower() {
-  const isAccepted = await UserRepository.Relationship.acceptMyFollower('userId');
-  return isAccepted;
+const didAccept = await UserRepository.Relationship.acceptMyFollower(userId);
+
+if (didAccept) {
+  showSuccessMessage('Follow request accepted');
 }
 ```
 
 ```dart Flutter
-void acceptFollowRequest(String userId) {
-  AmityCoreClient.newUserRepository()
-      .relationship()
-      .acceptMyFollower(userId = userId)
-      .then((value) => {
-            //success
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
+final status = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .acceptMyFollower(targetUserId);
 
+final statusValue = status.value;
+```
 
 ## Decline Follow Request
 
-Decline a follow request to remove the request and prevent the user from following you.
-
 ```swift iOS
-// Decline a follow request
-do {
-    let result = try await userRelationship.declineMyFollower(withUserId: "<user-id>")
-} catch {
-    // Handle error here
-}
+let relationship = AmityUserRelationship()
+let response = try await relationship.declineMyFollower(withUserId: "requester-user-id")
+_ = response
 ```
 
 ```kotlin Android
-fun declineFollowRequest(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .me()
-        .decline(userId = userId)
-        .doOnComplete {
-            //success
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .declineMyFollower(userId = targetUserId)
+    .subscribe(
+        {
+            showSuccessMessage()
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-async function declineFollower() {
-  const isDeclined = await UserRepository.Relationship.declineMyFollower('userId');
-  return isDeclined;
+const didDecline = await UserRepository.Relationship.declineMyFollower(userId);
+
+if (didDecline) {
+  showSuccessMessage('Follow request declined');
 }
 ```
 
 ```dart Flutter
-void declineFollowRequest(String userId) {
-  AmityCoreClient.newUserRepository()
-      .relationship()
-      .declineMyFollower(userId = userId)
-      .then((value) => {
-            //success
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
+final status = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .declineMyFollower(targetUserId);
+
+final statusValue = status.value;
 ```
 
-If the follow request is no longer available (withdrawn, already accepted/declined), the SDK will return an error. Always handle errors gracefully and inform the user.
+## Related Topics
 
----
+    Create or remove follow relationships.
+    Read status and counters.
+    Query pending or accepted followers.
 
 ---
 
 ### [Get Follower/Following List](https://learn.social.plus/social-plus-sdk/social/user-relationship/following/get-follower-following-list)
 
-> Retrieve live collections of followers and following users via UserRepository. Filter by status: accepted or pending.
+> Query paginated follower and following lists with the social.plus SDKs.
 
-Use `UserRepository` to retrieve paginated live collections of a user's followers or following. Filter by connection status (`accepted` or `pending`). Deleted users are automatically excluded and lists are ordered newest-first.
+Use follower and following list APIs when you need to show people lists, pending requests, or accepted relationships. Results are paginated or live depending on the platform.
 
-    Auto-updates when relationships change; no manual refresh required
-    Filter by accepted or pending; only available when request-based following is enabled
-    Built-in pagination handled by the live collection; call nextPage() to load more
+| List | Description |
+| --- | --- |
+| Followers | Users who follow the target user |
+| Following | Users the target user follows |
 
-## Key Features
+Status filters use `accepted`, `pending`, or `all` where the platform exposes them. Android supports status filters on the current user's follower/following builders. TypeScript, iOS, and Flutter expose status filters for the list APIs shown below.
 
-        Retrieve users who are following a specific user, with status-based filtering
-        Get users that a specific user is following, including pending requests
-        Filter by connection status: accepted connections or pending requests
-        Live collections automatically update when relationships change
-
-    **Follow Relationship Object Properties:**
-
-    - `sourceUser`: The user who initiated the follow action
-    - `targetUser`: The user being followed
-    - `status`: Connection status (accepted, pending, blocked)
-    - `createdAt`: Timestamp when the relationship was created
-    - `updatedAt`: Timestamp of the last status change
-
-    - **Own Lists**: Full access to your follower/following lists
-    - **Other User Lists**: Access based on privacy settings
-    - **Pending Requests**: Only visible to relevant users
-    - **Blocked Users**: Automatically excluded from results
-
-## Get Followers List
+## Get Followers
 
 ```swift iOS
-var token: AmityNotificationToken?
+let relationship = AmityUserRelationship()
+let followers = relationship.getMyFollowers(with: .accepted)
 
-// Get My Followers List
-func getMyFollowerList() {
-    let followers = userRelationship.getMyFollowers(with: .accepted)
-    token = followers.observe { collection, changes, error in
-        // Handle the result
+_ = followers.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
     }
+
+    let relationships = collection.snapshots
+    _ = relationships.first?.sourceUser
 }
 
-//Get Other User Followers List
-func getFollowerList() {
-    let followers = userRelationship.getFollowers(withUserId: "<user-id>")
-    token = followers.observe { collection, changes, error in
-        // Handle the result
-    }
-}
+followers.nextPage()
 ```
 
 ```kotlin Android
-// Get My Followers List
-fun queryFollowers(userRepository: AmityUserRepository) {
-    userRepository
-        .relationship()
-        .me()
-        .getFollowers()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
-
-//Get Other User Followers List
-fun queryFollowers(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .user(userId = userId)
-        .getFollowers()
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getMyFollowers()
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityFollowRelationship> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let loadMoreFollowers: (() => void) | undefined;
 
-//Get My Followers List
-const unsubscriber = UserRepository.Relationship.getFollowers(
-  { userId: 'my-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-  },
-);
-
-//Get Other User Followers List
 const unsubscribe = UserRepository.Relationship.getFollowers(
-  { userId: 'target-user-id' },
+  { userId, status: 'accepted' },
   ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && followers) {
+      renderResults(followers);
     }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    loadMoreFollowers = hasNextPage ? onNextPage : undefined;
   },
 );
 ```
 
 ```dart Flutter
-// Get My Followers List
-final _followRelationships = <AmityFollowRelationship>[];
-late PagingController<AmityFollowRelationship> _followerController;
+final page = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowers(targetUserId)
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .getPagingData(limit: 20);
 
-void queryMyFollowers() {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getMyFollowers()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
-
-//Get Other User Followers List
-void queryFollowers(String userId) {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getFollowers(userId)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
+final relationships = page.data;
 ```
 
-
-## Get Following List
+## Get Following
 
 ```swift iOS
-var token: AmityNotificationToken?
+let relationship = AmityUserRelationship()
+let followings = relationship.getMyFollowings(with: .accepted)
 
-// Get My Followers List
-func getMyFollowerList() {
-    let followers = userRelationship.getMyFollowings(with: .accepted)
-    token = followers.observe { collection, changes, error in
-        // Handle the result
+_ = followings.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
     }
+
+    let relationships = collection.snapshots
+    _ = relationships.first?.targetUser
 }
 
-//Get Other User Followers List
-func getFollowerList() {
-    let followers = userRelationship.getFollowings(withUserId: "<user-id>")
-    token = followers.observe { collection, changes, error in
-        // Handle the result
-    }
-}
+followings.nextPage()
 ```
 
 ```kotlin Android
-// Get My Followers List
-fun queryFollowers(userRepository: AmityUserRepository) {
-    userRepository
-        .relationship()
-        .me()
-        .getFollowings()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
-
-//Get Other User Followers List
-fun queryFollowers(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .user(userId = userId)
-        .getFollowings()
-        .build()
-        .getPagingData()
-        .doOnNext { pagingData: PagingData<AmityFollowRelationship> ->
-            //results
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowings(userId = targetUserId)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityFollowRelationship> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
+let loadMoreFollowings: (() => void) | undefined;
 
-//Get My Followers List
-const unsubscriber = UserRepository.Relationship.getFollowings(
-  { userId: 'my-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
-  },
-);
-
-//Get Other User Followers List
 const unsubscribe = UserRepository.Relationship.getFollowings(
-  { userId: 'target-user-id' },
-  ({ data: followers, onNextPage, hasNextPage, loading, error }) => {
+  { userId, status: 'accepted' },
+  ({ data: followings, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
+
+    if (!loading && followings) {
+      renderResults(followings);
     }
-    if (followers) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    loadMoreFollowings = hasNextPage ? onNextPage : undefined;
   },
 );
 ```
 
 ```dart Flutter
-// Get My Followers List
-final _followRelationships = <AmityFollowRelationship>[];
-late PagingController<AmityFollowRelationship> _followerController;
+final page = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowings(targetUserId)
+    .status(AmityFollowStatusFilter.ACCEPTED)
+    .getPagingData(limit: 20);
 
-void queryMyFollowers() {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getMyFollowings()
-        .status(AmityFollowStatusFilter.ACCEPTED)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
-
-//Get Other User Followers List
-void queryFollowers(String userId) {
-  _followerController = PagingController(
-    pageFuture: (token) => AmityCoreClient.newUserRepository()
-        .relationship()
-        .getFollowings(userId)
-        .getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_followerController.error == null) {
-          //handle _followerController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
-          _followRelationships.clear();
-          _followRelationships.addAll(_followerController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
-        }
-      },
-    );
-}
+final relationships = page.data;
 ```
 
+## Follow Relationship Fields
+
+| Platform | Common fields |
+| --- | --- |
+| TypeScript | `from`, `to`, `status`, `createdAt`, `updatedAt` |
+| iOS | `sourceUserId`, `targetUserId`, `sourceUser`, `targetUser`, `status` |
+| Android | `getSourceUser()`, `getTargetUser()`, `getStatus()` |
+| Flutter | `sourceUserId`, `targetUserId`, `sourceUser`, `targetUser`, `status`, `createdAt` |
 
 ## Related Topics
 
-    Learn how to implement basic follow and unfollow functionality
-    Check relationship status and connection counters between users
-    Handle incoming follow requests with approval workflows
+    Change a relationship.
+    Read counts and status.
+    Process pending followers.
 
 ---
 
 ### [Get Connection Status](https://learn.social.plus/social-plus-sdk/social/user-relationship/following/get-connection-status)
 
-> Check the relationship status between two users and retrieve follower/following/pending counts using UserRepository.
+> Read follow status and follow counts for the current user or another user.
 
-Use `UserRepository` to check the current relationship status between two users (following, pending, none, or blocked) and retrieve follower, following, and pending request counts.
+Use follow info APIs to render profile headers, follow buttons, follower counts, following counts, and pending-request badges.
 
-    Returns one of four statuses: following, pending, none, or blocked
-    Returns follower count, following count, and pending request count for any user
+The current user's follow info returns counts only. Another user's follow info returns counts plus the current user's relationship status toward that user.
 
-## Connection Status Types
+| Field | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Follower count | `followerCount` | `followersCount` | `getFollowerCount()` | `followerCount` |
+| Following count | `followingCount` | `followingCount` | `getFollowingCount()` | `followingCount` |
+| Pending count for current user | `pendingCount` | `pendingCount` | `getPendingRequestCount()` | `pendingRequestCount` |
+| Status for another user | `status` | `status` | `getStatus()` | `status` |
 
-    **Available Connection Statuses:**
-
-    | Status | Description | User Action Available |
-    |--------|-------------|----------------------|
-    | `following` | Active connection established | Can unfollow |
-    | `pending` | Follow request sent, awaiting approval | Can withdraw request |
-    | `none` | No relationship exists | Can send follow request |
-    | `blocked` | User has been blocked | Can unblock user |
-
-    **Status Transitions:**
-
-```mermaid
-stateDiagram-v2
-    [*] --> none
-    none --> pending : Send Request
-    none --> following : Direct Follow
-    pending --> following : Accept Request
-    pending --> none : Decline/Withdraw
-    following --> none : Unfollow
-    none --> blocked : Block User
-    following --> blocked : Block User
-    blocked --> none : Unblock User
-```
-    **Connection Counters Explained:**
-
-        Total number of users that the target user is following
-        Total number of users who are following the target user
-        Total number of follow requests the target user has received but not yet processed
-
-## Get User Follow Information
+## Get My Follow Info
 
 ```swift iOS
-let userRepository = AmityUserRepository(client: client)
-let userRelationship = userRepository.userRelationship
+let relationship = AmityUserRelationship()
 
-// To get the current user to follow information, use getMyFollowInfo.
-token = userRelationship.getMyFollowInfo().observe({ liveObject, error in
-    // Handle result
-})
+_ = relationship.getMyFollowInfo().observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
 
-// To get the other's user follow information, use getFollowInfo with the userId parameter.
-token = userRelationship.getFollowInfo(withUserId: "user-id").observe({ liveObject, error in
-    // Handle result
-})
+    if let info = liveObject.snapshot {
+        _ = info.followersCount
+        _ = info.followingCount
+        _ = info.pendingCount
+    }
+}
 ```
 
 ```kotlin Android
-// To get the current user follow information, use the code below.
-fun getFollowInfo() {
-    val userRepository = AmityCoreClient.newUserRepository()
-    userRepository
-        .relationship()
-        .me()
-        .getFollowInfo()
-        .doOnNext { followInfo: AmityMyFollowInfo ->
-            //results
-        }
-        .subscribe()
-}
-
-// To get the other's user follow information, use the code below with the userId parameter.
-fun getFollowInfo(userRepository: AmityUserRepository, userId: String) {
-    userRepository
-        .relationship()
-        .user(userId = userId)
-        .getFollowInfo()
-        .doOnNext { followInfo: AmityUserFollowInfo ->
-            //results
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getMyFollowInfo()
+    .subscribe(
+        { info: AmityMyFollowInfo ->
+            showSuccessMessage(info.getFollowerCount())
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-const unsubscriber = UserRepository.Relationship.getFollowInfo(
-  'userId',
+const unsubscribe = UserRepository.Relationship.getMyFollowInfo(
   ({ data: followInfo, loading, error }) => {
-    if (loading) {
-      // handle loading state
-    }
-
     if (error) {
-      // handle error
+      handleError(error);
+      return;
     }
 
     if (!loading && followInfo) {
-      // handle follow info
-      console.log('Follower count:', followInfo.followerCount);
-      console.log('Following count:', followInfo.followingCount);
+      updateUI({
+        followers: followInfo.followerCount,
+        following: followInfo.followingCount,
+        pending: followInfo.pendingCount,
+      });
     }
   },
 );
 ```
 
 ```dart Flutter
-// To get the current user follow information, use the code below.
-void getFollowInfo() {
-  AmityCoreClient.newUserRepository()
-      .relationship()
-      .getMyFollowInfo()
-      .then((myFollowInfo) => {
-            //my follower count
-            myFollowInfo.followerCount,
-            //my following count
-            myFollowInfo.followingCount
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
+final info = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getMyFollowInfo();
 
-// To get the other's user follow information, use the code below with the userId parameter.
-void getFollowInfo(String userId) {
-  AmityCoreClient.newUserRepository()
-      .relationship()
-      .getFollowInfo(userId)
-      .then((otherFollowInfo) => {
-            //my follower count
-            otherFollowInfo.followerCount,
-            //my following count
-            otherFollowInfo.followingCount
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+final followerCount = info.followerCount;
+final followingCount = info.followingCount;
+final pendingCount = info.pendingRequestCount;
+```
+
+## Get Another User's Follow Info
+
+```swift iOS
+let relationship = AmityUserRelationship()
+
+_ = relationship.getFollowInfo(withUserId: "target-user-id").observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    if let info = liveObject.snapshot {
+        _ = info.status
+        _ = info.followersCount
+        _ = info.followingCount
+    }
 }
+```
+
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowInfo(userId = targetUserId)
+    .subscribe(
+        { info: AmityUserFollowInfo ->
+            showSuccessMessage(info.getStatus().apiKey)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = UserRepository.Relationship.getFollowInfo(
+  userId,
+  ({ data: followInfo, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading && followInfo) {
+      updateUI({
+        status: followInfo.status,
+        followers: followInfo.followerCount,
+        following: followInfo.followingCount,
+      });
+    }
+  },
+);
+```
+
+```dart Flutter
+final info = await AmityCoreClient.newUserRepository()
+    .relationship()
+    .getFollowInfo(targetUserId);
+
+final status = info.status;
+final followerCount = info.followerCount;
+final followingCount = info.followingCount;
 ```
 
 ## Related Topics
 
-    Learn how to implement basic follow and unfollow functionality
-    Handle incoming follow requests with approval workflows
-    Retrieve and display follower and following lists for users
+    Change the relationship state.
+    Process pending requests.
+    Query follower and following lists.
 
 ---
 
 ### [Block & Unblock User](https://learn.social.plus/social-plus-sdk/social/user-relationship/blocking/block-unblock-user)
 
-> How to block and unblock users, product behavior, and multi-platform code examples.
+> Block or unblock another user with the social.plus SDKs.
 
-Use `UserRepository` to block or unblock another user. Blocking hides the blocked user's content from all feeds and prevents them from posting on the blocker's feed or initiating a follow.
+Use the block API when the current user wants to block another user. Use the unblock API to remove that block.
 
-Only users can be blocked. Console Admins and communities cannot be blocked. Community moderators or custom roles can be blocked regardless of their roles.
+The SDK updates relationship data after block and unblock calls. TypeScript returns the updated blocked payload (`follows` and `followCounts`). iOS, Android, and Flutter expose these actions as async or completable operations.
 
-## Product Behavior
-
-        - Global feed content hidden
-        - Community feed content hidden
-        - User feed content hidden
-        - Search functionality remains active
-        - Blocked user's connection status as `blocked`.
-        - Cannot create posts on blocker's feed
-        - Cannot follow the blocker
-
-      *Some limitations apply - If Alice blocks Bob, and either of them knows the other's post ID, they can still comment on or react to each other's posts.
-
-        - All feed content becomes visible
-        - Global, community, and user feeds restored
-        - Full content access resumed
-        - All interactions re-enabled
-        - Connection status remains `none`
-        - Following capability restored
-        - Previous connections not auto-restored
-
-      Connection status does not return to previous state after unblocking. Users must reconnect manually.
-
----
-
-## Parameters
-
-    **Type:** `String`
-    **Required:** Yes
-    The unique identifier of the user to block or unblock.
-
----
+Blocking affects relationship state, but downstream visibility and interaction behavior can vary by feature area and backend configuration. Keep feed, comment, search, and profile screens resilient by handling errors from those feature APIs and refreshing relationship status after block or unblock actions.
 
 ## Block User
 
-Users can block other users to prevent unwanted interactions. This action is immediate and silent (no notification sent).
-
 ```swift iOS
-// Block a user by userId
- do {
-    try await userRelationship.blockUser(userId: "user-id")
-    print("User blocked successfully")
-} catch let error {
-    print("Unable to block user \(error)")
-}
+let relationship = AmityUserRelationship()
+try await relationship.blockUser(userId: "target-user-id")
 ```
 
 ```kotlin Android
-fun blockUser(
-    userRepository: AmityUserRepository,
-    userId: String
-) {
-    userRepository
-        .relationship()
-        .blockUser(userId = userId)
-        .doOnComplete {
-            //  success
-        }
-        .doOnError {
-            //  handle exception
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .blockUser(userId = targetUserId)
+    .subscribe(
+        {
+            showSuccessMessage()
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-async function blockUser() {
-  const { follows } = await UserRepository.Relationship.blockUser('userId');
-  return follows;
-}
+const result = await UserRepository.Relationship.blockUser(userId);
 
-async function blockUserThenGetFollowCount() {
-  const { followCounts } = await UserRepository.Relationship.blockUser('userId');
-  return followCounts;
-}
+const followStatus = result.follows[0]?.status;
+const followCount = result.followCounts[0];
 ```
 
 ```dart Flutter
-void blockUser(String userId) {
-  AmityCoreClient.newUserRepository().relationship().blockUser(userId).then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+await AmityCoreClient.newUserRepository()
+    .relationship()
+    .blockUser(targetUserId);
 ```
-
----
 
 ## Unblock User
 
-Unblocking a user restores visibility and interaction, but the connection status always resets to `none`. Users must reconnect if they wish to follow again.
-
 ```swift iOS
-// Unblock a user by userId
-do {
-    try await userRelationship.unblockUser(userId: "user-id")
-    print("User unblocked successfully")
-} catch let error {
-    print("Unable to unblock user \(error)")
-}
+let relationship = AmityUserRelationship()
+try await relationship.unblockUser(userId: "target-user-id")
 ```
 
 ```kotlin Android
-fun unblockUser(
-    userRepository: AmityUserRepository,
-    userId: String
-) {
-    userRepository
-        .relationship()
-        .unblockUser(userId = userId)
-        .doOnComplete {
-            //  success
-        }
-        .doOnError {
-            //  handle exception
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .unblockUser(userId = targetUserId)
+    .subscribe(
+        {
+            showSuccessMessage()
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-async function unBlockUser() {
-  const { follows } = await UserRepository.Relationship.unBlockUser('userId');
-  return follows;
-}
+const result = await UserRepository.Relationship.unBlockUser(userId);
 
-async function unBlockUserThenGetFollowCount() {
-  const { followCounts } = await UserRepository.Relationship.unBlockUser('userId');
-  return followCounts;
-}
+const followStatus = result.follows[0]?.status;
+const followCount = result.followCounts[0];
 ```
 
 ```dart Flutter
-void unBlockUser(String userId) {
-  AmityCoreClient.newUserRepository().relationship().unblockUser(userId).then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+await AmityCoreClient.newUserRepository()
+    .relationship()
+    .unblockUser(targetUserId);
 ```
 
----
+## After Block Or Unblock
 
-## Best Practices
+After a successful block or unblock action:
 
-    - Always provide confirmation dialogs for blocking/unblocking actions.
-    - Clearly indicate blocked status in the UI.
-    - Allow users to manage their blocked list easily.
-    - Never notify users when they are blocked.
-    - Ensure all blocked user content and interactions are hidden.
-    - Respect privacy and content visibility settings.
+- Refresh follow info if the current screen shows relationship status or counters.
+- Refresh follower/following lists if the current screen displays social graph data.
+- Refresh blocked-user lists if the current screen lets users manage blocked accounts.
+- Handle errors from other feature APIs instead of assuming all product surfaces update in the same way.
+
+## Related Topics
+
+    Query the blocked-user list.
+    Read status and counters.
+    Change follow relationships.
 
 ---
 
 ### [Manage Blocked Users](https://learn.social.plus/social-plus-sdk/social/user-relationship/blocking/manage-blocked-users)
 
-> How to view and manage your blocked users list, with multi-platform code examples.
+> Query the current user's blocked-user list with the social.plus SDKs.
 
-Allow users to view and manage the list of users they have blocked. This feature is essential for user safety, privacy, and giving users control over their social experience.
+Use blocked-user list APIs to build a settings screen where users can review accounts they have blocked and unblock them when needed.
 
-    View all users you have blocked, including their display name, avatar, and user ID.
-    Only users you have blocked are shown. Inactive or deleted users are excluded.
+There are two read patterns:
 
-  You can only view users you have blocked—not users who have blocked you. Blocked users that are inactive or deleted will not appear in your list.
+| API | Best for | Platforms |
+| --- | --- | --- |
+| `getBlockedUsers()` | A paginated management screen | TypeScript, iOS, Android, Flutter |
+| `getAllBlockedUsers()` | A one-shot list for local decisions | TypeScript, iOS, Android |
 
-## Product Behavior
+You can query users blocked by the current user. These APIs do not reveal which users have blocked the current user.
 
-- The blocked users list displays:
-  - User ID
-  - Display Name
-  - Avatar
-  - Other relevant user information
-- Only active users you have blocked are shown
-- You cannot see users who have blocked you
-
----
-
-## Get Blocked Users List (Paginated)
-
-Retrieve and manage your blocked users list with pagination. This returns a **live collection** that automatically reflects changes when you block or unblock users.
-
-### How It Works
-
-- **Live collection** — Results are returned as a live collection
-- **Paginated** — Results are loaded in pages. Use the platform's pagination mechanism to load additional pages on demand.
-
-### Parameters
-
-| Parameter | Type   | Required | Description                                                            |
-| --------- | ------ | -------- | ---------------------------------------------------------------------- |
-| `limit`   | Number | No       | Number of users per page (default varies by platform, typically 20–25) |
-
-### Usage
-
+## Get Blocked Users
 
 ```swift iOS
-// Observe blocked users list
-let token = userRepository.getBlockedUsers().observe { liveCollection, _, error in
-    // Handle liveCollection (list of blocked users)
-    // Handle error if needed
-}
-```
+let repository = AmityUserRepository()
+let blockedUsers = repository.getBlockedUsers()
 
+_ = blockedUsers.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    let users = collection.snapshots
+    _ = users.first?.userId
+}
+
+blockedUsers.nextPage()
+```
 
 ```kotlin Android
-fun queryBlockedUsers(
-    userRepository: AmityUserRepository
-) {
-    userRepository
-        .getBlockedUsers()
-        .doOnNext { pagingData: PagingData<AmityUser> ->
-            // Handle pagingData (list of blocked users)
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .getBlockedUsers()
+    .subscribe(
+        { pagingData: PagingData<AmityUser> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
-
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined;
-let hasMore: boolean | undefined;
+let loadMoreBlockedUsers: (() => void) | undefined;
 
-const unsubscriber = UserRepository.getBlockedUsers(
+const unsubscribe = UserRepository.getBlockedUsers(
   { limit: 25 },
   ({ data: users, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle error
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Show loading spinner
+
+    if (!loading && users) {
+      renderResults(users);
     }
-    if (users) {
-      // Process users
-    }
-    hasMore = hasNextPage;
-    nextPageFn = onNextPage;
+
+    loadMoreBlockedUsers = hasNextPage ? onNextPage : undefined;
   },
 );
-
-function loadMore() {
-  if (hasMore) {
-    nextPageFn?.();
-  }
-}
 ```
-
 
 ```dart Flutter
-final _amityUsers = <AmityUser>[];
-late PagingController<AmityUser> _amityUsersController;
+final page = await AmityCoreClient.newUserRepository()
+    .getBlockedUsers()
+    .getPagingData(limit: 20);
 
-void getBlockedUsers() {
-  _amityUsersController = PagingController(
-    pageFuture: (token) =>
-        AmityCoreClient.newUserRepository().getBlockedUsers().getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_amityUsersController.error == null) {
-          _amityUsers.clear();
-          _amityUsers.addAll(_amityUsersController.loadedItems);
-          // Update widgets
-        } else {
-          // Handle error
-        }
-      },
-    );
-}
+final blockedUsers = page.data;
 ```
 
+## Get All Blocked Users
 
-  **When to use this**: Use the paginated `getBlockedUsers()` for building a "Manage Blocked Users" screen where users can browse, scroll through, and unblock people. The live collection keeps the UI in sync automatically. For one-shot use cases like feed filtering, see [Get All Blocked Users](#get-all-blocked-users-non-paginated) below.
+Use `getAllBlockedUsers()` when your app needs a one-shot list instead of a paginated collection. TypeScript, iOS, and Android return up to 100 blocked users and use a short SDK-side cache. Call the method again when you need a fresh snapshot.
 
----
+```swift iOS
+let repository = AmityUserRepository()
+let blockedUsers = try await repository.getAllBlockedUsers()
 
-## Get All Blocked Users (Non-Paginated)
-
-  **Platform Availability**: `getAllBlockedUsers()` is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
-
-Retrieve the complete list of blocked users as a **one-shot async call** (not a live collection). This is optimized for use cases like feed filtering where you need the full block list upfront without live reactivity.
-
-### How It Works
-
-- **One-shot result** — Returns the full blocked users list as a single async response, not a live collection.
-- **Built-in caching** — The SDK caches the result for **5 minutes**. The first call fetches from the server; subsequent calls within the TTL window resolve instantly from the local cache.
-- **Cache refresh** — After 5 minutes, the next call triggers a fresh server fetch.
-- **Local changes** — If you block or unblock a user between calls, the local cache is updated immediately. The next `getAllBlockedUsers()` call reflects the change even without a server fetch.
-- **Session-aware** — The cache resets on logout. After re-login, the next call fetches fresh data.
-
-  **Cache behavior**: Results are cached for **5 minutes**. If the blocked users list appears stale, this is expected — wait for the cache to expire or trigger a new call after 5 minutes. Blocking or unblocking a user locally will update the cached list immediately, but changes made from another device will only appear after the cache refreshes.
-
-### Usage
-
-```swift
-import AmitySDK
-
-let userRepository = AmityUserRepository(client: client)
-
-userRepository.getAllBlockedUsers { result in
-    switch result {
-    case .success(let blockedUsers):
-        print("Blocked users: \(blockedUsers.count)")
-        for user in blockedUsers {
-            print("- \(user.displayName ?? user.userId)")
-        }
-    case .failure(let error):
-        print("Failed to get blocked users: \(error)")
-    }
-}
+let blockedUserIds = Set(blockedUsers.map { $0.userId })
 ```
-```kotlin
-import com.amity.socialcloud.sdk.api.core.AmityCoreClient
 
-val userRepository = AmityCoreClient.newUserRepository()
-
-userRepository.getAllBlockedUsers()
-    .subscribeOn(Schedulers.io())
-    .observeOn(AndroidSchedulers.mainThread())
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .getAllBlockedUsers()
     .subscribe(
-        { blockedUsers: List<AmityUser> ->
-            println("Blocked users: ${blockedUsers.size}")
-            blockedUsers.forEach { user ->
-                println("- ${user.getDisplayName()}")
-            }
+        { users: List<AmityUser> ->
+            val blockedUserIds = users.map { it.getUserId() }.toSet()
+            showSuccessMessage(blockedUserIds)
         },
         { error ->
-            println("Failed to get blocked users: ${error.message}")
-        }
+            handleGeneralError(error)
+        },
     )
 ```
 
-### Use Case: Feed Filtering
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
 
-A common use case is filtering out blocked users' posts from a feed:
-
-```swift
-// Get all blocked user IDs for local filtering
-userRepository.getAllBlockedUsers { result in
-    switch result {
-    case .success(let blockedUsers):
-        let blockedUserIds = Set(blockedUsers.map { $0.userId })
-        // Use blockedUserIds to filter feed content locally
-    case .failure(let error):
-        // Handle error — do not assume empty block list
-        print("Error: \(error)")
-    }
-}
-```
-```kotlin
-userRepository.getAllBlockedUsers()
-    .subscribe(
-        { blockedUsers ->
-            val blockedUserIds = blockedUsers.map { it.getUserId() }.toSet()
-            // Use blockedUserIds to filter feed content locally
-        },
-        { error ->
-            // Handle error — do not assume empty block list
-        }
-    )
+const blockedUsers = await UserRepository.getAllBlockedUsers();
+const blockedUserIds = new Set(blockedUsers.map((user) => user.userId));
 ```
 
-### Limitations
+The one-shot API is not available in the Flutter public repository. For Flutter, use `getBlockedUsers().getPagingData(...)` and page through the result.
 
-- **Hard limit of 100 users** — Returns a maximum of 100 blocked users. If a user has more than 100 blocked users, only the most recent 100 are returned.
-- **Not a live collection** — The result is a one-shot snapshot. It does not automatically update when block/unblock actions occur. Call the function again to get the latest list.
-- **Error propagation** — If the server fetch fails (e.g., network error), the error is propagated to the caller. The SDK does not return a stale cached list on failure.
+## Related Topics
 
-  For real-time, paginated block lists (e.g., a "Manage Blocked Users" screen), use the existing `getBlockedUsers()` live collection API above instead.
-
----
-
-## Best Practices
-
-    - Provide clear UI for managing blocked users
-    - Allow easy unblocking from the list
-    - Show avatars and display names for quick identification
-    - Use pagination for large block lists
-    - Update the list in real-time as users are blocked/unblocked
+    Change blocked status.
+    Read follow status.
+    Query social graph lists.
 
 ## UIKit — Overview & Getting Started
 

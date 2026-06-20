@@ -1,264 +1,133 @@
 ---
 title: "Manage Blocked Users"
-description: "How to view and manage your blocked users list, with multi-platform code examples."
+description: "Query the current user's blocked-user list with the social.plus SDKs."
 ---
 
-Allow users to view and manage the list of users they have blocked. This feature is essential for user safety, privacy, and giving users control over their social experience.
+Use blocked-user list APIs to build a settings screen where users can review accounts they have blocked and unblock them when needed.
 
-<CardGroup cols={2}>
-  <Card icon="list" title="Blocked Users List">
-    View all users you have blocked, including their display name, avatar, and user ID.
-  </Card>
-  <Card icon="user-lock" title="Privacy & Control">
-    Only users you have blocked are shown. Inactive or deleted users are excluded.
-  </Card>
-</CardGroup>
+There are two read patterns:
+
+| API | Best for | Platforms |
+| --- | --- | --- |
+| `getBlockedUsers()` | A paginated management screen | TypeScript, iOS, Android, Flutter |
+| `getAllBlockedUsers()` | A one-shot list for local decisions | TypeScript, iOS, Android |
 
 <Info>
-  You can only view users you have blocked—not users who have blocked you. Blocked users that are inactive or deleted will not appear in your list.
+You can query users blocked by the current user. These APIs do not reveal which users have blocked the current user.
 </Info>
 
-## Product Behavior
-
-- The blocked users list displays:
-  - User ID
-  - Display Name
-  - Avatar
-  - Other relevant user information
-- Only active users you have blocked are shown
-- You cannot see users who have blocked you
-
----
-
-## Get Blocked Users List (Paginated)
-
-Retrieve and manage your blocked users list with pagination. This returns a **live collection** that automatically reflects changes when you block or unblock users.
-
-### How It Works
-
-- **Live collection** — Results are returned as a live collection 
-- **Paginated** — Results are loaded in pages. Use the platform's pagination mechanism to load additional pages on demand.
-
-### Parameters
-
-| Parameter | Type   | Required | Description                                                            |
-| --------- | ------ | -------- | ---------------------------------------------------------------------- |
-| `limit`   | Number | No       | Number of users per page (default varies by platform, typically 20–25) |
-
-### Usage
+## Get Blocked Users
 
 <CodeGroup>
-
 ```swift iOS
-// Observe blocked users list
-let token = userRepository.getBlockedUsers().observe { liveCollection, _, error in
-    // Handle liveCollection (list of blocked users)
-    // Handle error if needed
-}
-```
+let repository = AmityUserRepository()
+let blockedUsers = repository.getBlockedUsers()
 
+_ = blockedUsers.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    let users = collection.snapshots
+    _ = users.first?.userId
+}
+
+blockedUsers.nextPage()
+```
 
 ```kotlin Android
-fun queryBlockedUsers(
-    userRepository: AmityUserRepository
-) {
-    userRepository
-        .getBlockedUsers()
-        .doOnNext { pagingData: PagingData<AmityUser> ->
-            // Handle pagingData (list of blocked users)
-        }
-        .subscribe()
-}
+val disposable = AmityCoreClient.newUserRepository()
+    .getBlockedUsers()
+    .subscribe(
+        { pagingData: PagingData<AmityUser> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
 ```
-
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined;
-let hasMore: boolean | undefined;
+let loadMoreBlockedUsers: (() => void) | undefined;
 
-const unsubscriber = UserRepository.getBlockedUsers(
+const unsubscribe = UserRepository.getBlockedUsers(
   { limit: 25 },
   ({ data: users, onNextPage, hasNextPage, loading, error }) => {
     if (error) {
-      // Handle error
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Show loading spinner
+
+    if (!loading && users) {
+      renderResults(users);
     }
-    if (users) {
-      // Process users
-    }
-    hasMore = hasNextPage;
-    nextPageFn = onNextPage;
+
+    loadMoreBlockedUsers = hasNextPage ? onNextPage : undefined;
   },
 );
-
-function loadMore() {
-  if (hasMore) {
-    nextPageFn?.();
-  }
-}
 ```
-
 
 ```dart Flutter
-final _amityUsers = <AmityUser>[];
-late PagingController<AmityUser> _amityUsersController;
+final page = await AmityCoreClient.newUserRepository()
+    .getBlockedUsers()
+    .getPagingData(limit: 20);
 
-void getBlockedUsers() {
-  _amityUsersController = PagingController(
-    pageFuture: (token) =>
-        AmityCoreClient.newUserRepository().getBlockedUsers().getPagingData(token: token, limit: 20),
-    pageSize: 20,
-  )..addListener(
-      () {
-        if (_amityUsersController.error == null) {
-          _amityUsers.clear();
-          _amityUsers.addAll(_amityUsersController.loadedItems);
-          // Update widgets
-        } else {
-          // Handle error
-        }
-      },
-    );
-}
+final blockedUsers = page.data;
 ```
-
 </CodeGroup>
 
-<Tip>
-  **When to use this**: Use the paginated `getBlockedUsers()` for building a "Manage Blocked Users" screen where users can browse, scroll through, and unblock people. The live collection keeps the UI in sync automatically. For one-shot use cases like feed filtering, see [Get All Blocked Users](#get-all-blocked-users-non-paginated) below.
-</Tip>
+## Get All Blocked Users
 
----
+Use `getAllBlockedUsers()` when your app needs a one-shot list instead of a paginated collection. TypeScript, iOS, and Android return up to 100 blocked users and use a short SDK-side cache. Call the method again when you need a fresh snapshot.
 
-## Get All Blocked Users (Non-Paginated)
+<CodeGroup>
+```swift iOS
+let repository = AmityUserRepository()
+let blockedUsers = try await repository.getAllBlockedUsers()
 
-<Info>
-  **Platform Availability**: `getAllBlockedUsers()` is currently available on **iOS** and **Android** only. Web (TypeScript) support is under development.
-</Info>
+let blockedUserIds = Set(blockedUsers.map { $0.userId })
+```
 
-Retrieve the complete list of blocked users as a **one-shot async call** (not a live collection). This is optimized for use cases like feed filtering where you need the full block list upfront without live reactivity.
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .getAllBlockedUsers()
+    .subscribe(
+        { users: List<AmityUser> ->
+            val blockedUserIds = users.map { it.getUserId() }.toSet()
+            showSuccessMessage(blockedUserIds)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
 
-### How It Works
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
 
-- **One-shot result** — Returns the full blocked users list as a single async response, not a live collection.
-- **Built-in caching** — The SDK caches the result for **5 minutes**. The first call fetches from the server; subsequent calls within the TTL window resolve instantly from the local cache.
-- **Cache refresh** — After 5 minutes, the next call triggers a fresh server fetch.
-- **Local changes** — If you block or unblock a user between calls, the local cache is updated immediately. The next `getAllBlockedUsers()` call reflects the change even without a server fetch.
-- **Session-aware** — The cache resets on logout. After re-login, the next call fetches fresh data.
+const blockedUsers = await UserRepository.getAllBlockedUsers();
+const blockedUserIds = new Set(blockedUsers.map((user) => user.userId));
+```
+</CodeGroup>
 
-<Tip>
-  **Cache behavior**: Results are cached for **5 minutes**. If the blocked users list appears stale, this is expected — wait for the cache to expire or trigger a new call after 5 minutes. Blocking or unblocking a user locally will update the cached list immediately, but changes made from another device will only appear after the cache refreshes.
-</Tip>
+<Warning>
+The one-shot API is not available in the Flutter public repository. For Flutter, use `getBlockedUsers().getPagingData(...)` and page through the result.
+</Warning>
 
-### Usage
+## Related Topics
 
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    import AmitySDK
-    
-    let userRepository = AmityUserRepository(client: client)
-    
-    userRepository.getAllBlockedUsers { result in
-        switch result {
-        case .success(let blockedUsers):
-            print("Blocked users: \(blockedUsers.count)")
-            for user in blockedUsers {
-                print("- \(user.displayName ?? user.userId)")
-            }
-        case .failure(let error):
-            print("Failed to get blocked users: \(error)")
-        }
-    }
-    ```
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    import com.amity.socialcloud.sdk.api.core.AmityCoreClient
-    
-    val userRepository = AmityCoreClient.newUserRepository()
-    
-    userRepository.getAllBlockedUsers()
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribe(
-            { blockedUsers: List<AmityUser> ->
-                println("Blocked users: ${blockedUsers.size}")
-                blockedUsers.forEach { user ->
-                    println("- ${user.getDisplayName()}")
-                }
-            },
-            { error ->
-                println("Failed to get blocked users: ${error.message}")
-            }
-        )
-    ```
-  </Tab>
-</Tabs>
-
-### Use Case: Feed Filtering
-
-A common use case is filtering out blocked users' posts from a feed:
-
-<Tabs>
-  <Tab title="iOS">
-    ```swift
-    // Get all blocked user IDs for local filtering
-    userRepository.getAllBlockedUsers { result in
-        switch result {
-        case .success(let blockedUsers):
-            let blockedUserIds = Set(blockedUsers.map { $0.userId })
-            // Use blockedUserIds to filter feed content locally
-        case .failure(let error):
-            // Handle error — do not assume empty block list
-            print("Error: \(error)")
-        }
-    }
-    ```
-  </Tab>
-  <Tab title="Android">
-    ```kotlin
-    userRepository.getAllBlockedUsers()
-        .subscribe(
-            { blockedUsers ->
-                val blockedUserIds = blockedUsers.map { it.getUserId() }.toSet()
-                // Use blockedUserIds to filter feed content locally
-            },
-            { error ->
-                // Handle error — do not assume empty block list
-            }
-        )
-    ```
-  </Tab>
-</Tabs>
-
-### Limitations
-
-- **Hard limit of 100 users** — Returns a maximum of 100 blocked users. If a user has more than 100 blocked users, only the most recent 100 are returned.
-- **Not a live collection** — The result is a one-shot snapshot. It does not automatically update when block/unblock actions occur. Call the function again to get the latest list.
-- **Error propagation** — If the server fetch fails (e.g., network error), the error is propagated to the caller. The SDK does not return a stale cached list on failure.
-
-<Note>
-  For real-time, paginated block lists (e.g., a "Manage Blocked Users" screen), use the existing `getBlockedUsers()` live collection API above instead.
-</Note>
-
----
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion icon="user-check" title="User Experience">
-    - Provide clear UI for managing blocked users
-    - Allow easy unblocking from the list
-    - Show avatars and display names for quick identification
-  </Accordion>
-  <Accordion icon="bolt" title="Performance & Pagination">
-    - Use pagination for large block lists
-    - Update the list in real-time as users are blocked/unblocked
-  </Accordion>
-</AccordionGroup>
+<CardGroup cols={3}>
+  <Card title="Block & Unblock User" href="./block-unblock-user" icon="ban">
+    Change blocked status.
+  </Card>
+  <Card title="Connection Status" href="../following/get-connection-status" icon="signal">
+    Read follow status.
+  </Card>
+  <Card title="Follower Lists" href="../following/get-follower-following-list" icon="list">
+    Query social graph lists.
+  </Card>
+</CardGroup>
