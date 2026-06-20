@@ -6,7 +6,7 @@ import { UserRepository } from '@amityco/ts-sdk';
 // Get multiple users by IDs
 const getUsersByIds = async (userIds: string[]) => {
   try {
-    const users = await UserRepository.getUsers(userIds);
+    const { data: users } = await UserRepository.getUserByIds(userIds);
     
     users.forEach(user => {
       console.log(`${user.userId}: ${user.displayName}`);

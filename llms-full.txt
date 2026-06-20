@@ -2571,11 +2571,11 @@ Implement role-based permissions and moderation privileges
 
 ## How social.plus User Management Works
 
-**Decentralized Approach**: social.plus SDK does not store or manage personal user data. Instead, users are represented by unique identifiers that you control.
+**Decentralized Approach**: social.plus SDK does not replace your identity system. Users are represented by unique identifiers that you control, while optional social profile fields such as display name, avatar, metadata, roles, and moderation state are stored only when you send them to social.plus.
 
 ### Key Principles
 
-social.plus doesn't store user profiles, emails, or personal information. You maintain full control over your user data in your own systems.
+Keep your source-of-truth user accounts, credentials, email addresses, and private profile data in your own systems. Send social.plus a stable `userId` plus only the social profile fields your experience needs.
 
 Every user is represented by a unique `userId` - typically your database primary key or another immutable identifier.
 
@@ -2588,12 +2588,12 @@ Use social.plus repositories to query user information and perform searches acro
 **Your Application Handles:**
 - User signup/registration
 - Email verification
-- Profile creation
-- User data storage
+- Private profile creation
+- Source-of-truth user data storage
 
 **social.plus Receives:**
 - Unique user ID
-- Display name
+- Optional display name
 - Optional roles
 - Optional metadata
 
@@ -2616,7 +2616,7 @@ Use social.plus repositories to query user information and perform searches acro
 - Community safety features
 
 **You Maintain:**
-- User profile updates
+- Source-of-truth user profile updates
 - Privacy settings
 - Account management
 - Data compliance
@@ -2706,19 +2706,19 @@ This architecture gives you the flexibility to build social features while maint
 
 > Understand how social.plus SDK handles user identity and data management without storing personal information.
 
-social.plus SDK does not store personal user data. Each user is represented by a `userId` (a string you supply from your own system) that remains immutable for the lifetime of the account.
+social.plus SDK does not replace your identity system or require personal identifiers such as email addresses. Each user is represented by a `userId` (a string you supply from your own system) that remains immutable for the lifetime of the account. The SDK does store the social profile fields you send to it, such as display name, description, avatar, metadata, roles, and moderation state, so avoid putting sensitive personal data in those fields.
 
 ## Core Principles
 
-**No User Data Storage**: social.plus SDK does not store or manage any personal user data. This means no user profiles, emails, or personal information is stored in social.plus systems.
+**You Own Identity Data**: Keep your source-of-truth user account, login credentials, email address, and private profile data in your own system. Send social.plus only the stable `userId` and optional social profile fields needed by social features.
 
 ### Key Benefits
 
 Your users' data stays in your systems, ensuring privacy and compliance
 
-Integrate social.plus without importing or migrating existing user profiles
+Integrate social.plus without migrating your primary user accounts
 
-Handle user management with your existing application logic and systems
+Handle authentication and private user data with your existing application logic and systems
 
 ## User Identification
 
@@ -2793,7 +2793,7 @@ While social.plus doesn't store personal data, it maintains essential informatio
 <tr>
 <td><code>metadata</code></td>
 <td>Object</td>
-<td>Custom metadata for this user</td>
+<td>Custom metadata for this user. Do not store sensitive personal data here.</td>
 </tr>
 <tr>
 <td><code>avatarCustomUrl</code></td>
@@ -2855,7 +2855,7 @@ While social.plus doesn't store user profiles, it provides tools for querying an
 ### Initializing User Repository
 
 ```swift iOS
-let userRepository = AmityUserRepository(client: client)
+let userRepository = AmityUserRepository()
 ```
 
 ```kotlin Android
@@ -2951,36 +2951,42 @@ Use the `hasPermission` method to check if the current user can perform specific
 
 ```swift iOS
 // Check if user has permission to delete messages in a channel
-if client.hasPermission(.deleteMessage, in: channelId) {
-    // User can delete messages
-    showDeleteOption()
-} else {
-    // User cannot delete messages
-    hideDeleteOption()
+Task { @MainActor in
+    let canDelete = await client.hasPermission(.deleteMessage, forChannel: channelId)
+
+    if canDelete {
+        // Enable delete-message controls
+    } else {
+        // Hide delete-message controls
+    }
 }
 ```
 
 ```kotlin Android
 // Check if user has permission to ban users
-if (AmityCoreClient.hasPermission(AmityPermission.BAN_CHANNEL_USER, channelId)) {
-    // User can ban other users
-    showBanOption()
-} else {
-    // User cannot ban users
-    hideBanOption()
+fun checkBanPermission(channelId: String) {
+    AmityCoreClient.hasPermission(AmityPermission.BAN_CHANNEL_USER)
+        .atChannel(channelId)
+        .check()
+        .doOnNext { canBan ->
+            if (canBan) {
+                // Enable ban controls
+            } else {
+                // Hide ban controls
+            }
+        }
+        .subscribe()
 }
 ```
 
 ```typescript TypeScript
 // Check if user has permission to edit community posts
-const canEdit = await client.hasPermission({
-    permission: 'EDIT_COMMUNITY_POST',
-    communityId: 'community123'
-});
+const canEdit = client.hasPermission('EDIT_COMMUNITY_POST').community(communityId);
 
 if (canEdit) {
-    // Show edit controls
-    showEditButton();
+  // Enable edit controls
+} else {
+  // Hide edit controls
 }
 ```
 
@@ -2993,8 +2999,9 @@ final canMute = AmityCoreClient
     .check();
 
 if (canMute) {
-    // Show mute option
-    showMuteOption();
+    // Enable mute controls
+} else {
+    // Hide mute controls
 }
 ```
 
@@ -3349,7 +3356,9 @@ if (canMute) {
 
 *CommunityV3 - Refers to the latest community management system version
 
-## Detailed Permission List
+## Common Permission Constants
+
+Permission constants are not identical across every SDK. Use the enum or string constants exposed by your target SDK before passing a value to `hasPermission()`. Some Console/API permissions, such as community category or network notification settings, may not be available as typed client SDK permissions on every platform.
 
 ### Channel Permissions
 
@@ -3711,7 +3720,7 @@ Task { @MainActor in
             userId: "<user-id>",
             displayName: "<(optional)-display-name>",
             authToken: "<(optional)-auth-token>",
-            sessionHandler: MySessionHandler()
+            sessionHandler: sessionHandler
         )
         print("login success")
     } catch {
@@ -3722,7 +3731,7 @@ Task { @MainActor in
 
 ```kotlin Android
 fun authenticate() {
-    AmityCoreClient.login(userId = "userId 1")
+    AmityCoreClient.login(userId = "userId 1", sessionHandler = null)
         .displayName(displayName = "John Doe") // optional
         .authToken(authToken = "token") // optional
         .build()
@@ -3925,7 +3934,7 @@ import { UserRepository } from '@amityco/ts-sdk';
 // Get multiple users by IDs
 const getUsersByIds = async (userIds: string[]) => {
   try {
-    const users = await UserRepository.getUsers(userIds);
+    const { data: users } = await UserRepository.getUserByIds(userIds);
 
     users.forEach(user => {
       console.log(`${user.userId}: ${user.displayName}`);
@@ -4131,49 +4140,36 @@ Future<void> updateUser() async {
 
 ### [Delete User](https://learn.social.plus/social-plus-sdk/core-concepts/user-management/user-operations/delete-user)
 
-> Learn how to permanently delete users and their associated data from social.plus SDK
+> Understand user deletion availability for social.plus SDK applications
 
-The Delete User API permanently removes a user and their associated data from the system. This operation is irreversible: all profile data, content, and channel memberships are deleted and cannot be restored.
+Client SDKs do not expose a public method to delete a user. User deletion is an admin operation that should be performed through the social.plus Console or a server-side API flow controlled by your backend.
 
-This action performs a **hard delete** and **all deleted data will be lost permanently and cannot be recovered**. Use this feature only when absolutely necessary.
+Do not implement user deletion directly in a client app. Treat deletion as a privileged backend workflow with explicit authorization, confirmation, and audit logging.
 
 ## Admin-Only Feature
 
 User deletion can only be performed by **admin users** through the API or Console. Regular users cannot delete other users or themselves through the SDK.
 
-## API Parameters
+## SDK Availability
 
-The delete user operation accepts the following parameters to control what data gets deleted:
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `userId` | string | Yes | The unique identifier of the user to delete |
-| `deleteAll` | boolean | No | Delete all personal data including profile, images, files, messages, posts, and comments |
-| `markMessageDeleted` | boolean | No | Delete all message channels and messages created by the user |
-| `hardDeletePost` | boolean | No | Delete posts, comments, reactions, and child content |
-| `hardDeleteComment` | boolean | No | Delete all comments and reactions made by the user |
-
-### Deletion Scope
-
-    User profile, photos, images, and files
-    Messages, channels, posts, and comments
+    No public delete-user method is available in iOS, Android, TypeScript, or Flutter SDKs.
+    Use Console or a server-side API integration where credentials and authorization stay off the client.
 
 ## What Happens When a User is Deleted?
 
-    - **User cannot be reactivated**: Once deleted, the account cannot be restored under any circumstances
-    - **System ID preserved**: The user's system ID remains in the database for referential integrity
-    - **Display name changed**: Username is replaced with "Deleted User" to protect identity
-    - **Account marked as deleted**: All queries will show the user as deleted
+Deletion behavior is controlled by the admin/API flow you use. Review the server-side API options for the exact data-removal scope before exposing this workflow in your product.
 
-    - **Personal data removed**: Profile, photos, videos, images, and files are permanently deleted
-    - **Messages deleted**: All conversation channels and messages created by the user are removed
-    - **Posts and comments**: All posts, comments, and associated content are marked as deleted
-    - **File attachments**: All uploaded files and attachments are permanently removed
+    - Deleted users may appear with `isDeleted` state in SDK query results
+    - Your app should stop starting new sessions for deleted users
+    - Clear or refresh any locally cached user profile data in your app
 
-    - **Channel membership updated**: User is removed from all channels and member counts are updated
-    - **Reaction counts updated**: All reactions by the deleted user are removed and counts updated
-    - **Conversation channels deleted**: All channels created by the user are permanently removed
-    - **No access restoration**: No other user can reactivate or access the deleted account
+    - Data-removal scope depends on the server-side deletion parameters you choose
+    - Query and moderation UIs should handle deleted users gracefully
+    - Do not assume client SDK queries are a complete compliance export or erasure report
+
+    - Membership, content, and relationship effects depend on the admin deletion workflow
+    - Refresh affected lists after deletion so counts and user labels update
+    - Keep product-specific account state in sync with the backend operation
 
 ## Implementation
 
@@ -4225,7 +4221,7 @@ When implementing user deletion, ensure compliance with applicable data protecti
 
 ## Overview
 
-Use `UserRepository.searchUsers()` to find users by display name, or query the full user list sorted by display name, creation date (newest first), or creation date (oldest first). Search keywords must be at least 3 characters.
+Use the user repository to find users by display name, or query the full user list sorted by creation date where the platform supports it. Search API names differ by SDK: iOS and Android use `searchUsers`, while TypeScript and Flutter use `searchUserByDisplayName`.
 
 Deleted users are automatically excluded from all search and query results to maintain data integrity.
 
@@ -4241,9 +4237,8 @@ Query for users by their display name, receiving a collection of AmityUser match
 ### Search Requirements
 
 - **Search keywords must be at least 3 characters long**
-- If no keyword is supplied, the list of users will be organized alphabetically by display name
 - When a keyword is provided, the list will be arranged based on search rank
-- The displayName sorting option will be specified by default if it isn't specified
+- iOS and TypeScript expose display-name sorting for search results
 
 ### Sorting Options
 
@@ -4267,7 +4262,7 @@ var token: AmityNotificationToken?
 
 func searchUserExample() {
     let liveCollection = userRepository.searchUsers("<display-name>", sortBy: .displayName)
-    token = liveCollection.observe { collection, change, error in
+    token = liveCollection.observe { collection, error in
         // Handle live collection notification here
     }
 }
@@ -4327,7 +4322,7 @@ void searchUserByDisplayName(String keyword) {
 
 ## Query Users
 
-Query for users to receive a collection of AmityUser based on a single parameter: a 'sort option' from the AmityUserSortOption enum. Sort the list by options such as displayName, firstCreated, or lastCreated. The displayName sort option will be specified by default if it isn't specified.
+Query for users to receive a collection of AmityUser objects. iOS, Android, and Flutter expose display-name sorting for query results. TypeScript query sorting supports `firstCreated` and `lastCreated`.
 
 ### Sorting Behavior
 
@@ -4342,7 +4337,7 @@ var token: AmityNotificationToken?
 
 func queryUsersExample() {
     let liveCollection = userRepository.getUsers(.displayName)
-    token = liveCollection.observe { collection, change, error in
+    token = liveCollection.observe { collection, error in
         // Handle live collection notification here
     }
 }
@@ -4376,7 +4371,7 @@ const GetUsers: FC = () => {
 
   useEffect(() => {
     const unsubscribe = UserRepository.getUsers(
-      {},
+      { sortBy: 'lastCreated' },
       ({ data: users, onNextPage, hasNextPage, loading, error }) => {
         setUsers({
           data: users,
@@ -4473,7 +4468,7 @@ To flag a user, call the following method:
 
 ```swift iOS
 do {
-    let unflagged = try await userRepository.flagUser(withId: "<user-id>")
+    try await userRepository.flagUser(withId: "<user-id>")
 } catch {
     // Handle error here
 }
@@ -4493,17 +4488,16 @@ fun flagUser(
 ```
 
 ```typescript TypeScript
-import { deleteReport } from '@amityco/ts-sdk';
+import { UserRepository } from '@amityco/ts-sdk';
 
 async function flagUser() {
-  const didDeleteUserReport = await createReport('user', 'userId');
-  return didDeleteUserReport;
+  return UserRepository.flagUser('userId');
 }
 ```
 
 ```dart Flutter
-void unflagUser(AmityUser user) {
-  user.report().unflag().then((value) {
+void flagUser(AmityUser user) {
+  user.report().flag().then((value) {
     //success
   }).onError((error, stackTrace) {
     //handle error
@@ -4517,7 +4511,7 @@ To unflag a user, call the following method:
 
 ```swift iOS
 do {
-    let unflagged = try await userRepository.unflagUser(withId: "<user-id>")
+    try await userRepository.unflagUser(withId: "<user-id>")
 } catch {
     // Handle error here
 }
@@ -4537,11 +4531,10 @@ fun unflagUser(
 ```
 
 ```typescript TypeScript
-import { deleteReport } from '@amityco/ts-sdk';
+import { UserRepository } from '@amityco/ts-sdk';
 
 async function unflagUser() {
-  const didDeleteUserReport = await deleteReport('user', 'userId');
-  return didDeleteUserReport;
+  return UserRepository.unflagUser('userId');
 }
 ```
 
@@ -4568,7 +4561,7 @@ do {
 ```
 
 ```kotlin Android
-fun flagUser(user: AmityUser) {
+fun checkFlaggedByMe(user: AmityUser) {
     // check whether we already have flagged this user
     val isFlaggedByMe = user.isFlaggedByMe()
     // get the number of people who already have flagged this user
@@ -4577,10 +4570,10 @@ fun flagUser(user: AmityUser) {
 ```
 
 ```typescript TypeScript
-import { isReportedByMe } from '@amityco/ts-sdk';
+import { UserRepository } from '@amityco/ts-sdk';
 
-async function isUserReportedByMe() {
-  return isReportedByMe('user', 'userId');
+async function isUserFlaggedByMe() {
+  return UserRepository.isUserFlaggedByMe('userId');
 }
 ```
 
