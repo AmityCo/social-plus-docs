@@ -40,6 +40,7 @@ PREAMBLE_PARAMS = """\
   String commentId = 'comment-id',
   String pollId = 'poll-id',
   String fileId = 'file-id',
+  String streamId = 'stream-id',
   String targetUserId = 'target-user-id',"""
 
 
@@ -59,6 +60,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_post_creation_core", [])
         + pages_data.get("audited_post_creation_secondary", [])
         + pages_data.get("audited_post_creation_media_advanced", [])
+        + pages_data.get("audited_post_creation_realtime_types", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

@@ -74,6 +74,7 @@ import com.amity.socialcloud.sdk.model.social.poll.AmityPoll
 import com.amity.socialcloud.sdk.model.core.file.AmityImage
 import com.amity.socialcloud.sdk.model.core.file.AmityFile
 import com.amity.socialcloud.sdk.model.core.file.AmityVideo
+import com.amity.socialcloud.sdk.model.core.file.AmityClip
 import com.amity.socialcloud.sdk.model.core.file.AmityAudio
 import com.amity.socialcloud.sdk.model.core.file.AmityAttachment
 import com.amity.socialcloud.sdk.model.core.file.AmityVideoResolution
@@ -238,6 +239,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_post_creation_core", [])
         + pages_data.get("audited_post_creation_secondary", [])
         + pages_data.get("audited_post_creation_media_advanced", [])
+        + pages_data.get("audited_post_creation_realtime_types", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

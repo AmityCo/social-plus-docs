@@ -40,6 +40,8 @@ declare const user: Amity.User;
 declare const fileId: string;
 declare const imageFileId: string;
 declare const videoFileId: string;
+declare const streamId: string;
+declare const roomId: string;
 declare const imageUrl: string;
 
 // ── Misc context vars commonly used in snippets ───────────────────────────────
