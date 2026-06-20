@@ -51,6 +51,7 @@ import com.amity.socialcloud.sdk.api.core.file.AmityFileRepository
 import com.amity.socialcloud.sdk.model.chat.channel.AmityChannel
 import com.amity.socialcloud.sdk.model.chat.channel.AmityChannelFilter
 import com.amity.socialcloud.sdk.model.chat.message.AmityMessage
+import com.amity.socialcloud.sdk.model.chat.message.AmityMessageAttachment
 import com.amity.socialcloud.sdk.model.chat.member.AmityChannelMember
 import com.amity.socialcloud.sdk.model.chat.member.AmityMembershipType
 import com.amity.socialcloud.sdk.model.chat.notification.AmityChannelNotificationSettings
@@ -277,6 +278,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_events", [])
         + pages_data.get("audited_user_relationship", [])
         + pages_data.get("audited_social_closeout", [])
+        + pages_data.get("audited_chat_message_creation", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
