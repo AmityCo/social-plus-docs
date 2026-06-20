@@ -70,6 +70,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_stories", [])
         + pages_data.get("audited_discovery_search", [])
         + pages_data.get("audited_notifications", [])
+        + pages_data.get("audited_events", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])
