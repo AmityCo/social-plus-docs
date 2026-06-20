@@ -1,0 +1,185 @@
+---
+title: "Visitor Access"
+description: "Configure UIKit for anonymous visitor users — tab visibility, restricted action handling, and the daily usage limit page."
+---
+
+UIKit automatically adapts its interface and behaviour when a visitor or bot session is active. This guide covers the UIKit-specific layer on top of [SDK visitor mode](/social-plus-sdk/getting-started/visitor-mode).
+
+<Info>
+  **Prerequisites**: Visitor mode must be enabled for your network and the SDK must be logged in as a visitor before UIKit renders. See [SDK Visitor Mode](/social-plus-sdk/getting-started/visitor-mode) for login setup.
+</Info>
+
+## Tab Visibility
+
+UIKit adjusts which tabs are visible based on user type. Visitors see a read-only subset of the navigation:
+
+| Tab | Visitor | Signed-In |
+| --- | --- | --- |
+| Communities / Explore | ✅ Visible (default) | ✅ Visible |
+| Events | ✅ Visible | ✅ Visible |
+| Clips | Configurable (`can_view_tab`) | ✅ Visible |
+| Newsfeed / Following | ❌ Hidden | ✅ Visible |
+
+```json
+// config.json — control Clips tab visibility for visitors
+{
+  "feature_flags": {
+    "post": {
+      "clip": {
+        "can_view_tab": "all"           // show to visitors
+        // "can_view_tab": "signed_in_user_only"  // hide from visitors (default)
+      }
+    }
+  }
+}
+```
+
+## Restricted Action Handling
+
+When a visitor attempts a write action (react, comment, reply, follow), UIKit shows a sign-in prompt by default. Override `handleVisitorUserAction` in `AmityGlobalBehavior` to navigate to your own sign-in screen instead.
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    AmityUIKit4Manager.behavior.globalBehavior = MyGlobalBehavior()
+
+    class MyGlobalBehavior: AmityGlobalBehavior {
+        override func handleGuestUserAction(context: Context?) {
+            // Default: show sign-in toast
+            // Override: navigate to your sign-in screen
+            MyAuthFlow.presentSignIn()
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Android">
+    ```kotlin
+    AmityUIKit4Manager.behavior.globalBehavior = object : AmityGlobalBehavior() {
+        override fun handleVisitorUserAction() {
+            // Default: show sign-in toast
+            // Override: navigate to your sign-in screen
+            startActivity(Intent(context, SignInActivity::class.java))
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ```typescript
+    <AmityUIKitProvider
+      pageBehavior={{
+        AmityGlobalBehavior: {
+          handleGuestUserAction: () => {
+            // Default: show sign-in toast
+            // Override: navigate to your sign-in screen
+            router.push('/sign-in');
+          },
+        }
+      }}
+    >
+    ```
+  </Tab>
+</Tabs>
+
+## Daily Usage Limit Page
+
+When a visitor exceeds their **100 read requests/day** quota, the backend returns error `400323`. UIKit automatically subscribes to the SDK's `visitorUsageLimitReached` event and shows a full-screen `VisitorUsageLimitPage` that blocks further navigation until the user signs in.
+
+<CardGroup cols={2}>
+  <Card title="Default Page" icon="ban">
+    Back gestures and the system back button are disabled while the page is shown:
+
+    - **Web**: Navigation stack unmounted at root
+    - **Android**: Activity back stack cleared, back press swallowed
+    - **iOS**: Presented modally, swipe-back disabled
+  </Card>
+</CardGroup>
+
+### Platform Availability
+
+| Platform | UIKit Version | Notes |
+| --- | --- | --- |
+| Android | 4.18.0\+ | `AmityGlobalBehavior` overrides available |
+| iOS | 4.22.0\+ | `AmityGlobalBehavior` overrides available |
+| Web | 4.17.0\+ | `AmityGlobalBehavior` overrides available |
+
+### Customizing the Error Page
+
+Use two new `AmityGlobalBehavior` handlers to replace the default experience:
+
+| Handler | Default behaviour | Override use case |
+| --- | --- | --- |
+| `handleVisitorUsageLimitReached` | Show `VisitorUsageLimitPage` full-screen | Show your own branded error UI |
+| `handleVisitorUsageLimitSignIn` | Show toast: _"Create an account or sign in to continue."_ | Navigate to your own sign-in screen |
+
+<Tabs>
+  <Tab title="iOS">
+    ```swift
+    class MyGlobalBehavior: AmityGlobalBehavior {
+
+        // Replace the full-page error with your own UI
+        override func handleVisitorUsageLimitReached() {
+            MyAuthFlow.presentVisitorLimitError()
+        }
+
+        // Replace the "Sign in" CTA action
+        override func handleVisitorUsageLimitSignIn() {
+            MyAuthFlow.presentSignIn()
+        }
+    }
+
+    AmityUIKit4Manager.behavior.globalBehavior = MyGlobalBehavior()
+    ```
+  </Tab>
+  <Tab title="Android">
+    ```kotlin
+    AmityUIKit4Manager.behavior.globalBehavior = object : AmityGlobalBehavior() {
+
+        // Replace the full-page error with your own UI
+        override fun handleVisitorUsageLimitReached() {
+            startActivity(Intent(context, VisitorLimitActivity::class.java))
+        }
+
+        // Replace the "Sign in" CTA action
+        override fun handleVisitorUsageLimitSignIn() {
+            startActivity(Intent(context, SignInActivity::class.java))
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ```typescript
+    <AmityUIKitProvider
+      pageBehavior={{
+        AmityGlobalBehavior: {
+          // Replace the full-page error with your own UI
+          // If provided, the default <VisitorUsageLimitPage /> root-swap is skipped
+          handleVisitorUsageLimitReached: () => {
+            setShowCustomLimitPage(true);
+          },
+
+          // Replace the "Sign in" CTA action
+          handleVisitorUsageLimitSignIn: () => {
+            router.push('/sign-in');
+          },
+        }
+      }}
+    >
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The usage limit state is **in-memory only**. It resets automatically when the app restarts or when `registerDevice()` is called with a signed-in `userId`. Never persist the state to local storage — this ensures users see the normal UI again after signing in or after the daily quota resets.
+</Note>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="SDK Visitor Mode" icon="key" href="/social-plus-sdk/getting-started/visitor-mode">
+    Visitor login, device fingerprinting, secure mode, and SDK error codes
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/social-plus-sdk/core-concepts/foundation/logging">
+    Full server error reference including 400323, 403999, 403998
+  </Card>
+</CardGroup>
