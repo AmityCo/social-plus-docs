@@ -1,405 +1,226 @@
 ---
 title: "Create Channels"
-description: "Build structured chat experiences by creating community, live, and conversation channels with custom configurations"
+description: "Create community, live, and conversation chat channels with the current SDK APIs."
 ---
 
-Use `ChannelRepository` to create three channel types: Community, Live, and Conversation. Each is configurable with metadata, tags, and custom settings. This page covers both creation methods: supplying your own channel ID, or letting the SDK generate one.
+Use channel creation when your app needs a new chat container before sending messages. The current public SDK creation surface covers community, live, and conversation channels.
 
-## Channel Creation Approaches
+For new integrations, let the SDK and server generate channel IDs. Custom channel IDs are not exposed on the current TypeScript, iOS, or Android creation APIs, and Flutter's custom `channelId` builder is deprecated.
 
-social.plus Chat SDK offers two standard methods for creating channels, giving you flexibility in ID management:
+## Platform Surface
+
+| Platform | Entry point | Channel types exposed here | Notes |
+| --- | --- | --- | --- |
+| TypeScript | `ChannelRepository.createChannel(...)` | `community`, `live`, `conversation` | Conversation creation is distinct by membership. |
+| iOS | `AmityChannelRepository().createChannel(with:)` | `AmityCommunityChannelCreateOptions`, `AmityLiveChannelCreateOptions`, `AmityConversationChannelCreateOptions` | `AmityConversationChannelCreateOptions` defaults `isDistinct` to `true`. |
+| Android | `AmityChatClient.newChannelRepository().createChannel(displayName)` | `.community()`, `.live()`, `.conversation(...)` | Conversation accepts one user ID or a set of user IDs. |
+| Flutter | `AmityChatClient.newChannelRepository().createChannel()` | `.communityType()`, `.liveType()`, `.conversationType()` | `withChannelId(...)` exists for community/live but is deprecated. |
+
+## Create A Community Channel
 
 <CardGroup cols={2}>
-  <Card title="Custom Channel ID" icon="id-card">
-    **Specify your own unique identifier**
-    - Full control over channel naming
-    - Useful for integration with existing systems
-    - Must ensure uniqueness to avoid conflicts
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const { data: channel } = await ChannelRepository.createChannel({
+  type: 'community',
+  displayName: 'Product support',
+  userIds: ['user-id'],
+  tags: ['support'],
+  metadata: {
+    queue: 'tier-1',
+  },
+  isPublic: true,
+});
+
+renderResults(channel);
+```
   </Card>
-  <Card title="Auto-Generated ID" icon="wand-magic-sparkles">
-    **Let the SDK generate unique identifiers**
-    - Automatic conflict prevention
-    - Simplified creation process
-    - Recommended for most use cases
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityCommunityChannelCreateOptions()
+options.setDisplayName("Product support")
+options.setUserIds(["user-id"])
+options.setTags(["support"])
+options.setMetadata(["queue": "tier-1"])
+options.setIsChannelPublic(true)
+
+let channel = try await channelRepository.createChannel(with: options)
+showSuccessMessage(channel.channelId)
+```
   </Card>
-</CardGroup>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val metadata = JsonObject().apply {
+    addProperty("queue", "tier-1")
+}
 
-<Warning>
-Creating a channel with an existing ID returns a conflict error (400900). When the channel ID parameter is undefined, the SDK automatically generates a unique ID.
-</Warning>
-
-## Channel Types
-
-<Tabs>
-  <Tab title="Community Channels">
-    **Public channels discoverable by all users**
-    
-    Create community channels for open discussions, team collaboration, and public forums.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ✅ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-    | `isPublic` | Boolean | ❌ | Visibility setting (public/private community) |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    do {
-        let builder = AmityCommunityChannelBuilder()
-        // Optional. If you don't provide channel id, sdk will create a unique channel id for you.
-        builder.setUserIds(["steve", "john"])
-        builder.setDisplayName("My Community Channel")
-        builder.setTags(["ch-comm", "ios-sdk"])
-        builder.setMetadata(["sdk_type": "ios"])
-        // Create a channel by passing the builder
-        let channel = try await channelRepository.createChannel(with: builder)
-        print("A channel is created: \(channel.channelId)")
-    } catch {
-        print("Unable to create a channel: \(error)")
-    }
-    ```
-
-    ```kotlin Android
-    fun createCommunityChannel(
-        channelRepository: AmityChannelRepository
-    ) {
-        channelRepository.createChannel(displayName = "Weekly promo")
-            .community()
-            .metadata(metadata = JsonObject()) // optional
-            .tags(tags = AmityTags(listOf("Promotion", "New Arrival"))) // optional
-            .build()
-            .create()
-            .doOnSuccess { channel: AmityChannel ->
-                // AmityChannel
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { ChannelRepository } from '@amityco/ts-sdk';
-
-    async function createChannel() {
-      const newChannel = {
-        avatarFileId: 'fileId',
-        displayName: 'myCommunityChannel',
-        tags: ['tag'],
-        type: 'community' as Amity.ChannelType,
-        userIds: ['userId'],
-        metadata: {
-          data: 'anything',
-        },
-      };
-
-      const { data: channel } = await ChannelRepository.createChannel(newChannel);
-
-      return channel;
-    }
-    ```
-
-    ```dart Flutter
-    AmityChatClient.newChannelRepository()
-        .createChannel()
-        .communityType()
-        .withDisplayName('Weekly Promo')
-        .metadata({'key': 'value'}) //Optional
-        .tags(['Promotion', 'New Arrival']) //Optional
-        .create()
-        .then((AmityChannel channel) => {
-              //handle result
-            })
-        .onError((error, stackTrace) => {
-              //handle error
-            });
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Live Channels">
-    **Event-focused channels with exclusive membership**
-    
-    Create live channels for special events, temporary discussions, and exclusive conversations.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ✅ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    do {
-        let builder = AmityLiveChannelBuilder()
-        builder.setUserIds(["steve", "john"])
-        builder.setDisplayName("Live Channel")
-        
-        let channel = try await channelRepository.createChannel(with: builder)
-        print("A channel is created: \(channel.channelId)")
-    } catch {
-        // Handle error here
-    }
-    ```
-
-    ```kotlin Android
-    fun createLiveChannel(channelRepository: AmityChannelRepository) {
-        channelRepository.createChannel(displayName = "Weekly promo")
-            .live()
-            .metadata(metadata = JsonObject()) // optional
-            .tags(tags = AmityTags(listOf("Promotion", "New Arrival"))) // optional
-            .build()
-            .create()
-            .doOnSuccess { channel: AmityChannel ->
-                // AmityChannel
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { ChannelRepository } from '@amityco/ts-sdk';
-
-    async function createChannel() {
-      const newChannel = {
-        avatarFileId: 'fileId',
-        displayName: 'myLiveChannel',
-        tags: ['tag'],
-        type: 'live' as Amity.ChannelType,
-        userIds: ['userId'],
-        metadata: {
-          data: 'anything',
-        },
-      };
-
-      const { data: channel } = await ChannelRepository.createChannel(newChannel);
-
-      return channel;
-    }
-    ```
-
-    ```dart Flutter
-    AmityChatClient.newChannelRepository()
-        .createChannel()
-        .liveType()
-        .withDisplayName('Weekly Promo')
-        .metadata({'key': 'value'}) //Optional
-        .tags(['Promotion', 'New Arrival']) //Optional
-        .create()
-        .then((AmityChannel channel) => {
-              //handle result
-            })
-        .onError((error, stackTrace) => {
-              //handle error
-            });
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Conversation Channels">
-    **Private 1-on-1 and small group messaging**
-    
-    Create conversation channels for direct messaging and private group chats.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `userId` | String | ✅ | User ID of the person you want to chat with |
-    | `displayName` | String | ❌ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-
-    <Info>
-    **Unique Channel Architecture**: Conversation channels are unique based on their membership. When creating a conversation, the system checks if a channel with the same membership already exists. If found, it returns the existing channel instead of creating a new one.
-    </Info>
-
-    <Note>
-    **Auto-Generated IDs**: Channel IDs for conversation channels are always generated by the SDK to ensure uniqueness and prevent conflicts.
-    </Note>
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    do {
-        let builder = AmityConversationChannelBuilder()
-        builder.setUserIds(["steve", "john"])
-        builder.setDisplayName("My Conversation Channel")
-        builder.setTags(["ch-comm", "ios-sdk"])
-        builder.setMetadata(["sdk_type": "ios"])
-        
-        let channel = try await channelRepository.createChannel(with: builder)
-        print("A channel is created: \(channel.channelId)")
-    } catch {
-        // Handle error here
-    }
-    ```
-
-    ```kotlin Android
-    fun createConversationChannel(channelRepository: AmityChannelRepository) {
-        channelRepository.createChannel(displayName = "Chat with my BFF")
-            .conversation(userId = "myFriendId")
-            .metadata(metadata = JsonObject()) // optional
-            .tags(tags = AmityTags(listOf("friends"))) // optional
-            .build()
-            .create()
-            .doOnSuccess { channel: AmityChannel ->
-                // AmityChannel
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { ChannelRepository } from '@amityco/ts-sdk';
-
-    async function createChannel() {
-      const newChannel = {
-        avatarFileId: 'fileId',
-        displayName: 'myChannel',
-        tags: ['tag'],
-        // possible values for type = 'broadcast' | 'conversation' | 'community' | 'live';
-        type: 'conversation' as Amity.ChannelType,
-        userIds: ['userId'],
-        metadata: {
-          data: 'anything',
-        },
-      };
-
-      const { data: channel } = await ChannelRepository.createChannel(newChannel);
-
-      return channel;
-    }
-    ```
-
-    ```dart Flutter
-    void createConversationChannel() {
-      // create channel and let SDK handle channelId generation
-      AmityChatClient.newChannelRepository()
-          .createChannel()
-          .conversationType()
-          .withUserId('myFriendId')
-          .displayName('Chat with my BFF') //Optional
-          .metadata({'key': 'value'}) //Optional
-          .tags(['friends', 'New Arrival']) //Optional
-          .create()
-          .then((AmityChannel channel) => {
-                //handle result
-              })
-          .onError((error, stackTrace) => {
-                //handle error
-              });
-    }
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Broadcast Channels">
-    **One-way communication channels**
-    
-    Broadcast channels are designed for announcements and one-way communication where only admins and moderators can send messages.
-
-    <Warning>
-    **Console-Only Creation**: Broadcast channels can only be created through the social.plus Console, not via SDK. This ensures proper administrative control over broadcast communications.
-    </Warning>
-
-    ### Console Creation
-
-    To create a broadcast channel:
-
-    1. Access the social.plus Console
-    2. Navigate to Chat Management
-    3. Select Channel Management
-    4. Choose "Create Broadcast Channel"
-    5. Configure your broadcast settings
-
-    For detailed instructions, see [Channel Management in Console](/analytics-and-moderation/console/chat-management/channel-management#create-channel).
-
-    ### Key Features
-    - **Admin-Only Messaging**: Only administrators and designated moderators can send messages
-    - **Read-Only Members**: All other members receive messages but cannot respond
-    - **Wide Reach**: Ideal for announcements, marketing, and organizational updates
-    - **Full Moderation**: Complete administrative control and moderation capabilities
-  </Tab>
-</Tabs>
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Channel Planning" icon="lightbulb">
-    **Strategic Considerations**
-    - **Choose the Right Type**: Match channel type to your specific communication needs
-    - **Plan for Growth**: Consider how your channels will scale with user adoption
-    - **Metadata Strategy**: Use metadata fields for future extensibility and custom features
-    - **Naming Conventions**: Establish consistent naming patterns for better organization
-
-    **Common Patterns**
-    - Use Community channels for open discussions and team collaboration
-    - Implement Live channels for time-limited events and special conversations
-    - Deploy Conversation channels for private messaging and support
-    - Reserve Broadcast channels for official announcements and marketing
-  </Accordion>
-
-  <Accordion title="Error Handling" icon="triangle-exclamation">
-    **Robust Error Management**
-    - **Conflict Handling**: Implement proper handling for channel ID conflicts (400900)
-    - **Validation**: Validate required parameters before attempting creation
-    - **User Feedback**: Provide clear error messages for failed channel creation
-    - **Retry Logic**: Implement appropriate retry mechanisms for transient failures
-
-    **Common Error Scenarios**
-    - Duplicate channel IDs when using custom identifiers
-    - Invalid or missing required parameters
-    - Network connectivity issues during creation
-    - Permission errors for restricted channel types
-  </Accordion>
-
-  <Accordion title="Performance Optimization" icon="rocket">
-    **Efficient Implementation**
-    - **ID Generation**: Use auto-generated IDs unless you have specific requirements
-    - **Resource Management**: Monitor memory usage when creating many channels
-
-    **Optimization Tips**
-    - Leverage SDK's automatic ID generation for better performance
-    - Implement proper cleanup for unused or temporary channels
-    - Monitor channel creation patterns and optimize based on usage
-  </Accordion>
-</AccordionGroup>
-
-## Next Steps
-
-<CardGroup cols={3}>
-  <Card title="Manage Channels" href="/social-plus-sdk/chat/conversation-management/channels/update-channel" icon="gear">
-    Update channel properties and configurations
+val disposable = channelRepository
+    .createChannel(displayName = "Product support")
+    .community()
+    .userIds(listOf(targetUserId))
+    .tags(AmityTags(listOf("support")))
+    .metadata(metadata)
+    .isPublic(true)
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
   </Card>
-  <Card title="Query Channels" href="/social-plus-sdk/chat/conversation-management/channels/query-channels" icon="magnifying-glass">
-    Search and filter channels effectively
-  </Card>
-  <Card title="Member Management" href="/social-plus-sdk/chat/conversation-management/members/overview" icon="users">
-    Add and manage channel members
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final channel = await AmityChatClient.newChannelRepository()
+    .createChannel()
+    .communityType()
+    .withDisplayName('Product support')
+    .userIds([targetUserId])
+    .tags(['support'])
+    .metadata({'queue': 'tier-1'})
+    .isPublic(true)
+    .create();
+
+final createdChannelId = channel.channelId;
+```
   </Card>
 </CardGroup>
 
-<Tip>
-**Development Tip**: Start with Community channels for general use cases, then implement specialized channel types as your requirements become more specific. The SDK's automatic ID generation is recommended for most scenarios unless you need specific integration patterns.
-</Tip>
+## Create A Conversation Channel
+
+Conversation channels are for one-to-one or small-group private chat. Where the SDK exposes distinct conversation behavior, the default is to return the existing conversation for the same membership instead of creating a duplicate.
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const { data: conversation } = await ChannelRepository.createChannel({
+  type: 'conversation',
+  userIds: ['user-id'],
+  displayName: 'Support DM',
+  tags: ['support'],
+});
+
+renderResults(conversation);
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityConversationChannelCreateOptions()
+options.setUserId("user-id")
+options.setDisplayName("Support DM")
+options.setTags(["support"])
+options.setIsDistinct(true)
+
+let conversation = try await channelRepository.createChannel(with: options)
+showSuccessMessage(conversation.channelId)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = channelRepository
+    .createChannel(displayName = "Support DM")
+    .conversation(userId = targetUserId)
+    .tags(AmityTags(listOf("support")))
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final conversation = await AmityChatClient.newChannelRepository()
+    .createChannel()
+    .conversationType()
+    .withUserId(targetUserId)
+    .displayName('Support DM')
+    .tags(['support'])
+    .create();
+
+final channelId = conversation.channelId;
+```
+  </Card>
+</CardGroup>
+
+## Create A Live Channel
+
+Live channels support event-style chat. The platform builders expose optional metadata, tags, and members; iOS and Android also expose live-channel linkage fields such as room or post IDs in their builders.
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const { data: liveChannel } = await ChannelRepository.createChannel({
+  type: 'live',
+  displayName: 'Launch Q&A',
+  userIds: ['user-id'],
+  tags: ['event'],
+});
+
+renderResults(liveChannel);
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityLiveChannelCreateOptions()
+options.setDisplayName("Launch Q&A")
+options.setUserIds(["user-id"])
+options.setTags(["event"])
+
+let liveChannel = try await channelRepository.createChannel(with: options)
+showSuccessMessage(liveChannel.channelId)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = channelRepository
+    .createChannel(displayName = "Launch Q&A")
+    .live()
+    .userIds(listOf(targetUserId))
+    .tags(AmityTags(listOf("event")))
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final liveChannel = await AmityChatClient.newChannelRepository()
+    .createChannel()
+    .liveType()
+    .withDisplayName('Launch Q&A')
+    .userIds([targetUserId])
+    .tags(['event'])
+    .create();
+
+final channelId = liveChannel.channelId;
+```
+  </Card>
+</CardGroup>
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Get Channels" href="./get-channel" icon="file">
+    Retrieve a single channel or load known channel IDs.
+  </Card>
+  <Card title="Query Channels" href="./query-channels" icon="list-filter">
+    Build channel lists with type, membership, tag, and deletion filters.
+  </Card>
+  <Card title="Update Channels" href="./update-channel" icon="pen">
+    Change display name, avatar, tags, metadata, or notification mode where supported.
+  </Card>
+  <Card title="Join and Leave" href="../members/join-leave-channel" icon="log-in">
+    Manage membership for channels that require explicit joining.
+  </Card>
+</CardGroup>

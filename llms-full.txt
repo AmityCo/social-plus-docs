@@ -23230,1059 +23230,669 @@ The Unread Status system tracks message read and delivery states in real time, w
 
 ### [Create Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/create-channel)
 
-> Build structured chat experiences by creating community, live, and conversation channels with custom configurations
+> Create community, live, and conversation chat channels with the current SDK APIs.
 
-Use `ChannelRepository` to create three channel types: Community, Live, and Conversation. Each is configurable with metadata, tags, and custom settings. This page covers both creation methods: supplying your own channel ID, or letting the SDK generate one.
+Use channel creation when your app needs a new chat container before sending messages. The current public SDK creation surface covers community, live, and conversation channels.
 
-## Channel Creation Approaches
+For new integrations, let the SDK and server generate channel IDs. Custom channel IDs are not exposed on the current TypeScript, iOS, or Android creation APIs, and Flutter's custom `channelId` builder is deprecated.
 
-social.plus Chat SDK offers two standard methods for creating channels, giving you flexibility in ID management:
+## Platform Surface
 
-    **Specify your own unique identifier**
-    - Full control over channel naming
-    - Useful for integration with existing systems
-    - Must ensure uniqueness to avoid conflicts
-    **Let the SDK generate unique identifiers**
-    - Automatic conflict prevention
-    - Simplified creation process
-    - Recommended for most use cases
+| Platform | Entry point | Channel types exposed here | Notes |
+| --- | --- | --- | --- |
+| TypeScript | `ChannelRepository.createChannel(...)` | `community`, `live`, `conversation` | Conversation creation is distinct by membership. |
+| iOS | `AmityChannelRepository().createChannel(with:)` | `AmityCommunityChannelCreateOptions`, `AmityLiveChannelCreateOptions`, `AmityConversationChannelCreateOptions` | `AmityConversationChannelCreateOptions` defaults `isDistinct` to `true`. |
+| Android | `AmityChatClient.newChannelRepository().createChannel(displayName)` | `.community()`, `.live()`, `.conversation(...)` | Conversation accepts one user ID or a set of user IDs. |
+| Flutter | `AmityChatClient.newChannelRepository().createChannel()` | `.communityType()`, `.liveType()`, `.conversationType()` | `withChannelId(...)` exists for community/live but is deprecated. |
 
-Creating a channel with an existing ID returns a conflict error (400900). When the channel ID parameter is undefined, the SDK automatically generates a unique ID.
+## Create A Community Channel
 
-## Channel Types
-
-    **Public channels discoverable by all users**
-
-    Create community channels for open discussions, team collaboration, and public forums.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ✅ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-    | `isPublic` | Boolean | ❌ | Visibility setting (public/private community) |
-
-    ### Code Examples
-
-```swift iOS
-do {
-    let builder = AmityCommunityChannelBuilder()
-    // Optional. If you don't provide channel id, sdk will create a unique channel id for you.
-    builder.setUserIds(["steve", "john"])
-    builder.setDisplayName("My Community Channel")
-    builder.setTags(["ch-comm", "ios-sdk"])
-    builder.setMetadata(["sdk_type": "ios"])
-    // Create a channel by passing the builder
-    let channel = try await channelRepository.createChannel(with: builder)
-    print("A channel is created: \(channel.channelId)")
-} catch {
-    print("Unable to create a channel: \(error)")
-}
-```
-
-```kotlin Android
-fun createCommunityChannel(
-    channelRepository: AmityChannelRepository
-) {
-    channelRepository.createChannel(displayName = "Weekly promo")
-        .community()
-        .metadata(metadata = JsonObject()) // optional
-        .tags(tags = AmityTags(listOf("Promotion", "New Arrival"))) // optional
-        .build()
-        .create()
-        .doOnSuccess { channel: AmityChannel ->
-            // AmityChannel
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
+```typescript
 import { ChannelRepository } from '@amityco/ts-sdk';
 
-async function createChannel() {
-  const newChannel = {
-    avatarFileId: 'fileId',
-    displayName: 'myCommunityChannel',
-    tags: ['tag'],
-    type: 'community' as Amity.ChannelType,
-    userIds: ['userId'],
-    metadata: {
-      data: 'anything',
-    },
-  };
+const { data: channel } = await ChannelRepository.createChannel({
+  type: 'community',
+  displayName: 'Product support',
+  userIds: [targetId],
+  tags: ['support'],
+  metadata: {
+    queue: 'tier-1',
+  },
+  isPublic: true,
+});
 
-  const { data: channel } = await ChannelRepository.createChannel(newChannel);
-
-  return channel;
-}
+renderResults(channel);
 ```
+```swift
+let options = AmityCommunityChannelCreateOptions()
+options.setDisplayName("Product support")
+options.setUserIds(["user-id"])
+options.setTags(["support"])
+options.setMetadata(["queue": "tier-1"])
+options.setIsChannelPublic(true)
 
-```dart Flutter
-AmityChatClient.newChannelRepository()
+let channel = try await channelRepository.createChannel(with: options)
+showSuccessMessage(channel.channelId)
+```
+```kotlin
+val metadata = JsonObject().apply {
+    addProperty("queue", "tier-1")
+}
+
+val disposable = channelRepository
+    .createChannel(displayName = "Product support")
+    .community()
+    .userIds(listOf(targetUserId))
+    .tags(AmityTags(listOf("support")))
+    .metadata(metadata)
+    .isPublic(true)
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final channel = await AmityChatClient.newChannelRepository()
     .createChannel()
     .communityType()
-    .withDisplayName('Weekly Promo')
-    .metadata({'key': 'value'}) //Optional
-    .tags(['Promotion', 'New Arrival']) //Optional
-    .create()
-    .then((AmityChannel channel) => {
-          //handle result
-        })
-    .onError((error, stackTrace) => {
-          //handle error
-        });
+    .withDisplayName('Product support')
+    .userIds([targetUserId])
+    .tags(['support'])
+    .metadata({'queue': 'tier-1'})
+    .isPublic(true)
+    .create();
+
+final createdChannelId = channel.channelId;
 ```
 
-    **Event-focused channels with exclusive membership**
+## Create A Conversation Channel
 
-    Create live channels for special events, temporary discussions, and exclusive conversations.
+Conversation channels are for one-to-one or small-group private chat. Where the SDK exposes distinct conversation behavior, the default is to return the existing conversation for the same membership instead of creating a duplicate.
 
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ✅ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-
-    ### Code Examples
-
-```swift iOS
-do {
-    let builder = AmityLiveChannelBuilder()
-    builder.setUserIds(["steve", "john"])
-    builder.setDisplayName("Live Channel")
-
-    let channel = try await channelRepository.createChannel(with: builder)
-    print("A channel is created: \(channel.channelId)")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun createLiveChannel(channelRepository: AmityChannelRepository) {
-    channelRepository.createChannel(displayName = "Weekly promo")
-        .live()
-        .metadata(metadata = JsonObject()) // optional
-        .tags(tags = AmityTags(listOf("Promotion", "New Arrival"))) // optional
-        .build()
-        .create()
-        .doOnSuccess { channel: AmityChannel ->
-            // AmityChannel
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
+```typescript
 import { ChannelRepository } from '@amityco/ts-sdk';
 
-async function createChannel() {
-  const newChannel = {
-    avatarFileId: 'fileId',
-    displayName: 'myLiveChannel',
-    tags: ['tag'],
-    type: 'live' as Amity.ChannelType,
-    userIds: ['userId'],
-    metadata: {
-      data: 'anything',
-    },
-  };
+const { data: conversation } = await ChannelRepository.createChannel({
+  type: 'conversation',
+  userIds: [targetId],
+  displayName: 'Support DM',
+  tags: ['support'],
+});
 
-  const { data: channel } = await ChannelRepository.createChannel(newChannel);
+renderResults(conversation);
+```
+```swift
+let options = AmityConversationChannelCreateOptions()
+options.setUserId("user-id")
+options.setDisplayName("Support DM")
+options.setTags(["support"])
+options.setIsDistinct(true)
 
-  return channel;
-}
+let conversation = try await channelRepository.createChannel(with: options)
+showSuccessMessage(conversation.channelId)
+```
+```kotlin
+val disposable = channelRepository
+    .createChannel(displayName = "Support DM")
+    .conversation(userId = targetUserId)
+    .tags(AmityTags(listOf("support")))
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final conversation = await AmityChatClient.newChannelRepository()
+    .createChannel()
+    .conversationType()
+    .withUserId(targetUserId)
+    .displayName('Support DM')
+    .tags(['support'])
+    .create();
+
+final channelId = conversation.channelId;
 ```
 
-```dart Flutter
-AmityChatClient.newChannelRepository()
+## Create A Live Channel
+
+Live channels support event-style chat. The platform builders expose optional metadata, tags, and members; iOS and Android also expose live-channel linkage fields such as room or post IDs in their builders.
+
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const { data: liveChannel } = await ChannelRepository.createChannel({
+  type: 'live',
+  displayName: 'Launch Q&A',
+  userIds: [targetId],
+  tags: ['event'],
+});
+
+renderResults(liveChannel);
+```
+```swift
+let options = AmityLiveChannelCreateOptions()
+options.setDisplayName("Launch Q&A")
+options.setUserIds(["user-id"])
+options.setTags(["event"])
+
+let liveChannel = try await channelRepository.createChannel(with: options)
+showSuccessMessage(liveChannel.channelId)
+```
+```kotlin
+val disposable = channelRepository
+    .createChannel(displayName = "Launch Q&A")
+    .live()
+    .userIds(listOf(targetUserId))
+    .tags(AmityTags(listOf("event")))
+    .build()
+    .create()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final liveChannel = await AmityChatClient.newChannelRepository()
     .createChannel()
     .liveType()
-    .withDisplayName('Weekly Promo')
-    .metadata({'key': 'value'}) //Optional
-    .tags(['Promotion', 'New Arrival']) //Optional
-    .create()
-    .then((AmityChannel channel) => {
-          //handle result
-        })
-    .onError((error, stackTrace) => {
-          //handle error
-        });
+    .withDisplayName('Launch Q&A')
+    .userIds([targetUserId])
+    .tags(['event'])
+    .create();
+
+final channelId = liveChannel.channelId;
 ```
 
-    **Private 1-on-1 and small group messaging**
+## Related Topics
 
-    Create conversation channels for direct messaging and private group chats.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `userId` | String | ✅ | User ID of the person you want to chat with |
-    | `displayName` | String | ❌ | Public display name of the channel |
-    | `avatarFileId` | String | ❌ | Image file ID for channel avatar |
-    | `metadata` | Object | ❌ | Custom fields for extended functionality |
-    | `tags` | Array | ❌ | Searchable tags for channel discovery |
-
-    **Unique Channel Architecture**: Conversation channels are unique based on their membership. When creating a conversation, the system checks if a channel with the same membership already exists. If found, it returns the existing channel instead of creating a new one.
-
-    **Auto-Generated IDs**: Channel IDs for conversation channels are always generated by the SDK to ensure uniqueness and prevent conflicts.
-
-    ### Code Examples
-
-```swift iOS
-do {
-    let builder = AmityConversationChannelBuilder()
-    builder.setUserIds(["steve", "john"])
-    builder.setDisplayName("My Conversation Channel")
-    builder.setTags(["ch-comm", "ios-sdk"])
-    builder.setMetadata(["sdk_type": "ios"])
-
-    let channel = try await channelRepository.createChannel(with: builder)
-    print("A channel is created: \(channel.channelId)")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun createConversationChannel(channelRepository: AmityChannelRepository) {
-    channelRepository.createChannel(displayName = "Chat with my BFF")
-        .conversation(userId = "myFriendId")
-        .metadata(metadata = JsonObject()) // optional
-        .tags(tags = AmityTags(listOf("friends"))) // optional
-        .build()
-        .create()
-        .doOnSuccess { channel: AmityChannel ->
-            // AmityChannel
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { ChannelRepository } from '@amityco/ts-sdk';
-
-async function createChannel() {
-  const newChannel = {
-    avatarFileId: 'fileId',
-    displayName: 'myChannel',
-    tags: ['tag'],
-    // possible values for type = 'broadcast' | 'conversation' | 'community' | 'live';
-    type: 'conversation' as Amity.ChannelType,
-    userIds: ['userId'],
-    metadata: {
-      data: 'anything',
-    },
-  };
-
-  const { data: channel } = await ChannelRepository.createChannel(newChannel);
-
-  return channel;
-}
-```
-
-```dart Flutter
-void createConversationChannel() {
-  // create channel and let SDK handle channelId generation
-  AmityChatClient.newChannelRepository()
-      .createChannel()
-      .conversationType()
-      .withUserId('myFriendId')
-      .displayName('Chat with my BFF') //Optional
-      .metadata({'key': 'value'}) //Optional
-      .tags(['friends', 'New Arrival']) //Optional
-      .create()
-      .then((AmityChannel channel) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-
-    **One-way communication channels**
-
-    Broadcast channels are designed for announcements and one-way communication where only admins and moderators can send messages.
-
-    **Console-Only Creation**: Broadcast channels can only be created through the social.plus Console, not via SDK. This ensures proper administrative control over broadcast communications.
-
-    ### Console Creation
-
-    To create a broadcast channel:
-
-    1. Access the social.plus Console
-    2. Navigate to Chat Management
-    3. Select Channel Management
-    4. Choose "Create Broadcast Channel"
-    5. Configure your broadcast settings
-
-    For detailed instructions, see [Channel Management in Console](/analytics-and-moderation/console/chat-management/channel-management#create-channel).
-
-    ### Key Features
-    - **Admin-Only Messaging**: Only administrators and designated moderators can send messages
-    - **Read-Only Members**: All other members receive messages but cannot respond
-    - **Wide Reach**: Ideal for announcements, marketing, and organizational updates
-    - **Full Moderation**: Complete administrative control and moderation capabilities
-
-## Best Practices
-
-    **Strategic Considerations**
-    - **Choose the Right Type**: Match channel type to your specific communication needs
-    - **Plan for Growth**: Consider how your channels will scale with user adoption
-    - **Metadata Strategy**: Use metadata fields for future extensibility and custom features
-    - **Naming Conventions**: Establish consistent naming patterns for better organization
-
-    **Common Patterns**
-    - Use Community channels for open discussions and team collaboration
-    - Implement Live channels for time-limited events and special conversations
-    - Deploy Conversation channels for private messaging and support
-    - Reserve Broadcast channels for official announcements and marketing
-
-    **Robust Error Management**
-    - **Conflict Handling**: Implement proper handling for channel ID conflicts (400900)
-    - **Validation**: Validate required parameters before attempting creation
-    - **User Feedback**: Provide clear error messages for failed channel creation
-    - **Retry Logic**: Implement appropriate retry mechanisms for transient failures
-
-    **Common Error Scenarios**
-    - Duplicate channel IDs when using custom identifiers
-    - Invalid or missing required parameters
-    - Network connectivity issues during creation
-    - Permission errors for restricted channel types
-
-    **Efficient Implementation**
-    - **ID Generation**: Use auto-generated IDs unless you have specific requirements
-    - **Resource Management**: Monitor memory usage when creating many channels
-
-    **Optimization Tips**
-    - Leverage SDK's automatic ID generation for better performance
-    - Implement proper cleanup for unused or temporary channels
-    - Monitor channel creation patterns and optimize based on usage
-
-## Next Steps
-
-    Update channel properties and configurations
-    Search and filter channels effectively
-    Add and manage channel members
-
-**Development Tip**: Start with Community channels for general use cases, then implement specialized channel types as your requirements become more specific. The SDK's automatic ID generation is recommended for most scenarios unless you need specific integration patterns.
+    Retrieve a single channel or load known channel IDs.
+    Build channel lists with type, membership, tag, and deletion filters.
+    Change display name, avatar, tags, metadata, or notification mode where supported.
+    Manage membership for channels that require explicit joining.
 
 ---
 
 ### [Get Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/get-channel)
 
-> Retrieve individual channels or query multiple channels by ID with real-time updates and live object support
+> Retrieve a single chat channel or load known channel IDs with the current SDK APIs.
 
-Retrieve channel information using Live Objects that automatically update when channel properties change. Whether you need a single channel or multiple channels by ID, the SDK provides efficient querying with real-time synchronization.
+Use channel retrieval when your app already has a `channelId` and needs the current channel object for message routing, member preview, unread state, or display metadata.
 
-## Channel Retrieval Methods
+Single-channel retrieval is available on all current SDKs. Batch lookup by channel IDs is exposed on TypeScript, iOS, and Android; the current public Flutter repository does not expose a batch-by-IDs method.
 
-social.plus Chat SDK offers two methods for retrieving channel information, giving you flexibility based on your specific needs:
+## Platform Surface
 
-    **Get specific channel by ID**
-    - Returns Live Object with real-time updates
-    - Complete channel information and metadata
-    - Ideal for channel details and validation
-    **Query up to 100 channels simultaneously**
-    - Batch retrieval with Live Collection
-    - Automatic filtering of invalid channels
-    - Efficient for bulk channel operations
+| Operation | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Get one channel | `ChannelRepository.getChannel(channelId, callback)` | `channelRepository.getChannel(channelId)` | `channelRepository.getChannel(channelId)` | `getChannel(channelId)` |
+| Result style | Live object callback | `AmityObject<AmityChannel>` | `Flowable<AmityChannel>` | `Future<AmityChannel>` |
+| Get channel IDs | `getChannels({ channelIds })` | `getChannels(channelIds:)` | `getChannels(channelIds)` | Not exposed in the current public repository |
 
-## Get a Single Channel
+## Get One Channel
 
-    **Retrieve detailed channel information**
-
-    The function allows users to retrieve information about a specific channel using the `channelId` parameter. This function returns a Live Object of the `AmityChannel` class, which contains information such as the channel's display name, tags, avatar, and other metadata.
-
-    This function is useful for a variety of purposes, such as displaying information about a channel to users or retrieving channel details before joining the channel.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `channelId` | String | ✅ | Unique identifier of the channel to retrieve |
-
-    ### Code Examples
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func getChannel(channelId: String) {
-    token = channelRepository.getChannel(channelId).observe { liveObject, error in
-        if let error = error {
-            print(error)
-            return
-        }
-        guard let channel = liveObject.snapshot else {
-            return
-        }
-        print("Got a channel")
-        print("- id: \(channel.channelId)")
-        print("- name: \(channel.displayName ?? "no_name")")
-    }
-}
-```
-
-```kotlin Android
-fun getChannel(channelRepository: AmityChannelRepository) {
-    channelRepository.getChannel(channelId = "channel1")
-        .doOnNext { channel: AmityChannel ->
-            // AmityChannel
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
+```typescript
 import { ChannelRepository } from '@amityco/ts-sdk';
 
-const unsubscriber = ChannelRepository.getChannel(
-  'channelId',
+const unsubscribe = ChannelRepository.getChannel(
+  channelId,
   ({ data: channel, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (channel) {
-      // Process the data
+    if (error) handleError(error);
+
+    if (!loading && channel) {
+      renderResults(channel);
     }
   },
 );
-```
 
-```dart Flutter
-void getChannel(String channelId) {
-  AmityChatClient.newChannelRepository()
-      .getChannel(channelId)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
+unsubscribe();
+```
+```swift
+let liveChannel = channelRepository.getChannel("channel-id")
+
+token = liveChannel.observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    guard let channel = liveObject.snapshot else { return }
+    showSuccessMessage(channel.channelId)
 }
 ```
+```kotlin
+val disposable = channelRepository
+    .getChannel(channelId = channelId)
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final channel = await AmityChatClient.newChannelRepository()
+    .getChannel(channelId);
 
-## Get Multiple Channels
-
-    **Query multiple channels by ID**
-
-    SDK now supports querying channels based on provided channel IDs. The `ChannelRepository` class includes a `getChannels` method that takes an array of channel IDs as input and returns a live collection of channels. This live collection will contain all the channels that are being queried in the first page. This live collection will not support pagination.
-
-    Any update to the channels present in this live collection will be automatically notified to the user. Furthermore:
-
-    - This live collection will only contain valid channels. In case of invalid channels (such as user gets banned etc.) the list may exclude those channels.
-    - If any channel id is invalid, live collection will throw error.
-
-    The maximum number of channels that can be queried is 100.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `channelIds` | Array&lt;String&gt; | ✅ | Array of channel IDs to retrieve (max 100) |
-
-    ### Code Examples
-
-```swift iOS
-func queryChannelByIds() {
-    // List of channel ids to query
-    let channelIds = ["channel-1","channel-2","channel-3","channel-4"]
-    token = channelRepository.getChannels(channelIds: channelIds).observe({ liveCollection, error in
-
-        // Access channels with above ids
-        let channels = liveCollection.snapshots
-    })
-}
+final fetchedChannelId = channel.channelId;
 ```
 
-```kotlin Android
-fun getChannelsByIds(channelRepository: AmityChannelRepository) {
+## Get Known Channel IDs
 
-    // List of channel ids
-    val channelIds = listOf("ChannelId_1", "channelId_2", "channelId_3")
+Use batch lookup when your app has a small list of known channel IDs and wants the matching channel objects. The collection is not the same as a general channel search; use [Query Channels](./query-channels) when you need filters or pagination.
 
-    channelRepository.getChannels(channelIds = channelIds)
-            .doOnNext {
-                // List<AmityChannel>
-            }
-            .doOnError {
-                // Exception
-            }
-            .subscribe()
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    channelIds: [channelId, 'channel-2'],
+  },
+  ({ data: channels, loading, error }) => {
+    if (error) handleError(error);
+
+    if (!loading && channels) {
+      renderResults(channels);
+    }
+  },
+);
+
+unsubscribe();
+```
+```swift
+let channelIds = ["channel-1", "channel-2"]
+let channels = channelRepository.getChannels(channelIds: channelIds)
+
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
 }
 ```
+```kotlin
+val channelIds = listOf(channelId, "channel-2")
 
-    ### Limitations
+val disposable = channelRepository
+    .getChannels(channelIds = channelIds)
+    .subscribe(
+        { channels -> showSuccessMessage(channels.size) },
+        { error -> handleGeneralError(error) },
+    )
+```
+    The current public Flutter `AmityChannelRepository` exposes `getChannel(channelId)` and query builders, but not a batch `getChannels(channelIds)` method.
 
-    **Collection Persistence**: If the channel is not public and user leaves the channel, the channel will still remain in the live collection until user refresh or resets the live collection.
+## Related Topics
 
-## Next Steps
-
-    Set up new channels with custom configurations
-    Modify channel properties and settings
-    Search and filter channels with advanced criteria
-
-**Development Tip**: Use single channel retrieval for displaying specific channel details and batch retrieval when you need to load multiple channels efficiently. Live Objects provide automatic updates for real-time synchronization.
+    Create community, live, or conversation channels.
+    Build paginated channel lists from filters.
+    Update channel attributes after retrieval.
+    Render latest-message preview data from channel objects.
 
 ---
 
 ### [Query Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/query-channels)
 
-> Search and retrieve channels based on various criteria including display name, tags, membership status, and channel type
+> Query chat channels by type, membership, tags, deletion state, archive state, or known channel IDs.
 
-Use `getChannels` to search and retrieve channels filtered by display name, tags, membership status, and channel type. Results are returned as a Live Collection that updates automatically.
+Use channel queries to build inboxes, public channel discovery, event chat lists, and moderation views. Query support is similar across platforms, but not identical: TypeScript and Flutter expose keyword/display-name style searching, while Android's public channel query builder focuses on type, membership, tags, and deleted-state filters.
 
-## Query Capabilities
+## Filter Surface
 
-The query function returns a Live Collection of channels that match your search criteria, enabling you to display search results in your app or apply additional filtering as needed.
+| Filter | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Types | `types` | `types` | `.types(...)` or type helpers | `.types(...)` or type helpers |
+| Membership | `membership` | `filter` | `.filter(...)` where the builder exposes it | `.filter(...)` |
+| Tags | `tags`, `excludeTags` | `includingTags`, `excludingTags` | `.includingTags(...)`, `.excludingTags(...)` | `.includingTags(...)`, `.excludingTags(...)` |
+| Deleted state | `isDeleted` | `includeDeleted` | `.includeDeleted(...)` | `.includeDeleted(...)` |
+| Name or keyword | `displayName` | Not exposed on `AmityChannelQueryOptions` | Not exposed on public query builder | `.withKeyword(...)` |
+| Archive exclusion | `excludeArchives` | Not exposed | Not exposed | `.excludeArchives(...)` |
+| Sort | `sortBy` | Not exposed on current options | Not exposed on public query builder | `.sortBy(...)` with `LAST_ACTIVITY` |
+| Known IDs | `channelIds` | `getChannels(channelIds:)` | `getChannels(channelIds)` | Not exposed in the current public repository |
 
-    **Multiple search criteria**
-    - Display name and tag-based searching
-    - Membership status filtering
-    - Channel type specification
-    - Include/exclude deleted channels
-    **Real-time search results**
-    - Automatic updates when channels change
-    - Pagination support for large result sets
-    - Efficient data loading and caching
+## Query A Channel List
 
-## Channel Query Parameters
-
-    **Core search functionality**
-
-    Search for channels using basic criteria such as display name and membership status.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `displayName` | String | ❌ | Search query for channel's public display name |
-    | `includeDeleted` | Boolean | ❌ | Include closed/deleted channels (`null` = both, `false` = active only) |
-    | `filter` | String | ❌ | Membership filter: `all` (default), `member`, `notMember`, `flagged` |
-    | `userId` | String | ❌ | Search channels created by specific user (admin only) |
-
-    ### Code Examples
-
-```swift iOS
-var token: AmityNotificationToken?
-
-func queryChannelExample() {
-
-    let query = AmityChannelQueryOptions(
-        types: [AmityChannelQueryType.conversation],
-        filter: .all,
-        includingTags: ["dog"],
-        excludingTags: ["cat"],
-        includeDeleted: false
-    )
-
-    token = channelRepository.getChannels(with: query).observe { liveCollection, error in
-        // ...
-    }
-
-}
-```
-
-```kotlin Android
-fun queryChannel(channelRepository: AmityChannelRepository) {
-
-    channelRepository.getChannels()
-        // Choose specific types of channel
-        .types(listOf(AmityChannel.Type.LIVE, AmityChannel.Type.COMMUNITY))
-        // Filter by membership condition
-        .filter(AmityChannelFilter.ALL)
-        // Specify including or excluding tags
-        .includingTags(AmityTags().apply { add("dogs") })
-        .excludingTags(AmityTags().apply { add("cats") })
-        // Filter to include deleted channels default will return both
-        .includeDeleted(false)
-        .build()
-        .query()
-        .doOnNext {
-            // PagingData<AmityChannel>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
+```typescript
 import { ChannelRepository } from '@amityco/ts-sdk';
 
-// Variables to handle pagination
-let nextPageFn: (() => void) | undefined; // Function to load the next page of data
-let hasMore: boolean | undefined; // Boolean flag indicating if more pages are available
-
-const unsubscriber = ChannelRepository.getChannels(
-  {},
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    displayName: 'support',
+    membership: 'member',
+    types: ['community', 'live'],
+    tags: ['support'],
+    excludeTags: ['hidden'],
+    isDeleted: false,
+    excludeArchives: true,
+    sortBy: 'lastActivity',
+  },
   ({ data: channels, onNextPage, hasNextPage, loading, error }) => {
-    if (error) {
-      // Handle any errors that occur during retrieving data
+    if (error) handleError(error);
+
+    if (!loading && channels) {
+      renderResults(channels);
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (channels) {
-      // Process the data
-    }
-    hasMore = hasNextPage; // Update the hasMore flag
-    nextPageFn = onNextPage; // Update the nextPage function with the new one provided
+
+    if (hasNextPage) onNextPage?.();
   },
 );
 
-// Function to load more items (next page)
-function loadMore() {
-  // Check if more pages are available to load
-  if (hasMore) {
-    nextPageFn?.(); // Execute the nextPage function if it's defined
-  }
+unsubscribe();
+```
+```swift
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.community, AmityChannelQueryType.live]),
+    filter: .userIsMember,
+    includingTags: ["support"],
+    excludingTags: ["hidden"],
+    includeDeleted: false
+)
+
+let channels = channelRepository.getChannels(with: options)
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
 }
 ```
+```kotlin
+val includingTags = AmityTags().apply { add("support") }
+val excludingTags = AmityTags().apply { add("hidden") }
 
-```dart Flutter
-List<AmityChannel> _amityChannel = <AmityChannel>[];
-late ChannelLiveCollection liveCollection;
-final scrollcontroller = ScrollController();
-
-// Available Channel Type options
-// AmityChannelType.COMMUNITY;
-// AmityChannelType.LIVE;
-// AmityChannelType.BROADCAST;
-// AmityChannelType.CONVERSATION;
-
-void queryChannels() {
-  // Query for Multiple types
-  final types = <AmityChannelType>[
-    AmityChannelType.LIVE,
-    AmityChannelType.COMMUNITY
-  ];
-  liveCollection = AmityChatClient.newChannelRepository()
+val disposable = channelRepository
     .getChannels()
-    .types(types)
-    .excludeArchives(true) // boolean value to exclude archived channels, default is false
+    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
+    .filter(AmityChannelFilter.MEMBER)
+    .includingTags(includingTags)
+    .excludingTags(excludingTags)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final liveCollection = AmityChatClient.newChannelRepository()
+    .getChannels()
+    .withKeyword('support')
+    .filter(AmityChannelFilter.MEMBER)
+    .types([AmityChannelType.COMMUNITY, AmityChannelType.LIVE])
+    .includingTags(['support'])
+    .excludingTags(['hidden'])
+    .includeDeleted(false)
+    .excludeArchives(true)
+    .sortBy(AmityChannelSortOption.LAST_ACTIVITY)
     .getLiveCollection();
 
-}
+liveCollection.getStreamController().stream.listen((channels) {
+  final count = channels.length;
+});
+
+await liveCollection.loadNext();
 ```
 
-    **Tag-based search capabilities**
+## Query A Specific Type
 
-    Filter channels using tag inclusion and exclusion criteria for precise search results.
+Use the type-specific helpers when the platform exposes them. Some helpers apply membership defaults: for example, Flutter's `conversationType()` and `liveType()` also set the filter to `MEMBER`.
 
-    ### Parameters
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `tags` | Array&lt;String&gt; | ❌ | Include channels with any of these tags |
-    | `excludeTags` | Array&lt;String&gt; | ❌ | Exclude channels containing any of these tags |
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    types: ['conversation'],
+    membership: 'member',
+    isDeleted: false,
+  },
+  ({ data: channels }) => {
+    renderResults(channels);
+  },
+);
 
-    ### Tag Search Behavior
+unsubscribe();
+```
+```swift
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.conversation]),
+    filter: .userIsMember,
+    includeDeleted: false
+)
 
-    - **Including Tags**: When multiple tags are specified, the system searches for channels that contain **any** of those tags (OR logic)
-    - **Excluding Tags**: When multiple tags are specified, the system excludes channels that contain **any** of those tags (OR logic)
-    - **Combined Logic**: You can use both including and excluding tags together for precise filtering
+let conversations = channelRepository.getChannels(with: options)
+showSuccessMessage(conversations)
+```
+```kotlin
+val disposable = channelRepository
+    .getChannels()
+    .conversationType()
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final conversations = AmityChatClient.newChannelRepository()
+    .getChannels()
+    .conversationType()
+    .includeDeleted(false)
+    .excludeArchives(true)
+    .getLiveCollection();
 
-    Tag filtering supports flexible search patterns. Including tags uses OR logic (channels with any specified tag), while excluding tags removes channels with any of the specified tags.
+conversations.getStreamController().stream.listen((channels) {
+  final count = channels.length;
+});
+```
 
-    **Filter by specific channel types**
+## Known IDs
 
-    Limit search results to specific channel types based on your application needs.
+If you already have channel IDs, use [Get Channels](./get-channel) instead of a filtered query. Batch get-by-IDs is currently exposed on TypeScript, iOS, and Android.
 
-    ### Parameters
+## Related Topics
 
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `types` | Array&lt;ChannelType&gt; | ❌ | Channel types to include: `conversation`, `broadcast`, `live`, `community` |
-
-    ### Available Channel Types
-
-    - **`conversation`**: Private 1-on-1 and small group messaging
-    - **`community`**: Public channels discoverable by all users
-    - **`live`**: Event-focused channels with exclusive membership
-    - **`broadcast`**: One-way communication channels for announcements
-
-    You can specify multiple channel types in a single query to search across different channel categories simultaneously.
-
-## Filter Options Reference
-
-Understanding the available filter options helps you create precise channel queries:
-
-### Membership Filters
-
-| Filter | Description |
-|--------|-------------|
-| `all` | Search all channels (default) |
-| `member` | Search channels where user is a member |
-| `notMember` | Search channels where user is not a member |
-| `flagged` | Search channels that user has flagged |
-
-### Include Deleted Options
-
-| Value | Description |
-|-------|-------------|
-| `null` | Show both active and closed channels (default) |
-| `false` | Show only active/open channels |
-| `true` | Show only closed/deleted channels |
-
-## Next Steps
-
-    Set up new channels with custom configurations
-    Retrieve specific channels by ID
-    Modify channel properties and settings
-
-**Search Strategy**: Combine multiple filter criteria for precise results. Use tag filtering for category-based searches, membership filters for user-specific queries, and channel types to focus on specific communication patterns.
+    Create a channel before it appears in query results.
+    Retrieve a single channel or a known list of IDs.
+    Hide or restore archived conversation channels where supported.
+    Query members after selecting a channel.
 
 ---
 
 ### [Update Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/update-channel)
 
-> Modify channel properties including display name, avatar, tags, and metadata to keep channel information current and relevant
+> Update chat channel display name, avatar, tags, metadata, and notification mode where the SDK exposes it.
 
-The `updateChannel` function enables you to modify channel properties dynamically, keeping channel information current and relevant. Update display names, avatars, tags, and metadata with simple API calls that provide immediate feedback and real-time synchronization.
+Use channel updates when the app needs to change channel attributes after creation. Keep updates narrow: send only fields that actually changed, because metadata and tag updates replace the submitted values rather than merging app-side state for you.
 
-## Update Capabilities
+## Update Surface
 
-Channel updates support both individual property changes and batch updates, giving you flexibility in how you manage channel information.
+| Field | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Display name | `displayName` | `setDisplayName(...)` | `.displayName(...)` | `.displayName(...)` |
+| Avatar | `avatarFileId` | `setAvatar(...)` | `.avatar(...)` | `.avatar(...)` |
+| Tags | `tags` | `setTags(...)` | `.tags(...)` | `.tags(...)` |
+| Metadata | `metadata` | `setMetadata(...)` | `.metadata(...)` | `.metadata(...)` |
+| Notification mode | `notificationMode` | Not on `AmityChannelUpdateOptions` | Not on `AmityChannelUpdate.Builder` | `.notificationMode(...)` |
 
-    **Modify channel attributes**
-    - Display name and visual branding
-    - Avatar images and metadata
-    - Tags for search and categorization
-    - Custom metadata fields
-    **Immediate updates**
-    - Changes reflected instantly across all clients
-    - Automatic Live Object synchronization
-    - Conflict resolution with last-writer-wins
+## Update Channel Fields
 
-## Update Channel Properties
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-    **Modify existing channel properties**
+const { data: updatedChannel } = await ChannelRepository.updateChannel(
+  channelId,
+  {
+    displayName: 'Support desk',
+    tags: ['support', 'active'],
+    metadata: {
+      queue: 'tier-2',
+    },
+  },
+);
 
-    The `updateChannel` function allows users to modify the properties of a channel. This function is useful in cases where a channel's details need to be updated, such as changing the channel's display name or avatar.
+renderResults(updatedChannel);
+```
+```swift
+let options = AmityChannelUpdateOptions(channelId: "channel-id")
+options.setDisplayName("Support desk")
+options.setTags(["support", "active"])
+options.setMetadata(["queue": "tier-2"])
 
-    The function takes a `channelId` parameter as a required input, which specifies the channel to be modified. Additionally, users can pass in any number of optional parameters to update the channel's properties.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `channelId` | String | ✅ | Unique identifier of the channel to update |
-    | `displayName` | String | ❌ | New display name for the channel |
-    | `avatarFileId` | String | ❌ | ID of image file for channel avatar |
-    | `tags` | Array&lt;String&gt; | ❌ | Tags for channel discovery and categorization |
-    | `metadata` | Object | ❌ | Additional metadata associated with the channel |
-
-    **Metadata Handling**: `metadata` is implemented with _last writer wins_ semantics: multiple mutations by independent users to the metadata object will result in a single stored value. No locking, merging, or other coordination is performed across multiple writes on the data.
-
-    **Avatar Images**: To obtain a file ID for setting as channel avatar, please see the [Image Handling](/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling#upload-images) section for upload instructions.
-
-    ### Code Examples
-
-```swift iOS
-do {
-    let builder = AmityChannelUpdateOptions(channelId: "<channel-id>")
-    builder.setMetadata(["key": "value"])
-    let channel = try await channelRepository.editChannel(with: builder)
-    print("Successfully update channel: \(channel.channelId)")
-    print("- metadata: \(String(describing: channel.metadata))")
-} catch {
-    print("Unable to update a channel: \(error)")
+let channel = try await channelRepository.editChannel(with: options)
+showSuccessMessage(channel.channelId)
+```
+```kotlin
+val metadata = JsonObject().apply {
+    addProperty("queue", "tier-2")
 }
+
+val disposable = channelRepository
+    .editChannel(channelId = channelId)
+    .displayName("Support desk")
+    .tags(AmityTags(listOf("support", "active")))
+    .metadata(metadata)
+    .build()
+    .apply()
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getChannelId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+```dart
+final channel = await AmityChatClient.newChannelRepository()
+    .updateChannel(channelId)
+    .displayName('Support desk')
+    .tags(['support', 'active'])
+    .metadata({'queue': 'tier-2'})
+    .create();
+
+final updatedChannelId = channel.channelId;
 ```
 
-```kotlin Android
-fun updateData(
-    channelRepository: AmityChannelRepository,
-    avatarImage: AmityImage
-) {
-    channelRepository.editChannel(channelId = "channel2")
-        .displayName(displayName = "New Display name") //optional
-        .avatar(avatar = avatarImage) //optional
-        .tags(tags = AmityTags(listOf("tag1", "tag2"))) //optional
-        .build()
-        .apply()
-        .doOnSuccess { channel: AmityChannel ->
-            // AmityChannel
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
+## Update Notification Mode
+
+The channel update API exposes notification mode on TypeScript and Flutter. Use platform-specific notification settings pages for broader notification configuration.
+
+```typescript
+import {
+  AmityChannelNotificationModeEnum,
+  ChannelRepository,
+} from '@amityco/ts-sdk';
+
+const { data: channel } = await ChannelRepository.updateChannel(
+  channelId,
+  {
+    notificationMode: AmityChannelNotificationModeEnum.Silent,
+  },
+);
+
+renderResults(channel);
+```
+```dart
+final channel = await AmityChatClient.newChannelRepository()
+    .updateChannel(channelId)
+    .notificationMode(NotificationMode.silent)
+    .create();
+
+final notificationMode = channel.notificationMode;
 ```
 
-```typescript TypeScript
-const { ChannelRepository } = await import('@amityco/ts-sdk');
+## Related Topics
 
-async function updateChannel() {
-  const { data: updatedChannel } = await ChannelRepository.updateChannel('channelId', {
-    displayName: 'newDisplayName',
-    tags: ['tag'],
-  });
-
-  return updatedChannel;
-}
-```
-
-```dart Flutter
-void updateChannel(AmityImage avatar) {
-  // update channel
-  AmityChatClient.newChannelRepository()
-      .updateChannel('channelId')
-      .displayName('New Display name')
-      .avatar(avatar)
-      .tags(['tag1', 'tag2'])
-      .create()
-      .then((AmityChannel channel) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-
-## Update Strategies
-
-    **Efficient property modification**
-    - **Selective Updates**: Only specify the properties you want to change
-    - **Preserve Existing Data**: Unchanged properties remain intact
-    - **Batch Operations**: Update multiple properties in a single API call
-    - **Performance Optimization**: Minimize network calls with targeted updates
-
-    **Best Practices**
-    - Update only the properties that have actually changed
-    - Use batch updates when modifying multiple properties simultaneously
-    - Validate data before sending update requests
-    - Handle update conflicts gracefully in collaborative environments
-
-    **Custom data handling**
-    - **Last Writer Wins**: Latest metadata update takes precedence
-    - **No Merging**: Complete metadata object replacement on each update
-    - **Custom Fields**: Store application-specific data and configurations
-    - **Conflict Resolution**: Simple override model for concurrent updates
-
-    **Implementation Tips**
-    - Design metadata structure to minimize conflicts
-    - Consider versioning for complex metadata scenarios
-    - Use metadata for feature flags and channel configurations
-    - Implement client-side validation for metadata schemas
-
-    **Robust update management**
-    - **Permission Validation**: Ensure user has update rights for the channel
-    - **Data Validation**: Validate input parameters before sending requests
-    - **Network Resilience**: Implement retry logic for failed updates
-    - **Conflict Resolution**: Handle concurrent update scenarios appropriately
-
-    **Common Error Scenarios**
-    - Insufficient permissions to update channel properties
-    - Invalid file IDs for avatar updates
-    - Network connectivity issues during update operations
-    - Channel not found or deleted during update attempt
-
-## Next Steps
-
-    Archive or restore channels for lifecycle management
-    Search and filter channels with advanced criteria
-    Manage channel membership and permissions
-
-**Update Strategy**: Use partial updates to modify only the properties that have changed. This approach is more efficient and reduces the risk of overwriting concurrent changes made by other users.
+    Observe the updated channel object.
+    Refresh channel lists after an update.
+    Configure channel notification settings.
+    Manage membership separately from channel attributes.
 
 ---
 
 ### [Archive Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/archive-channels)
 
-> Archive and unarchive conversation channels to organize your chat list while preserving message history and functionality
+> Archive, unarchive, and query archived chat channels where the current SDK exposes archive APIs.
 
-Archive a conversation-type channel to remove it from a user's active chat list while keeping all messages intact, then unarchive it to restore it. Up to 100 channels can be archived per user, and archiving is personal (it does not affect other participants).
+Archiving is a per-user chat-list operation. It hides a channel from the active list for the current user without deleting the channel or its messages. In the current public SDKs, archive APIs are exposed on TypeScript and Flutter; iOS and Android do not expose public channel archive methods in this checkout.
 
-Only conversation-type channels can be archived, up to 100 per user. Archived channels keep all their messages.
+## Platform Surface
 
-## Archive Management
+| Operation | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Archive | `ChannelRepository.archiveChannel(channelId)` | Not exposed | Not exposed | `archiveChannel(channelId)` |
+| Unarchive | `ChannelRepository.unarchiveChannel(channelId)` | Not exposed | Not exposed | `unarchiveChannel(channelId)` |
+| Query archived channels | `ChannelRepository.getArchivedChannels(...)` | Not exposed | Not exposed | `getArchivedChannels()` |
 
-Channel archiving affects only the user who performs the action, providing personalized chat organization without impacting other participants.
+## Archive Or Unarchive
 
-    **Hide from main chat list**
-    - Move channels to separate archived list
-    - Preserve all messages and functionality
-    - Personal action affecting only your view
-    **Restore to active list**
-    - Return channels to main chat list
-    - Maintain original message timestamps
-    - Continue conversations as before
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-## Archive Operations
+await ChannelRepository.archiveChannel(channelId);
+await ChannelRepository.unarchiveChannel(channelId);
+```
+```dart
+final repository = AmityChatClient.newChannelRepository();
 
-    **Move channel to archived list**
-
-    The `archiveChannel` function allows users to archive a specific conversation channel. Archiving a channel removes it from the active list channel but retains its data for future reference. This function takes one parameter, channelId, which specifies the ID of the channel to be archived.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `channelId` | String | ✅ | Unique identifier of the conversation channel to archive |
-
-    ### Archive Effects
-
-    - **Effect for the User**: The archived chat is hidden from the user's main chat list view and moved to a separate archived chat list. This action only affects the user who archives the chat; the other participant(s) in the conversation will still see the chat in their main list as usual.
-    - **Messages**: Archiving does not delete any messages within the chat. Users can continue sending and receiving messages within the archived chat just like a normal chat.
-    - **Sorting**: Chats within the archived list are sorted based on the timestamp of the last message exchanged.
-
-    ### Code Example
-
-```dart Flutter
-void archiveChannel(String channelId) async {
-  await AmityChatClient.newChannelRepository()
-      .archiveChannel(channelId);
-}
+await repository.archiveChannel(channelId);
+await repository.unarchiveChannel(channelId);
 ```
 
-    ### Important Considerations
+## Query Archived Channels
 
-    **Channel Type Limitation**: Only 'conversation' type channels (like DMs) can be archived. Community, Live, and Broadcast channels do not support archiving.
+Use the archived-channel collection for an archived inbox. The TypeScript API accepts live collection parameters such as `limit`; the Flutter API returns a live collection stream for the current user.
 
-    **Archive Limit**: A user can archive a maximum of 100 channels. An error message will be displayed if a user tries to exceed this limit.
+```typescript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-    ### Message Behavior in Archived Channels
+const unsubscribe = ChannelRepository.getArchivedChannels(
+  {
+    limit: 20,
+  },
+  ({ data: channels, loading, error }) => {
+    if (error) handleError(error);
 
-    - **Receiving New Messages**: If another user sends a message in a chat you have archived, the chat will remain in your archived list. It will not automatically move back to the main chat list.
-    - **Notifications**: You will **not** receive push notifications for new messages arriving in channels you have archived. The system prevents notifications for channels marked as archived by the recipient user.
-    - **Muted Chats**: If a chat is muted and then archived, it is treated as a normal, unmuted chat within the archive list regarding its behavior (though notifications remain disabled due to the archive status).
-
-    **Restore channel to active list**
-
-    The `unarchiveChannel` function allows users to restore an archived conversation channel back to the active channel list. This function takes one parameter, channelId, which specifies the ID of the channel to be unarchived.
-
-    ### Parameters
-
-    | Parameter | Type | Required | Description |
-    |-----------|------|----------|-------------|
-    | `channelId` | String | ✅ | Unique identifier of the archived channel to restore |
-
-    ### Unarchive Effects
-
-    - **Effect for the User**: The chat is removed from the archived list and reappears in the main chat list.
-    - **Sorting**: The unarchived chat is placed back into the main chat list according to the timestamp of its last message.
-
-    ### Code Example
-
-```dart Flutter
-void unarchiveChannel(String channelId) async {
-  await AmityChatClient.newChannelRepository()
-      .unarchiveChannel(channelId);
-}
-```
-
-    **Retrieve list of archived channels**
-
-    The `queryArchivedChannels` function allows users to retrieve a list of archived channels. This function uses a live collection to fetch the data and provides real-time updates on the fetching status. It also supports pagination to load more data when the user scrolls to the end of the list.
-
-    ### Code Example
-
-```dart Flutter
-void queryArchivedChannels() {
-
-  final scrollController = ScrollController();
-
-  // Prepare the query to get archived channels
-  LiveCollectionStream<AmityChannel> collections = AmityChatClient.newChannelRepository()
-      .getArchivedChannels();
-
-  // Observe to the stream to get the data and fetching status
-  collections.getStream().listen((event) {
-    List<AmityChannel> channels = event.data;
-    bool isFetching = event.isFetching;
-  });
-
-  // Load next page when reaching the end of the list
-  scrollController.addListener(() {
-    if (scrollController.position.pixels == scrollController.position.maxScrollExtent && collections.hasNextPage()) {
-      collections.loadNext();
+    if (!loading && channels) {
+      renderResults(channels);
     }
-  });
+  },
+);
 
-}
+unsubscribe();
+```
+```dart
+final archivedChannels = AmityChatClient.newChannelRepository()
+    .getArchivedChannels();
+
+archivedChannels.getStream().listen((event) {
+  final channels = event.data;
+  final isFetching = event.isFetching;
+});
+
+await archivedChannels.loadNext();
 ```
 
-    ### Query Features
+## Notes
 
-    - **Live Collection**: Real-time updates when archived channels change
-    - **Pagination Support**: Load more channels as needed for large archive lists
-    - **Fetching Status**: Monitor loading state for better user experience
-    - **Scroll Integration**: Seamless infinite scroll implementation
+| Topic | Current SDK guidance |
+| --- | --- |
+| Scope | Archive state belongs to the current user's archived-channel list. |
+| Messages | Archiving is not message deletion. Use message delete APIs for message lifecycle changes. |
+| Channel deletion | Archiving is separate from channel deletion or soft deletion. |
+| Platform gaps | Use platform checks before exposing archive UI on iOS or Android. |
 
-## Best Practices
+## Related Topics
 
-    **Effective channel organization**
-    - **Regular Cleanup**: Periodically archive inactive conversations to maintain a clean chat list
-    - **Priority Focus**: Keep active conversations in main list for easy access
-    - **100-Channel Limit**: Monitor archive count to stay within the maximum limit
-    - **User Education**: Inform users about archive functionality and benefits
-
-    **Organization Tips**
-    - Archive completed project conversations
-    - Move seasonal or event-based chats to archive after completion
-    - Use archiving for conversations that may need future reference
-    - Consider user workflow when implementing archive triggers
-
-    **Seamless archive experience**
-    - **Clear Visual Indicators**: Show archived status clearly in UI
-    - **Easy Access**: Provide simple ways to view and manage archived channels
-    - **Restore Functionality**: Make unarchiving intuitive and accessible
-    - **Search Integration**: Include archived channels in search when appropriate
-
-    **Interface Design**
-    - Implement swipe gestures or context menus for quick archiving
-    - Show archive counts and easy access to archived list
-    - Provide bulk archive/unarchive operations for power users
-    - Include archive status in channel information displays
-
-    **Managing archived channel communications**
-    - **Notification Strategy**: Understand that archived channels don't send push notifications
-    - **Message Continuity**: Ensure users understand messages continue in archived channels
-    - **Participant Impact**: Communicate that archiving is personal and doesn't affect others
-    - **Recovery Process**: Make it easy to find and unarchive important conversations
-
-    **Communication Guidelines**
-    - Set expectations about notification behavior for archived channels
-    - Provide clear guidance on when to archive vs delete conversations
-    - Implement search functionality that can find messages in archived channels
-    - Consider periodic reminders about archived conversations with new activity
-
-## Next Steps
-
-    Manage channel membership and permissions
-    Search and filter channels with advanced criteria
-    Modify channel properties and settings
-
-**Archive Strategy**: Use archiving as a way to maintain focus on active conversations while preserving access to historical chats. Remember that archived channels still receive messages but don't generate notifications, making them perfect for less urgent ongoing conversations.
+    Use `excludeArchives` where the platform query supports it.
+    Resolve an archived channel by ID before opening it.
+    Delete messages instead of hiding a channel.
+    Update channel display and metadata separately from archive state.
 
 ## Chat — Channel Governance
 
