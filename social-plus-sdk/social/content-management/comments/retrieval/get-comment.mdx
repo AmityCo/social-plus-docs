@@ -1,172 +1,149 @@
 ---
 title: "Get Comment"
-description: "Retrieve individual comments and multiple comments efficiently with live object synchronization for iOS apps"
+description: "Retrieve a comment by ID and observe updates where the SDK exposes live objects or streams."
 ---
 
-social.plus SDK provides functionality to retrieve comments from your application. You can retrieve a single comment by its ID or multiple comments in batch operations. The retrieved results are returned as live objects, providing real-time updates when comment data changes.
+Use a comment ID when your app needs to open a thread, refresh a detail view, or inspect a comment after creation. TypeScript, iOS, Android, and Flutter all expose single-comment retrieval; the live update shape differs by platform.
 
-<CardGroup cols={3}>
-  <Card title="Single Comment" icon="message">
-    Fetch individual comments by ID with live object updates
-  </Card>
-  <Card title="Multiple Comments" icon="messages">
-    Retrieve multiple comments efficiently with batch operations
-  </Card>
-  <Card title="Live Objects" icon="bolt">
-    Real-time synchronization with automatic updates
-  </Card>
-</CardGroup>
+## Comment Fields
 
-<Info>
-Comments are returned as live objects, which automatically update when the underlying data changes. For more information, refer to the Live Objects/Collections documentation.
-</Info>
+The comment model names vary by SDK, but these are the fields most apps read after retrieval.
 
-## Comment Properties
+| Concept | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Comment ID | `commentId` | `commentId` | `getCommentId()` | `commentId` |
+| Parent comment | `parentId` | `parentId` | `getParentId()` | `parentId` |
+| Reference | `referenceId`, `referenceType` | `referenceId`, `referenceType` | `getReference()` | `referenceId`, `referenceType` |
+| Data | `data` | `data` | `getData()` | `data` |
+| Image attachments | `attachments` | `attachments` | `getAttachments()` | `attachments` |
+| Reply count | `childrenNumber` | `childrenNumber` | `getChildCount()` | `childrenNumber` |
+| Reactions | `reactionCount`, `myReactions` | `reactionsCount`, `myReactions` | `getReactionCount()`, `getMyReactions()` | `reactionCount`, `myReactions` |
+| Deleted state | `isDeleted` | `isDeleted` | `isDeleted()` | `isDeleted` |
 
-When you retrieve a comment, you get access to various properties and metadata.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| **`commentId`** | String | Unique identifier for the comment |
-| **`userId`** | String | ID of the user who created the comment |
-| **`postId`** | String | ID of the post this comment belongs to |
-| **`parentId`** | String? | ID of parent comment (for replies) |
-| **`text`** | String? | Text content of the comment |
-| **`createdAt`** | Date | When the comment was created |
-| **`editedAt`** | Date? | When the comment was edited (if applicable) |
-| **`reactionsCount`** | [String: Int] | Count of reactions by type |
-| **`childrenCount`** | Int | Number of reply comments |
-
-## Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `commentId` | String | Yes | Unique identifier of the comment to retrieve |
+## Observe A Comment
 
 <CodeGroup>
-```swift iOS
-import AmitySDK
-
-// Initialize comment repository
-let commentRepository = AmityCommentRepository(client: AmityUIKitManager.client)
-
-// Retrieve a single comment
-let commentLiveObject: AmityObject<AmityComment> = commentRepository.getComment(withId: "comment_id")
-
-// Observe comment updates
-commentLiveObject.observe { [weak self] liveObject, error in
-    guard let self = self else { return }
-    
-    if let error = error {
-        print("Error retrieving comment: \(error.localizedDescription)")
-        return
-    }
-    
-    if let comment = liveObject.object {
-        // Comment retrieved successfully
-        self.displayComment(comment)
-    }
-}
-```
-
-```kotlin Android
-fun getComment(
-    commentRepository: AmityCommentRepository,
-    commentId: String
-) {
-    commentRepository.getComment(commentId = commentId)
-        .doOnNext { comment: AmityComment ->
-            // AmityComment
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
-import { CommentRepository } from '@amityco/ts-sdk';
+import { CommentRepository } from "@amityco/ts-sdk";
 
 const unsubscribe = CommentRepository.getComment(
-  'commentId',
+  commentId,
   ({ data: comment, loading, error }) => {
+    if (loading) return;
+
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
+
     if (comment) {
-      // Process the data
+      renderResults(comment);
     }
   },
 );
 ```
 
-```dart Flutter
-// Initialize comment repository
-final commentRepository = AmitySocialClient.newCommentRepository();
-
-// Retrieve a single comment
-try {
-    final comment = await commentRepository.getComment(commentId: "comment_id");
-    // Comment retrieved successfully
-    displayComment(comment);
-} catch (error) {
-    // Handle error
-    print('Error retrieving comment: $error');
-}
-```
-</CodeGroup>
-
-## Multiple Comments Retrieval
-
-For retrieving multiple comments, you can iterate through an array of comment IDs:
-
-<CodeGroup>
 ```swift iOS
 var token: AmityNotificationToken?
 
-func commentQueryExample() {
-    let queryOptions = AmityCommentQueryOptions(referenceId: "post-id", referenceType: .post, filterByParentId: false, orderBy: .descending, includeDeleted: false)
-    token = commentRepository.getComments(with: queryOptions)
-        .observe { collection, changes, error in
-        // Handle the result
+token = commentRepository
+    .getComment(withId: "comment-id")
+    .observe { liveObject, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        guard let comment = liveObject.snapshot else { return }
+        showSuccessMessage(comment.commentId)
     }
-}
 ```
 
 ```kotlin Android
-fun getCommentByIds(
-    commentRepository: AmityCommentRepository,
-    commentIds: Set<String>
-) {
-    commentRepository.getCommentByIds(commentIds = commentIds)
-        .doOnNext { comments: List<AmityComment> ->
-            // List<AmityComment>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
+import com.amity.socialcloud.sdk.api.core.ExperimentalAmityApi
+
+@OptIn(ExperimentalAmityApi::class)
+fun observeComment(commentId: String) {
+    AmitySocialClient.newCommentRepository()
+        .getComment(commentId = commentId)
+        .subscribe(
+            { comment -> showSuccessMessage(comment.getCommentId()) },
+            { error -> handleGeneralError(error) }
+        )
 }
+
+observeComment(commentId)
 ```
+
+```dart Flutter
+final commentStream = AmitySocialClient.newCommentRepository()
+    .live
+    .getComment(commentId);
+
+final subscription = commentStream.listen((comment) {
+  final latestCommentId = comment.commentId;
+}, onError: (error) {
+  showError(error);
+});
+
+await subscription.cancel();
+```
+
 </CodeGroup>
+
+## Fetch One Comment
+
+Flutter also exposes a direct one-shot fetch for comment detail screens.
+
+```dart Flutter
+final comment = await AmitySocialClient.newCommentRepository()
+    .getComment(commentId: commentId);
+
+final fetchedCommentId = comment.commentId;
+```
+
+## Fetch Multiple Comments By ID
+
+Batch lookup is available in TypeScript and Android. Use query APIs when you need a paged collection for a post, story, or custom content item.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const { data: comments } = await CommentRepository.getCommentByIds([
+  commentId,
+  "another-comment-id",
+]);
+
+renderResults(comments);
+```
+
+```kotlin Android
+AmitySocialClient.newCommentRepository()
+    .getCommentByIds(commentIds = setOf(commentId, "another-comment-id"))
+    .subscribe(
+        { comments -> showSuccessMessage(comments.size) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+## Notes
+
+- Dispose of live observers or stream subscriptions when the screen is no longer active.
+- Android `getComment(...)` is annotated with `ExperimentalAmityApi`; opt in at the call site or enclosing scope.
+- If the user needs a list of comments under a reference, use [Query Comments](/social-plus-sdk/social/content-management/comments/retrieval/query-comments) instead of repeated single-comment calls.
 
 ## Related Topics
 
 <CardGroup cols={2}>
   <Card title="Query Comments" href="/social-plus-sdk/social/content-management/comments/retrieval/query-comments" icon="search">
-    Learn how to query and filter comments with advanced options
+    Query top-level comments and reply threads
   </Card>
-  <Card title="Create Comment" href="/social-plus-sdk/social/content-management/comments/creation/create-comment" icon="plus">
-    Understand the comment creation process and optimistic updates
-  </Card>
-  <Card title="Comment Reactions" href="/social-plus-sdk/social/content-management/comments/overview" icon="heart">
-    Implement comment reaction features and engagement tracking
-  </Card>
-  <Card title="Edit Comment" href="/social-plus-sdk/social/content-management/comments/actions/edit-comment" icon="edit">
-    Learn how to edit existing comments and handle permissions
+  <Card title="Get Latest Comment" href="/social-plus-sdk/social/content-management/comments/retrieval/get-latest-comment" icon="clock">
+    Fetch or derive the newest comment for a reference
   </Card>
 </CardGroup>
