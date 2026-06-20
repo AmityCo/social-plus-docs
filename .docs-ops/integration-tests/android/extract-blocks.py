@@ -207,6 +207,7 @@ def resolve_pages(pages_data):
     paths = []
     all_entries = (
         pages_data.get("android_specific", [])
+        + pages_data.get("audited_root", [])
         + pages_data.get("audited_getting_started", [])
         + pages_data.get("audited_user_management", [])
         + pages_data.get("chat_track", [])
