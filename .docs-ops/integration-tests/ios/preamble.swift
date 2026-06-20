@@ -34,6 +34,7 @@ func docSnippet(
     post: AmityPost? = nil,
     comment: AmityComment? = nil,
     community: AmityCommunity? = nil,
+    storyRepository: AmityStoryRepository = AmityStoryRepository(),
     user: AmityUser? = nil
 ) async throws {
     // <SNIPPET_BODY> inserted here by extractor

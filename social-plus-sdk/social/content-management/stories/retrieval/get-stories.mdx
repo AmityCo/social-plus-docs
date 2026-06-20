@@ -1,224 +1,274 @@
 ---
 title: "Get Stories"
-description: "Retrieve stories by ID, active stories for a target, or stories across multiple targets using StoryRepository methods. Results are live objects."
+description: "Retrieve individual stories, active stories for one target, or stories across multiple targets."
 ---
 
-Use `StoryRepository.getStory(storyId)` for a single story, `StoryRepository.getActiveStoriesByTarget()` for a community's current stories, or `StoryRepository.getStoriesByTargets()` to fetch stories from up to 10 targets simultaneously. All results are live objects or live collections that update automatically.
+Story retrieval APIs return live objects or live collections. Use a single-story API when you already have a `storyId`, active-story APIs for a target's current stories, and multi-target APIs when building a story tray across communities.
 
-<CardGroup cols={2}>
-  <Card title="Single Story Retrieval" icon="eye">
-    Get individual stories by ID with live object updates
-  </Card>
-  <Card title="Active Story Collections" icon="play">
-    Retrieve non-expired stories with optimistic creation support
-  </Card>
-  <Card title="Multi-Target Queries" icon="list">
-    Fetch stories from multiple communities simultaneously
-  </Card>
-  <Card title="Real-time Updates" icon="bolt">
-    Live synchronization of story states, reactions, and view counts
-  </Card>
-</CardGroup>
-
-<Info>
-All story retrieval functions return Live Objects or Live Collections that automatically update when subscribed to Real-time Events, ensuring your app stays current with the latest story interactions.
-</Info>
-
-## Get Single Story
-
-The `getStory()` function retrieves individual stories by ID, returning a Live Object that observes real-time updates including reactions, view states, and other dynamic properties.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `storyId` | String | Yes | Unique identifier of the story to retrieve |
+## Single Story
 
 <CodeGroup>
+```typescript TypeScript
+import { StoryRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = StoryRepository.getStoryByStoryId(storyId, ({ data, loading, error }) => {
+  if (error) {
+    handleError(error);
+    return;
+  }
+
+  if (!loading && data) {
+    updateUI(data);
+  }
+});
+
+unsubscribe();
+```
+
 ```swift iOS
-token = storyRepository.getStory(storyId: "story-id").observe({ object, error in
-    // Handle story live object here.
-})
+token = storyRepository.getStory(storyId: "story-id").observe { object, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    if let story = object.snapshot {
+        showSuccessMessage(story.storyId)
+    }
+}
 ```
 
 ```kotlin Android
-fun getStoryById(
+fun observeStory(
     storyRepository: AmityStoryRepository,
     storyId: String
 ) {
     storyRepository.getStory(storyId = storyId)
-        .doOnNext {
-            // AmityStory
+        .doOnNext { story: AmityStory ->
+            showSuccessMessage(story.getStoryId())
         }
-        .doOnError {
-            // Exception
-        }
+        .doOnError { error -> showErrorMessage(error = error) }
         .subscribe()
+}
+```
+
+```dart Flutter
+void observeStory(String storyId) {
+  final stream = AmitySocialClient.newStoryRepository().live.getStory(storyId);
+
+  stream.listen((story) {
+    final currentStoryId = story.storyId;
+    showError(currentStoryId ?? '');
+  });
 }
 ```
 </CodeGroup>
 
-## Get Active Stories
+## Active Stories For A Target
 
-The `getActiveStories()` function retrieves non-expired stories for a specific target, providing a Live Collection optimized for story feed implementation with optimistic creation support.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `targetType` | Enum | Yes | Type of target (currently supports `.community`) |
-| `targetId` | String | Yes | ID of the target community |
-| `sortOption` | Enum | No | Sorting order: `.firstCreated` or `.lastCreated` (default: `.firstCreated`) |
-
-
-<Warning>
-Real-time exclusion of expired stories from Live Collections is not supported. Stories will remain in the collection until the next refresh or manual query.
-</Warning>
+Active-story APIs retrieve non-expired stories for one target. They are the usual choice for rendering a viewer after the user opens a story ring.
 
 <CodeGroup>
+```typescript TypeScript
+import { StoryRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = StoryRepository.getActiveStoriesByTarget(
+  {
+    targetType: 'community',
+    targetId: communityId,
+    options: {
+      sortBy: 'createdAt',
+      orderBy: 'desc',
+    },
+  },
+  ({ data, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading) {
+      renderResults(data);
+    }
+  },
+);
+
+unsubscribe();
+```
+
 ```swift iOS
-token = storyRepository.getActiveStoriesByTarget(targetType: .community, targetId: "targetId", sortOption: .firstCreated).observe({ collection, _, error in
-    if let error {
-        print(error)
-        return
+token = storyRepository
+    .getActiveStoriesByTarget(
+        targetType: .community,
+        targetId: communityId,
+        sortOption: .lastCreated
+    )
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        showSuccessMessage(collection.snapshots.count)
     }
-    
-    for story in collection.snapshots {
-        // Get list of story in the collection
-        print(story)
-    }
-})
 ```
 
 ```kotlin Android
-fun getActiveStories(
+fun observeActiveStories(
     storyRepository: AmityStoryRepository,
-    targetType: AmityStory.TargetType,
     targetId: String
 ) {
     storyRepository.getActiveStories(
-        targetType = targetType,
+        targetType = AmityStory.TargetType.COMMUNITY,
         targetId = targetId,
+        sortOption = AmityStorySortOption.LAST_CREATED
     )
         .doOnNext { stories: PagingData<AmityStory> ->
-            // PagingData<AmityStory>
+            getPagingData(stories)
         }
-        .doOnError {
-            // Exception
-        }
+        .doOnError { error -> showErrorMessage(error = error) }
         .subscribe()
 }
 ```
 
 ```dart Flutter
-late StoryLiveCollection storyLiveCollection;
-List<AmityStory> amityStories = [];
+void observeActiveStories(String communityId) {
+  final collection = StoryLiveCollection(
+    request: () => AmitySocialClient.newStoryRepository()
+        .getActiveStories(
+          targetId: communityId,
+          targetType: AmityStoryTargetType.COMMUNITY,
+          orderBy: AmityStorySortingOrder.LAST_CREATED,
+        )
+        .build(),
+  );
 
-void observeStories(AmityStoryTargetType targetType, String targetId) {
-  storyLiveCollection = StoryLiveCollection(
-      request: () => AmitySocialClient.newStoryRepository()
-          .getActiveStories(targetId: targetId, targetType: targetType)
-          .build());
-
-  storyLiveCollection.getStreamController().stream.listen((event) {
-    // update latest results here
-    // setState(() {
-    amityStories = event;
-    // });
+  collection.getStreamController().stream.listen((stories) {
+    final visibleCount = stories.length;
+    showError(visibleCount);
   });
 
-  storyLiveCollection.getData();
-
+  collection.getData();
 }
 ```
 </CodeGroup>
 
-## Get Stories by Targets
+## Stories Across Targets
 
-The `getStoriesByTargets()` function enables retrieval of stories from multiple communities simultaneously, perfect for pre-downloading content and building comprehensive story feeds.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `targets` | Array | Yes | Array of target pairs (max 10 targets) |
-| `sortOption` | Enum | No | Sorting order across all targets |
-
-### Target Configuration
-- **Maximum Targets**: Up to 10 target pairs per request
-- **Target Format**: Pairs of `targetType` and `targetId`
-- **Story Filter**: Returns only `SYNCED` stories (excludes optimistic stories)
-- **Cross-Target Sorting**: Stories sorted across all targets by specified option
+Use the multi-target APIs when you need stories from multiple targets in one live collection.
 
 <CodeGroup>
-```swift iOS
-let firstTarget = StoryTargetSearchInfo(targetType: .community, targetId: "targetId-1")
-let secondTarget = StoryTargetSearchInfo(targetType: .community, targetId: "targetId-2")
+```typescript TypeScript
+import { StoryRepository } from '@amityco/ts-sdk';
 
-token = storyRepository.getStoriesByTargets(targets: [firstTarget, secondTarget], sortOption: .firstCreated).observe({ collection, change, error in
-    // Handle list of stories here.
-})
+const unsubscribe = StoryRepository.getStoriesByTargetIds(
+  {
+    targets: [
+      { targetType: 'community', targetId: communityId },
+      { targetType: 'community', targetId: 'community-id-2' },
+    ],
+    options: {
+      sortBy: 'createdAt',
+      orderBy: 'desc',
+    },
+  },
+  ({ data, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading) {
+      renderResults(data);
+    }
+  },
+);
+
+unsubscribe();
+```
+
+```swift iOS
+let targets = [
+    AmityStoryTargetSearchInfo(targetType: .community, targetId: communityId),
+    AmityStoryTargetSearchInfo(targetType: .community, targetId: "community-id-2")
+]
+
+token = storyRepository
+    .getStoriesByTargets(targets: targets, sortOption: .lastCreated)
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        showSuccessMessage(collection.snapshots.count)
+    }
 ```
 
 ```kotlin Android
-fun getStoriesByStoryTargets(
-    storyRepository: AmityStoryRepository
-) {
+fun observeStoriesByTargets(storyRepository: AmityStoryRepository) {
     val targets = listOf(
-        AmityStory.TargetType.COMMUNITY to "communityId1",
-        AmityStory.TargetType.COMMUNITY to "communityId2"
+        AmityStory.TargetType.COMMUNITY to "community-id-1",
+        AmityStory.TargetType.COMMUNITY to "community-id-2"
     )
+
     storyRepository.getStoriesByTargets(
         targets = targets,
-        sortOption = AmityStorySortOption.FIRST_CREATED
+        sortOption = AmityStorySortOption.LAST_CREATED
     )
         .doOnNext { stories: List<AmityStory> ->
-            // List<AmityStory>
+            showSuccessMessage(stories.size)
         }
-        .doOnError {
-            // Exception
-        }
+        .doOnError { error -> showErrorMessage(error = error) }
         .subscribe()
 }
 ```
 
 ```dart Flutter
-late StoryLiveCollection storyLiveCollection;
-List<AmityStory> amityStories = [];
+void observeStoriesByTargets() {
+  final targets = [
+    StoryTargetSearchInfo(
+      targetType: AmityStoryTargetType.COMMUNITY,
+      targetId: 'community-id-1',
+    ),
+    StoryTargetSearchInfo(
+      targetType: AmityStoryTargetType.COMMUNITY,
+      targetId: 'community-id-2',
+    ),
+  ];
 
-void observeStories(AmityStoryTargetType targetType, String targetId) {
-  storyLiveCollection = StoryLiveCollection(
-      request: () => AmitySocialClient.newStoryRepository()
-          .getActiveStories(targetId: targetId, targetType: targetType)
-          .build());
+  final collection = StoryLiveCollection(
+    request: () => AmitySocialClient.newStoryRepository()
+        .getStoriesByTargets(
+          targets: targets,
+          orderBy: AmityStorySortingOrder.LAST_CREATED,
+        )
+        .build(),
+  );
 
-  storyLiveCollection.getStreamController().stream.listen((event) {
-    // update latest results here
-    // setState(() {
-    amityStories = event;
-    // });
+  collection.getStreamController().stream.listen((stories) {
+    final visibleCount = stories.length;
+    showError(visibleCount);
   });
 
-  storyLiveCollection.getData();
-  
+  collection.getData();
 }
 ```
 </CodeGroup>
 
+## Notes
+
+- Active-story APIs include local optimistic stories where the platform SDK supports optimistic creation.
+- Multi-target APIs return synced stories across the requested targets.
+- Use story target APIs when you only need ring state such as `hasUnseen`.
 
 ## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="Create Story" href="../creation/create-story" icon="plus">
-    Learn how to create engaging stories with media and interactive elements
+  <Card title="Get Story Targets" href="./get-story-targets" icon="bullseye-pointer">
+    Retrieve target-level story availability and unseen state.
   </Card>
-  <Card title="Story Analytics" href="../analytics/story-impressions" icon="chart-bar">
-    Track story performance and engagement metrics
-  </Card>
-  <Card title="Real-time Events" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/overview" icon="bolt">
-    Understanding live updates and synchronization
-  </Card>
-  <Card title="Community Management" href="/social-plus-sdk/social/communities-spaces/overview" icon="users">
-    Learn about community-based story access and permissions
+  <Card title="Story Impressions" href="../analytics/story-impressions" icon="chart-bar">
+    Track views and reached users for stories.
   </Card>
 </CardGroup>

@@ -36,6 +36,9 @@ import com.amity.socialcloud.sdk.api.chat.channel.AmityChannelRepository
 import com.amity.socialcloud.sdk.api.chat.message.AmityMessageRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityFeedRepository
 import com.amity.socialcloud.sdk.api.social.post.AmityPostRepository
+import com.amity.socialcloud.sdk.api.social.story.AmityStoryRepository
+import com.amity.socialcloud.sdk.api.social.story.AmityStorySortOption
+import com.amity.socialcloud.sdk.api.social.storytarget.AmityGlobalStoryTargetsQueryOption
 import com.amity.socialcloud.sdk.api.social.community.AmityCommunityRepository
 import com.amity.socialcloud.sdk.api.social.community.query.AmityCommunitySortOption
 import com.amity.socialcloud.sdk.api.social.category.query.AmityCommunityCategorySortOption
@@ -50,6 +53,10 @@ import com.amity.socialcloud.sdk.model.chat.member.AmityChannelMember
 import com.amity.socialcloud.sdk.model.chat.member.AmityMembershipType
 import com.amity.socialcloud.sdk.model.chat.notification.AmityChannelNotificationSettings
 import com.amity.socialcloud.sdk.model.social.post.AmityPost
+import com.amity.socialcloud.sdk.model.social.story.AmityStory
+import com.amity.socialcloud.sdk.model.social.story.AmityStoryImageDisplayMode
+import com.amity.socialcloud.sdk.model.social.story.AmityStoryItem
+import com.amity.socialcloud.sdk.model.social.story.AmityStoryTarget
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunity
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityFilter
 import com.amity.socialcloud.sdk.model.social.community.AmityCommunityPostSettings
@@ -92,6 +99,7 @@ import com.amity.socialcloud.sdk.model.core.notification.AmityUserNotificationMo
 import com.amity.socialcloud.sdk.model.core.producttag.AmityProductTag
 import com.amity.socialcloud.sdk.model.core.producttag.AmityAttachmentProductTags
 import com.amity.socialcloud.sdk.model.core.content.AmityContentFeedType
+import com.amity.socialcloud.sdk.model.core.analytics.AmityViewedType
 import com.amity.socialcloud.sdk.model.core.session.SessionHandler
 import com.amity.socialcloud.sdk.model.core.session.AccessTokenHandler
 import com.amity.socialcloud.sdk.model.core.session.AmityUserToken
@@ -246,6 +254,7 @@ def resolve_pages(pages_data):
         + pages_data.get("audited_comment_creation", [])
         + pages_data.get("audited_comment_retrieval", [])
         + pages_data.get("audited_comment_actions", [])
+        + pages_data.get("audited_stories", [])
         + pages_data.get("chat_track", [])
         + pages_data.get("social_track", [])
         + pages_data.get("shared", [])

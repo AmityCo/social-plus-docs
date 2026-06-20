@@ -29,6 +29,7 @@ declare const postId: string;
 declare const communityId: string;
 declare const commentId: string;
 declare const pollId: string;
+declare const storyId: string;
 declare const post: Amity.Post;
 declare const comment: Amity.Comment;
 declare const community: Amity.Community;
@@ -43,6 +44,8 @@ declare const videoFileId: string;
 declare const streamId: string;
 declare const roomId: string;
 declare const imageUrl: string;
+declare const imageFile: File;
+declare const videoFile: File;
 
 // ── Misc context vars commonly used in snippets ───────────────────────────────
 declare const memberId: string;
@@ -55,3 +58,4 @@ declare function updateUI(data: any): void;
 declare function showLoading(): void;
 declare function hideLoading(): void;
 declare function handleError(e: any): void;
+declare function showSuccessMessage(msg: any): void;
