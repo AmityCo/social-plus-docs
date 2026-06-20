@@ -1,504 +1,297 @@
 ---
 title: "Query and Filter Messages"
-description: "Retrieve and filter messages from channels with advanced querying capabilities, sorting options, and real-time updates for dynamic chat experiences."
+description: "Query chat messages by subchannel, type, tags, deleted state, parent message, or around-message context."
 ---
 
-Use `getMessages` to retrieve messages from a subchannel filtered by tags, message type, deletion status, or thread. Results are returned as a Live Collection that updates in real time as messages are added, edited, or deleted.
+Use message queries to build timelines, reply threads, media views, and jump-to-message flows. All platforms start from a `subChannelId`; optional filters narrow the result set.
 
-## Feature Overview
+For chat timelines, prefer live collections or reactive streams where the platform provides them. They keep edits, deletes, reactions, and newly created messages in sync without a manual refresh loop.
 
-The `getMessages` function retrieves messages from a specific subchannel based on various criteria. It returns a [live collection](/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview#live-collection) that automatically updates when messages are added, modified, or deleted.
+## Filter Surface
+
+| Filter | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Subchannel | `subChannelId` | `subChannelId` | `getMessages(subChannelId)` | `getMessages(subChannelId)` |
+| Tags | `includingTags`, `excludingTags` | `includingTags`, `excludingTags` | `includingTags()`, `excludingTags()` | `includingTags()`, `excludingTags()` |
+| Type | `type` | `type` | `type()` | `type()` |
+| Deleted messages | `includeDeleted` | Not exposed on query options | `includeDeleted()` | `includeDeleted()` |
+| Replies | `parentId` | `messageParentFilter` | `parentId()` | `parentId()` |
+| Jump context | `aroundMessageId` | `aroundMessageId` | `aroundMessageId()` | `aroundMessageId()` |
+
+## Query A Timeline
 
 <CardGroup cols={2}>
-  <Card title="Advanced Filtering" icon="filter">
-    **Query parameters**
-    - Filter by tags (including/excluding)
-    - Message type filtering
-    - Deleted message inclusion
-    - Thread-based querying
+  <Card title="TypeScript" icon="code">
+```typescript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = MessageRepository.getMessages(
+  {
+    subChannelId,
+    includingTags: ['public'],
+    excludingTags: ['hidden'],
+    sortBy: 'segmentDesc',
+  },
+  ({ data: messages, onNextPage, hasNextPage, loading, error }) => {
+    if (error) handleError(error);
+
+    if (!loading && messages) {
+      renderResults(messages);
+    }
+
+    if (hasNextPage) onNextPage?.();
+  },
+);
+
+unsubscribe();
+```
   </Card>
-  <Card title="Real-time Updates" icon="arrows-rotate">
-    **Live collection benefits**
-    - Automatic data synchronization
-    - Real-time message updates
-    - Efficient pagination handling
-    - Memory-optimized collections
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityMessageQueryOptions(
+    subChannelId: "sub-channel-id",
+    includingTags: ["public"],
+    excludingTags: ["hidden"],
+    sortOption: .lastCreated
+)
+
+let messages = messageRepository.getMessages(options: options)
+token = messages.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val includingTags = AmityTags().apply { add("public") }
+val excludingTags = AmityTags().apply { add("hidden") }
+
+val disposable = messageRepository
+    .getMessages(subChannelId = subChannelId)
+    .includingTags(includingTags)
+    .excludingTags(excludingTags)
+    .sortBy(AmityMessageQuerySortOption.LAST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final liveCollection = AmityChatClient.newMessageRepository()
+    .getMessages(subChannelId)
+    .includingTags(['public'])
+    .excludingTags(['hidden'])
+    .stackFromEnd(true)
+    .getLiveCollection();
+
+liveCollection.getStreamController().stream.listen((messages) {
+  final count = messages.length;
+});
+
+liveCollection.loadNext();
+```
   </Card>
 </CardGroup>
 
-## Implementation Guide
+## Query By Type Or Deleted State
 
-<Tabs>
-  <Tab title="Basic Message Querying">
-    **Retrieve messages from a subchannel with optional filtering**
-    
-    Query messages with various filtering options to get exactly the messages you need for your chat interface.
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { MessageRepository } from '@amityco/ts-sdk';
 
-    ### Required Parameters
+const unsubscribe = MessageRepository.getMessages(
+  {
+    subChannelId,
+    type: 'image',
+    includeDeleted: false,
+  },
+  ({ data: messages }) => {
+    renderResults(messages);
+  },
+);
 
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `subChannelId` | String | The ID of the subchannel from which to retrieve messages |
+unsubscribe();
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityMessageQueryOptions(
+    subChannelId: "sub-channel-id",
+    type: .image,
+    sortOption: .lastCreated
+)
 
-    ### Optional Parameters
-
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `includingTags` | Array&lt;String&gt; | Filter messages that contain at least one of the specified tags |
-    | `excludingTags` | Array&lt;String&gt; | Exclude messages that contain any of the specified tags |
-    | `includeDeleted` | Boolean | Whether to include deleted messages in results (default: false) |
-    | `type` | MessageType | Filter by specific message type (TEXT, IMAGE, FILE, AUDIO, VIDEO, CUSTOM) |
-    | `sortOption` | SortOption | Sort order: `firstCreated` (oldest first) or `lastCreated` (newest first) |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    // Basic message query with tag filtering
-    let messageQueryOptions = AmityMessageQueryOptions(
-        subChannelId: "subChannel-123", 
-        includingTags: ["games"], 
-        excludingTags: ["staff-only"], 
-        sortOption: .lastCreated
+let messages = messageRepository.getMessages(options: options)
+showSuccessMessage(messages)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = messageRepository
+    .getMessages(subChannelId = subChannelId)
+    .type(AmityMessage.DataType.IMAGE)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) },
     )
-    let messagesCollection = messageRepository.getMessages(options: messageQueryOptions)
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final imageMessages = await AmityChatClient.newMessageRepository()
+    .getMessages(subChannelId)
+    .type(AmityMessageDataType.IMAGE)
+    .includeDeleted(false)
+    .query();
 
-    // Observe messages with real-time updates
-    token = messageRepository.getMessages(options: messageQueryOptions).observe({ collection, error in
-        if let error {
-            print("Error: \(error).")
-            return
-        }
-        for message in collection.snapshots {
-            // Handle each message in the collection
-        }
-    })
-    ```
+final count = imageMessages.length;
+```
+  </Card>
+</CardGroup>
 
-    ```kotlin Android
-    fun filterMessages(
-        messageRepository: AmityMessageRepository,
-        subChannelId: String
-    ) {
-        // Setup tag filters
-        val includingTags = AmityTags().apply {
-            add("games")
-        }
-        val excludingTags = AmityTags().apply {
-            add("staff-only")
-        }
+## Query Replies
 
-        // Query messages with filters
-        messageRepository.getMessages(subChannelId = subChannelId)
-            .includingTags(includingTags = includingTags)
-            .excludingTags(excludingTags = excludingTags)
-            .type(type = AmityMessage.DataType.IMAGE) // Optional type filter
-            .build()
-            .query()
-            .doOnNext { pagingData ->
-                // Handle PagingData<AmityMessage>
-            }
-            .doOnError { exception ->
-                // Handle error
-            }
-            .subscribe()
-    }
-    ```
+Use a parent message ID to fetch replies to that message. Use the no-parent/default query for the main timeline.
 
-    ```typescript TypeScript
-    import { MessageRepository } from '@amityco/ts-sdk';
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { MessageRepository } from '@amityco/ts-sdk';
 
-    // Variables for pagination management
-    let nextPageFn: (() => void) | undefined;
-    let hasMore: boolean | undefined;
+const unsubscribe = MessageRepository.getMessages(
+  {
+    subChannelId,
+    parentId: messageId,
+    sortBy: 'segmentAsc',
+  },
+  ({ data: replies }) => {
+    renderResults(replies);
+  },
+);
 
-    const unsubscribe = MessageRepository.getMessages(
-      { 
-        subChannelId: 'subChannelId',
-        includingTags: ['games'],
-        excludingTags: ['staff-only']
-      },
-      ({ data: messages, onNextPage, hasNextPage, loading, error }) => {
-        if (error) {
-          // Handle retrieval errors
-        }
-        if (loading) {
-          // Show loading state
-        }
-        if (messages) {
-          // Process retrieved messages
-        }
-        hasMore = hasNextPage;
-        nextPageFn = onNextPage;
-      },
-    );
-    ```
+unsubscribe();
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityMessageQueryOptions(
+    subChannelId: "sub-channel-id",
+    messageParentFilter: .parent(id: "parent-message-id"),
+    sortOption: .firstCreated
+)
 
-    ```dart Flutter
-    late MessageLiveCollection messageLiveCollection;
-    List<AmityMessage> amityMessages = [];
-    final scrollController = ScrollController();
-
-    void observeMessages(String channelId) {
-      // Initialize message live collection
-      messageLiveCollection = AmityChatClient.newMessageRepository()
-          .getMessages(channelId)
-          .stackFromEnd(true) // Latest messages at bottom
-          .getLiveCollection(pageSize: 20);
-
-      // Listen to real-time data changes
-      messageLiveCollection.getStreamController().stream.listen((event) {
-        setState(() {
-          amityMessages = event;
-        });
-      });
-
-      // Load initial page
-      messageLiveCollection.loadNext();
-
-      // Setup pagination listener
-      scrollController.addListener(paginationListener);
-    }
-
-    void paginationListener() {
-      if ((scrollController.position.pixels >=
-              (scrollController.position.maxScrollExtent - 100)) &&
-          messageLiveCollection.hasNextPage()) {
-        messageLiveCollection.loadNext();
-      }
-    }
-    ```
-    </CodeGroup>
-
-    <Note>
-    **Sorting Options**: Use `firstCreated` for chronological order (oldest first) or `lastCreated` for reverse chronological order (newest first, typical for chat interfaces).
-    </Note>
-  </Tab>
-
-  <Tab title="Threaded Message Querying">
-    **Retrieve child messages from message threads**
-    
-    Query threaded messages to get replies associated with a specific parent message, enabling structured conversation flows.
-
-    ### Thread Query Parameters
-
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `parentId` | String | ID of the parent message to retrieve child messages from |
-    | `messageParentFilter` | ParentFilter | Filter for parent/child message relationships |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    // Query messages without a parent (top-level messages)
-    let messageQueryOptions = AmityMessageQueryOptions(
-        subChannelId: "subChannel-123", 
-        messageParentFilter: .noParent, 
-        sortOption: .lastCreated
+let replies = messageRepository.getMessages(options: options)
+showSuccessMessage(replies)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = messageRepository
+    .getMessages(subChannelId = subChannelId)
+    .parentId(parentId = messageId)
+    .sortBy(AmityMessageQuerySortOption.FIRST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) },
     )
-    let messagesCollection = messageRepository.getMessages(options: messageQueryOptions)
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final replies = await AmityChatClient.newMessageRepository()
+    .getMessages(subChannelId)
+    .parentId(messageId)
+    .query();
 
-    // Query child messages of a specific parent
-    let parentFilter = AmityMessageParentFilter.parent(id: "parent-messageId")
-    let threadQueryOptions = AmityMessageQueryOptions(
-        subChannelId: "subChannel-123", 
-        messageParentFilter: parentFilter, 
-        sortOption: .lastCreated
+final replyCount = replies.length;
+```
+  </Card>
+</CardGroup>
+
+## Jump To A Message
+
+Use `aroundMessageId` when your app opens a deep link or search result and needs the target message plus nearby context.
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = MessageRepository.getMessages(
+  {
+    subChannelId,
+    aroundMessageId: messageId,
+  },
+  ({ data: messages, hasPrevPage, hasNextPage }) => {
+    renderResults({ messages, hasPrevPage, hasNextPage });
+  },
+);
+
+unsubscribe();
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let options = AmityMessageQueryOptions(
+    subChannelId: "sub-channel-id",
+    aroundMessageId: "message-id",
+    sortOption: .lastCreated
+)
+
+let messages = messageRepository.getMessages(options: options)
+showSuccessMessage(messages)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = messageRepository
+    .getMessages(subChannelId = subChannelId)
+    .aroundMessageId(messageId = messageId)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) },
     )
-    let threadMessages = messageRepository.getMessages(options: threadQueryOptions)
-    ```
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final messagesAroundTarget = await AmityChatClient.newMessageRepository()
+    .getMessages(subChannelId)
+    .aroundMessageId(messageId)
+    .query();
 
-    ```kotlin Android
-    fun queryMessagesByParent(
-        messageRepository: AmityMessageRepository,
-        subChannelId: String,
-        parentMessageId: String
-    ) {
-        messageRepository.getMessages(subChannelId = subChannelId)
-            .includeDeleted(includeDeleted = false)
-            .parentId(parentId = parentMessageId)
-            .build()
-            .query()
-            .doOnNext { pagingData ->
-                // Handle child messages
-            }
-            .doOnError { exception ->
-                // Handle error
-            }
-            .subscribe()
-    }
-    ```
+final count = messagesAroundTarget.length;
+```
+  </Card>
+</CardGroup>
 
-    ```typescript TypeScript
-    import { MessageRepository } from '@amityco/ts-sdk';
-
-    const unsubscribe = MessageRepository.getMessages(
-      {
-        subChannelId: 'subChannelId',
-        parentId: 'parentMessageId',
-      },
-      ({ data: messages, onNextPage, hasNextPage, loading, error }) => {
-        if (error) {
-          // Handle error
-        }
-        if (loading) {
-          // Show loading spinner
-        }
-        if (messages) {
-          // Process child messages
-        }
-      },
-    );
-    ```
-
-    ```dart Flutter
-    void observeThreadMessages(String channelId, String parentId) {
-      messageLiveCollection = AmityChatClient.newMessageRepository()
-          .getMessages(channelId)
-          .parentId(parentId) // Filter by parent message
-          .stackFromEnd(true)
-          .getLiveCollection(pageSize: 20);
-
-      messageLiveCollection.getStreamController().stream.listen((event) {
-        setState(() {
-          amityMessages = event;
-        });
-      });
-
-      messageLiveCollection.loadNext();
-    }
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Jump to Specific Message">
-    **Navigate directly to a specific message in the conversation**
-    
-    Use the `aroundMessageId` parameter to retrieve a target message along with its surrounding context, useful for implementing "jump to message" functionality.
-
-    ### Navigation Parameters
-
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `aroundMessageId` | String | ID of the target message to center the query around |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    var queryOptions: AmityMessageQueryOptions!
-
-    func jumpToMessage(targetMessageId: String) {
-        // Create query options to jump to specific message
-        queryOptions = AmityMessageQueryOptions(
-            subChannelId: "subChannel-123", 
-            aroundMessageId: targetMessageId, 
-            sortOption: .lastCreated
-        )
-        
-        // Query messages around the target
-        queryMessages(queryOptions: queryOptions)
-    }
-
-    func queryMessages(queryOptions: AmityMessageQueryOptions) {
-        // Invalidate previous observer
-        token?.invalidate()
-        
-        // Start new observation
-        token = messageRepository.getMessages(options: queryOptions).observe({ collection, error in
-            if let error = error {
-                print("Error: \(error).")
-                return
-            }
-            
-            // Update UI with new message collection
-            // Scroll to target message if needed
-        })
-    }
-    ```
-
-    {/* doc-as-test: skip(android-ui: requires PagingDataAdapter/RecyclerView UI components) */}
-    ```kotlin Android
-    fun jumpToTarget(
-        messageRepository: AmityMessageRepository,
-        subChannelId: String,
-        targetId: String,
-        newAdapter: PagingDataAdapter<AmityMessage, *>,
-        previousAdapter: PagingDataAdapter<AmityMessage, *>?,
-        recyclerView: RecyclerView,
-        lifecycle: Lifecycle
-    ) {
-        // Setup error handling
-        var listener: ((CombinedLoadStates) -> Unit)? = null
-        listener = { loadStates ->
-            val refreshState = loadStates.refresh
-            if (refreshState is LoadState.Error) {
-                newAdapter.removeLoadStateListener(listener!!)
-                
-                val error = AmityError.from(refreshState.error)
-                val shouldFallback = (error != AmityError.CONNECTION_ERROR) && previousAdapter != null
-                
-                if (shouldFallback) {
-                    recyclerView.adapter = previousAdapter
-                }
-            }
-        }
-
-        // Switch to new adapter and query around target message
-        recyclerView.adapter = newAdapter
-        newAdapter.addLoadStateListener(listener)
-        
-        messageRepository.getMessages(subChannelId = subChannelId)
-            .aroundMessageId(messageId = targetId)
-            .build()
-            .query()
-            .doOnNext { pagingData ->
-                newAdapter.submitData(lifecycle, pagingData)
-            }
-            .subscribe()
-    }
-    ```
-
-    ```typescript TypeScript
-    import { MessageRepository } from '@amityco/ts-sdk';
-    import { useEffect, useState } from 'react';
-
-    const JumpToMessage = ({ targetMessageId }: { targetMessageId: string }) => {
-      const [messages, setMessages] = useState<Amity.Message[]>();
-
-      useEffect(() => {
-        const unsubscribe = MessageRepository.getMessages(
-          {
-            subChannelId: 'subChannelId',
-            aroundMessageId: targetMessageId,
-          },
-          ({ data: messages, onNextPage, hasNextPage, onPrevPage, hasPrevPage, loading, error }) => {
-            if (messages) {
-              setMessages(messages);
-              // The data contains messages around the target messageId
-              // If limit is 10: 5 messages before + target + 4 messages after
-            }
-          },
-        );
-
-        return () => unsubscribe();
-      }, [targetMessageId]);
-
-      return null;
-    };
-    ```
-    </CodeGroup>
-
-    <Note>
-    **Navigation Strategy**: When jumping to a message, the query returns the target message with surrounding context. Handle potential errors (invalid messageId, deleted messages) by falling back to a standard query without `aroundMessageId`.
-    </Note>
-  </Tab>
-</Tabs>
-
-## Query Strategies
-
-<AccordionGroup>
-  <Accordion title="Tag-Based Filtering" icon="tags">
-    **Filter messages using custom tags for categorization**
-    
-    Use `includingTags` and `excludingTags` to create sophisticated filtering systems:
-    - **Including Tags**: Messages must have at least one of the specified tags
-    - **Excluding Tags**: Messages with any of these tags will be filtered out
-    - **Combine Both**: Create precise filters by including desired tags while excluding unwanted ones
-    
-    Example use cases: Filter gaming-related messages while excluding staff-only content, or show only announcements while hiding archived discussions.
-  </Accordion>
-
-  <Accordion title="Message Type Filtering" icon="message">
-    **Query specific types of messages for specialized views**
-    
-    Filter by message type to create focused interfaces:
-    - **Text Messages**: `AmityMessage.DataType.TEXT` for text-only conversations
-    - **Media Messages**: `IMAGE`, `VIDEO`, `AUDIO` for media galleries
-    - **File Messages**: `FILE` for document sharing views
-    - **Custom Messages**: `CUSTOM` for app-specific message types
-    
-    This enables creation of specialized views like media galleries or document repositories within chat channels.
-  </Accordion>
-
-  <Accordion title="Thread Management" icon="comments">
-    **Handle threaded conversations and reply structures**
-    
-    Implement sophisticated conversation threading:
-    - **Top-Level Messages**: Use `messageParentFilter: nil` or `parentId: null` for main conversation flow
-    - **Thread Replies**: Use `parentId` to get all replies to a specific message
-    - **Thread Navigation**: Combine with sorting to maintain chronological order within threads
-    
-    Essential for implementing reply features, comment systems, and structured discussions.
-  </Accordion>
-
-  <Accordion title="Message Navigation" icon="location-arrow">
-    **Implement jump-to-message functionality**
-    
-    Enable users to navigate directly to specific messages:
-    - **Context Preservation**: `aroundMessageId` provides surrounding messages for context
-    - **Error Handling**: Gracefully handle invalid or deleted message targets
-    - **Pagination Strategy**: Manage data source swapping when jumping between distant messages
-    
-    Critical for implementing features like "jump to reply", search result navigation, and deep linking to specific messages.
-  </Accordion>
-</AccordionGroup>
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Efficient Pagination" icon="arrows-up-down">
-    **Optimize data loading and memory usage**
-    
-    - Use appropriate page sizes (15-20 messages for mobile, ~40 for desktop)
-    - Implement scroll-based pagination with threshold detection
-    - Cache previous pages to enable smooth bidirectional scrolling
-    - Monitor memory usage and release old pages when not needed
-    
-    Proper pagination ensures smooth scrolling performance even in channels with thousands of messages.
-  </Accordion>
-
-  <Accordion title="Real-time Synchronization" icon="sync">
-    **Maintain data consistency with live collections**
-    
-    - Always use live collections for active chat interfaces
-    - Handle connection state changes gracefully
-    - Implement proper cleanup when components unmount
-    - Use appropriate error handling for network issues
-    
-    Live collections automatically sync new messages, edits, and deletions without manual refresh calls.
-  </Accordion>
-
-  <Accordion title="Performance Optimization" icon="gauge-high">
-    **Optimize query performance and user experience**
-    
-    - Combine filters efficiently to reduce server load
-    - Use specific message type filters when building specialized views
-    - Implement proper loading states for better user experience
-    - Cache frequently accessed message collections
-    
-    Well-optimized queries provide faster response times and better scalability.
-  </Accordion>
-</AccordionGroup>
-
-## Related Features
+## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Send Messages" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message" icon="paper-plane">
-    **Message Creation**
-    Learn how to send new messages to channels
+  <Card title="Send Messages" href="../message-creation/send-a-message" icon="paper-plane">
+    Create messages that appear in the queried subchannel.
   </Card>
-  <Card title="Edit & Delete" href="/social-plus-sdk/chat/messaging-features/messages/edit-and-delete-messages" icon="pen-to-square">
-    **Message Management**
-    Modify and remove messages after sending
+  <Card title="Get A Message" href="./get-and-view-a-message" icon="eye">
+    Retrieve or observe one message by ID.
   </Card>
-  <Card title="Live Collections" href="/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview" icon="arrows-rotate">
-    **Real-time Data**
-    Understand live collection patterns and benefits
+  <Card title="Edit & Delete" href="./edit-and-delete-messages" icon="pen-to-square">
+    Update queried messages after creation.
   </Card>
 </CardGroup>
-
-<Tip>
-**Implementation Strategy**: Start with basic message querying using live collections, then add filtering capabilities as needed. Always implement proper error handling for network issues and invalid parameters to ensure robust chat experiences.
-</Tip>

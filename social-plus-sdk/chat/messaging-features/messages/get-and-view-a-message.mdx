@@ -1,608 +1,176 @@
 ---
 title: "Get and View a Message"
-description: "Retrieve individual messages by ID as live objects that update automatically when content changes, for all message types."
+description: "Retrieve one chat message by ID and inspect its SDK fields."
 ---
 
-Retrieve a message by ID and observe it as a live object. Any subsequent edits or deletions to that message are reflected automatically, without a manual refresh.
+Use a single-message lookup when your app needs to open a message permalink, refresh a message after an action, or observe a specific message for edits, deletion, reactions, flags, and marker updates.
 
-## Message Retrieval Overview
+The SDK returns the same message model used by message queries. Rendering is app-owned: inspect `messageType` or `dataType`, read the typed data payload, and handle `isDeleted` before displaying content.
 
-Retrieve and display message content using live data objects that update in real time for all message types including text, images, videos, files, and custom messages.
+## Platform Surface
+
+| Platform | Retrieval shape | Update behavior |
+| --- | --- | --- |
+| TypeScript | `MessageRepository.getMessage(messageId, callback)` | Live object callback; returns unsubscriber |
+| iOS | `messageRepository.getMessage(messageId)` | `AmityObject<AmityMessage>` observation |
+| Android | `messageRepository.getMessage(messageId)` | `Flowable<AmityMessage>` |
+| Flutter | `messageRepository.getMessage(messageId)` | One-shot `Future<AmityMessage>`; use `message.listen` for local live updates |
+
+## Retrieve A Message
 
 <CardGroup cols={2}>
-  <Card title="Live Objects" icon="bolt">
-    **Real-time updates**
-    - Automatic content synchronization
-    - Live data object observation
-    - Real-time change notifications
-    - Automatic UI updates
+  <Card title="TypeScript" icon="code">
+```typescript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = MessageRepository.getMessage(
+  messageId,
+  ({ data: fetchedMessage, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading && fetchedMessage) {
+      renderResults(fetchedMessage);
+    }
+  },
+);
+
+unsubscribe();
+```
   </Card>
-  <Card title="All Content Types" icon="layer-group">
-    **Content type support**
-    - Text message handling
-    - Image and video processing
-    - File attachment management
-    - Custom message structures
+  <Card title="iOS" icon="mobile">
+```swift
+let liveMessage = messageRepository.getMessage("message-id")
+
+token = liveMessage.observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    if let message = liveObject.snapshot {
+        showSuccessMessage(message.messageId)
+    }
+}
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+val disposable = messageRepository
+    .getMessage(messageId = messageId)
+    .subscribe(
+        { fetchedMessage ->
+            showSuccessMessage(fetchedMessage.getMessageId())
+        },
+        { error -> handleGeneralError(error) },
+    )
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final fetchedMessage = await AmityChatClient.newMessageRepository()
+    .getMessage(messageId);
+
+final fetchedMessageId = fetchedMessage.messageId;
+final isDeleted = fetchedMessage.isDeleted ?? false;
+```
   </Card>
 </CardGroup>
 
-## Implementation Guide
+## Inspect Message Content
 
-<Tabs>
-  <Tab title="Single Message Retrieval">
-    **Retrieve individual messages by ID**
-    
-    Get specific messages using their unique identifiers with live data observation for real-time updates.
-
-    ### Required Parameters
-
-    | Parameter | Type | Description |
-    |-----------|------|-------------|
-    | `messageId` | String | Unique identifier of the message to retrieve |
-
-    ### Return Value
-
-    | Type | Description |
-    |------|-------------|
-    | `LiveObject<AmityMessage>` | Live data object with automatic updates |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-    // Get single message with live updates
-    func observeMessage(messageId: String) {
-        let messageObject = messageRepository.getMessage(messageId)
-        
-        // Observe message changes
-        token = messageObject.observe { [weak self] messageObject, error in
-            if let error = error {
-                self?.handleError(error)
-                return
-            }
-            
-            guard let message = messageObject.object else {
-                print("Message not found or deleted")
-                return
-            }
-            
-            // Update UI with message content
-            self?.displayMessage(message)
-            
-            // Handle different message types
-            self?.processMessageContent(message)
-        }
-    }
-    ```
-
-    ```kotlin Android
-    // Get single message with live updates
-    fun observeMessage(
-        messageRepository: AmityMessageRepository,
-        messageId: String
-    ) {
-        val messageObject = messageRepository.getMessage(messageId)
-        
-        messageObject.observe()
-            .doOnNext { message ->
-                when (message.isDeleted()) {
-                    true -> handleDeletedMessage(message)
-                    false -> {
-                        displayMessage(message)
-                        processMessageContent(message)
-                    }
-                }
-            }
-            .doOnError { error ->
-                handleError(error)
-            }
-            .subscribe()
-    }  
-    ```
-
-    ```typescript TypeScript
-    import { MessageRepository } from '@amityco/ts-sdk';
-
-    // Get single message with live updates
-    function observeMessage(messageId: string) {
-      const unsubscriber = MessageRepository.getMessage(
-        messageId,
-        ({ data: message, loading, error }) => {
-          if (error) {
-            console.error('Error retrieving message:', error);
-            handleError(error);
-            return;
-          }
-
-          if (loading) {
-            showLoadingState();
-            return;
-          }
-
-          if (message) {
-            hideLoadingState();
-            displayMessage(message);
-            processMessageContent(message);
-          }
-        }
-      );
-
-      // Return unsubscriber for cleanup
-      return unsubscriber;
-    }
-    ```
-
-    ```dart Flutter
-    // Get single message with live updates
-    void observeMessage(String messageId) {
-      final messageObject = AmityChatClient.newMessageRepository()
-          .getMessage(messageId);
-
-      messageObject.listen().listen(
-        (AmityMessage message) {
-          if (message.isDeleted ?? false) {
-            handleDeletedMessage(message);
-          } else {
-            displayMessage(message);
-            processMessageContent(message);
-          }
-        },
-        onError: (error) {
-          handleError(error);
-        },
-      );
-    }
-    ```
-    </CodeGroup>
-
-    <Note>
-    **Live Data Benefits**: Live objects automatically update when message content changes, eliminating the need for manual refresh calls and ensuring your UI always displays current information.
-    </Note>
-  </Tab>
-
-  <Tab title="Text Message Handling">
-    **Display and process text message content**
-    
-    Handle text messages with support for mentions, metadata, formatting, and the 20,000 character limit.
-
-    ### Implementation Examples
-
-    <CodeGroup>
-    ```swift iOS
-    // Handle text message display
-    func handleTextMessage(_ message: AmityMessage) {
-        guard let textData = message.data as? AmityMessageTextData else { return }
-        
-        let messageText = textData.text
-
-        // Update UI elements
-        messageLabel.text = messageText
-    }
-    ```
-
-    ```kotlin Android
-    // Handle text message display
-    fun handleTextMessage(message: AmityMessage) {
-        when (val data = message.getData()) {
-            is AmityMessage.Data.TEXT -> {
-                val text = data.getText()
-                val mentions = data.getMentions()
-                
-                // Update UI
-                messageTextView.text = text
-            }
-            else -> {
-                // Handle non-text message
-            }
-        }
-    }
-    ```
-
-    ```typescript TypeScript
-    // Handle text message display
-    function handleTextMessage(message: Amity.Message<'text'>) {
-      const text = message.data?.text || '';
-      const mentions = message.mentions || [];
-      
-      // Create message element
-      const messageElement = document.createElement('div');
-      messageElement.className = 'text-message';
-      
-      return messageElement;
-    }
-  
-    ```
-
-    ```dart Flutter
-    // Handle text message display
-    Widget buildTextMessage(AmityMessage message) {
-      if (message.data is MessageTextData) {
-        final textData = message.data as MessageTextData;
-        final text = textData.text ?? '';
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Message text 
-            RichText(
-              text: _buildTextSpan(text),
-            ),
-          ],
-        );
-      }
-      
-      return Container();
-    }
-    ```
-    </CodeGroup>
-
-    ### Text Processing Features
-
-    | Feature | Description | Implementation |
-    |---------|-------------|----------------|
-    | **Mention Highlighting** | Visual emphasis for user mentions | Color, weight, and click handling |
-    | **Link Detection** | Automatic URL and email detection | Regex parsing and link styling |
-    | **Long Message Handling** | Expandable content for lengthy text | Truncation with "Show more" option |
-    | **Accessibility** | Screen reader and keyboard support | ARIA labels and semantic markup |
-  </Tab>
-
-  <Tab title="Media Message Handling">
-    **Process image, video, and file messages**
-    
-    Handle media content with automatic resizing, format support, and download management.
-
-    ### Media Processing Features
-
-    | Media Type | Available Sizes | Max Size | Features |
-    |------------|----------------|----------|----------|
-    | **Image** | Small, Medium, Large, Full | 1 GB | Auto-resize, multiple formats |
-    | **Video** | 360p, 480p, 720p, 1080p, Original | 1 GB | Auto-transcode, thumbnail generation |
-    | **File** | Original only | 1 GB | Direct download, mime type detection |
-
-    ### Image Message Handling
-
-    <CodeGroup>
-    ```swift iOS
-func downloadImageAsURL(from message: AmityMessage) {
-    guard let imageInfo = message.getImageInfo() else { return }
-    
-    // Download from url and return saved image url.
-    fileRepository.downloadImage(fromURL: imageInfo.fileURL, size: .medium) { imageUrl, error in
-        // Handle image url and error.
-    }
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="code">
+```typescript
+if (message.dataType === 'text') {
+  const text = message.data?.text;
+  renderResults(text);
 }
 
-func downloadImageAsUIImage(from message: AmityMessage) {
-    guard let imageInfo = message.getImageInfo() else { return }
-    
-    // Download from url and return image.
-    fileRepository.downloadImageAsData(fromURL: imageInfo.fileURL, size: .small) { image, size, error in
-        // Handle image and error.
+if (message.dataType === 'image') {
+  const fileId = message.data?.fileId;
+  renderResults(fileId);
+}
+```
+  </Card>
+  <Card title="iOS" icon="mobile">
+```swift
+let liveMessage = messageRepository.getMessage("message-id")
+
+token = liveMessage.observe { liveObject, _ in
+    guard let message = liveObject.snapshot else { return }
+
+    switch message.messageType {
+    case .text:
+        showSuccessMessage(message.messageId)
+    case .image, .file, .video, .audio, .custom:
+        showSuccessMessage(message.messageId)
     }
 }
-    ```
-
-    ```kotlin Android
-    fun viewImageMessage(message: AmityMessage) {
-    when (val data = message.getData()) {
-        is AmityMessage.Data.IMAGE -> {
-            val image : AmityImage? =data.getImage()
-            val imageUrl: String? = image?.getUrl()
-            val smallImageUrl: String? = image?.getUrl(size = AmityImage.Size.SMALL)
-            val mediumImageUrl: String? = image?.getUrl(size = AmityImage.Size.MEDIUM)
-            val largeImageUrl: String? = image?.getUrl(size = AmityImage.Size.LARGE)
-        }
-        else -> {}
-    }
-}
-    ```
-
-    ```typescript TypeScript
-import { FileRepository } from '@amityco/ts-sdk';
-import React, { FC, useEffect, useState } from 'react';
-
-const ImageMessage: FC<{ message: Amity.Message<'image'> }> = ({ message }) => {
-  const imageFileId = message.data?.fileId;
-  const [fileResult, setFileResult] = useState<Amity.File>();
-
-  useEffect(() => {
-    if (imageFileId) {
-      FileRepository.getFile(imageFileId).then(({ data }) => {
-        setFileResult(data);
-      });
-    }
-  }, [imageFileId]);
-
-  if (imageFileId) return null;
-
-  return <img src={fileResult?.fileUrl} alt="your message" />;
-};
-    ```
-
-    ```dart Flutter
-void viewImageMessage(AmityMessage message) {
-  if (message.data is MessageImageData) {
-    final imageUrl =
-        (message.data as MessageImageData).image!.getUrl(AmityImageSize.FULL);
-
-    final smallImageUrl = (message.data as MessageImageData)
-        .image!
-        .getUrl(AmityImageSize.SMALL);
-
-    final mediumImageUrl = (message.data as MessageImageData)
-        .image!
-        .getUrl(AmityImageSize.MEDIUM);
-
-    final largeImageUrl = (message.data as MessageImageData)
-        .image!
-        .getUrl(AmityImageSize.LARGE);
-  }
-}
-    ```
-    </CodeGroup>
-
-
-
-    ### Video Message Handling
-
-    <CodeGroup>
-    ```swift iOS
-guard let videoPath = videoData.getVideo(resolution: resolution),
-        let url = URL(string: videoPath) else { return }
-let player = AVPlayer(url: url)
-let controller = AVPlayerViewController()
-controller.player = player
-present(controller, animated: true) {
-    player.play()
-}
-    ```
-
-    ```kotlin Android
-  fun viewVideoMessage(message: AmityMessage) {
-    val data = message.getData()
-    if (data is AmityMessage.Data.VIDEO) {
-        val videoUrl: AmityVideo? = data.getVideo()
-        val imageUrl: AmityImage? = data.getThumbnailImage()
-    }
-}
-    ```
-
-    ```typescript TypeScript
-import {
-  MessageRepository,
-  FileRepository,
-  ContentFeedType,
-  MessageContentType,
-} from '@amityco/ts-sdk';
-
-async function createVideoMessage() {
-  // 1. create `FormData` by appending the desired file to it
-  const file: File = new File(['foo'], 'foo.mp4');
-  const data = new FormData();
-  data.append('files', file);
-
-  // 2. create video file and get fileId of newly created file
-  const { data: files } = await FileRepository.uploadVideo(data, ContentFeedType.MESSAGE);
-  const { fileId } = files[0];
-
-  const videoMessage = {
-    subChannelId: 'subChannelId',
-    dataType: MessageContentType.VIDEO,
-    fileId,
-  };
-  // 3. run create message query
-  const { data: message } = await MessageRepository.createMessage(videoMessage);
-
-  return message;
-}
-    ```
-
-    </CodeGroup>
-
- 
-    ### File Message Handling
-
-    <CodeGroup>
-    ```swift iOS
-    // Handle file message display and download
-    func handleFileMessage(_ fileData: AmityMessageFileData, message: AmityMessage) {
-        guard let fileInfo = message.getFileInfo() else { return }
-        
-        // Update UI with file information
-        fileNameLabel.text = fileInfo.fileName
-        fileSizeLabel.text = formatFileSize(fileInfo.fileSize)
-        
-        // Set appropriate file icon
-        fileIconImageView.image = getFileIcon(for: fileInfo.mimeType)
-        
-        // Setup download button
-        downloadButton.addTarget(self, action: #selector(downloadFile), for: .touchUpInside)
-        
-        // Check if file is already downloaded
-        if let localURL = getCachedFileURL(for: fileInfo.fileURL) {
-            showOpenFileOption(localURL)
+```
+  </Card>
+  <Card title="Android" icon="smartphone">
+```kotlin
+messageRepository
+    .getMessage(messageId = messageId)
+    .subscribe { fetchedMessage ->
+        when (fetchedMessage.getData()) {
+            is AmityMessage.Data.TEXT -> showSuccessMessage()
+            is AmityMessage.Data.IMAGE -> showSuccessMessage()
+            is AmityMessage.Data.FILE -> showSuccessMessage()
+            is AmityMessage.Data.VIDEO -> showSuccessMessage()
+            is AmityMessage.Data.AUDIO -> showSuccessMessage()
+            is AmityMessage.Data.CUSTOM -> showSuccessMessage()
+            else -> showSuccessMessage()
         }
     }
-    
-    @objc func downloadFile() {
-        guard let fileInfo = message.getFileInfo() else { return }
-        
-        // Show download progress
-        showDownloadProgress()
-        
-        fileRepository.downloadFile(fromURL: fileInfo.fileURL) { [weak self] fileURL in
-            DispatchQueue.main.async {
-                self?.hideDownloadProgress()
-                
-                if let fileURL = fileURL {
-                    self?.showOpenFileOption(fileURL)
-                    self?.cacheFileURL(fileURL, for: fileInfo.fileURL)
-                } else {
-                    self?.showDownloadError()
-                }
-            }
-        }
-    }
-    ```
+```
+  </Card>
+  <Card title="Flutter" icon="mobile-screen">
+```dart
+final fetchedMessage = await AmityChatClient.newMessageRepository()
+    .getMessage(messageId);
 
-    ```kotlin Android
-    // Handle file message display and download
-    fun handleFileMessage(message: AmityMessage) {
-        when (val data = message.getData()) {
-            is AmityMessage.Data.FILE -> {
-                val file = data.getFile()
-                
-                // Update UI with file information
-                fileNameTextView.text = file?.getFileName() ?: "Unknown file"
-                fileSizeTextView.text = formatFileSize(file?.getFileSize() ?: 0)
-                
-                // Set file icon based on mime type
-                val iconResource = getFileIconResource(file?.getMimeType())
-                fileIconImageView.setImageResource(iconResource)
-                
-                // Setup download button
-                downloadButton.setOnClickListener {
-                    downloadFile(file)
-                }
-                
-                // Check if file exists in cache
-                val cachedFile = getCachedFile(file?.getUrl())
-                if (cachedFile?.exists() == true) {
-                    showOpenFileOption(cachedFile)
-                }
-            }
-            else -> {}
-        }
-    }
-    
-    private fun downloadFile(file: AmityFile?) {
-        file?.getUrl()?.let { fileUrl ->
-            // Show download progress
-            downloadProgressBar.visibility = View.VISIBLE
-            downloadButton.isEnabled = false
-            
-            // Use DownloadManager or custom download logic
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val request = DownloadManager.Request(Uri.parse(fileUrl))
-                .setTitle(file.getFileName())
-                .setDescription("Downloading file...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, file.getFileName())
-            
-            downloadManager.enqueue(request)
-        }
-    }
-    ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Custom Message Handling">
-    **Process custom message structures and data**
-    
-    Handle custom messages with flexible JSON data structures for polls, cards, and specialized content.
-
-    ### Custom Message Processing
-
-    <CodeGroup>
-    ```swift iOS
-let messageObject = messageRepository.getMessage(messageId)
-
-token = messageObject.observe { messageObject, error in
-    if let message = messageObject.object {
-        if let data = message.data {
-            // Handle custom message data
-        }
-    } else {
-        // Handle error.
-    }
+switch (fetchedMessage.dataType) {
+  case AmityMessageDataType.TEXT:
+  case AmityMessageDataType.IMAGE:
+  case AmityMessageDataType.FILE:
+  case AmityMessageDataType.VIDEO:
+  case AmityMessageDataType.AUDIO:
+  case AmityMessageDataType.CUSTOM:
+    final fetchedMessageId = fetchedMessage.messageId;
+    break;
 }
-    ```
+```
+  </Card>
+</CardGroup>
 
-    ```kotlin Android
-fun viewCustomMessage(message: AmityMessage) {
-    when (val data = message.getData()) {
-        is AmityMessage.Data.CUSTOM -> {
-            val jsonData: JsonObject = data.getRawData()
-        }
-        else -> {}
-    }
-}
-    ```
+## Deletion And Edit Fields
 
-    ```dart Flutter
-    void viewCustomMessage(AmityMessage message) {
-  if (message.data is MessageCustomData) {
-    final jsonObject = (message.data as MessageCustomData).rawData;
-  }
-}
-    ```
-    </CodeGroup>
-  </Tab>
-</Tabs>
+| Field | What to use it for |
+| --- | --- |
+| `isDeleted` | Decide whether to hide content or render a deleted-message placeholder. |
+| `editedAt` | Show an edited indicator when present. |
+| `parentId` | Link a reply back to its parent message. |
+| `childrenNumber` | Show reply/thread counts when available. |
+| `flagCount` / `isFlaggedByMe` | Render report state and moderation affordances. |
 
-## Message State Management
+<Note>
+Single-message retrieval does not replace list queries. Use `getMessages` for timelines and use `getMessage` for detail refresh, deep links, or focused observation.
+</Note>
 
-<AccordionGroup>
-  <Accordion title="Live Data Observation" icon="eye">
-    **Managing real-time message updates and synchronization**
-    
-    **Observer Pattern Benefits**
-    - **Automatic Updates**: Messages update automatically when content changes
-    - **Real-Time Sync**: Changes from other users appear instantly
-    - **Error Handling**: Built-in error handling for network and data issues
-    
-    **Implementation Best Practices**
-    - **Lifecycle Management**: Properly dispose of observers to prevent memory leaks
-    - **Error Recovery**: Implement retry logic for failed observations
-    - **Loading States**: Show appropriate loading indicators during data fetching
-    
-    **Performance Optimization**
-    - **Selective Observation**: Only observe messages currently visible to users
-    - **Debounced Updates**: Prevent excessive UI updates with debouncing
-    - **Background Processing**: Handle heavy data processing off the main thread
-    
-  </Accordion>
-
- <Accordion title="Error Handling" icon="triangle-exclamation">
-    **Robust error handling for message retrieval and display**
-    
-    **Error Types and Handling**
-    - **Network Errors**: Connection timeouts, network unavailability
-    - **Permission Errors**: Insufficient access rights to view messages
-    - **Content Errors**: Corrupted or invalid message data
-    - **Rate Limiting**: API rate limit exceeded errors
-    
-    **Recovery Strategies**
-    - **Automatic Retry**: Retry failed requests with exponential backoff
-    - **Fallback Content**: Show cached or placeholder content when fresh data fails
-    - **User Feedback**: Clear error messages and recovery options for users
-    - **Graceful Degradation**: Maintain basic functionality even with partial failures
-    
-    **User Experience**
-    - **Loading States**: Show appropriate loading indicators during operations
-    - **Error Messages**: User-friendly error messages with actionable solutions
-    - **Offline Support**: Enable offline viewing of cached messages
-    - **Retry Options**: Allow users to manually retry failed operations
-    
-  </Accordion>
-</AccordionGroup>
-## Related Features
+## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Message Creation" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message" icon="plus">
-    **Create messages**
-    Send text, media, and custom messages
+  <Card title="Query Messages" href="./query-and-filter-messages" icon="list-filter">
+    Load message lists and thread replies.
   </Card>
-  <Card title="Message Management" href="/social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages" icon="gear">
-    **Manage content**
-    Edit, delete, and moderate messages
+  <Card title="Edit & Delete" href="./edit-and-delete-messages" icon="pen-to-square">
+    Update or soft-delete a message after sending.
   </Card>
-  <Card title="Real-Time Updates" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/overview" icon="bolt">
-    **Live synchronization**
-    Real-time message updates and notifications
+  <Card title="Message Flagging" href="../message-flagging" icon="flag">
+    Report and unreport chat messages.
   </Card>
 </CardGroup>
-
-<Tip>
-**Implementation Priority**: Start with basic text and image message display, then progressively add support for other content types. Always implement proper error handling and loading states for the best user experience.
-</Tip>
