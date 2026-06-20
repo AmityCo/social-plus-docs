@@ -1,222 +1,188 @@
 ---
 title: "Get Story Targets"
-description: "Retrieve one or more story targets using StoryRepository.getStoryTarget() or StoryRepository.getStoryTargets(). Use hasUnseen() to show story ring indicators."
+description: "Retrieve story target state, including unseen status and local sync counts."
 ---
 
-Use `StoryRepository.getStoryTarget(targetType, targetId)` to observe a single community story target as a live object, or `StoryRepository.getStoryTargets(targets)` to observe up to 10 targets simultaneously. Check `target.hasUnseen()` to drive story ring indicators in your UI.
+Story target APIs let you render story rings without fetching every story. A story target tells you whether a target has unseen stories and, where supported, how many local stories are syncing or failed.
 
-<CardGroup cols={2}>
-  <Card title="Single Target Observation" icon="bullseye-pointer">
-    Monitor individual story targets with real-time unseen status updates
-  </Card>
-  <Card title="Multi-Target Queries" icon="bullseye">
-    Observe multiple story targets simultaneously for efficient feed management
-  </Card>
-  <Card title="Unseen Story Detection" icon="eye-slash">
-    Implement story rings and indicators for unviewed content
-  </Card>
-  <Card title="Live Object Updates" icon="bolt">
-    Real-time synchronization of target states and story availability
-  </Card>
-</CardGroup>
+The examples below use community targets.
 
-<Info>
-Story Targets provide metadata about story availability and viewing states for specific targets, enabling you to build engaging story feed interfaces with proper unseen indicators.
-</Info>
-
-## Get Single Story Target
-
-The `getStoryTarget()` function enables real-time observation of a specific story target, returning a Live Object that provides updates about story availability and unseen status.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `targetType` | Enum | Yes | Type of target (currently supports `.community`) |
-| `targetId` | String | Yes | ID of the target community |
-
-### Use Cases
-- **Story Ring Indicators**: Show visual indicators for targets with unseen stories
-- **Feed Organization**: Prioritize targets with new content
-- **User Experience**: Guide users to fresh, unviewed content
-- **Analytics**: Track story consumption patterns across targets
+## Single Story Target
 
 <CodeGroup>
-```swift iOS
-let token = storyRepository.getStoryTarget(targetType: .community, targetId: "targetId").observe { object, error in
-    if let error {
-        print(error)
-        return
+```typescript TypeScript
+import { StoryRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = StoryRepository.getTargetById(
+  {
+    targetType: 'community',
+    targetId: communityId,
+  },
+  ({ data, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
     }
-    
-    guard let storyTarget = object.snapshot else { return}
-    print(storyTarget)
-    // Use storyTarget
-}
+
+    if (!loading && data) {
+      updateUI(data.hasUnseen);
+    }
+  },
+);
+
+unsubscribe();
+```
+
+```swift iOS
+token = storyRepository
+    .getStoryTarget(targetType: .community, targetId: communityId)
+    .observe { object, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        if let storyTarget = object.snapshot {
+            showSuccessMessage(storyTarget.hasUnseen)
+        }
+    }
 ```
 
 ```kotlin Android
-fun getStoryTarget(
+fun observeStoryTarget(
     storyRepository: AmityStoryRepository,
-    targetType: AmityStory.TargetType,
     targetId: String
 ) {
     storyRepository.getStoryTarget(
-        targetType = targetType,
+        targetType = AmityStory.TargetType.COMMUNITY,
         targetId = targetId
     )
-        .doOnNext { target ->
-            // check if there is unseen stories on this target
-            val hasUnseen = target.hasUnseen()
+        .doOnNext { storyTarget: AmityStoryTarget ->
+            showSuccessMessage(storyTarget.hasUnseen())
         }
-        .doOnError {
-            // Exception
-        }
+        .doOnError { error -> showErrorMessage(error = error) }
         .subscribe()
 }
 ```
 
+```dart Flutter
+void observeStoryTarget(String communityId) {
+  final stream = AmitySocialClient.newStoryRepository().live.getStoryTaregt(
+    targetType: AmityStoryTargetType.COMMUNITY,
+    targetId: communityId,
+  );
+
+  stream.listen((storyTarget) {
+    final hasUnseen = storyTarget.hasUnseen;
+    showError(hasUnseen);
+  });
+}
+```
+</CodeGroup>
+
+<Note>
+Flutter's single-target live helper is spelled `getStoryTaregt` in the current SDK.
+</Note>
+
+## Multiple Story Targets
+
+<CodeGroup>
 ```typescript TypeScript
 import { StoryRepository } from '@amityco/ts-sdk';
 
-const unsubscribe = StoryRepository.getStoriesByTargetIds(
-  {
-    targets: [
-      {
-        targetType: 'community_1',
-        targetId: 'communityId_1',
-      },
-      {
-        targetType: 'community_2',
-        targetId: 'communityId_2',
-      },
-    ],
-    options: {
-      orderBy: 'asc', // or desc
-    },
-  },
-  ({ data: storiesData, loading, error }) => {
-    // Pagination is not supported in this function
+const unsubscribe = StoryRepository.getTargetsByTargetIds(
+  [
+    { targetType: 'community', targetId: communityId },
+    { targetType: 'community', targetId: 'community-id-2' },
+  ],
+  ({ data, loading, error }) => {
     if (error) {
-      // Handle any errors that occur during retrieving data
+      handleError(error);
+      return;
     }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (storiesData) {
-      // Process the data
-      console.log(storiesData);
+
+    if (!loading) {
+      renderResults(data);
     }
   },
 );
 
-// Call to unsubscribe live collection
 unsubscribe();
 ```
-</CodeGroup>
 
-## Get Multiple Story Targets
-
-The `getStoryTargets()` function enables retrieval of multiple story targets simultaneously, returning a Live Collection that observes updates across all specified targets.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `targets` | Array | Yes | Array of target pairs (max 10 targets) |
-
-
-### Implementation Patterns
-- **Story Feed Management**: Monitor multiple communities for story availability
-- **Batch Updates**: Efficient UI updates for multiple story indicators
-- **Feed Prioritization**: Sort targets based on unseen story status
-- **Performance Optimization**: Reduce network requests with batch queries
-
-<CodeGroup>
 ```swift iOS
-// Example of creating StoryTargetSeachInfo from any target id and target type.
-let firstTarget = StoryTargetSearchInfo(targetType: .community, targetId: "targetId-1")
-let secondTarget = StoryTargetSearchInfo(targetType: .community, targetId: "targetId-2")
+let targets = [
+    AmityStoryTargetSearchInfo(targetType: .community, targetId: communityId),
+    AmityStoryTargetSearchInfo(targetType: .community, targetId: "community-id-2")
+]
 
-token = storyRepository.getStoryTargets(targets: [firstTarget, secondTarget]).observe({ collection, change, error in
-    // Handle list of story targets here.
-})
+token = storyRepository.getStoryTargets(targets: targets).observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
 ```
 
 ```kotlin Android
-fun getStoryTargets(
-    storyRepository: AmityStoryRepository,
-) {
+fun observeStoryTargets(storyRepository: AmityStoryRepository) {
     val targets = listOf(
-        AmityStory.TargetType.COMMUNITY to "communityId1",
-        AmityStory.TargetType.COMMUNITY to "communityId2"
+        AmityStory.TargetType.COMMUNITY to "community-id-1",
+        AmityStory.TargetType.COMMUNITY to "community-id-2"
     )
 
-    storyRepository.getStoryTargets(
-        targets = targets
-    )
-        .doOnNext {
-            // List<AmityStoryTarget>
+    storyRepository.getStoryTargets(targets = targets)
+        .doOnNext { storyTargets: List<AmityStoryTarget> ->
+            showSuccessMessage(storyTargets.size)
         }
-        .doOnError {
-            // Exception
-        }
+        .doOnError { error -> showErrorMessage(error = error) }
         .subscribe()
 }
 ```
 
-```typescript TypeScript
-import { StoryRepository } from '@amityco/ts-sdk';
+```dart Flutter
+void observeStoryTargets() {
+  final targets = [
+    StoryTargetSearchInfo(
+      targetType: AmityStoryTargetType.COMMUNITY,
+      targetId: 'community-id-1',
+    ),
+    StoryTargetSearchInfo(
+      targetType: AmityStoryTargetType.COMMUNITY,
+      targetId: 'community-id-2',
+    ),
+  ];
 
-const unsubscribe = StoryRepository.getStoriesByTargetIds(
-  {
-    targets: [
-      {
-        targetType: 'community_1',
-        targetId: 'communityId_1',
-      },
-      {
-        targetType: 'community_2',
-        targetId: 'communityId_2',
-      },
-    ],
-    options: {
-      orderBy: 'asc', // or desc
-    },
-  },
-  ({ data: storiesData, loading, error }) => {
-    // Pagination is not supported in this function
-    if (error) {
-      // Handle any errors that occur during retrieving data
-    }
-    if (loading) {
-      // Handle the loading state, e.g., show a loading spinner
-    }
-    if (storiesData) {
-      // Process the data
-      console.log(storiesData);
-    }
-  },
-);
+  final collection = StoryTargetLiveCollection(
+    request: () => AmitySocialClient.newStoryRepository()
+        .getStoryTargets(targets: targets),
+  );
 
-// Call to unsubscribe live collection
-unsubscribe();
+  collection.getStreamController().stream.listen((storyTargets) {
+    final targetCount = storyTargets.length;
+    showError(targetCount);
+  });
+
+  collection.getData();
+}
 ```
 </CodeGroup>
+
+## When To Use Story Targets
+
+- Use story targets for story tray rings, unseen indicators, and sync/error badges.
+- Use [Get Stories](./get-stories) when you need the actual story media and items.
+- Use [Get Global Story Targets](./get-global-story-targets) when you need a global discovery feed of active story targets.
 
 ## Related Topics
 
 <CardGroup cols={2}>
   <Card title="Get Stories" href="./get-stories" icon="list">
-    Retrieve and display actual story content with filtering options
+    Retrieve story objects and collections.
   </Card>
   <Card title="Global Story Targets" href="./get-global-story-targets" icon="globe">
-    Access story targets across your entire network
-  </Card>
-  <Card title="Story Analytics" href="../analytics/story-impressions" icon="chart-bar">
-    Track story engagement and viewing patterns
-  </Card>
-  <Card title="Live Objects" href="/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview" icon="bolt">
-    Understanding live object patterns and real-time updates
+    Query story targets across the app.
   </Card>
 </CardGroup>

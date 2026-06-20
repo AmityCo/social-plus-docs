@@ -48,6 +48,7 @@ let communityRepository = AmityCommunityRepository()
 let fileRepository = AmityFileRepository()
 let userRepository = AmityUserRepository()
 let feedRepository = AmityFeedRepository()
+let storyRepository = AmityStoryRepository()
 var token: AmityNotificationToken? = nil
 let initialAccessToken: String = ""
 let imageData = Data()
