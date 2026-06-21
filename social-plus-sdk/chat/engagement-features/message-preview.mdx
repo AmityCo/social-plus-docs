@@ -1,187 +1,187 @@
 ---
 title: "Message Preview"
-description: "Display quick message summaries in channel listings and notifications without loading full message content, optimizing performance and user experience."
+description: "Read the latest message preview from chat channel and subchannel SDK objects."
 ---
 
-Access a brief summary of the latest message in a channel or subchannel object, without fetching full message content, to populate chat lists and notification previews. Must be enabled via the network-settings API before use.
+Use message preview when your app needs a lightweight latest-message summary for a chat list, inbox row, or notification handoff. The SDK exposes preview data on channel and subchannel models after message preview is enabled for the network.
 
-## Feature Overview
+<Info>
+  Message preview is configured outside these client SDK calls, typically through network settings. Client SDKs read the preview that is returned with channel or subchannel data; they do not enable the setting themselves.
+</Info>
 
-Message Preview provides partial message data through channel and subchannel objects, offering users a brief summary of incoming messages. This feature enables efficient content assessment and prioritization without the overhead of loading complete message content.
+## Platform Surface
 
-<CardGroup cols={2}>
-  <Card title="Performance Optimization" icon="gauge-high">
-    **Efficient data loading**
-    - Lightweight message preview
-    - Reduced bandwidth usage
-    - Faster interface rendering
-    - Battery-efficient operations
-  </Card>
-  <Card title="Chat List Integration" icon="sparkles">
-    **Interaction flows**
-    - Quick message assessment
-    - Priority-based responses
-    - Lightweight notification previews
-    - Context-aware previews
-  </Card>
-</CardGroup>
+| Surface | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Channel preview | `channel.messagePreview` | `channel.messagePreview` | `channel.getMessagePreview()` | `channel.messagePreview` |
+| Subchannel preview | `subChannel.messagePreview` | `subChannel.messagePreview` | `subChannel.getMessagePreview()` | Not exposed as a public preview object |
+| Preview ID | `messagePreviewId` | `messagePreviewId` | `getMessagePreviewId()` | `messagePreviewId` |
+| Preview data | `data`, `dataType` | `data`, `dataType` | `getData()`, `getDataType()` | `data`, `dataType` |
 
-<Warning>
-**Configuration Required**: Message Preview must be enabled via API before use. The feature only works for new messages created after activation.
+## Parameters
 
-**Enable Message Preview API**: `PUT /api/v3/network-settings/chat`
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `channelId` | Yes | Channel ID used to retrieve or observe the channel that contains the preview. |
+| `subChannelId` | Yes for subchannel preview | Subchannel ID used to retrieve or observe a subchannel preview where the platform exposes it. |
+| Preview setting | Yes | The network must have message preview enabled before new messages produce preview data. |
+| `messagePreview` null handling | Yes | A channel or subchannel can return no preview when no eligible message exists, preview is disabled, or the preview has not been cached yet. |
 
-```json
-{
-  "messagePreviewSetting": {
-    "enabled": true,
-    "isIncludeDeleted": false
-  }
+## Read Channel Preview
+
+Read the preview from the channel object you already use for channel lists. Treat the preview as optional and render a fallback for empty channels.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = ChannelRepository.getChannel(
+  channelId,
+  ({ data: channelSnapshot, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading && channelSnapshot?.messagePreview) {
+      renderResults({
+        id: channelSnapshot.messagePreview.messagePreviewId,
+        dataType: channelSnapshot.messagePreview.dataType,
+        data: channelSnapshot.messagePreview.data,
+        userId: channelSnapshot.messagePreview.user?.userId,
+      });
+    }
+  },
+);
+
+unsubscribe();
+```
+
+```swift iOS
+token = channelRepository.getChannel(channelId).observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    guard let preview = liveObject.snapshot?.messagePreview else { return }
+
+    showSuccessMessage([
+        "id": preview.messagePreviewId,
+        "type": preview.dataType,
+        "subChannelId": preview.subChannelId
+    ])
 }
 ```
-</Warning>
 
-## Implementation Guide
+```kotlin Android
+val currentChannel = channel ?: return
+val preview = currentChannel.getMessagePreview() ?: return
 
-<Tabs>
-  <Tab title="Channel Message Preview">
-    **Access message previews through channel objects**
-    
-    Retrieve the latest message preview from channels to display in chat lists, notifications, and conversation overviews.
+showSuccessMessage(
+    mapOf(
+        "id" to preview.getMessagePreviewId(),
+        "type" to preview.getDataType(),
+        "subChannelId" to preview.getSubChannelId(),
+    ),
+)
+```
 
-    ### Message Preview Attributes
+```dart Flutter
+final fetchedChannel = await AmityChatClient.newChannelRepository()
+    .getChannel(channelId);
 
-    | Attribute | Type | Description |
-    |-----------|------|-------------|
-    | `messageId` | String | Unique identifier of the message |
-    | `channelId` | String | ID of the channel containing the message |
-    | `userId` | String | ID of the user who created the message |
-    | `type` | MessageType | Message type (text, image, file, custom, etc.) |
-    | `data` | Object | Message content data (text stored in "text" key) |
-    | `isDeleted` | Boolean | Whether the message has been deleted |
-    | `createdAt` | Date | Message creation timestamp |
-    | `updatedAt` | Date | Last message update timestamp |
+final preview = fetchedChannel.messagePreview;
 
-    ### Code Examples
+if (preview != null) {
+  final previewId = preview.messagePreviewId;
+  final previewType = preview.dataType;
+  final previewData = preview.data;
+}
+```
 
-    <CodeGroup>
-    ```swift iOS
-    // Get channel with message preview
-    token = channelRepository.getChannel("channel-id").observe { liveObject, error in
-        guard let channel = liveObject.snapshot else { return }
-        
-        if let previewMessage = channel.messagePreview {
-            // Access preview message data
-            let messageText = previewMessage.data?["text"] as? String ?? ""
-            let messageType = previewMessage.dataType
-            let senderId = previewMessage.userId
-            let timestamp = previewMessage.createdAt
-            
-            // Update UI with preview content
-            updateChannelPreview(
-                text: messageText,
-                type: messageType,
-                sender: senderId,
-                time: timestamp
-            )
-        } else {
-            // No preview available
-            showEmptyChannelState()
-        }
+</CodeGroup>
+
+## Read Subchannel Preview
+
+Use subchannel preview when your UI lists subchannels directly. Flutter currently exposes `messagePreviewId` on `AmitySubChannel`, but not the composed `AmityMessagePreview` object.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { SubChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = SubChannelRepository.getSubChannel(
+  subChannelId,
+  ({ data: subChannel, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
     }
-    ```
 
-    ```kotlin Android
-    fun getChannelMessagePreview(channel: AmityChannel) {
-        val messagePreview: AmityMessagePreview? = channel.getMessagePreview()
-        
-        messagePreview?.let { preview ->
-            val data: AmityMessage.Data = preview.getData()
-            val dataType: AmityMessage.DataType = preview.getDataType()
-            val user: AmityUser? = preview.getUser()
-            val messageText = data.getText()
-            val createdAt = preview.getCreatedAt()
-            
-            // Update channel list item with preview
-            updateChannelListItem(
-                channelId = channel.getChannelId(),
-                previewText = formatPreviewText(dataType, messageText),
-                timestamp = createdAt,
-                sender = user
-            )
-        } ?: run {
-            // Handle no preview case
-            showEmptyChannelPreview(channel.getChannelId())
-        }
+    if (!loading && subChannel?.messagePreview) {
+      renderResults(subChannel.messagePreview.messagePreviewId);
     }
-    ```
+  },
+);
 
-    ```typescript
-    import { ChannelRepository } from '@amityco/ts-sdk';
+unsubscribe();
+```
 
-    const unsubscriber = ChannelRepository.getChannel(
-      'channelId',
-      ({ data: channel, loading, error }) => {
-        if (error) {
-          console.error('Error loading channel:', error);
-          return;
-        }
-        
-        if (loading) {
-          // Show loading state for channel
-          return;
-        }
-        
-        if (channel) {
-          const { messagePreview } = channel;
-          
-          if (messagePreview) {
-            // Process message preview
-            const previewData = {
-              messageId: messagePreview.messageId,
-              text: formatPreviewText(messagePreview),
-              type: messagePreview.type,
-              sender: messagePreview.userId,
-              timestamp: messagePreview.createdAt,
-              isDeleted: messagePreview.isDeleted
-            };
-            
-            // Update channel list UI
-            updateChannelListItem(channel.channelId, previewData);
-          } else {
-            // No preview available
-            showEmptyChannelPreview(channel.channelId);
-          }
-        }
-      },
-    );
-    ```
-    </CodeGroup>
+```swift iOS
+let subChannelRepository = AmitySubChannelRepository()
 
-    <Note>
-    **Availability**: Message previews are only available for channels, and only for messages created after the feature is enabled in your network settings.
-    </Note>
-  </Tab>
+token = subChannelRepository.getSubChannel(withId: "sub-channel-id").observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
 
-</Tabs>
+    guard let preview = liveObject.snapshot?.messagePreview else { return }
+    showSuccessMessage(preview.messagePreviewId)
+}
+```
 
-## Related Features
+```kotlin Android
+val subChannelRepository = AmityChatClient.newSubChannelRepository()
+
+val disposable = subChannelRepository
+    .getSubChannel(subChannelId)
+    .subscribe(
+        { subChannel ->
+            val preview = subChannel.getMessagePreview()
+            showSuccessMessage(preview?.getMessagePreviewId() ?: "")
+        },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+</CodeGroup>
+
+## Preview Fields
+
+| Field | Description |
+| --- | --- |
+| `messagePreviewId` | ID of the message represented by the preview. |
+| `dataType` | Message data type, such as text, image, file, video, audio, or custom. |
+| `data` | Preview payload for the message data type. For text messages, this contains the text payload. |
+| `channelId` | Channel that owns the previewed message. |
+| `subChannelId` | Subchannel that owns the previewed message. |
+| `subChannelName` | Subchannel display name where the platform exposes it. |
+| `isDeleted` | Whether the previewed message is deleted. Availability depends on the network preview setting. |
+| `user` | User object for the previewed message creator when the SDK has the user data. |
+
+## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Channel Management" href="/social-plus-sdk/chat/conversation-management/overview" icon="comments">
-    **Channel Operations**
-    Create and manage channels with preview support
+  <Card title="Query Channels" href="/social-plus-sdk/chat/conversation-management/channels/query-channels" icon="list">
+    Load channel lists that include preview data.
   </Card>
-  <Card title="Message Querying" href="/social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages" icon="magnifying-glass">
-    **Message Retrieval**
-    Advanced message querying and filtering
+  <Card title="Query Messages" href="/social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages" icon="message">
+    Load full message timelines when preview data is not enough.
   </Card>
-  <Card title="Real-time Updates" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/overview" icon="bolt">
-    **Live Synchronization**
-    Real-time message and preview updates
+  <Card title="Channel Unread Count" href="/social-plus-sdk/chat/engagement-features/unread-status/channel-unread-count" icon="hashtag">
+    Combine previews with unread count and mention indicators.
   </Card>
 </CardGroup>
-
-<Tip>
-**Implementation Strategy**: Start with basic channel preview display, then enhance with notification integration and performance optimizations. Focus on data efficiency and user experience quality for the best results.
-</Tip>
