@@ -1,283 +1,152 @@
 ---
 title: "Mute Management"
-description: "Mute and unmute channel members to restrict messaging while allowing read-only participation."
+description: "Mute and unmute chat channel members with the current SDK APIs."
 ---
 
-Mute a member to block them from sending messages while leaving their read access intact; unmute to restore messaging rights. Mute is not supported on Broadcast or Conversation channels.
+Use member mute when a user should keep channel access but lose the ability to send messages for a period of time. Mute duration units differ by platform, so pass the value in the unit expected by the SDK you are using.
 
-## Feature Overview
+## Platform Surface
 
-Mute Management allows moderators to restrict users' ability to send messages while preserving their ability to read and observe channel conversations. This provides a measured response to disruptive behavior without completely removing users from the community.
+| Operation | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Mute members | `ChannelRepository.Moderation.muteMembers(channelId, userIds, mutePeriod?)` | `AmityChannelModeration(channelId:).muteMembers(_:mutePeriod:)` | `moderation(channelId).muteMembers(timeout, userIds)` | `moderation(channelId).muteMembers(userIds, millis:)` |
+| Unmute members | `ChannelRepository.Moderation.unmuteMembers(channelId, userIds)` | `AmityChannelModeration(channelId:).unmuteMembers(_:)` | `moderation(channelId).unmuteMembers(userIds)` | `moderation(channelId).unmuteMembers(userIds)` |
+| Duration unit | Seconds; omit for indefinite mute | Seconds | `org.joda.time.Duration` | Milliseconds; defaults to 600000 |
+| Result | `Promise<boolean>` | `Void` | `Completable` | `Future` |
+
+## Parameters
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `channelId` | Yes | Channel ID where the mute or unmute should be applied. |
+| `userIds` | Yes | One or more user IDs to mute or unmute. Empty lists are rejected. |
+| `mutePeriod` / `timeout` / `millis` | Mute only | Duration of the mute. TypeScript and iOS take seconds, Android takes a `Duration`, and Flutter takes milliseconds. |
+| Moderation permission | Yes | The current user must have permission to moderate the target channel. |
+
+## Mute Members
+
+Mute members when you want a temporary or indefinite send-message restriction without removing channel access. TypeScript's omitted `mutePeriod` means an indefinite mute until unmuted.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const tenMinutesInSeconds = 10 * 60;
+
+const didMute = await ChannelRepository.Moderation.muteMembers(
+  channelId,
+  [userId],
+  tenMinutesInSeconds,
+);
+
+if (didMute) {
+  showSuccessMessage(channelId);
+}
+```
+
+```swift iOS
+let moderation = AmityChannelModeration(channelId: channelId)
+let tenMinutesInSeconds = 10 * 60
+
+try await moderation.muteMembers([userId], mutePeriod: tenMinutesInSeconds)
+
+showSuccessMessage(channelId)
+```
+
+```kotlin Android
+val tenMinutes = org.joda.time.Duration.standardMinutes(10)
+
+val disposable = channelRepository
+    .moderation(channelId = channelId)
+    .muteMembers(timeout = tenMinutes, userIds = listOf(targetUserId))
+    .subscribe(
+        { showSuccessMessage(channelId) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```dart Flutter
+const tenMinutesInMillis = 10 * 60 * 1000;
+
+await AmityChatClient.newChannelRepository()
+    .moderation(channelId)
+    .muteMembers([targetUserId], millis: tenMinutesInMillis);
+```
+
+</CodeGroup>
+
+## Unmute Members
+
+Unmute restores the users' ability to send messages in the channel.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const didUnmute = await ChannelRepository.Moderation.unmuteMembers(channelId, [
+  userId,
+]);
+
+if (didUnmute) {
+  showSuccessMessage(channelId);
+}
+```
+
+```swift iOS
+let moderation = AmityChannelModeration(channelId: channelId)
+
+try await moderation.unmuteMembers([userId])
+
+showSuccessMessage(channelId)
+```
+
+```kotlin Android
+val disposable = channelRepository
+    .moderation(channelId = channelId)
+    .unmuteMembers(userIds = listOf(targetUserId))
+    .subscribe(
+        { showSuccessMessage(channelId) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```dart Flutter
+await AmityChatClient.newChannelRepository()
+    .moderation(channelId)
+    .unmuteMembers([targetUserId]);
+```
+
+</CodeGroup>
+
+## Duration Notes
 
 <CardGroup cols={2}>
-  <Card title="Mute Members" icon="microphone-slash">
-    **Restrict messaging privileges**
-    - Silence disruptive users
-    - Maintain read-only access
-    - Set temporary restrictions
-    - Graduated moderation approach
+  <Card title="TypeScript" icon="code">
+    Pass seconds. Omit `mutePeriod` to mute indefinitely until a later `unmuteMembers` call.
   </Card>
-  <Card title="Unmute Members" icon="microphone">
-    **Restore messaging privileges**
-    - Reinstate messaging rights
-    - End temporary restrictions
-    - Reward improved behavior
-    - Adjustable moderation management
+  <Card title="iOS" icon="mobile">
+    Pass seconds through `mutePeriod`. The SDK converts the value before sending the request.
+  </Card>
+  <Card title="Android" icon="mobile-screen">
+    Pass an `org.joda.time.Duration`, such as `Duration.standardMinutes(10)`.
+  </Card>
+  <Card title="Flutter" icon="feather">
+    Pass milliseconds through `millis`. If omitted, the current public SDK default is 600000 milliseconds.
   </Card>
 </CardGroup>
 
-<Warning>
-**Channel Type Limitation**: Mute functionality is not applicable to Broadcast and Conversation channels. Calling mute operations on these channel types will result in an error.
-</Warning>
-
-## Mute System Concepts
-
-Understanding the mute system helps implement effective graduated moderation:
-
-| Concept | Description | Duration Options |
-|---------|-------------|------------------|
-| **Channel Mute** | User restricted from sending messages | Temporary or indefinite |
-| **Read-Only Access** | User can observe but not participate | Maintains channel visibility |
-| **Mute Duration** | Time-based restriction period | Minutes, hours, days, or permanent |
-| **Auto-Unmute** | Automatic restoration after timeout | System-managed expiration |
-
-<Note>
-**Mute Characteristics**:
-- Muted users can still read all channel messages
-- Messages sent by muted users are rejected by the system
-- Mute status is channel-specific (not global)
-- Mutes can be temporary with automatic expiration or indefinite
-- Only users with moderation permissions can mute/unmute members
-</Note>
-
-## Implementation Guide
-
-<Tabs>
-  <Tab title="Mute Members">
-    **Restrict messaging privileges for disruptive users**
-    
-    Apply temporary or permanent messaging restrictions while maintaining users' ability to observe channel conversations.
-
-    ### Core Operations
-
-    | Method | Purpose | When to Use |
-    |--------|---------|-------------|
-    | `muteMembers` | Restrict user messaging | Managing disruptive behavior |
-    | `getMutedMembers` | List muted users | Reviewing mute status |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-   let channelModeration = AmityChannelModeration(client: client, andChannel: "<channel-id>")
-
-do {
-    let ismuted = try await channelModeration.muteMembers(["<user-id>"], mutePeriod: 600)
-} catch {
-    // Handle error here
-}
-    ```
-
-    ```kotlin Android
-fun muteChannelUsers(channel: AmityChannel) {
-    val userIds = listOf("user1", "user2")
-    //
-    channel.moderation()
-        .muteMembers(userIds = userIds, timeout = Duration.standardMinutes(5))
-        .subscribe()
-}
-    ```
-
-    ```typescript TypeScript
-import { ChannelRepository } from '@amityco/ts-sdk';
-
-async function muteChannelMembers() {
-  /*
-   * The default mute period is set to forever or until unmuted
-   */
-  const didMute = await ChannelRepository.Moderation.muteMembers('channelId', [
-    'userId1',
-    'userId2',
-  ]);
-
-  const FIVE_MINUTES = 5 * 60 * 1000;
-  /*
-   * This value can be overridden by passing a specific amount of time (in
-   * milliseconds) as the
-   * second variable
-   */
-  const didMuteForFiveMinutes = await ChannelRepository.Moderation.muteMembers(
-    'channelId',
-    ['userId1', 'userId2'],
-    FIVE_MINUTES,
-  );
-
-  return [didMute, didMuteForFiveMinutes];
-}
-    ```
-
-    ```dart Flutter
-void muteChannelUsers() {
-  final userIds = List.of(['user1', 'user2']);
-  AmityChatClient.newChannelRepository()
-      .moderation('channelId')
-      .muteMembers(userIds)
-      .then((value) => {
-            //handle result
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-    ```
-    </CodeGroup>
-
-    <Note>
-    **Duration Management**: The timeout parameter allows for temporary or permanent muting. Pass `-1` for indefinite muting, or specify time in seconds/minutes for temporary restrictions.
-    </Note>
-  </Tab>
-
-  <Tab title="Unmute Members">
-    **Restore messaging privileges for muted users**
-    
-    Remove mute restrictions to allow users to resume messaging participation in channel conversations.
-
-    ### Core Operations
-
-    | Method | Purpose | When to Use |
-    |--------|---------|-------------|
-    | `unmuteMembers` | Remove mute restrictions | Restoring messaging privileges |
-    | `getMutedMembers` | View muted user list | Managing mute status |
-
-    ### Code Examples
-
-    <CodeGroup>
-    ```swift iOS
-let channelModeration = AmityChannelModeration(client: client, andChannel: "<channel-id>")
-
-do {
-    let unmuted = try await channelModeration.unmuteMembers(["<user-id>"])
-} catch {
-    // Handle error here
-}
-    ```
-
-    ```kotlin Android
-fun unMuteChannelUsers(
-    channelRepository: AmityChannelRepository,
-    channel: AmityChannel
-) {
-    val userIds = listOf("user1")
-    channelRepository.moderation(channelId = channel.getChannelId())
-        .unmuteMembers(userIds = userIds)
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-    ```
-
-    ```typescript TypeScript
-import { ChannelRepository } from '@amityco/ts-sdk';
-
-async function unmuteChannelMembers() {
-  const didUnmute = await ChannelRepository.Moderation.unmuteMembers('channelId', [
-    'userId1',
-    'userId2',
-  ]);
-
-  return didUnmute;
-}
-    ```
-
-    ```dart Flutter
-fun unMuteChannelUsers(channel: AmityChannel) {
-    val userIds = listOf("user1")
-    //
-    channel.moderation()
-        .unmuteMembers(userIds = userIds)
-        .subscribe()
-}
-    ```
-    </CodeGroup>
-
-    <Warning>
-    **Unmute Validation**: Always verify that a user is actually muted before attempting to unmute them. Consider implementing notifications to inform unmuted users of their restored messaging privileges.
-    </Warning>
-  </Tab>
-</Tabs>
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Graduated Moderation" icon="stairs">
-    **Implementing progressive moderation strategies**
-    
-    - Use muting as an intermediate step before banning
-    - Start with shorter mute durations and escalate for repeat offenses
-    - Document clear escalation policies (warning → 5min mute → 1hr mute → ban)
-    - Consider user history when determining mute duration
-    - Provide clear communication about mute reasons and duration
-    
-    Graduated moderation helps users understand boundaries while maintaining community safety.
-  </Accordion>
-
-  <Accordion title="Duration Strategy" icon="clock">
-    **Effective mute duration management**
-    
-    - Use temporary mutes for first-time or minor infractions
-    - Reserve indefinite mutes for serious or repeated violations
-    - Implement automatic unmute notifications for transparency
-    - Monitor mute effectiveness and adjust duration policies
-    
-    Strategic duration management balances correction with user experience.
-  </Accordion>
-
-  <Accordion title="Communication" icon="message">
-    **Clear mute communication practices**
-    
-    - Always provide reasons for muting actions
-    - Use constructive language that promotes understanding
-    - Explain expected behavior changes during mute period
-    - Provide information about when mute will be lifted
-    - Offer channels for appeals or clarification
-    
-    Transparent communication helps users learn from moderation actions.
-  </Accordion>
-
-  <Accordion title="Monitoring & Review" icon="chart-line">
-    **Tracking mute effectiveness**
-    
-    - Monitor user behavior after mute expiration
-    - Track repeat offenses to identify problematic users
-    - Analyze mute reasons to identify common issues
-    - Regular review of muted users for potential early unmuting
-    - Use analytics to optimize moderation policies
-    
-    Continuous monitoring ensures mute policies remain effective and fair.
-  </Accordion>
-</AccordionGroup>
-
-## Related Features
+## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Role Management" href="/social-plus-sdk/chat/conversation-management/channels/governance/role-management" icon="user-gear">
-    **User Permissions**
-    Assign and manage user roles
+  <Card title="Ban Management" href="./ban-management" icon="user-slash">
+    Remove channel access until a user is unbanned.
   </Card>
-  <Card title="Member Management" href="/social-plus-sdk/chat/conversation-management/channels/governance/member-management" icon="users">
-    **Channel Membership**
-    Add and remove channel members
+  <Card title="Query Members" href="/social-plus-sdk/chat/conversation-management/members/query-members" icon="users">
+    Filter members by muted or banned membership states.
   </Card>
-  <Card title="Ban Management" href="/social-plus-sdk/chat/conversation-management/channels/governance/ban-management" icon="user-slash">
-    **User Restrictions**
-    Ban and unban problematic users
+  <Card title="Message Creation" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message" icon="paper-plane">
+    Send messages after membership and moderation checks pass.
   </Card>
 </CardGroup>
-
-<Tip>
-**Implementation Strategy**: Start with basic mute/unmute functionality, then add duration management and confirmation flows. Implement comprehensive logging and analytics for understanding moderation effectiveness. Consider integrating with your broader community guidelines and escalation policies.
-</Tip>

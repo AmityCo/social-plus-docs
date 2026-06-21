@@ -53,6 +53,7 @@ var token: AmityNotificationToken? = nil
 let initialAccessToken: String = ""
 let imageData = Data()
 let channelId: String = ""
+let userId: String = ""
 let communityId: String = ""
 let signature: String = ""
 let expiresAt: Date? = Date()
@@ -115,7 +116,7 @@ def resolve_pages(pages_json: Path, docs_root: Path) -> list[str]:
 
 
 def slug_from_path(rel_path: str) -> str:
-    return Path(rel_path).stem.replace(" ", "-")
+    return rel_path.replace("/", "__").replace(".mdx", "").replace(" ", "-")
 
 
 def extract_blocks(mdx_path: Path) -> list[tuple[str, bool]]:
