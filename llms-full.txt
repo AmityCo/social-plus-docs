@@ -10837,819 +10837,295 @@ With live viewing implemented:
 
 ### [Manage Rooms](https://learn.social.plus/social-plus-sdk/video-new/broadcasting/manage-rooms)
 
-> Query, update, stop, and delete rooms with comprehensive lifecycle management
+> Observe, query, update, stop, and delete live rooms with current SDK room APIs.
 
-# Manage Rooms
+Manage rooms after creation by observing a single room, querying room lists, updating room metadata, stopping a live session, or deleting a room record.
 
-Manage room lifecycle including queries, updates, stream control, and deletion operations for interactive livestreaming.
+  This page covers SDK room management APIs. Media publishing, LiveKit connection handling, and player UI are app-owned concerns.
 
-## Querying Rooms
+## Platform Surface
 
-### Get Room by ID
+| Platform | Single room | Room list | Mutations | Notes |
+| --- | --- | --- | --- | --- |
+| TypeScript | `RoomRepository.getRoom(roomId, callback)` | `RoomRepository.getRooms(params, callback)` | `updateRoom()`, `stopRoom()`, `deleteRoom()` | Live callbacks return an unsubscribe function. Room list pagination uses `hasNextPage` and `onNextPage`. |
+| iOS | `AmityRoomRepository().getRoom(withId:)` | `AmityRoomRepository().getRooms(with:)` | `updateRoom(withId:options:)`, `stopRoom(withId:)`, `deleteRoom(withId:)` | Retain the returned `AmityNotificationToken` while observing. |
+| Android | `AmityVideoClient.newRoomRepository().getRoom(roomId)` | `AmityVideoClient.newRoomRepository().getRooms().build().query()` | `updateRoom()`, `stopRoom()`, `deleteRoom()` | Single rooms are `Flowable<AmityRoom>`; room lists are `Flowable<PagingData<AmityRoom>>`. |
+| Flutter | No current public room repository found in this audit | Not available | Not available | The Flutter SDK source exposes older stream APIs, not the room broadcasting repository. |
 
-Retrieve a single room with real-time updates:
+## Get a Room
 
-```swift iOS
-let roomLiveObject = AmityRoomRepository().getRoom(roomId: "room-123")
+Use the single-room API when a screen needs live updates for one room.
 
-roomLiveObject.observe { room in
-    print("Room: \(room.title)")
-    print("Status: \(room.status)")
-    print("Participants: \(room.participants.count)")
-    print("Live URL: \(room.livePlaybackUrl ?? "Not live")")
+
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+function observeRoom(roomId: string): Amity.Unsubscriber {
+  return RoomRepository.getRoom(roomId, snapshot => {
+    if (snapshot.error) {
+      handleError(snapshot.error);
+      return;
+    }
+
+    showSuccessMessage(snapshot.data.status);
+  });
 }
 ```
 
 ```kotlin Android
-val roomLiveObject = AmityRoomRepository.getRoom(roomId = "room-123")
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
 
-roomLiveObject.observe()
-    .subscribe { room ->
-        Log.d("Room", "Title: ${room.title}")
-        Log.d("Room", "Status: ${room.status}")
-        Log.d("Room", "Participants: ${room.participants.size}")
-        Log.d("Room", "Live URL: ${room.livePlaybackUrl ?: "Not live"}")
-    }
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRoom(roomId)
+    .subscribe(
+        { room -> showSuccessMessage(room.getStatus()) },
+        { error -> handleGeneralError(error) }
+    )
 ```
-
-```typescript TypeScript
-const roomLiveObject = roomRepository.getRoom("room-123");
-
-roomLiveObject.on("dataUpdated", (room) => {
-    console.log("Room:", room.title);
-    console.log("Status:", room.status);
-    console.log("Participants:", room.participants.length);
-    console.log("Live URL:", room.livePlaybackUrl || "Not live");
-});
-```
-
-### Query Multiple Rooms
-
-Get rooms with filtering and sorting:
 
 ```swift iOS
-let roomsCollection = AmityRoomRepository().getRooms(
-    statuses: [.live, .idle],
-    types: [.coHosts],
-    isDeleted: false,
-    sortBy: .firstCreated
-)
+var roomObservationToken: AmityNotificationToken?
+let roomObject = AmityRoomRepository().getRoom(withId: roomId)
 
-roomsCollection.observe { rooms in
-    rooms.forEach { room in
-        print("Room: \(room.title) - Status: \(room.status)")
+roomObservationToken = roomObject.observe { liveObject, error in
+    if let error {
+        handleGeneralError(error)
+        return
+    }
+
+    if let room = liveObject.snapshot {
+        showSuccessMessage(room.status.rawValue)
     }
 }
 ```
 
-```kotlin Android
-val roomsCollection = AmityRoomRepository.getRooms(
-    statuses = listOf(AmityRoomStatus.LIVE, AmityRoomStatus.IDLE),
-    types = listOf(AmityRoomType.CO_HOSTS),
-    isDeleted = false,
-    sortBy = AmityRoomSortOption.FIRST_CREATED
-)
 
-roomsCollection.observe()
-    .subscribe { rooms ->
-        rooms.forEach { room ->
-            Log.d("Room", "Title: ${room.title} - Status: ${room.status}")
-        }
-    }
-```
+## Query Rooms
+
+Use the room-list API for discovery, dashboards, moderation queues, or live-room shelves.
+
 
 ```typescript TypeScript
-const roomsCollection = roomRepository.getRooms({
-    statuses: [AmityRoomStatus.LIVE, AmityRoomStatus.IDLE],
-    types: [AmityRoomType.CO_HOSTS],
-    isDeleted: false,
-    sortBy: AmityRoomSortOption.FIRST_CREATED
-});
+import { RoomRepository } from "@amityco/ts-sdk";
 
-roomsCollection.on("dataUpdated", (rooms) => {
-    rooms.forEach(room => {
-        console.log(`Room: ${room.title} - Status: ${room.status}`);
-    });
-});
+function observeLiveRooms(): Amity.Unsubscriber {
+  return RoomRepository.getRooms(
+    {
+      statuses: ["live"],
+      type: "coHosts",
+      sortBy: "lastCreated",
+      includeDeleted: false,
+      limit: 20,
+    },
+    snapshot => {
+      if (snapshot.error) {
+        handleError(snapshot.error);
+        return;
+      }
+
+      renderResults(snapshot.data);
+
+      if (snapshot.hasNextPage) {
+        snapshot.onNextPage?.();
+      }
+    },
+  );
+}
 ```
 
-### Query Live Rooms Only
+```kotlin Android
+import androidx.paging.PagingData
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomSortOption
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomType
 
-Get currently broadcasting rooms:
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRooms()
+    .setStatuses(arrayOf(AmityRoomStatus.LIVE))
+    .setTypes(arrayOf(AmityRoomType.CO_HOSTS))
+    .setIsDeleted(false)
+    .setSortBy(AmityRoomSortOption.LastCreated)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityRoom> -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
 
 ```swift iOS
-let liveRooms = AmityRoomRepository().getRooms(
+var roomCollectionToken: AmityNotificationToken?
+let options = AmityRoomQueryOptions(
     statuses: [.live],
-    types: nil,
+    type: .coHosts,
     isDeleted: false,
     sortBy: .lastCreated
 )
 
-liveRooms.observe { rooms in
-    print("Currently live: \(rooms.count) rooms")
+let rooms = AmityRoomRepository().getRooms(with: options)
+
+roomCollectionToken = rooms.observe { collection, error in
+    if let error {
+        handleGeneralError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.map { $0.roomId })
+
+    if collection.hasNext {
+        collection.nextPage()
+    }
 }
 ```
 
-```kotlin Android
-val liveRooms = AmityRoomRepository.getRooms(
-    statuses = listOf(AmityRoomStatus.LIVE),
-    types = null,
-    isDeleted = false,
-    sortBy = AmityRoomSortOption.LAST_CREATED
-)
-
-liveRooms.observe()
-    .subscribe { rooms ->
-        Log.d("Room", "Currently live: ${rooms.size} rooms")
-    }
-```
-
-```typescript TypeScript
-const liveRooms = roomRepository.getRooms({
-    statuses: [AmityRoomStatus.LIVE],
-    types: null,
-    isDeleted: false,
-    sortBy: AmityRoomSortOption.LAST_CREATED
-});
-
-liveRooms.on("dataUpdated", (rooms) => {
-    console.log("Currently live:", rooms.length, "rooms");
-});
-```
 
 ## Query Parameters
 
-    **Type:** `AmityRoomStatus[]`
-    **Required:** No
-    **Values:** `idle` | `live` | `waitingReconnect` | `ended` | `recorded`
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Status filter | `statuses?: Amity.RoomStatus[]` | `statuses: [AmityRoomStatus]?` | `setStatuses(Array<AmityRoomStatus>)` |
+| Room type filter | `type?: Amity.RoomType` | `type: AmityRoomType?` | `setTypes(Array<AmityRoomType>)` |
+| Deleted rooms | `includeDeleted?: boolean` | `isDeleted: Bool` | `setIsDeleted(Boolean?)` |
+| Sort order | `sortBy?: "firstCreated"` or `"lastCreated"` | `sortBy: AmityRoomSortOption` | `setSortBy(AmityRoomSortOption?)` |
+| Page size | `limit?: number` | Not exposed on `AmityRoomQueryOptions` | Paging 3 controls consumption after `PagingData` emission |
 
-    Filter rooms by their current status. Pass multiple statuses to match any.
+  TypeScript filters by a single `type` value. Android's builder accepts `setTypes(...)` because the Android query model supports an array of room types.
 
-    **Type:** `AmityRoomType[]`
-    **Required:** No
-    **Values:** `coHosts`
+## Update a Room
 
-    Filter rooms by type.
+Update room display fields and metadata. Participants, room type, and room identity are not update fields in these APIs.
 
-    **Type:** `boolean`
-    **Required:** No
-    **Default:** `false`
-
-    Include or exclude deleted rooms.
-
-    **Type:** `AmityRoomSortOption`
-    **Required:** No
-    **Values:** `firstCreated` | `lastCreated`
-    **Default:** `firstCreated`
-
-    Sort rooms by creation date.
-
-## Updating Rooms
-
-Update room details (creator only):
-
-```swift iOS
-Task { @MainActor in
-    do {
-        let updatedRoom = try await AmityRoomRepository().updateRoom(
-            roomId: "room-123",
-            title: "Updated Room Title",
-            description: "New description with updated details",
-            thumbnailFileId: "new-thumbnail-file-id",
-            metadata: ["category": "updated"],
-            channelEnabled: true
-        )
-        print("Room updated: \(updatedRoom.title)")
-    } catch {
-        print("Failed to update room: \(error)")
-    }
-}
-```
-
-```kotlin Android
-AmityRoomRepository.updateRoom(
-    roomId = "room-123",
-    title = "Updated Room Title",
-    description = "New description with updated details",
-    thumbnailFileId = "new-thumbnail-file-id",
-    metadata = mapOf("category" to "updated"),
-    channelEnabled = true
-).subscribe(
-    onSuccess = { room ->
-        Log.d("Room", "Updated: ${room.title}")
-    },
-    onError = { error ->
-        Log.e("Room", "Failed to update", error)
-    }
-)
-```
 
 ```typescript TypeScript
-try {
-    const updatedRoom = await roomRepository.updateRoom("room-123", {
-        title: "Updated Room Title",
-        description: "New description with updated details",
-        thumbnailFileId: "new-thumbnail-file-id",
-        metadata: { category: "updated" },
-        channelEnabled: true
-    });
-    console.log("Room updated:", updatedRoom.title);
-} catch (error) {
-    console.error("Failed to update room:", error);
-}
-```
+import { RoomRepository } from "@amityco/ts-sdk";
 
-**Updatable Fields**: Only title, description, thumbnailFileId, metadata, and channelEnabled can be updated. Participants and room type cannot be changed after creation.
+const { data: updatedRoom } = await RoomRepository.updateRoom(roomId, {
+  title: "Updated Room Title",
+  description: "New description",
+  thumbnailFileId: imageFileId,
+  metadata: {
+    category: "updated",
+  },
+  liveChatEnabled: true,
+});
 
-## Stopping a Stream
-
-Stop an active broadcast:
-
-```swift iOS
-Task { @MainActor in
-    do {
-        try await AmityRoomRepository().stop(roomId: "room-123")
-        print("Stream stopped successfully")
-    } catch {
-        print("Failed to stop stream: \(error)")
-    }
-}
+showSuccessMessage(updatedRoom.roomId);
 ```
 
 ```kotlin Android
-AmityRoomRepository.stopRoom(roomId = "room-123")
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import com.google.gson.JsonObject
+
+val metadata = JsonObject().apply {
+    addProperty("category", "updated")
+}
+
+AmityVideoClient.newRoomRepository()
+    .updateRoom(
+        roomId = roomId,
+        title = "Updated Room Title",
+        description = "New description",
+        thumbnailFileId = imageFileId,
+        metadata = metadata,
+        liveChatEnabled = true
+    )
     .subscribe(
-        onComplete = {
-            Log.d("Room", "Stream stopped successfully")
-        },
-        onError = { error ->
-            Log.e("Room", "Failed to stop stream", error)
-        }
+        { room -> showSuccessMessage(room.getRoomId()) },
+        { error -> handleGeneralError(error) }
     )
 ```
 
-```typescript TypeScript
-try {
-    await roomRepository.stop("room-123");
-    console.log("Stream stopped successfully");
-} catch (error) {
-    console.error("Failed to stop stream:", error);
-}
+```swift iOS
+let options = AmityRoomUpdateOptions(
+    title: "Updated Room Title",
+    description: "New description",
+    thumbnailFileId: imageFileId,
+    metadata: ["category": "updated"],
+    channelEnabled: true
+)
+
+let room = try await AmityRoomRepository()
+    .updateRoom(withId: roomId, options: options)
+
+showSuccessMessage(room.roomId)
 ```
 
-**Stream Status**: Stopping a stream changes the room status to "ended". The stream cannot be restarted in the same room.
 
-## Getting Recorded URLs
+## Stop or Delete a Room
 
-Retrieve recorded stream URLs after broadcast ends:
+Stop a live session when broadcasting ends. Delete a room when your product flow should remove the room record.
 
-```swift iOS
-Task { @MainActor in
-    do {
-        let recordedUrls = try await AmityRoomRepository().getRecordedUrls(
-            roomId: "room-123"
-        )
 
-        if recordedUrls.isEmpty {
-            print("No recordings available")
-        } else {
-            recordedUrls.forEach { url in
-                print("Recording URL: \(url)")
-            }
-        }
-    } catch {
-        print("Failed to get recorded URLs: \(error)")
-    }
-}
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+const { data: stoppedRoom } = await RoomRepository.stopRoom(roomId);
+showSuccessMessage(stoppedRoom.status);
+
+await RoomRepository.deleteRoom(roomId);
+showSuccessMessage(roomId);
 ```
 
 ```kotlin Android
-AmityRoomRepository.getRecordedUrls(roomId = "room-123")
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+
+val roomRepository = AmityVideoClient.newRoomRepository()
+
+roomRepository.stopRoom(roomId)
+    .andThen(roomRepository.deleteRoom(roomId))
     .subscribe(
-        onSuccess = { urls ->
-            if (urls.isEmpty()) {
-                Log.d("Room", "No recordings available")
-            } else {
-                urls.forEach { url ->
-                    Log.d("Room", "Recording URL: $url")
-                }
-            }
-        },
-        onError = { error ->
-            Log.e("Room", "Failed to get recorded URLs", error)
-        }
+        { showSuccessMessage(roomId) },
+        { error -> handleGeneralError(error) }
     )
 ```
 
-```typescript TypeScript
-try {
-    const recordedUrls = await roomRepository.getRecordedUrls("room-123");
-
-    if (recordedUrls.length === 0) {
-        console.log("No recordings available");
-    } else {
-        recordedUrls.forEach(url => {
-            console.log("Recording URL:", url);
-        });
-    }
-} catch (error) {
-    console.error("Failed to get recorded URLs:", error);
-}
-```
-
-**Recording Availability**: Recordings are available after the room status changes to "recorded". This may take some time after the stream ends.
-
-## Common Patterns
-
-### Monitor Room Status
-
-Track room status changes in real-time:
-
-
 ```swift iOS
-let roomLiveObject = AmityRoomRepository().getRoom(roomId: roomId)
+let roomRepository = AmityRoomRepository()
 
-roomLiveObject.observe { room in
-    switch room.status {
-    case .idle:
-        showStatus("Room created, ready to start")
-        enableStartButton()
+let stoppedRoom = try await roomRepository.stopRoom(withId: roomId)
+showSuccessMessage(stoppedRoom.status.rawValue)
 
-    case .live:
-        showStatus("Broadcasting live")
-        updateViewerCount()
-        enableStopButton()
-
-    case .waitingReconnect:
-        showStatus("Reconnecting...")
-        showReconnectingUI()
-
-    case .ended:
-        showStatus("Stream ended")
-        disableStreamControls()
-        checkForRecording()
-
-    case .recorded:
-        showStatus("Recording available")
-        enablePlaybackButton()
-    }
-}
-```
-
-```kotlin Android
-val roomLiveObject = AmityRoomRepository.getRoom(roomId = roomId)
-
-roomLiveObject.observe()
-    .subscribe { room ->
-        when (room.status) {
-            AmityRoomStatus.IDLE -> {
-                showStatus("Room created, ready to start")
-                enableStartButton()
-            }
-            AmityRoomStatus.LIVE -> {
-                showStatus("Broadcasting live")
-                updateViewerCount()
-                enableStopButton()
-            }
-            AmityRoomStatus.WAITING_RECONNECT -> {
-                showStatus("Reconnecting...")
-                showReconnectingUI()
-            }
-            AmityRoomStatus.ENDED -> {
-                showStatus("Stream ended")
-                disableStreamControls()
-                checkForRecording()
-            }
-            AmityRoomStatus.RECORDED -> {
-                showStatus("Recording available")
-                enablePlaybackButton()
-            }
-        }
-    }
-```
-
-```typescript TypeScript
-const roomLiveObject = roomRepository.getRoom(roomId);
-
-roomLiveObject.on("dataUpdated", (room) => {
-    switch (room.status) {
-        case AmityRoomStatus.IDLE:
-            showStatus("Room created, ready to start");
-            enableStartButton();
-            break;
-
-        case AmityRoomStatus.LIVE:
-            showStatus("Broadcasting live");
-            updateViewerCount();
-            enableStopButton();
-            break;
-
-        case AmityRoomStatus.WAITING_RECONNECT:
-            showStatus("Reconnecting...");
-            showReconnectingUI();
-            break;
-
-        case AmityRoomStatus.ENDED:
-            showStatus("Stream ended");
-            disableStreamControls();
-            checkForRecording();
-            break;
-
-        case AmityRoomStatus.RECORDED:
-            showStatus("Recording available");
-            enablePlaybackButton();
-            break;
-    }
-});
+try await roomRepository.deleteRoom(withId: roomId)
+showSuccessMessage(roomId)
 ```
 
 
-### Display Live Rooms List
+  Stopping a room ends the current broadcast session. Do not document or build a "restart same room" flow unless your product and backend contract explicitly support it.
 
-Show currently active broadcasts:
+## Mutation Parameters
 
-**Automatic Thumbnails**: When a room is live, the backend automatically populates `liveThumbnailUrl` with an auto-generated thumbnail from the stream. Use this as a fallback when no creator-uploaded thumbnail (`thumbnailFileId`) is available. See [Rooms Overview - Automatic Thumbnail Generation](./rooms-overview#automatic-thumbnail-generation) for the complete fallback chain.
+| Operation | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Update | `updateRoom(roomId, bundle)` | `updateRoom(withId:options:)` | `updateRoom(roomId, ...)` |
+| Stop | `stopRoom(roomId)` | `stopRoom(withId:)` | `stopRoom(roomId)` |
+| Delete | `deleteRoom(roomId)` | `deleteRoom(withId:)` | `deleteRoom(roomId)` |
 
+| Update field | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Title | `title` | `title` | `title` |
+| Description | `description` | `description` | `description` |
+| Thumbnail | `thumbnailFileId` | `thumbnailFileId` | `thumbnailFileId` |
+| Metadata | `metadata` | `metadata` | `metadata` |
+| Live chat flag | `liveChatEnabled` | `channelEnabled` | `liveChatEnabled` |
+| Parent room | `parentRoomId` | Not exposed by update options | Not exposed by update API |
 
-```swift iOS
-let liveRooms = AmityRoomRepository().getRooms(
-    statuses: [.live],
-    types: [.coHosts],
-    isDeleted: false,
-    sortBy: .lastCreated
-)
+## Recorded Playback Boundary
 
-liveRooms.observe { rooms in
-    let roomList = rooms.map { room in
-        RoomListItem(
-            roomId: room.roomId,
-            title: room.title,
-            thumbnail: room.getThumbnail()?.fileUrl,
-            participantCount: room.participants.count,
-            playbackUrl: room.livePlaybackUrl,
-            channelId: room.channelId
-        )
-    }
-    updateLiveRoomsList(roomList)
-}
-```
+Recorded playback is intentionally separate from room lifecycle management:
 
-```kotlin Android
-val liveRooms = AmityRoomRepository.getRooms(
-    statuses = listOf(AmityRoomStatus.LIVE),
-    types = listOf(AmityRoomType.CO_HOSTS),
-    isDeleted = false,
-    sortBy = AmityRoomSortOption.LAST_CREATED
-)
+- TypeScript exposes `RoomRepository.getRecordedUrl(roomId)`.
+- Android exposes `getRecordedUrls(roomId)`.
+- iOS reads recorded playback data from `AmityRoom.recordedData`.
 
-liveRooms.observe()
-    .subscribe { rooms ->
-        val roomList = rooms.map { room ->
-            RoomListItem(
-                roomId = room.roomId,
-                title = room.title,
-                thumbnail = room.getThumbnail()?.fileUrl,
-                participantCount = room.participants.size,
-                playbackUrl = room.livePlaybackUrl,
-                channelId = room.channelId
-            )
-        }
-        updateLiveRoomsList(roomList)
-    }
-```
-
-```typescript TypeScript
-const liveRooms = roomRepository.getRooms({
-    statuses: [AmityRoomStatus.LIVE],
-    types: [AmityRoomType.CO_HOSTS],
-    sortBy: AmityRoomSortOption.LAST_CREATED
-});
-
-liveRooms.on("dataUpdated", (rooms) => {
-    const roomList = rooms.map(room => ({
-        roomId: room.roomId,
-        title: room.title,
-        thumbnail: room.getThumbnail()?.fileUrl,
-        participantCount: room.participants.length,
-        playbackUrl: room.livePlaybackUrl,
-        channelId: room.channelId
-    }));
-
-    updateLiveRoomsList(roomList);
-});
-```
-
-
-### Stream Lifecycle Management
-
-Complete stream management workflow:
-
-
-```swift iOS
-// Start streaming
-func startStreaming(roomId: String) async {
-    do {
-        let broadcasterData = try await AmityRoomRepository().getBroadcastData(
-            roomId: roomId
-        )
-
-        if case .coHosts(let token, let url) = broadcasterData {
-            try await initializeLiveKit(url: url, token: token)
-        }
-
-        try await beginBroadcast()
-        print("Streaming started")
-    } catch {
-        print("Failed to start streaming: \(error)")
-    }
-}
-
-// Stop streaming
-func stopStreaming(roomId: String) async {
-    do {
-        endBroadcast()
-        try await AmityRoomRepository().stop(roomId: roomId)
-        print("Streaming stopped")
-
-        // Wait for recording
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-            Task {
-                if let urls = try? await AmityRoomRepository().getRecordedUrls(roomId: roomId),
-                   let firstUrl = urls.first {
-                    print("Recording available: \(firstUrl)")
-                }
-            }
-        }
-    } catch {
-        print("Failed to stop streaming: \(error)")
-    }
-}
-```
-
-```kotlin Android
-// Start streaming
-fun startStreaming(roomId: String) {
-    AmityRoomRepository.getBroadcasterData(roomId = roomId)
-        .subscribe(
-            onSuccess = { broadcasterData ->
-                if (broadcasterData is AmityRoomBroadcastData.CoHosts) {
-                    initializeLiveKit(
-                        url = broadcasterData.coHostUrl,
-                        token = broadcasterData.coHostToken
-                    )
-                }
-                beginBroadcast()
-                Log.d("Stream", "Streaming started")
-            },
-            onError = { error ->
-                Log.e("Stream", "Failed to start streaming", error)
-            }
-        )
-}
-
-// Stop streaming
-fun stopStreaming(roomId: String) {
-    endBroadcast()
-    AmityRoomRepository.stopRoom(roomId = roomId)
-        .subscribe(
-            onComplete = {
-                Log.d("Stream", "Streaming stopped")
-
-                // Wait for recording
-                Handler(Looper.getMainLooper()).postDelayed({
-                    AmityRoomRepository.getRecordedUrls(roomId = roomId)
-                        .subscribe { urls ->
-                            if (urls.isNotEmpty()) {
-                                Log.d("Stream", "Recording available: ${urls.first()}")
-                            }
-                        }
-                }, 30000)
-            },
-            onError = { error ->
-                Log.e("Stream", "Failed to stop streaming", error)
-            }
-        )
-}
-```
-
-```typescript TypeScript
-// Start streaming
-async function startStreaming(roomId: string) {
-    try {
-        const broadcasterData = await roomRepository.getBroadcastData(roomId);
-
-        if (broadcasterData.type === "coHosts") {
-            await initializeLiveKit(
-                broadcasterData.coHostUrl,
-                broadcasterData.coHostToken
-            );
-        }
-
-        await beginBroadcast();
-        console.log("Streaming started");
-    } catch (error) {
-        console.error("Failed to start streaming:", error);
-    }
-}
-
-// Stop streaming
-async function stopStreaming(roomId: string) {
-    try {
-        await endBroadcast();
-        await roomRepository.stop(roomId);
-        console.log("Streaming stopped");
-
-        // Wait for recording
-        setTimeout(async () => {
-            const urls = await roomRepository.getRecordedUrls(roomId);
-            if (urls.length > 0) {
-                console.log("Recording available:", urls[0]);
-            }
-        }, 30000); // Wait 30 seconds for recording processing
-    } catch (error) {
-        console.error("Failed to stop streaming:", error);
-    }
-}
-```
-
-
-## Best Practices
-
-    Monitor room status for better UX:
-
-    - Subscribe to room updates for real-time status
-    - Handle all status transitions appropriately
-    - Show appropriate UI for each status
-    - Auto-reconnect on temporary disconnections
-
-    Implement proper stream controls:
-
-    - Validate room status before starting/stopping
-    - Provide clear feedback to users
-    - Handle network interruptions gracefully
-    - Implement timeout mechanisms
-
-    Manage recordings effectively:
-
-    - Poll for recordings after stream ends
-    - Store recording URLs for playback
-    - Implement retry logic for unavailable recordings
-    - Clean up old recordings
-
-    Optimize resource usage:
-
-    - Unsubscribe from live collections when not needed
-    - Delete ended rooms after recording retrieval
-    - Limit concurrent live room queries
-    - Cache frequently accessed room data
-
-## Permission Checks
-
-Verify permissions before operations:
-
-
-```swift iOS
-// Check if user can stop/delete room
-let roomLiveObject = AmityRoomRepository().getRoom(roomId: roomId)
-
-roomLiveObject.observe { room in
-    let isCreator = room.creatorId == AmityCoreClient.currentUserId
-    let isHost = room.participants.first { $0.type == .host && $0.userId == AmityCoreClient.currentUserId } != nil
-    let isCoHost = room.participants.first { $0.type == .coHost && $0.userId == AmityCoreClient.currentUserId } != nil
-
-    if isCreator || isHost {
-        // User can stop or delete the room
-        showStreamControls()
-    } else if isCoHost {
-        // Co-host can leave but not stop/delete
-        showCoHostControls()
-    } else {
-        // User is viewer
-        showViewerControls()
-    }
-}
-```
-
-```kotlin Android
-// Check if user can stop/delete room
-val roomLiveObject = AmityRoomRepository.getRoom(roomId = roomId)
-
-roomLiveObject.observe()
-    .subscribe { room ->
-        val currentUserId = AmityCoreClient.getUserId()
-        val isCreator = room.creatorId == currentUserId
-        val isHost = room.participants.any {
-            it.type == AmityRoom.ParticipantType.HOST && it.userId == currentUserId
-        }
-        val isCoHost = room.participants.any {
-            it.type == AmityRoom.ParticipantType.CoHost && it.userId == currentUserId
-        }
-
-        when {
-            isCreator || isHost -> {
-                // User can stop or delete the room
-                showStreamControls()
-            }
-            isCoHost -> {
-                // Co-host can leave but not stop/delete
-                showCoHostControls()
-            }
-            else -> {
-                // User is viewer
-                showViewerControls()
-            }
-        }
-    }
-```
-
-```typescript TypeScript
-// Check if user can stop/delete room
-const roomLiveObject = roomRepository.getRoom(roomId);
-
-roomLiveObject.on("dataUpdated", (room) => {
-    const currentUserId = amityClient.userId;
-    const isCreator = room.creatorId === currentUserId;
-    const isHost = room.participants.some(
-        p => p.type === 'host' && p.userId === currentUserId
-    );
-    const isCoHost = room.participants.some(
-        p => p.type === 'coHost' && p.userId === currentUserId
-    );
-
-    if (isCreator || isHost) {
-        // User can stop or delete the room
-        showStreamControls();
-    } else if (isCoHost) {
-        // Co-host can leave but not stop/delete
-        showCoHostControls();
-    } else {
-        // User is viewer
-        showViewerControls();
-    }
-});
-```
-
-
-## Error Handling
-
-```swift iOS
-do {
-    try await AmityRoomRepository().stop(roomId: roomId)
-} catch AmityError.permissionDenied {
-    showError("You don't have permission to stop this stream")
-} catch AmityError.notFound {
-    showError("Room not found")
-} catch AmityError.invalidStatus {
-    showError("Stream is not currently active")
-} catch {
-    showError("Failed to stop stream: \(error.localizedDescription)")
-}
-```
-
-```kotlin Android
-AmityRoomRepository.stopRoom(roomId = roomId)
-    .subscribe(
-        onComplete = { /* Success */ },
-        onError = { error ->
-            when {
-                error is AmityException && error.code == AmityError.PERMISSION_DENIED.code -> {
-                    showError("You don't have permission to stop this stream")
-                }
-                error is AmityException && error.code == AmityError.ITEM_NOT_FOUND.code -> {
-                    showError("Room not found")
-                }
-                error is AmityException.InvalidStatus -> {
-                    showError("Stream is not currently active")
-                }
-                else -> {
-                    showError("Failed to stop stream: ${error.message}")
-                }
-            }
-        }
-    )
-```
-
-```typescript TypeScript
-try {
-    await roomRepository.stop(roomId);
-} catch (error) {
-    if (error.code === 'PERMISSION_DENIED') {
-        showError("You don't have permission to stop this stream");
-    } else if (error.code === 'NOT_FOUND') {
-        showError("Room not found");
-    } else if (error.code === 'INVALID_STATUS') {
-        showError("Stream is not currently active");
-    } else {
-        showError(`Failed to stop stream: ${error.message}`);
-    }
-}
-```
+See [Recorded Playback](./recorded-playback) for playback-specific guidance.
 
 ## Related Topics
 
-    Connect to LiveKit and go live
-    Invite and manage co-hosts
-    Set up new rooms
+    Create a room before observing or mutating it.
+    Review room fields, statuses, participants, and playback metadata.
+    Manage co-host invitations, removal, and permissions.
 
 ---
 
