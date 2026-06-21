@@ -1,220 +1,97 @@
 ---
-title: "Flutter Live Objects/Collections"
-description: "Live Objects are supported in the Flutter SDK with Streams and LiveCollection for real-time data synchronization"
+title: "Flutter Live Objects & Collections"
+description: "Observe Social+ Flutter SDK objects and collections with Dart streams, LiveCollection, and LiveResult."
 ---
 
-In Flutter SDK, we have a concept of **Live Object** and **Live Collection**.
+The Flutter SDK exposes live objects as Dart streams and live collections through `LiveCollection` / `LiveCollectionStream`. A live collection emits `LiveResult<T>`, which contains the current `data` list and an `isFetching` flag.
 
-Live Object is represented by `StreamSubscription<Object>` instance and Live Collection is represented by an instance of `LiveCollection`. LiveCollection is a generic class that encapsulates any other object and notifies the observer whenever any property of the encapsulated object changes.
+## Platform Surface
 
-Live Object helps to observe changes in a single object whereas Live Collection helps to observe changes in a list of objects.
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Stream<T>` | Example: `AmitySocialClient.newPostRepository().live.getPost(postId)`. |
+| Live collection | `LiveCollection<T>` | Returned by builders such as `getPosts().targetCommunity(...).getLiveCollection()`. |
+| Collection stream | `Stream<LiveResult<T>>` | Access with `liveCollection.getStream()`. |
+| Loading state | `LiveResult<T>.isFetching` or `observeLoadingState()` | Use this to drive loading indicators. |
+| Pagination | `loadNext()`, `loadPrevious()`, `hasNextPage()`, `hasPreviousPage()`, `reset()` | `getStream()` also triggers the first load. |
+| Cleanup | `StreamSubscription.cancel()` and `liveCollection.dispose()` | Cancel listeners and dispose the live collection when the widget or bloc is done. |
 
-<Info>
-Examples: `StreamSubscription<AmityPost>` for single objects or `LiveCollection<AmityMessage>` for collections.
-</Info>
+## Parameters
 
-## How it Works
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object streams | ID of the object to observe. |
+| Query builder target | Live collections | Scope for the collection, such as `targetCommunity(communityId)` or `targetUser(userId)`. |
+| `pageSize` | Live collections | Optional page size for `getLiveCollection(pageSize: ...)`. Defaults to 20 when omitted. |
+| `LiveResult<T>.data` | Collection stream | Current list snapshot. |
+| `LiveResult<T>.isFetching` | Collection stream | Whether the collection is currently fetching. |
 
-SDK handles lots of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync.
+## Observe A Live Object
 
-Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through helper methods in the Live Object and Live Collection classes.
+<CodeGroup>
 
-New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
+```dart Flutter
+final subscription = AmitySocialClient.newPostRepository()
+    .live
+    .getPost(postId)
+    .listen((post) {
+  final currentPostId = post.postId;
+  showError(currentPostId ?? postId);
+});
 
-### Data Sources
-
-<CardGroup cols={3}>
-  <Card title="Local Cache" icon="database">
-    Data present in local storage
-  </Card>
-  <Card title="Server Queries" icon="server">
-    Data queried from the server
-  </Card>
-  <Card title="Real-time Events" icon="bolt">
-    Data received from real-time events
-  </Card>
-</CardGroup>
-
-## LiveObject
-
-`StreamSubscription<Object>` is a native flutter class that keeps track of a single object. It is a live object. In Flutter AmitySDK, any object which provides Stream is a Live Object.
-
-This function helps listen to Live Object. Whenever any property for the observed object changes, the listen callback will be triggered.
-
-### Example Usage
-
-```dart
-void listenPost(String postId) {
-  AmitySocialClient.newPostRepository()
-      .getPostStream(postId)
-      .stream
-      .listen((AmityPost post) {
-    //handle results
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+await subscription.cancel();
 ```
 
-## Live Collection
+</CodeGroup>
 
-`LiveCollection` is a generic class that keeps track of a collection of objects. It is a Live Collection. In Flutter SDK, any object that is encapsulated by LiveCollection class is a live collection.
+## Observe A Live Collection
 
+`getStream()` emits `LiveResult<AmityPost>`. Keep the collection instance so you can load more pages and dispose it later.
 
-### Stream Observer
+<CodeGroup>
 
-`asStream` method can get triggered multiple times throughout the lifetime of the application as long as its associated `Stream<List<Object>>` is retained in memory.
+```dart Flutter
+final liveCollection = AmitySocialClient.newPostRepository()
+    .getPosts()
+    .targetCommunity(communityId)
+    .getLiveCollection(pageSize: 20);
 
-`asStream` method will be called from the main thread so you can perform any UI update-related task within the listen block itself.
+liveCollection.onError((error, stackTrace) {
+  showError(error ?? stackTrace);
+});
 
-- If the requested data collection is stored locally on the device, the block will be called immediately with the local version of the data.
-- In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the listen block will be triggered again.
-- Any future changes to the data from any sources can trigger the listen block.
+final subscription = liveCollection.getStream().listen((result) {
+  final posts = result.data;
+  final isFetching = result.isFetching;
 
-### Pagination
+  showError('${posts.length}:$isFetching');
+});
 
-AmityCollection in SDK returns a maximum of pageSize items per page. It has `loadNext()` method to fetch more data. It also exposes `hasNext` property to check if the next page or previous page is present.
-
-```dart
-void loadNextPage() async {
-  if (liveCollection.hasNextPage()) {
-    liveCollection.loadNext();
-  }
+if (liveCollection.hasNextPage()) {
+  await liveCollection.loadNext();
 }
+
+await subscription.cancel();
+await liveCollection.dispose();
 ```
 
-Once the next page is available, the same listen block gets triggered and you can access the collection as shown above. If you want to shrink the collection to the original first page, you can do so by calling `reset()` method on the same collection.
+</CodeGroup>
 
-### ListView Integration
+## Notes
 
-One typical usage of LiveCollection is in ListView. Below is an example of fetching a collection and updating its state in a Widget.
+- `getStream()` starts the first page load for `LiveCollection`.
+- Use `observeLoadingState()` when you only need loading changes.
+- Call `loadNext()` only when `hasNextPage()` is true.
+- Call `reset()` to clear the collection and reload the first page.
+- Cancel every `StreamSubscription` and call `dispose()` on live collections that are no longer used.
 
-```dart
-void initState(String channelId) {
-  messageLiveCollection = AmityChatClient.newMessageRepository()
-      .getMessages(channelId)
-      .stackFromEnd(true)
-      .getLiveCollection(pageSize: 20);
-
-  messageLiveCollection.getStreamController().stream.listen((event) {
-    // update latest results here
-    // setState(() {
-    //   amityMessages = event;
-    // });
-  });
-
-  //load first page when initiating widget
-  WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-    messageLiveCollection.loadNext();
-  });
-
-  scrollcontroller.addListener(paginationListener);
-}
-
-void paginationListener() {
-  if ((scrollcontroller.position.pixels >=
-          (scrollcontroller.position.maxScrollExtent - 100)) &&
-      messageLiveCollection.hasNextPage()) {
-    messageLiveCollection.loadNext();
-  }
-}
-```
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Memory Management">
-    **Always Cancel Subscriptions**: Prevent memory leaks by properly canceling StreamSubscriptions in the dispose method.
-    
-    ```dart
-    class MyWidget extends StatefulWidget {
-      @override
-      _MyWidgetState createState() => _MyWidgetState();
-    }
-    
-    class _MyWidgetState extends State<MyWidget> {
-      late StreamSubscription<AmityPost> _postSubscription;
-      late LiveCollection<AmityMessage> _messageLiveCollection;
-      
-      @override
-      void dispose() {
-        // Cancel stream subscriptions
-        _postSubscription.cancel();
-        
-        // Reset live collections
-        _messageLiveCollection.reset();
-        
-        super.dispose();
-      }
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="Error Handling">
-    **Handle Stream Errors**: Always provide error callbacks for streams to prevent crashes.
-    
-    ```dart
-    _postSubscription = repository.getPost(postId).listen(
-      (post) {
-        // Handle success
-        setState(() {
-          _post = post;
-        });
-      },
-      onError: (error) {
-        // Handle error gracefully
-        setState(() {
-          _error = error.toString();
-        });
-      },
-    );
-    ```
-  </Accordion>
-  
-  <Accordion title="Pagination Management">
-    **Check hasNextPage**: Always verify if more pages are available before loading to avoid unnecessary API calls.
-    
-    ```dart
-    void loadMoreData() {
-      if (liveCollection.hasNextPage() && !_isLoading) {
-        setState(() {
-          _isLoading = true;
-        });
-        liveCollection.loadNext();
-      }
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="Performance Optimization">
-    **Use StreamBuilder**: Leverage Flutter's StreamBuilder for efficient UI updates without manual setState calls.
-    
-    ```dart
-    StreamBuilder<AmityPost>(
-      stream: repository.getPost(postId),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return ErrorWidget(snapshot.error!);
-        }
-        
-        if (!snapshot.hasData) {
-          return CircularProgressIndicator();
-        }
-        
-        return PostWidget(post: snapshot.data!);
-      },
-    );
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Related Resources
+## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="Dart Streams" href="https://dart.dev/tutorials/language/streams" icon="code">
-    Understanding Dart Streams and StreamSubscriptions
+  <Card title="Post Retrieval" icon="newspaper" href="/social-plus-sdk/social/content-management/posts/retrieval/get-post">
+    See post-specific Flutter retrieval examples.
   </Card>
-  <Card title="StreamBuilder Widget" href="https://api.flutter.dev/flutter/widgets/StreamBuilder-class.html" icon="flutter">
-    Flutter's StreamBuilder for reactive UI updates
+  <Card title="Flutter Push Notifications" icon="bell" href="/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/flutter-setup">
+    Configure Flutter notification setup alongside real-time data.
   </Card>
 </CardGroup>

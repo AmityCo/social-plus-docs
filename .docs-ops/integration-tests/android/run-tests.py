@@ -85,6 +85,10 @@ def build_classpath():
         GRADLE_CACHE / "org.reactivestreams/reactive-streams",
         "reactive-streams-1.0.4.jar",
     )
+    coroutines_core = find_jar(
+        GRADLE_CACHE / "org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm",
+        "kotlinx-coroutines-core-jvm-1.9*.jar",
+    )
     paging_common_aar = find_jar(
         GRADLE_CACHE / "androidx.paging/paging-common-android",
         "paging-common.aar",
@@ -124,6 +128,7 @@ def build_classpath():
         (rxjava2, "rxjava2"),
         (rxandroid, "rxandroid"),
         (reactive_streams, "reactive-streams"),
+        (coroutines_core, "kotlinx-coroutines-core-jvm"),
         (paging_common, "paging-common"),
         (amity_sdk, "amity-sdk"),
         (amity_rxbridge, "amity-rxbridge"),
@@ -137,7 +142,7 @@ def build_classpath():
 
     compile_cp = ":".join(str(j) for j in [
         amity_sdk, amity_rxbridge, amity_log, rxjava3, rxjava2, kotlin_stdlib, android_jar, annotations,
-        rxandroid, reactive_streams, paging_common, gson, joda_time,
+        rxandroid, reactive_streams, coroutines_core, paging_common, gson, joda_time,
     ])
     return compile_cp, kotlin_stdlib, annotations
 

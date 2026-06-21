@@ -5876,1312 +5876,540 @@ if (ads.isNotEmpty) {
 
 ### [Live Objects & Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview)
 
-> Learn about observable data holders that provide real-time updates from local cache and server events
+> Understand how the Social+ SDKs expose live objects and live collections for cache-backed, real-time data.
 
-Live Objects and Live Collections are observable data holders. The observer gets updated when there is a change of data in the local cache.
+Live objects and live collections are SDK patterns for reading data that can change after your first request. They let your app subscribe to SDK-managed state instead of treating every query as a one-time network response.
 
-There are two main sources that can make changes to the object and collection:
+Use a live object when the screen is centered on one entity, such as a post, message, channel, community, user, room, stream, poll, or story. Use a live collection when the screen renders a list, such as posts, comments, messages, members, followers, reactions, rooms, or streams.
 
-1. **When data get updated by an action from the current device**
-2. **Real-time events of the subscribed data from the server**
+## Platform Surface
 
-Refer to the platform-specific subpages in this section for an in-depth explanation of how your SDK handles live objects and live collections.
-
-By subscribing to a specific topic in the Real-time event system, users can ensure that they are receiving the most up-to-date information and notifications related to the observed object across devices.
+| Platform | Live object | Live collection | Pagination | Cleanup |
+| --- | --- | --- | --- | --- |
+| TypeScript | `Amity.LiveObject<T>` delivered to repository callbacks such as `PostRepository.getPost()` | `Amity.LiveCollection<T>` delivered to query callbacks such as `PostRepository.getPosts()` | `onNextPage`, `hasNextPage`, `onPrevPage`, `hasPrevPage` when supported by that query | Call the returned `Amity.Unsubscriber`; also unsubscribe from any real-time topics you subscribed to |
+| iOS | `AmityObject<T>` | `AmityCollection<T>` | `nextPage()`, `previousPage()`, `hasNext`, `hasPrevious`, `resetPage()` | Retain the returned `AmityNotificationToken`; call `invalidate()` or release the token |
+| Android | `Flowable<T>` from repository methods such as `getPost(postId)` | `Flowable<PagingData<T>>` or `Flowable<List<T>>`, depending on the query | Android Paging 3 through `PagingData` for paged collections | Dispose the RxJava subscription or cancel the coroutine collector |
+| Flutter | `Stream<T>` from live-object builders such as `live.getPost(postId)` | `LiveCollection<T>` / `LiveCollectionStream<T>` | `loadNext()`, `loadPrevious()`, `hasNextPage()`, `hasPreviousPage()`, `reset()` | Cancel stream subscriptions and call `dispose()` on live collections |
 
 ## Data Sources
 
-    Updates from user interactions within your current device
-    Live changes from subscribed objects on the server
+Live results can be updated by more than one source:
+
+| Source | What it means |
+| --- | --- |
+| Local cache | The SDK may emit cached data first so the UI can render quickly. |
+| Server fetch | The SDK fetches newer data and updates the same live object or live collection. |
+| Local mutation | Actions from the current device update the local SDK store and notify observers. |
+| Real-time event | Events from subscribed topics update the SDK store and notify observers. |
+
+Live objects and collections observe SDK state. They do not remove the need to subscribe to the right real-time topics where a platform exposes explicit topic subscriptions.
 
 ## Live Object
 
-Live Object allows users to observe the states of a single object within the app, such as a post, message, or channel. With Live Object, users can automatically receive notifications of any data updates related to the observed object, whether from the network or locally.
+A live object tracks one entity. The SDK can emit:
 
-### Key Features
+| State | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Current data | `snapshot.data` | `liveObject.snapshot` | emitted `T` value | emitted `T` value |
+| Loading | `snapshot.loading` | `loadingStatus` | stream lifecycle / app state | stream lifecycle / app state |
+| Error | `snapshot.error` | `error` or observer `error` parameter | `onError` | stream `onError` |
+| Freshness/origin | `origin` | `dataStatus` | not exposed as a shared public enum | not exposed as a shared public enum |
 
-    Live Object API is designed around the observer design pattern, allowing users to subscribe to an object, receive notifications of any data updates, and unsubscribe when necessary.
-
-    Live Object also provides additional states, such as `isLoading` and `error`, which can help understand the status of the observed object and any potential issues that may arise.
-
-    These updates are delivered via Snapshot, a captured state that is frozen and cannot be changed. Users can own and access these snapshots to stay up-to-date with the latest data within the app.
-
-    It's worth noting that while data updates may occur internally within the SDK, these updates will not affect previous snapshots. The only way for users to see the latest data is by getting new snapshots delivered via Live Object updates.
-
-### Use Cases
-
-Live Object is ideal for monitoring individual entities such as:
-
-- **Posts**: Track likes, comments, and content updates
-- **Messages**: Monitor delivery status, read receipts, and reactions
-- **Channels**: Observe member count changes and channel metadata
-- **User Profiles**: Watch status updates, avatar changes, and online presence
-
-### Live Object Architecture
-
-```mermaid
-graph TD
-    A[Your App UI] --> B[Live Object Observer]
-    B --> C[Snapshot Data]
-    C --> D[Local Cache]
-    C --> E[Real-time Events]
-    C --> F[Server Updates]
-
-    D --> G[User Actions]
-    E --> H[Other Users]
-    F --> I[Background Sync]
-```
+Typical screens: post detail, message detail, channel profile, community header, user profile, room detail, or stream detail.
 
 ## Live Collection
 
-Live Collection allows users to observe changes to an entire collection of data within their app in real-time. Live Collection works similarly to Live Object, with the main difference being that Live Collection notifies changes related to the entire collection rather than just a single object.
+A live collection tracks a list. The SDK can append, refresh, or re-emit the list when local cache, server fetches, or real-time events change the underlying data.
 
-### How It Works
+| Capability | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Current list | `collection.data` | `collection.snapshots` | `PagingData<T>` or `List<T>` emission | `LiveResult<T>.data` |
+| Loading | `collection.loading` | `loadingStatus` | paging load state / Rx lifecycle | `LiveResult<T>.isFetching` and `observeLoadingState()` |
+| Next page | `collection.onNextPage?.()` | `collection.nextPage()` | collect more through Paging 3 | `collection.loadNext()` |
+| Reset | Recreate the query or collection | `collection.resetPage()` | invalidate/recreate the paging source or query | `collection.reset()` |
 
-To use Live Collection, users can observe changes in a specific collection within the SDK. The collection handler then receives a snapshot of changes since the last result, which includes three possible events:
+Typical screens: post feeds, comment threads, chat messages, channel lists, member lists, reaction lists, follower lists, rooms, streams, and notifications.
 
-    The indices of the objects that were deleted
-    The indices of the objects that were inserted
-    The indices of the objects that were modified
+## Usage Notes
 
-### Change Detection
+- Keep the live subscription for as long as the UI needs updates.
+- Clean up subscriptions when the screen, component, view model, or widget is disposed.
+- Treat the first emission as potentially local or loading unless the platform exposes freshness status and it says otherwise.
+- Do not assume all platforms expose identical states. Use each platform's native live primitive.
+- For TypeScript, subscribe to the relevant topic when you need cross-device real-time updates, then dispose both the repository observer and the topic subscription.
 
-Live Collections provide granular change notifications instead of replacing entire datasets:
+## Platform Guides
 
-| Change Type | Description | Benefit |
-|-------------|-------------|---------|
-| **Insertions** | New items added to collection | Efficient UI updates for new content |
-| **Deletions** | Items removed from collection | Smooth removal animations |
-| **Modifications** | Existing items updated | Targeted updates without full refresh |
+    Observe live objects and collections with callbacks, pagination helpers, and topic subscriptions.
+    Use `AmityObject`, `AmityCollection`, notification tokens, and published snapshots.
+    Use RxJava `Flowable`, Android Paging 3, and the coroutine `asFlow()` bridge.
+    Use Dart streams, `LiveCollection`, `LiveResult`, and collection disposal.
 
-### Use Cases
+## Related Topics
 
-By subscribing to changes on a specific collection using Live Collection, users can stay up-to-date with the latest changes and updates to important collections within the app. This can be particularly helpful for:
-
-- **Managing large amounts of data**: Efficiently handle extensive datasets without performance impact
-- **Monitoring frequently updated collections**: Track changes to dynamic content like messages or posts
-- **Real-time social feeds**: Display new posts, comments, and reactions as they happen
-- **Chat message lists**: Show new messages instantly with typing indicators
-- **Member lists**: Track community or channel membership changes
-
-### Live Collection Architecture
-
-```mermaid
-graph TD
-    A[Collection UI] --> B[Live Collection Observer]
-    B --> C[Change Snapshot]
-    C --> D[Insertions]
-    C --> E[Deletions]
-    C --> F[Modifications]
-
-    G[Data Sources] --> B
-    H[Paginated API] --> G
-    I[Real-time Events] --> G
-    J[Local Cache] --> G
-    K[User Actions] --> G
-```
-\
-## Best Practices
-
-    **Proper Cleanup**: Always unsubscribe from observers to prevent memory leaks when components unmount or views disappear.
-
-    **Efficient Updates**: Use collection change indices for targeted UI updates instead of full re-renders. Only update the specific items that changed.
-
-    **Graceful Degradation**: Handle network errors and loading states appropriately using the built-in `isLoading` and `error` states.
-
-    **Topic Management**: Subscribe to relevant real-time topics for automatic updates. Ensure proper cleanup when no longer needed.
-
-## Platform Implementation
-
-Each platform has its own specific implementation patterns for Live Objects and Collections:
-
-    Learn iOS-specific patterns for observers and delegates
-    Discover Android LiveData and RxJava integration
-    Understand Dart streams and reactive widgets
-
-## Related Concepts
-
-    Learn how Live Objects connect to real-time updates
-    Explore event channels powering live updates
-
-**Development Tip**: Use platform-specific debugging tools to monitor subscription status and data flow in your Live Objects and Collections during development.
+    Learn how real-time events update SDK state.
+    Track user, channel, and room presence.
 
 ---
 
-### [Android Live Objects/Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/android)
+### [Android Live Objects & Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/android)
 
-> Live Objects are supported in the Android SDK with RxJava Data Streaming
+> Observe Social+ Android SDK objects and collections with RxJava Flowable, Android Paging, and coroutine flows.
 
-The RxJava3 library is being used in Android development to achieve Live Object and Live Collection behavior.
+The Android SDK exposes live objects and collections through RxJava 3 streams. Singular reads such as `getPost(postId)` return `Flowable<T>`. Paged list queries return `Flowable<PagingData<T>>`. Some finite list queries return `Flowable<List<T>>`.
 
-It is a Java VM implementation of ReactiveX, a library for composing asynchronous and event-based programs by using observable sequences. The building blocks of RxJava are Observables and Subscribers. Observable is used for emitting items and Subscriber is used for consuming those items.
+Use RxJava directly, or convert supported streams to Kotlin `Flow` with the SDK coroutine bridge.
 
-You can visit [ReactiveX](https://reactivex.io/) for more information.
+## Platform Surface
 
-## How it Works
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Flowable<T>` | Repository methods such as `AmitySocialClient.newPostRepository().getPost(postId)`. |
+| Paged live collection | `Flowable<PagingData<T>>` | Query builders such as `getPosts().targetCommunity(...).build().query()`. |
+| Finite live collection | `Flowable<List<T>>` | Used by selected APIs such as get-by-IDs style queries. |
+| Coroutine bridge | `Flowable<T>.asFlow()` | Import `com.amity.socialcloud.sdk.helper.core.coroutines.asFlow`. |
+| Cleanup | `Disposable.dispose()` or coroutine cancellation | Dispose or cancel when the Activity, Fragment, ViewModel, or UI scope no longer needs updates. |
 
-SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
+## Parameters
 
-Rx3 Data Stream helps in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through **Flowable Objects** and **Flowable Collection**.
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object methods | ID of the object to observe. |
+| Query builder target | Live collection builders | Scope for the collection, such as `targetCommunity(communityId)` or `targetUser(userId)`. |
+| `PagingData<T>` | Paged collections | The emitted paging payload consumed by RecyclerView, Paging 3, or Compose paging. |
+| `subscribeOn(Schedulers.io())` | RxJava streams | Runs SDK work on an IO scheduler. |
+| `observeOn(AndroidSchedulers.mainThread())` | UI observers | Delivers callbacks on the Android main thread for UI updates. |
 
-New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
+## Observe A Live Object
 
-### Data Sources
 
-    Data present in local storage
-    Data queried from the server
-    Data received from real-time events
-
-## How to Retrieve Data from Rx3 Data Stream
-
-To retrieve data from the RxStream, we need to subscribe to the Stream(Flowable/Single/Completable) by defining subscribing and observing threads.
-
-```kotlin
-fun subscribeToFlowable() {
-    //Flowable
-    val flowableStream: Flowable<Any> =
-        Flowable.just("one", "two", "three") // Flowable initialization
-    flowableStream
-        .subscribeOn(Schedulers.io()) // subscribing an operation on io thread (Background thread)
-        .observeOn(AndroidSchedulers.mainThread()) // observing results on main thread (UI thread)
-        .doOnNext {
-            // data is available here
-        }.doOnError {
-            // handle error here
-        }.subscribe()
-}
-```
-
-## Events a Data Stream can Emit
-
-In the RxJava3 framework we have these different types of objects that can be observed:
-
-### Flowable
-Emits a stream of elements
-
-- **doOnNext**
-- **doOnError**
-
-### Single
-Emits exactly one element
-
-- **doOnSuccess**
-- **doOnError**
-
-### Completable
-Emits a "complete" event, without emitting any data type, just a success/failure
-
-- **doOnComplete**
-- **doOnError**
-
-```kotlin
-val flowableStream: Flowable<List<AmityPost>> = postRepository.getPosts()
-
-flowableStream
+```kotlin Android
+val disposable = AmitySocialClient.newPostRepository()
+    .getPost(postId)
     .subscribeOn(Schedulers.io())
     .observeOn(AndroidSchedulers.mainThread())
-    .doOnNext { posts ->
-        // Handle stream of posts
-        updateUI(posts)
-    }
-    .doOnError { error ->
-        // Handle error
-        showErrorMessage(error.message)
-    }
-    .subscribe()
+    .subscribe(
+        { post: AmityPost ->
+            showSuccessMessage(post.getPostId())
+        },
+        { error: Throwable ->
+            handleGeneralError(error)
+        }
+    )
+
+disposable.dispose()
 ```
 
-```kotlin
-val singlePost: Single<AmityPost> = postRepository.getPost(postId)
 
-singlePost
+## Observe A Paged Live Collection
+
+The SDK query emits `PagingData<AmityPost>`. Feed it into your Paging 3 adapter or Compose paging collector.
+
+
+```kotlin Android
+val disposable = AmitySocialClient.newPostRepository()
+    .getPosts()
+    .targetCommunity(communityId)
+    .includeDeleted(false)
+    .build()
+    .query()
     .subscribeOn(Schedulers.io())
     .observeOn(AndroidSchedulers.mainThread())
-    .doOnSuccess { post ->
-        // Handle single post
-        displayPost(post)
-    }
-    .doOnError { error ->
-        // Handle error
-        showErrorMessage(error.message)
-    }
-    .subscribe()
-```
-
-```kotlin
-val deleteOperation: Completable = postRepository.deletePost(postId)
-
-deleteOperation
-    .subscribeOn(Schedulers.io())
-    .observeOn(AndroidSchedulers.mainThread())
-    .doOnComplete {
-        // Handle successful completion
-        showSuccessMessage("Operation completed")
-    }
-    .doOnError { error ->
-        // Handle error
-        showErrorMessage(error.message)
-    }
-    .subscribe()
-```
-
-## Flow functions
-
-By using the `.asFlow()` method, it enables the conversion of Flowable&lt;T&gt; functions of the Amity Android SDK into Flow functions.
-
-```kotlin
-fun getAllUsers(): Flow<PagingData<AmityUser>> {
-    return AmityCoreClient.newUserRepository()
-        .getUsers()
-        .build()
-        .query()
-        .asFlow()
-}
-```
-
-## Jetpack Compose compatibility
-
-Amity Android SDK seamlessly integrates with Jetpack Compose UI, allowing you to take full advantage of the modern UI toolkit provided by Jetpack Compose. You can effortlessly incorporate our SDK into your Jetpack Compose-based projects to enhance your app's social experience. This compatibility ensures that you can leverage the power of Jetpack Compose while benefiting from the features and capabilities our SDK provides.
-
-### Flow of PagingData in Compose
-
-In Jetpack Compose, integrating data from a `Flow<PagingData<T>>` source into your UI is made easy through the `collectAsLazyPagingItems()` function. This function allows you to seamlessly paginate and display items within your Composable functions.
-
-To start using it, add compose paging dependency in your project app level build.gradle file.
-
-```gradle
-implementation "androidx.paging:paging-compose:x.y.z"
-```
-
-Then in your Composable functions, you can collect from flow and display data, and also can observe the load state.
-
-```kotlin
-@Composable
-fun UserList(
-    modifier: Modifier = Modifier
-) {
-    //  collect data from flow using collectAsLazyPagingItems
-    val users = getAllUsers().collectAsLazyPagingItems()
-
-    //  display data in LazyColumn or LazyRow
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        items(
-            count = users.itemCount,
-            key = users.itemKey { it.getUserId() }
-        ) { index ->
-            //  render each item here
-            val user = users[index]
-            Text(text = "UserId: ${user?.getUserId()}")
+    .subscribe(
+        { pagingData: PagingData<AmityPost> ->
+            showSuccessMessage(pagingData)
+        },
+        { error: Throwable ->
+            handleGeneralError(error)
         }
+    )
 
-        //  handle load state on loading first page
-        when (val state = users.loadState.refresh) {
-            is LoadState.Error -> {
-                //  handle error
-                item {
-                    Text(text = "Error: ${state.error.message}")
-                }
-            }
-
-            is LoadState.Loading -> {
-                //  loading first page
-                item {
-                    Column(
-                        modifier = modifier.fillParentMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(text = "Refresh/First Loading")
-                        CircularProgressIndicator(color = Color.Black)
-                    }
-                }
-            }
-
-            else -> {}
-        }
-
-        //  handle load state on loading next page
-        when (val state = users.loadState.append) {
-            is LoadState.Error -> {
-                //  handle error
-                item {
-                    Text(text = "Error: ${state.error.message}")
-                }
-            }
-
-            is LoadState.Loading -> {
-                //  loading next page
-                item {
-                    Column(
-                        modifier = modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(text = "Pagination Loading")
-                        CircularProgressIndicator(color = Color.Black)
-                    }
-                }
-            }
-
-            else -> {}
-        }
-    }
-}
-```
-
-### Flow in Compose
-
-By using `collectAsState()` method, it can deliver asynchronous data updates to your Compose UI components.
-
-```kotlin
-fun getPostAsFlow(): Flow<AmityPost> {
-    return AmitySocialClient.newPostRepository()
-        .getPost(postId = "postId")
-        .asFlow()
-}
-
-@Composable
-fun SinglePostItem() {
-    val post by getPostAsFlow().collectAsState(initial = null)
-
-    Text(text = "Post ID: ${post?.getPostId()}")
-}
+disposable.dispose()
 ```
 
 
-## Best Practices
+## Convert To Kotlin Flow
 
-    **Proper Disposal**: Always dispose of RxJava subscriptions to prevent memory leaks when Activities/Fragments are destroyed.
+Use the coroutine bridge when the rest of your app is built around Kotlin Flow.
 
-    **Proper Scheduling**: Use `subscribeOn(Schedulers.io())` for background operations and `observeOn(AndroidSchedulers.mainThread())` for UI updates.
 
-    **Graceful Recovery**: Implement robust error handling with `doOnError` for all RxJava streams to prevent crashes.
+```kotlin Android
+import com.amity.socialcloud.sdk.helper.core.coroutines.asFlow
 
-    **State Management**: Use `collectAsState()` for single objects and `collectAsLazyPagingItems()` for paginated collections in Compose.
+val postFlow = AmitySocialClient.newPostRepository()
+    .getPost(postId)
+    .asFlow()
+```
 
-## Related Resources
 
-    Learn more about reactive programming concepts
-    Explore Android's official paging library
-    Build modern Android UI with declarative programming
-    Access RxJava3 source code and documentation
+## Notes
+
+- A live object fetches the server object and then observes the SDK local store. The internal live-object use case also checks tombstones for hard-deleted objects.
+- Paged live collections use Android Paging 3, so page loading and UI load states should be handled through your Paging adapter or Compose paging integration.
+- Dispose RxJava subscriptions in the matching lifecycle owner or ViewModel. For coroutines, cancel the collecting scope.
+- Use `subscribeOn(Schedulers.io())` for SDK work and `observeOn(AndroidSchedulers.mainThread())` before mutating UI state.
+
+## Related Topics
+
+    See post-specific Android query examples.
+    Configure Android notification setup alongside real-time data.
 
 ---
 
-### [Flutter Live Objects/Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/flutter)
+### [Flutter Live Objects & Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/flutter)
 
-> Live Objects are supported in the Flutter SDK with Streams and LiveCollection for real-time data synchronization
+> Observe Social+ Flutter SDK objects and collections with Dart streams, LiveCollection, and LiveResult.
 
-In Flutter SDK, we have a concept of **Live Object** and **Live Collection**.
+The Flutter SDK exposes live objects as Dart streams and live collections through `LiveCollection` / `LiveCollectionStream`. A live collection emits `LiveResult<T>`, which contains the current `data` list and an `isFetching` flag.
 
-Live Object is represented by `StreamSubscription<Object>` instance and Live Collection is represented by an instance of `LiveCollection`. LiveCollection is a generic class that encapsulates any other object and notifies the observer whenever any property of the encapsulated object changes.
+## Platform Surface
 
-Live Object helps to observe changes in a single object whereas Live Collection helps to observe changes in a list of objects.
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Stream<T>` | Example: `AmitySocialClient.newPostRepository().live.getPost(postId)`. |
+| Live collection | `LiveCollection<T>` | Returned by builders such as `getPosts().targetCommunity(...).getLiveCollection()`. |
+| Collection stream | `Stream<LiveResult<T>>` | Access with `liveCollection.getStream()`. |
+| Loading state | `LiveResult<T>.isFetching` or `observeLoadingState()` | Use this to drive loading indicators. |
+| Pagination | `loadNext()`, `loadPrevious()`, `hasNextPage()`, `hasPreviousPage()`, `reset()` | `getStream()` also triggers the first load. |
+| Cleanup | `StreamSubscription.cancel()` and `liveCollection.dispose()` | Cancel listeners and dispose the live collection when the widget or bloc is done. |
 
-Examples: `StreamSubscription<AmityPost>` for single objects or `LiveCollection<AmityMessage>` for collections.
+## Parameters
 
-## How it Works
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object streams | ID of the object to observe. |
+| Query builder target | Live collections | Scope for the collection, such as `targetCommunity(communityId)` or `targetUser(userId)`. |
+| `pageSize` | Live collections | Optional page size for `getLiveCollection(pageSize: ...)`. Defaults to 20 when omitted. |
+| `LiveResult<T>.data` | Collection stream | Current list snapshot. |
+| `LiveResult<T>.isFetching` | Collection stream | Whether the collection is currently fetching. |
 
-SDK handles lots of data received from various sources. Data can be present in the local cache. It might also be queried from the server or received from some real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and become out of sync.
+## Observe A Live Object
 
-Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through helper methods in the Live Object and Live Collection classes.
 
-New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
+```dart Flutter
+final subscription = AmitySocialClient.newPostRepository()
+    .live
+    .getPost(postId)
+    .listen((post) {
+  final currentPostId = post.postId;
+  showError(currentPostId ?? postId);
+});
 
-### Data Sources
-
-    Data present in local storage
-    Data queried from the server
-    Data received from real-time events
-
-## LiveObject
-
-`StreamSubscription<Object>` is a native flutter class that keeps track of a single object. It is a live object. In Flutter AmitySDK, any object which provides Stream is a Live Object.
-
-This function helps listen to Live Object. Whenever any property for the observed object changes, the listen callback will be triggered.
-
-### Example Usage
-
-```dart
-void listenPost(String postId) {
-  AmitySocialClient.newPostRepository()
-      .getPostStream(postId)
-      .stream
-      .listen((AmityPost post) {
-    //handle results
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+await subscription.cancel();
 ```
 
-## Live Collection
 
-`LiveCollection` is a generic class that keeps track of a collection of objects. It is a Live Collection. In Flutter SDK, any object that is encapsulated by LiveCollection class is a live collection.
+## Observe A Live Collection
+
+`getStream()` emits `LiveResult<AmityPost>`. Keep the collection instance so you can load more pages and dispose it later.
 
 
-### Stream Observer
+```dart Flutter
+final liveCollection = AmitySocialClient.newPostRepository()
+    .getPosts()
+    .targetCommunity(communityId)
+    .getLiveCollection(pageSize: 20);
 
-`asStream` method can get triggered multiple times throughout the lifetime of the application as long as its associated `Stream<List<Object>>` is retained in memory.
+liveCollection.onError((error, stackTrace) {
+  showError(error ?? stackTrace);
+});
 
-`asStream` method will be called from the main thread so you can perform any UI update-related task within the listen block itself.
+final subscription = liveCollection.getStream().listen((result) {
+  final posts = result.data;
+  final isFetching = result.isFetching;
 
-- If the requested data collection is stored locally on the device, the block will be called immediately with the local version of the data.
-- In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the listen block will be triggered again.
-- Any future changes to the data from any sources can trigger the listen block.
+  showError('${posts.length}:$isFetching');
+});
 
-### Pagination
-
-AmityCollection in SDK returns a maximum of pageSize items per page. It has `loadNext()` method to fetch more data. It also exposes `hasNext` property to check if the next page or previous page is present.
-
-```dart
-void loadNextPage() async {
-  if (liveCollection.hasNextPage()) {
-    liveCollection.loadNext();
-  }
-}
-```
-
-Once the next page is available, the same listen block gets triggered and you can access the collection as shown above. If you want to shrink the collection to the original first page, you can do so by calling `reset()` method on the same collection.
-
-### ListView Integration
-
-One typical usage of LiveCollection is in ListView. Below is an example of fetching a collection and updating its state in a Widget.
-
-```dart
-void initState(String channelId) {
-  messageLiveCollection = AmityChatClient.newMessageRepository()
-      .getMessages(channelId)
-      .stackFromEnd(true)
-      .getLiveCollection(pageSize: 20);
-
-  messageLiveCollection.getStreamController().stream.listen((event) {
-    // update latest results here
-    // setState(() {
-    //   amityMessages = event;
-    // });
-  });
-
-  //load first page when initiating widget
-  WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-    messageLiveCollection.loadNext();
-  });
-
-  scrollcontroller.addListener(paginationListener);
+if (liveCollection.hasNextPage()) {
+  await liveCollection.loadNext();
 }
 
-void paginationListener() {
-  if ((scrollcontroller.position.pixels >=
-          (scrollcontroller.position.maxScrollExtent - 100)) &&
-      messageLiveCollection.hasNextPage()) {
-    messageLiveCollection.loadNext();
-  }
-}
+await subscription.cancel();
+await liveCollection.dispose();
 ```
 
-## Best Practices
 
-    **Always Cancel Subscriptions**: Prevent memory leaks by properly canceling StreamSubscriptions in the dispose method.
+## Notes
 
-```dart
-class MyWidget extends StatefulWidget {
-  @override
-  _MyWidgetState createState() => _MyWidgetState();
-}
+- `getStream()` starts the first page load for `LiveCollection`.
+- Use `observeLoadingState()` when you only need loading changes.
+- Call `loadNext()` only when `hasNextPage()` is true.
+- Call `reset()` to clear the collection and reload the first page.
+- Cancel every `StreamSubscription` and call `dispose()` on live collections that are no longer used.
 
-class _MyWidgetState extends State<MyWidget> {
-  late StreamSubscription<AmityPost> _postSubscription;
-  late LiveCollection<AmityMessage> _messageLiveCollection;
+## Related Topics
 
-  @override
-  void dispose() {
-    // Cancel stream subscriptions
-    _postSubscription.cancel();
-
-    // Reset live collections
-    _messageLiveCollection.reset();
-
-    super.dispose();
-  }
-}
-```
-
-    **Handle Stream Errors**: Always provide error callbacks for streams to prevent crashes.
-
-```dart
-_postSubscription = repository.getPost(postId).listen(
-  (post) {
-    // Handle success
-    setState(() {
-      _post = post;
-    });
-  },
-  onError: (error) {
-    // Handle error gracefully
-    setState(() {
-      _error = error.toString();
-    });
-  },
-);
-```
-
-    **Check hasNextPage**: Always verify if more pages are available before loading to avoid unnecessary API calls.
-
-```dart
-void loadMoreData() {
-  if (liveCollection.hasNextPage() && !_isLoading) {
-    setState(() {
-      _isLoading = true;
-    });
-    liveCollection.loadNext();
-  }
-}
-```
-
-    **Use StreamBuilder**: Leverage Flutter's StreamBuilder for efficient UI updates without manual setState calls.
-
-```dart
-StreamBuilder<AmityPost>(
-  stream: repository.getPost(postId),
-  builder: (context, snapshot) {
-    if (snapshot.hasError) {
-      return ErrorWidget(snapshot.error!);
-    }
-
-    if (!snapshot.hasData) {
-      return CircularProgressIndicator();
-    }
-
-    return PostWidget(post: snapshot.data!);
-  },
-);
-```
-
-## Related Resources
-
-    Understanding Dart Streams and StreamSubscriptions
-    Flutter's StreamBuilder for reactive UI updates
+    See post-specific Flutter retrieval examples.
+    Configure Flutter notification setup alongside real-time data.
 
 ---
 
-### [iOS Live Objects/Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/ios)
+### [iOS Live Objects & Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/ios)
 
-> Live Objects are supported in the iOS SDK with AmityObject and AmityCollection for real-time data synchronization
+> Observe Social+ iOS SDK objects and collections with AmityObject, AmityCollection, notification tokens, and published snapshots.
 
-In iOS social.plus SDK, we have two core concepts for real-time data synchronization: **Live Object** and **Live Collection**.
+The iOS SDK exposes live objects with `AmityObject<T>` and live collections with `AmityCollection<T>`. Both are `ObservableObject`s and expose published state for SwiftUI or Combine. Block observation is tied to `AmityNotificationToken`; retain the token while you need updates.
 
-Live Object is represented by `AmityObject` instance for observing changes in a single object whereas Live Collection is represented by `AmityCollection` instance for observing changes in a list of objects.
+## Platform Surface
 
-These generic classes encapsulate any other object and notify observers whenever any property of the encapsulated object changes.
+| Surface | Public API | Notes |
+| --- | --- | --- |
+| Live object | `AmityObject<T>` | Exposes `snapshot`, `dataStatus`, `loadingStatus`, and `error`. |
+| Live collection | `AmityCollection<T>` | Exposes `snapshots`, `dataStatus`, `loadingStatus`, and `error`. |
+| Block observer | `observe { ... }` | Can emit multiple times while the token is retained. |
+| One-time observer | `observeOnce { ... }` | Invalidates after one notification. |
+| Cleanup | `AmityNotificationToken.invalidate()` | Releasing the token also ends observation. |
+| Collection pagination | `nextPage()`, `previousPage()`, `resetPage()` | Check `hasNext` or `hasPrevious` before requesting more pages. |
 
-Examples: `AmityObject<AmityPost>`, `AmityCollection<AmityMessage>`, or `AmityObject<AmityChannel>`.
+## Parameters And State
 
-## How it Works
+| Name | Applies to | Description |
+| --- | --- | --- |
+| `AmityNotificationToken` | Object and collection observers | Retain it strongly for the lifetime of the observation. Invalidate it when the view no longer needs updates. |
+| `snapshot` | `AmityObject<T>` | The current object snapshot, or `nil` if the object is not available. |
+| `snapshots` | `AmityCollection<T>` | The current collection snapshot array. |
+| `dataStatus` | Object and collection | `notExist`, `local`, `fresh`, or `error`. Use this when freshness matters. |
+| `loadingStatus` | Object and collection | `notLoading`, `loading`, `loaded`, or `error`. |
+| `hasNext` / `hasPrevious` | Collection | Indicates whether another page can be requested. |
 
-SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
+## Observe A Live Object
 
-Live Object and Live Collection help in syncing these constantly updating data, so you will always get the most recent one. Whenever the data gets updated, you will be notified through helper methods in live objects and live collection classes.
+This example observes one post. Keep `token` in view-controller, view-model, or view scope; invalidate it when the screen disappears.
 
-New data gets automatically collected every time when there is an updation and the user need not refresh to get the recent data.
 
-### Data Sources
+```swift iOS
+let livePost = postRepository.getPost(withId: postId)
 
-    Data present in local storage
-    Data queried from the server
-    Data received from real-time events
-
-Both `AmityObject` and `AmityCollection` provide methods for observing changes in objects. The life cycle of observation is tied to its token. As soon as the token is invalidated or deallocated, observation ends.
-
-## AmityNotificationToken
-
-`AmityNotificationToken` is a simple object which keeps track of what is being observed. Each Live Object or Live Collection observation is tied to its respective token. As soon as the token is invalidated or deallocated, observation ends. The token is declared within the scope of the class.
-
-```swift
-class MyClass {
-    var token: AmityNotificationToken?
-
-    func doSomething() {
-        // AmityNotification is alive in MyClass scope
+token = livePost.observe { observedPost, error in
+    if let error = error {
+        handleError(error)
+        return
     }
+
+    guard let post = observedPost.snapshot else {
+        return
+    }
+
+    showSuccessMessage(post.postId)
+}
+
+func stopObservingPost() {
+    token?.invalidate()
+    token = nil
 }
 ```
 
-The token is used in combination with AmityObject or AmityCollection. We will explore it more in AmityObject and AmityCollection concepts.
 
-## AmityObject
+## Observe A Live Collection
 
-`AmityObject` is a generic class that keeps track of a single object. It is a live object. In iOS AmitySDK, any object which is encapsulated by AmityObject is a live object.
+`AmityCollection` emits through `snapshots`. Use pagination methods on the collection instance, not array indexing helpers from older SDK generations.
 
-Examples: `AmityObject<AmityMessage>`, `AmityObject<AmityChannel>`
 
-AmityObject class exposes the following methods: `observe` and `observeOnce`. These methods help observe a live object. Whenever any property for the observed object changes, the observer is triggered.
+```swift iOS
+let options = AmityPostQueryOptions(
+    targetType: .community,
+    targetId: communityId,
+    sortBy: .lastCreated,
+    deletedOption: .notDeleted,
+    dataTypes: nil
+)
 
-Please make sure that the user is logged in before observing AmityObject. You can also refer to the session state section for more details.
+let livePosts = postRepository.getPosts(options)
 
-### Observer
-
-`observe` method can be triggered multiple times throughout the lifetime of the application as long as its associated AmityNotificationToken is retained in memory. `observeOnce` method, on the other hand, can only be triggered once.
-
-Both `observe` and `observeOnce` methods will be called from the main thread so you can perform any UI update-related tasks from within the observed block itself.
-
-If the requested object data is stored locally on the device, the block will be called immediately with the local version of the data. This can be verified through the dataStatus property of AmityObject.
-
-In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the observed block will be triggered again.
-
-Any future changes to that data from any sources can trigger an observer.
-
-**Lifecycle**: The life cycle of the observer is tied to its token. If the token is not retained, then the observer can get deallocated at any time and will not be called.
-
-```swift
-var token1: AmityNotificationToken?
-var token2: AmityNotificationToken?
-
-func example() {
-    let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
-
-    // observe block
-    token1 = liveObject.observe { liveObject, error in
-        // Handle updates
+token = livePosts.observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
     }
 
-    // observeOnce block
-    token2 = liveObject.observeOnce { liveObject, error in
-        // Handle single update
-    }
+    let posts = collection.snapshots
+    let isFresh = collection.dataStatus == .fresh
+
+    showSuccessMessage(posts.count)
+    showSuccessMessage(isFresh)
+}
+
+if livePosts.hasNext {
+    livePosts.nextPage()
 }
 ```
 
-```swift
-// Manually invalidate the token tied to observer
-token1?.invalidate()
 
-// Alternatively, you can invalidate a token by deallocate it
-token1 = nil
-```
+## Observe Published Snapshots
 
-### Accessing Objects
+`AmityObject` and `AmityCollection` are also observable from SwiftUI or Combine through published properties.
 
-There are multiple ways to access data from AmityObject. AmityObject exposes the following properties:
 
-- **dataStatus**: Indicates whether the data is fresh or local
-- **loadingStatus**: Indicates if the data is being loaded from server or not
-- **object**: The actual object that is being tracked or encapsulated by this AmityObject
-
-Once you add an observer block, you can access both local or fresh data as shown below.
-
-```swift
-var token: AmityNotificationToken?
-
-func example() {
-    let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
-
-    token = liveObject.observe { liveObject, error in
-        // This helps us to determine if the data is fresh or local
-        let dataStatus: AmityDataStatus = liveObject.dataStatus
-
-        // Here we access channel from this live object. This gives us with `AmityChannel` object.
-        guard let channel = liveObject.object else {
-            return
-        }
-
-        // Access channel object property as normal
-        let channelId = channel.channelId
-        let channelDisplayName = channel.displayName
-    }
-}
-```
-
-```swift
-var token: AmityNotificationToken?
-
-func example() {
-    let liveObject = channelRepository.getChannel("1234")
-
-    token = liveObject.observe { [weak self] liveObject, error in
-        // We want to get fresh data only.
-        guard liveObject.dataStatus == .fresh else {
-            return
-        }
-
-        guard let channel = liveObject.object else {
-            return
-        }
-
-        // Access channel object property as normal
-        let channelId = channel.channelId
-        let channelDisplayName = channel.displayName
-
-        // We don't want to observe future changes. So we stop observing by invaliding token
-        self?.token?.invalidate()
-    }
-}
-```
-
-```swift
-let liveObject: AmityObject<AmityChannel> = channelRepository.getChannel("1234")
-
-// If local data is present, you can also access it as...
-if let channel = liveObject.object {
-    // Access channel properties
-}
-```
-
-    While this is possible, we recommend accessing object from within the `observe` or `observeOnce` block depending on your requirement.
-
-For `observeOnce` method, if data is present locally, this observer will be triggered only once with that local data. If you are looking for fresh data, use the `observe` block and invalidate the token once fresh data is received as shown above.
-
-### AmityLoadingStatus
-
-AmityObject can be tracked for their loading status by accessing the `loadingStatus` property, which is of type `AmityLoadingStatus` and it can have one of four possible values.
-
-- **0 (notLoading)**: Indicates that the data is already fresh locally and does not need to be loaded.
-- **1 (loading)**: Indicates that the client is currently loading the data from the server.
-- **2 (loaded)**: Indicates that the client has successfully loaded fresh data from the server and is up to date.
-- **3 (error)**: Indicates that the data is unable to load due from a specific error.
-
-## AmityCollection
-
-`AmityCollection` is a generic class that keeps track of a collection of objects. It is a live collection. In iOS SDK, any object which is encapsulated by AmityCollection class is a live collection.
-
-Examples: `AmityCollection<AmityMessage>`, `AmityCollection<AmityChannel>`
-
-AmityCollection exposes these methods: `observe` and `observeOnce`. These methods help to observe a live collection. Whenever any property for any object within the collection changes, the observer is triggered.
-
-Please make sure that the user is logged in before observing AmityCollection. You can also refer to session state section for more details.
-
-### Observer
-
-`observe` method can get triggered multiple times throughout the lifetime of the application as long as it's associated AmityNotificationToken is retained in memory. `observeOnce`, on the other hand, can only be triggered once.
-
-Both `observe` and `observeOnce` method will be called from the main thread so you can perform any UI update related task within the observe block itself.
-
-If the requested data collection is stored locally on the device, the block will be called immediately with the local version of the data. This can be verified through the dataStatus property of AmityCollection.
-
-In parallel, a request is made to the server to fetch the latest version of the data. Once the data is returned, the observe block will be triggered again.
-
-Any future changes to the data from any sources can trigger observer.
-
-**Lifecycle**: The life cycle of the observer for AmityCollection is also tied to its token. If the token is not retained, the observer can get deallocated at any time and will not be called.
-
-### Accessing Collection
-
-Unlike most databases, AmityCollection does not return all data in an array. Instead, data is fetched one by one using the `objectAtIndex:` method. This allows the framework to store most of the actual result on disk, and load them in memory only when necessary.
-
-AmityCollection also exposes a `count` property which determines the number of objects present in a collection.
-
-With these two public interfaces, you can create a robust list UI for your use case. Similar to AmityObject, AmityCollection also exposes `dataStatus` and `loadingStatus` property.
-
-```swift
-var token: AmityNotificationToken?
-
-func example() {
-    // Fetching live collection of channels...
-    let query = AmityChannelQuery()
-    query.types = [AmityChannelQueryType.live]
-    query.includeDeleted = false
-    let liveCollection = channelRepository.getChannels(with: query)
-
-    // observe block
-    token = liveCollection.observe { liveCollection, change, error in
-        // Determine if data is local or fresh
-        let dataStatus: AmityDataStatus = liveCollection.dataStatus
-
-        // Using the count property we loop through collection data
-        for i in 0..<liveCollection.count() {
-            // We access individual data
-            if let channel = liveCollection.object(at: i) {
-                // Access channel object property as normal object i.e AmityChannel
-                let channelId = channel.channelId
-                let channelDisplayName = channel.displayName
-            }
-        }
-    }
-}
-```
-
-```swift
-// AmityCollection returns a maximum of 20 items per page
-// For example, when user scrolls to the bottom of the list; fetch next page
-if liveCollection.hasNext {
-    liveCollection.nextPage()
-}
-
-// If you want to shrink the collection to the original first page
-liveCollection.resetPage()
-```
-
-    AmityCollection has `nextPage()` and `previousPage()` method to fetch more data. It also exposes `hasNext` and `hasPrevious` property to check if next page or previous page is present.
-
-One typical usage of Live Collection is in UITableView. Below is an example of fetching a collection and displaying it in a tableview.
-
-```swift
-class ExampleViewController: UITableViewController {
-
-    var liveCollection: AmityCollection<AmityChannel>!
-    var token: AmityNotificationToken?
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        setupDataSource()
-    }
-
-    func setupDataSource() {
-        let query = AmityChannelQuery()
-        query.types = [AmityChannelQueryType.live]
-        query.includeDeleted = false
-        // Get live collection
-        liveCollection = App.shared.channelRepository.getChannels(with: query)
-        // Observe live collection
-        token = liveCollection.observe { [weak self] liveCollection, changes, error in
-            self?.tableView.reloadData()
-        }
-    }
-
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        1
-    }
-
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        Int(liveCollection.count())
-    }
-
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell")!
-        // build your cell here with AmityChannel object.
-        if let channel = liveCollection.object(at: indexPath.row) {
-            cell.textLabel?.text = channel.displayName
-        }
-        return cell
-    }
-}
-```
-
-## SwiftUI Support
-
-AmityObject and AmityCollection are now observable object with its properties marked with @Published annotation. Now you can use live object & live collection directly within your SwiftUI views.
-
-**Live Object @Published**: dataStatus ✅, loadingStatus ✅, snapshot ✅, error ✅, object ❌
-
-**Live Collection @Published**: dataStatus ✅, loadingStatus ✅, snapshot ✅, error ✅
-
-### Access AmityObject & AmityCollection in SwiftUI views
-
-Since AmityObject & AmityCollection are observable object, it can be used as an ObservedObject within SwiftUI views. We recommend to create small view which observes AmityCollection & AmityObject as ObservedObject as shown in code sample below.
-
-```swift
-struct LiveCommunityView: View {
-    @ObservedObject var liveObject: AmityObject<AmityCommunity>
-
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text(liveObject.snapshot?.displayName ?? "")
-        }
-    }
-}
-```
-
-```swift
-struct CommunityListView: View {
-    @ObservedObject var communityCollection: AmityCollection<AmityCommunity>
-
-    var body: some View {
-        List(communityCollection.snapshots, id: \.communityId) { item in
-            CommunityRowItemView(community: item)
-        }
-    }
-}
-```
-
-```swift
-func observeChangesInLiveObject() {
-    var cancellable: AnyCancellable?
-
-    var liveObject: AmityObject<AmityCommunity> = communityRepository.getCommunity(withId: "abcd")
-    cancellable = liveObject.$snapshot.sink { community in
-        // Observe changes to AmityCommunity
-        let displayName = community?.displayName ?? "Unknown"
-    }
-}
-```
-
-```swift
-func observeChangesInLiveCollection() {
-    var cancellable1: AnyCancellable?
-    var cancellable2: AnyCancellable?
-
-    var liveCollection: AmityCollection<AmityCommunity> = communityRepository.getTrendingCommunities()
-    cancellable1 = liveCollection.$snapshots.sink { communities in
-        // Observe changes to [AmityCommunity]
-        let communitiesCount = communities.count
-    }
-
-    cancellable2 = liveCollection.$error.sink { communities in
-        // Some error occurred
-    }
-}
-```
-
-Since the properties are published, If you are using Combine Framework, you can also subscribe to changes on those properties.
-
-States of live collection & live object are published before snapshots so that you can compare the state from within subscriber.
-
-## FAQ's
-
-    AmityCollection & AmityObject is an ObservableObject. When this live collection or live object is embedded inside another Observable Object, SwiftUI cannot observe the changes in snapshot occurring within Live collection & Live object. As a result, there might be a situation where you see your view is not getting updated even when snapshot(s) are updated. This is a common problem with nested observable object in SwiftUI.
-
-    **❌ Error: View where list does not update**
-```swift
-class MyViewModel: ObservableObject {
-    var commentRepo: AmityCommentRepository!
-    @Published var liveCollection: AmityCollection<AmityComment>!
-
-    init() {
-        let commentQuery = AmityCommentQueryOptions(referenceId: "", referenceType: .post, filterByParentId: false, orderBy: .descending, includeDeleted: false)
-        liveCollection = commentRepo.getComments(with: commentQuery)
-    }
-}
-
-struct MyView1: View {
-    @StateObject var viewModel = MyViewModel()
-
-    var body: some View {
-        // List does not update
-        List(viewModel.liveCollection.snapshots, id: \.commentId) { item in
-            Text("Comment: \(item.commentId)")
-        }
-    }
-}
-```
-
-    **✅ Success: View where list updates successfully**
-```swift
-struct MyView2: View {
-    @StateObject var viewModel = MyViewModel()
-
-    var body: some View {
-        // List updates
-        CommentListView(commentCollection: viewModel.liveCollection)
-    }
-}
-
-struct CommentListView: View {
-    @ObservedObject var commentCollection: AmityCollection<AmityComment>
-
-    var body: some View {
-        List(commentCollection.snapshots, id: \.commentId) { item in
-            Text("Comment: \(item.commentId)")
-        }
-    }
-}
-```
-
-    To solve this issue we recommend to create a specific view which observes AmityCollection & AmityObject as @ObservedObject as shown in code example.
-
-    Since the properties of AmityCollection & AmityObject are marked with @Published annotation, the publishing of changes occurs in the property's willSet block, meaning that any subscribers will receive an update before the property is changed. This behaviour can easily lead to unexpected bugs.
-
-```swift
+```swift iOS
 var cancellable: AnyCancellable?
-func publishedPropertiesBugs() {
-    var liveObject: AmityObject<AmityComment>!
 
-    cancellable = liveObject.$snapshot.sink(receiveValue: { newComment in
+let livePost = postRepository.getPost(withId: postId)
 
-        var snapshot: AmityComment?
+cancellable = livePost.$snapshot.sink { post in
+    guard let post = post else {
+        return
+    }
 
-        // Incorrect:
-        snapshot = liveObject.snapshot
-
-        // Correct:
-        snapshot = newComment
-    })
+    showSuccessMessage(post.postId)
 }
 ```
 
-## Best Practices
 
-    **Proper Retention**: Always retain `AmityNotificationToken` in appropriate scope to maintain observations. Store tokens as instance variables to prevent deallocation.
+## Notes
 
-    **Choose Appropriate Method**: Use `observe` for ongoing updates throughout the application lifecycle, and `observeOnce` for single-time data retrieval.
+- Current iOS SDK live objects expose `snapshot`; live collections expose `snapshots`.
+- Do not use older `object`, `object(at:)`, or `count()` patterns with current live objects and collections.
+- Observer callbacks are dispatched on the main thread.
+- If an object has local data, the SDK can emit local state before fresh server state.
+- For fresh-only flows, wait until `dataStatus == .fresh`, then invalidate the token if you do not need future updates.
+- For SwiftUI, pass the live object or collection directly into the view that observes it. Nested `ObservableObject` containers can hide changes from SwiftUI.
 
-    **Check Freshness**: Always verify `dataStatus` to determine if data is fresh or local before processing, especially when you need the most recent data.
+## Related Topics
 
-    **Dedicated Views**: Create dedicated views that observe live objects as `@ObservedObject` to avoid nested ObservableObject issues in SwiftUI.
-
-    **Parameter Usage**: When using Combine framework, always use parameter values in sink closures rather than accessing properties directly to avoid timing issues.
-
-## Related Resources
-
-    Learn more about SwiftUI and ObservableObject
-    Explore Apple's reactive programming framework
+    See post-specific iOS retrieval examples.
+    Learn how server events keep SDK state fresh.
 
 ---
 
-### [TypeScript Live Objects/Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/typescript)
+### [TypeScript Live Objects & Collections](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/typescript)
 
-> Live Objects are supported in the TypeScript SDK with subscribable objects and collections for real-time data synchronization
+> Observe Social+ TypeScript SDK objects and collections with callbacks, pagination helpers, and real-time topic subscriptions.
 
-In the social.plus TypeScript SDK, we have the concept of **Live Object** and **Live Collection**.
+The TypeScript SDK exposes live objects and live collections through repository callbacks. A live object callback receives one object snapshot. A live collection callback receives a list snapshot plus pagination helpers when the query supports paging.
 
-Live Object is represented by an instance of social.plus Object. It helps to observe changes in a single object whereas Live Collection is represented by an instance of social.plus LiveCollection. It helps to observe changes in a list of objects.
+Repository observers watch SDK cache state. For cross-device real-time updates, subscribe to the topic that matches the object or collection scope, then clean up both the repository observer and the topic subscription.
 
-SDK handles lots of data received from various sources. Data can be present in the local cache. It may also be queried from the server or received from real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated and become out of sync.
+## Platform Surface
 
-Live Object and Live Collection help in syncing data so you will always get the most recent one. New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Amity.LiveObject<T>` | Callback payload includes `data`, `loading`, `error`, and optional `origin`. |
+| Live collection | `Amity.LiveCollection<T>` | Extends the live-object shape with `onNextPage`, `hasNextPage`, `onPrevPage`, and `hasPrevPage` where available. |
+| Observer cleanup | `Amity.Unsubscriber` | Repository live methods return an unsubscribe function. |
+| Real-time topic cleanup | `Amity.Unsubscriber` | `subscribeTopic()` returns a separate unsubscribe function. |
+| Collection config | `Amity.LiveCollectionConfig` | Supports query policies except `no_fetch`. |
 
-Examples: `Amity.Post` for single objects or `Amity.LiveCollection<Amity.Post>` for collections.
+## Parameters
 
-## How it Works
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object methods | ID of the object to observe, such as a post, message, channel, community, user, poll, room, or stream. |
+| `params.targetType` / `params.targetId` | Collection queries such as `PostRepository.getPosts()` | Scope for the list. For posts, `targetType` is commonly `user` or `community`. |
+| `limit` | Collection queries | Optional page size for the query. |
+| `callback` | Object and collection methods | Receives each live snapshot. Handle `loading` and `error` before rendering data. |
+| `onNextPage` / `hasNextPage` | Live collections | Use when the UI asks for the next page. Do not call `onNextPage` repeatedly without checking `hasNextPage`. |
+| `subscribeTopic(topic, callback?)` | Real-time updates | Subscribes the active client to a topic such as `getPostTopic(post)` or `getCommunityTopic(community, SubscriptionLevels.POST)`. |
 
-SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
+## Observe A Live Object
 
-Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through subscribable objects and collections.
+This example observes one post and subscribes to the post topic after the first post snapshot is available.
 
-New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
 
-### Data Sources
+```typescript TypeScript
+import { PostRepository, getPostTopic, subscribeTopic } from "@amityco/ts-sdk";
 
-    Data present in local storage
-    Data queried from the server
-    Data received from real-time events
+let unsubscribePostTopic: Amity.Unsubscriber | undefined;
 
-## Live Object
+const unsubscribePost = PostRepository.getPost(postId, snapshot => {
+  if (snapshot.loading) {
+    showLoading();
+  }
 
-Although live objects were introduced prior to v6. All getter methods for singular objects (example getPost) will now return a subscribe-able object.
-
-This means that if an object gets updated and you have subscribed to real-time events, the object will get updated automatically via real-time events.
-
-If for your use case, you don't require any real-time updates, you can unsubscribe immediately.
-
-For further information about Live Object, please visit Live Object page.
-
-### Getting Real Time Updates for an Object
-
-```typescript
-import { PostRepository, subscribeTopic, getPostTopic } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const disposers: Amity.Unsubscriber[] = [];
-
-const GetPost: FC<{ postId: string }> = ({ postId }) => {
-  const [post, setPost] = useState<Amity.Post>();
-
-  useEffect(() => {
-
-    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-     const { post, loading, error } = data
-
-     if (post) {
-       /*
-       * This step is important if you wish to recieve real time updates
-       * Here, you are letting the server know that you wish to recieve real time
-       * updates regarding this post
-       */
-       disposers.push(subscribeTopic(getPostTopic(post)))
-
-       setPost(post)
-     }
-    });
-
-    disposers.push(unsubscribePost);
-  }, [postId]);
-
-  return null;
-};
-```
-
-### Getting the object only once
-
-```typescript
-import { PostRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const GetPostOnce: FC<{ postId: string }> = ({ postId }) => {
-  const [post, setPost] = useState<Amity.Post>();
-
-  useEffect(() => {
-    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-     const { post, loading, error } = data
-
-     if (post) {
-       setPost(post)
-     }
-    });
-
-    unsubscribePost()
-  }, [postId]);
-
-  return null;
-};
-
-## Live Collection
-
-Although live collections were introduced prior to v6. All query methods for the collection of objects (example getPosts) will now return a subscribe-able collection.
-
-This means that if an object in the collection gets updated and you have subscribed to real-time events, the collection will get updated automatically via real-time events.
-
-If for your use case, you don't require any real-time updates, you can unsubscribe immediately. Similar to the live objects above.
-
-<Info>
-For further information about Live Collection, please visit Live Collection page.
-</Info>
-
-### Getting Real-Time updates for a collection
-
-```typescript
-  PostRepository,
-  subscribeTopic,
-  getUserTopic,
-  getCommunityTopic,
-  SubscriptionLevels,
-} from '@amityco/ts-sdk';
-
-const disposers: Amity.Unsubscriber[] = [];
-
-const GetPosts: FC<{ targetId: string; targetType: string }> =
-({ targetId, targetType }) => {
-  const [posts, setPosts] = useState<Amity.Post[]>();
-
-  useEffect(() => {
-    const unsubscribe = PostRepository.getPosts(
-      { targetId, targetType },
-      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
-        setPosts(posts);
-        /*
-         * this is only required if you want real time updates for each
-         * post in the collection
-         */
-        subscribePostTopic(targetType, targetId);
-      },
-    );
-
-    disposers.push(unsubscribe);
-
-    return () => {
-      disposers.forEach(fn => fn());
-    };
-  });
-
-  return null;
-};
-
-const subscribePostTopic = (targetType: string, targetId: string) => {
-  if (isSubscribed) return;
-
-  if (targetType === 'user') {
-    const user = {} as Amity.User; // use getUser to get user by targetId
-    disposers.push(
-      subscribeTopic(getUserTopic(user, SubscriptionLevels.POST), () => {
-        // use callback to handle errors with event subscription
-      }),
-    );
+  if (snapshot.error) {
+    handleError(snapshot.error);
     return;
   }
 
-  if (targetType === 'community') {
-    // use getCommunity to get community by targetId
-    const community = {} as Amity.Community;
-    disposers.push(
-      subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST), () => {
-        // use callback to handle errors with event subscription
-      }),
-    );
-  }
-};
-```
+  const currentPost = snapshot.data;
+  renderResults(currentPost);
 
-### Getting paginated collection without real-time updates
-
-```typescript
-  PostRepository,
-  subscribeTopic,
-  getUserTopic,
-  getCommunityTopic,
-  SubscriptionLevels,
-} from '@amityco/ts-sdk';
-
-const GetPosts: FC<{ targetId: string; targetType: string }> =
-({ targetId, targetType }) => {
-  const [posts, setPosts] = useState<Amity.Post[]>();
-
-  useEffect(() => {
-    const unsubscribe = PostRepository.getPosts(
-      { targetId, targetType },
-      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
-        if (posts)
-          setPosts(posts);
-
-        // to get next page use onNextPage()
-      },
-    );
-
-    unsubscribe()
-  });
-
-  return null;
-};
-
-## Best Practices
-
-    **Always Clean Up**: Prevent memory leaks by properly disposing of subscriptions and unsubscribers.
-
-```typescript
-// Use a disposer pattern
-const disposers: Amity.Unsubscriber[] = [];
-
-useEffect(() => {
-  // Add subscriptions
-  disposers.push(PostRepository.getPost(postId, callback));
-  disposers.push(subscribeTopic(getPostTopic(post)));
-
-  return () => {
-    // Clean up all subscriptions
-    disposers.forEach(dispose => dispose());
-  };
-}, []);
-```
-
-    **Subscribe Selectively**: Only subscribe to real-time events when you need live updates to optimize performance.
-
-```typescript
-// For static content, unsubscribe immediately
-const unsubscribe = PostRepository.getPost(postId, callback);
-unsubscribe(); // No real-time updates needed
-
-// For live content, keep subscription active
-const unsubscribe = PostRepository.getPost(postId, callback);
-disposers.push(unsubscribe); // Keep for real-time updates
-```
-
-    **Handle Subscription Errors**: Always provide error callbacks for topic subscriptions.
-
-```typescript
-disposers.push(
-  subscribeTopic(getPostTopic(post), (error) => {
-    if (error) {
-      console.error('Subscription failed:', error);
-      // Handle fallback or retry logic
-    }
-  })
-);
-```
-
-    **Debounce Updates**: For frequently updating collections, consider debouncing UI updates.
-
-```typescript
-import { debounce } from 'lodash';
-
-const debouncedSetPosts = debounce(setPosts, 300);
-
-PostRepository.getPosts(query, ({ data: posts }) => {
-  if (posts) {
-    debouncedSetPosts(posts);
+  if (!unsubscribePostTopic) {
+    unsubscribePostTopic = subscribeTopic(getPostTopic(currentPost), error => {
+      if (error) handleError(error);
+    });
   }
 });
+
+function stopObservingPost() {
+  unsubscribePost();
+  unsubscribePostTopic?.();
+}
 ```
+
+
+## Observe A Live Collection
+
+Use the collection callback to render the latest list. Keep the next-page function and call it only when the UI requests more data.
+
+
+```typescript TypeScript
+import {
+  PostRepository,
+  SubscriptionLevels,
+  getCommunityTopic,
+  subscribeTopic,
+} from "@amityco/ts-sdk";
+
+let hasMorePosts = false;
+let loadNextPostsPage: (() => void) | undefined;
+
+const unsubscribePostsTopic = subscribeTopic(
+  getCommunityTopic(community, SubscriptionLevels.POST),
+  error => {
+    if (error) handleError(error);
+  }
+);
+
+const unsubscribePosts = PostRepository.getPosts(
+  {
+    targetType: "community",
+    targetId: communityId,
+    limit: 20,
+    sortBy: "lastCreated",
+    includeDeleted: false,
+  },
+  collection => {
+    if (collection.loading) {
+      showLoading();
+    }
+
+    if (collection.error) {
+      handleError(collection.error);
+      return;
+    }
+
+    renderResults(collection.data);
+    hasMorePosts = collection.hasNextPage ?? false;
+    loadNextPostsPage = collection.onNextPage;
+  }
+);
+
+function loadMorePosts() {
+  if (hasMorePosts) {
+    loadNextPostsPage?.();
+  }
+}
+
+function stopObservingPosts() {
+  unsubscribePosts();
+  unsubscribePostsTopic();
+}
+```
+
+
+## Notes
+
+- `getPost()`, `getMessage()`, `getChannel()`, `getCommunity()`, `getUser()`, `getPoll()`, `getRoom()`, and similar singular methods follow the same live-object callback pattern.
+- Query methods such as `getPosts()`, `getComments()`, `getMessages()`, `getMembers()`, `getReactions()`, `getRooms()`, and `getStreams()` follow the live-collection callback pattern.
+- The callback can emit local/cache data before server data. Use `loading`, `error`, and `origin` if your UI needs to distinguish phases.
+- Keep topic subscriptions as narrow as possible. A post-detail screen should subscribe to the post topic; a community feed screen should subscribe to the community post topic.
+- Always dispose the observer returned by the repository and any topic unsubscribe functions returned by `subscribeTopic()`.
+
+## Related Topics
+
+    See post-specific live object and collection usage.
+    Subscribe to social topics for cross-device updates.
 
 ---
 
