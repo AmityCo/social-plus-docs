@@ -1,387 +1,219 @@
 ---
 title: "Livestream Analytics"
-description: "Track watch minutes and viewer engagement for live and recorded room playback"
+description: "Track live and recorded room watch sessions with current SDK room analytics APIs."
 ---
 
-# Livestream Analytics
+Livestream analytics track a viewer's watch session for a room. The social.plus SDK owns session creation, local watch-session storage, duration updates, and pending-session sync. Your app owns deciding when a viewer is actually watching, when playback is paused or buffering, and when a viewer changes role from viewer to host or co-host.
 
-The social.plus Video SDK tracks viewer engagement and watch time for live and recorded room playback, so you can measure how users interact with your video content.
+<Note>
+  This page covers SDK room watch-session APIs. Product analytics dashboards, custom event names, media player state, and business reporting are app-owned concerns after you create and update watch sessions.
+</Note>
 
-## Overview
+## Platform Surface
 
-<CardGroup cols={2}>
-  <Card title="Watch Session Tracking" icon="clock">
-    **Track viewer watch time**
+| Platform | Analytics entry point | Create session | Update duration | Sync pending sessions |
+| --- | --- | --- | --- | --- |
+| TypeScript | `room.analytics()` | `createWatchSession(startedAt)` | `updateWatchSession(sessionId, duration, endedAt)` | `syncPendingWatchSessions()` |
+| iOS | `room.analytics()` | `createWatchSession(startedAt:)` | `updateWatchSession(sessionId:duration:endedAt:)` | `syncPendingWatchSessions()` |
+| Android | `room.analytics()` | `createWatchSession(startedAt)` | `updateWatchSession(sessionId, duration, endedAt)` | `syncPendingWatchSessions()` |
+| Flutter | No current public room analytics API found in this audit | Not available | Not available | Not available |
 
-    - Create watch sessions for viewers
-    - Separate tracking for live and recorded content
-  </Card>
-  <Card title="Network Resilient Sync" icon="cloud-arrow-up">
-    **Reliable data collection**
+## Create a Watch Session
 
-    - Local persistence of analytics data
-    - Automatic sync with jitter delay
-    - Network-aware retry logic
-  </Card>
-</CardGroup>
-
-## Key Concepts
-
-### Watch Sessions
-
-A watch session represents a period of time during which a viewer is actively watching a room. Key characteristics:
-
-- **Unique Session IDs**: Each session has a unique identifier with prefixes indicating content type
-  - `room_` prefix for live room watching
-  - `room_playback_` prefix for recorded content
-
-## Getting Started
-
-<Steps>
-  <Step title="Access Room Analytics">
-    Get the analytics instance from any `AmityRoom` object.
-  </Step>
-  <Step title="Create Watch Session">
-    Create a session when a viewer starts watching.
-  </Step>
-  <Step title="Update Watch Duration">
-    Update the session periodically with accumulated watch time.
-  </Step>
-  <Step title="Sync Sessions">
-    Sync pending sessions when the viewer stops watching.
-  </Step>
-</Steps>
-
-## API Reference
-
-### AmityRoom Extension
-
-The `AmityRoom` class is extended with an analytics capability:
+Create a watch session when the current user starts viewing a room as a viewer. The SDK accepts watch sessions only for rooms in watchable states: `live` or `recorded`.
 
 <CodeGroup>
 
-```swift iOS
-extension AmityRoom {
-    /// Get analytics instance for this room
-    /// - Returns: AmityRoomAnalytics instance for tracking watch sessions
-    func analytics() -> AmityRoomAnalytics
+```typescript TypeScript
+async function createRoomWatchSession(
+  room: Amity.Room,
+): Promise<string | undefined> {
+  if (room.status !== "live" && room.status !== "recorded") {
+    return undefined;
+  }
+
+  const sessionId = await room.analytics().createWatchSession(new Date());
+  showSuccessMessage(sessionId);
+
+  return sessionId;
 }
 ```
-
 
 ```kotlin Android
-class AmityRoom {
-    /**
-     * Get analytics instance for this room
-     * @return AmityRoomAnalytics instance for tracking watch sessions
-     */
-    fun analytics(): AmityRoomAnalytics
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
+import org.joda.time.DateTime
+
+fun createRoomWatchSession(room: AmityRoom) {
+    if (room.getStatus() != AmityRoomStatus.LIVE &&
+        room.getStatus() != AmityRoomStatus.RECORDED
+    ) {
+        return
+    }
+
+    room.analytics()
+        .createWatchSession(DateTime.now())
+        .subscribe(
+            { sessionId -> showSuccessMessage(sessionId) },
+            { error -> handleGeneralError(error) }
+        )
 }
 ```
 
+```swift iOS
+func createRoomWatchSession(for room: AmityRoom) async throws -> String? {
+    guard room.status == .live || room.status == .recorded else {
+        return nil
+    }
 
-```typescript
-class Amity.Room {
-    /**
-     * Get analytics instance for this room
-     * @returns AmityRoomAnalytics instance for tracking watch sessions
-     */
-    analytics(): AmityRoomAnalytics;
+    let sessionId = try await room.analytics()
+        .createWatchSession(startedAt: Date())
+
+    showSuccessMessage(sessionId)
+
+    return sessionId
 }
 ```
 
 </CodeGroup>
 
-### AmityRoomAnalytics
+## Update Watch Duration
 
-The main class for managing room analytics operations:
+Update the session with the accumulated watch duration in seconds. Count only time your player considers watchable, such as active playback, and exclude buffering, paused, or backgrounded states according to your product rules.
 
-<AccordionGroup>
-  <Accordion title="createWatchSession" icon="play">
-    **Create a new watch session for the current room**
+<CodeGroup>
 
-    Creates a unique watch session to track viewer engagement. The session ID format depends on the room status:
+```typescript TypeScript
+async function updateRoomWatchSession(
+  room: Amity.Room,
+  sessionId: string,
+  watchedSeconds: number,
+): Promise<void> {
+  await room.analytics().updateWatchSession(
+    sessionId,
+    watchedSeconds,
+    new Date(),
+  );
 
-    - Live rooms: `room_<unique-id>`
-    - Recorded rooms: `room_playback_<unique-id>`
+  showSuccessMessage(sessionId);
+}
+```
 
-    **Parameters:**
+```kotlin Android
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import org.joda.time.DateTime
 
-    | Parameter   | Type   | Required | Description                         |
-    | ----------- | ------ | -------- | ----------------------------------- |
-    | `startedAt` | `Date` | Yes      | The timestamp when watching started |
-
-    **Returns:** `Promise<String>` - Unique session identifier
-
-    **Throws:** `BusinessException` if room is not in watchable state (not LIVE or RECORDED)
-
-    <CodeGroup>
-
-    ```swift iOS
-    import AmitySDK
-    
-    func startWatchSession(room: AmityRoom) async throws -> String {
-        let analytics = room.analytics()
-        let sessionId = try await analytics.createWatchSession(startedAt: Date())
-        print("Watch session created: \(sessionId)")
-        return sessionId
-    }
-    ```
-
-    
-    ```kotlin Android
-    import com.amity.socialcloud.sdk.video.AmityRoom
-    import kotlinx.coroutines.Dispatchers
-    import kotlinx.coroutines.withContext
-    import java.util.Date
-    
-    suspend fun startWatchSession(room: AmityRoom): String {
-        return withContext(Dispatchers.IO) {
-            val analytics = room.analytics()
-            val sessionId = analytics.createWatchSession(startedAt = Date())
-            println("Watch session created: $sessionId")
-            sessionId
-        }
-    }
-    ```
-
-    
-    ```typescript
-    
-    async function startWatchSession(room: Amity.Room): Promise<string> {
-        const analytics = room.analytics();
-        const sessionId = await analytics.createWatchSession(new Date());
-        console.log('Watch session created:', sessionId);
-        return sessionId;
-    }
-    ```
-
-    </CodeGroup>
-  </Accordion>
-  <Accordion title="updateWatchSession" icon="clock-rotate-left">
-    **Update an existing watch session with duration**
-
-    Updates the watch session with the current accumulated watch time. Call this periodically (recommended: every 1 second) while the viewer is actively watching.
-
-    **Parameters:**
-
-    | Parameter   | Type     | Required | Description                                |
-    | ----------- | -------- | -------- | ------------------------------------------ |
-    | `sessionId` | `String` | Yes      | The unique identifier of the watch session |
-    | `duration`  | `Number` | Yes      | The total watch duration in seconds        |
-    | `endedAt`   | `Date`   | Yes      | The timestamp when this update occurred    |
-
-    **Returns:** `Promise<void>`
-
-    <CodeGroup>
-
-    ```swift iOS
-    import AmitySDK
-    
-    func updateSession(
-        room: AmityRoom, 
-        sessionId: String, 
-        watchedSeconds: Int
-    ) async throws {
-        let analytics = room.analytics()
-        try await analytics.updateWatchSession(
-            sessionId: sessionId,
-            duration: watchedSeconds,
-            endedAt: Date()
+fun updateRoomWatchSession(
+    room: AmityRoom,
+    sessionId: String,
+    watchedSeconds: Long
+) {
+    room.analytics()
+        .updateWatchSession(
+            sessionId = sessionId,
+            duration = watchedSeconds,
+            endedAt = DateTime.now()
         )
-    }
-    ```
+        .subscribe(
+            { showSuccessMessage(sessionId) },
+            { error -> handleGeneralError(error) }
+        )
+}
+```
 
-    
-    ```kotlin Android
-    import com.amity.socialcloud.sdk.video.AmityRoom
-    import kotlinx.coroutines.Dispatchers
-    import kotlinx.coroutines.withContext
-    import java.util.Date
-    
-    suspend fun updateSession(
-        room: AmityRoom,
-        sessionId: String,
-        watchedSeconds: Long
-    ) {
-        withContext(Dispatchers.IO) {
-            val analytics = room.analytics()
-            analytics.updateWatchSession(
-                sessionId = sessionId,
-                duration = watchedSeconds,
-                endedAt = Date()
-            )
-        }
-    }
-    ```
+```swift iOS
+func updateRoomWatchSession(
+    for room: AmityRoom,
+    sessionId: String,
+    watchedSeconds: Int
+) async throws {
+    try await room.analytics().updateWatchSession(
+        sessionId: sessionId,
+        duration: watchedSeconds,
+        endedAt: Date()
+    )
 
-    
-    ```typescript
-    
-    async function updateSession(
-        room: Amity.Room,
-        sessionId: string,
-        watchedSeconds: number
-    ): Promise<void> {
-        const analytics = room.analytics();
-        await analytics.updateWatchSession(
-            sessionId,
-            watchedSeconds,
-            new Date()
-        );
-    }
-    ```
+    showSuccessMessage(sessionId)
+}
+```
 
-    </CodeGroup>
-  </Accordion>
-  <Accordion title="syncPendingWatchSessions" icon="cloud-arrow-up">
-    **Sync all pending watch sessions to backend**
+</CodeGroup>
 
-    Triggers synchronization of all locally stored watch sessions that haven't been synced yet. 
+## Sync Pending Sessions
 
-    **Returns:** `void` 
+Call sync when the viewer leaves the playback experience or changes out of a viewer role. The SDK sync method handles pending locally stored sessions; your app decides the lifecycle event that should trigger it.
 
-    <CodeGroup>
+<CodeGroup>
 
-    ```swift iOS
-    import AmitySDK
-    
-    func syncAllSessions(room: AmityRoom) {
-        let analytics = room.analytics()
-        analytics.syncPendingWatchSessions()
-        // Sync happens asynchronously with jitter delay
-    }
-    ```
+```typescript TypeScript
+function syncRoomWatchSessions(room: Amity.Room): void {
+  room.analytics().syncPendingWatchSessions();
+  showSuccessMessage("sync-scheduled");
+}
+```
 
-    
-    ```kotlin Android
-    import com.amity.socialcloud.sdk.video.AmityRoom
-    
-    fun syncAllSessions(room: AmityRoom) {
-        val analytics = room.analytics()
-        analytics.syncPendingWatchSessions()
-        // Sync happens asynchronously with jitter delay
-    }
-    ```
+```kotlin Android
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
 
-    
-    ```typescript
-    
-    function syncAllSessions(room: Amity.Room): void {
-        const analytics = room.analytics();
-        analytics.syncPendingWatchSessions();
-        // Sync happens asynchronously with jitter delay
-    }
-    ```
+fun syncRoomWatchSessions(room: AmityRoom) {
+    room.analytics().syncPendingWatchSessions()
+    showSuccessMessage("sync-scheduled")
+}
+```
 
-    </CodeGroup>
+```swift iOS
+func syncRoomWatchSessions(for room: AmityRoom) {
+    room.analytics().syncPendingWatchSessions()
+    showSuccessMessage("sync-scheduled")
+}
+```
 
-    <Warning>
-      Only call `syncPendingWatchSessions()` when the user leaves the room or transitions from viewer to co-host. Do not call on every pause event.
-    </Warning>
-  </Accordion>
-</AccordionGroup>
+</CodeGroup>
 
-## Best Practices
+## Analytics Parameters
 
-<AccordionGroup>
-  <Accordion title="Session Creation" icon="circle-play">
-    **When to create sessions:**
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Entry point | `room.analytics()` | `room.analytics()` | `room.analytics()` |
+| Watchable statuses | `"live"`, `"recorded"` | `.live`, `.recorded` | `AmityRoomStatus.LIVE`, `AmityRoomStatus.RECORDED` |
+| Start timestamp | `Date` | `Date` | `DateTime` |
+| Session ID | `string` | `String` | `String` |
+| Duration | `number` seconds | `Int` seconds | `Long` seconds |
+| End timestamp | `Date` | `Date` | `DateTime` |
+| Sync return | `void` | `Void` | `Unit` |
 
-    - Create a session when a viewer enters the room player page
-    - Only create for actual viewers (not hosts or co-hosts)
-    - Only create for LIVE or RECORDED rooms
-    - Prevent duplicate sessions by tracking the current room ID
+## Tracking Boundaries
 
-    ```typescript
-    // ✅ Correct: Check all conditions before creating
-    if (isActualViewer && (room.status === 'live' || room.status === 'recorded')) {
-        if (watchingRoomId !== room.roomId) {
-            sessionId = await room.analytics().createWatchSession(new Date());
-        }
-    }
-    
-    // ❌ Incorrect: Creating without checks
-    sessionId = await room.analytics().createWatchSession(new Date());
-    ```
-  </Accordion>
-  <Accordion title="Duration Tracking" icon="stopwatch">
-    **Accurate time tracking:**
+| Area | SDK responsibility | App responsibility |
+| --- | --- | --- |
+| Session lifecycle | Create, update, and sync room watch sessions | Decide when the viewer starts and stops watching |
+| Watchable state | Reject sessions for non-watchable room statuses | Check room status before creating a session |
+| Duration | Store the latest duration value for the session | Calculate accumulated watch seconds from player state |
+| Sync | Send pending sessions with SDK sync behavior | Trigger sync on page exit, role transition, or product-defined lifecycle events |
+| Role changes | No automatic viewer/co-host policy | Stop viewer tracking before the user becomes host or co-host |
 
-    - Only count time when video is actively playing
-    - Pause tracking during buffering states
-    - Use accumulated time + elapsed since last resume for accurate totals
-
-    ```typescript
-    // ✅ Correct: Calculate total from accumulated + current elapsed
-    const totalDuration = accumulatedWatchTimeSeconds + 
-        Math.floor((Date.now() - lastResumeTime.getTime()) / 1000);
-    
-    // ❌ Incorrect: Using wall clock time
-    const totalDuration = Math.floor((Date.now() - sessionStartTime.getTime()) / 1000);
-    ```
-  </Accordion>
-  <Accordion title="Sync Timing" icon="cloud-arrow-up">
-    **When to sync:**
-
-    - ✅ When user leaves the room player page
-    - ✅ When user transitions from viewer to co-host
-    - ❌ Do NOT sync on video pause
-    - ❌ Do NOT sync on app background
-
-    ```typescript
-    // ✅ Correct: Sync on page exit
-    function onPageExit() {
-        stopWatchTracking(shouldSync: true);
-    }
-    
-    // ❌ Incorrect: Syncing on pause
-    function onVideoPause() {
-        pauseWatchTracking();
-        room.analytics().syncPendingWatchSessions(); // Don't do this!
-    }
-    ```
-  </Accordion>
-  <Accordion title="Role Transitions" icon="arrow-right-arrow-left">
-    **Handle viewer ↔ co-host transitions:**
-
-    - When becoming a co-host: Stop tracking and sync immediately
-    - When returning to viewer: Create a fresh new session
-    - Never reuse session IDs across role transitions
-
-    ```typescript
-    // Viewer → Co-host
-    function onBecomeCoHost() {
-        stopWatchTracking(shouldSync: true);
-    }
-    
-    // Co-host → Viewer
-    function onReturnToViewer() {
-        // Creates a completely new session
-        startWatchTracking(isStreamerMode, cohostUserId, currentUserId);
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
+<Warning>
+  Do not create watch sessions for `idle`, `ended`, `terminated`, or `error` rooms. Create sessions only after the room is `live` or `recorded`.
+</Warning>
 
 ## Error Handling
 
-### Common Errors
-
-| Error                                               | Cause                                                              | Solution                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------- |
-| `BusinessException: room is not in watchable state` | Attempting to create session for room that is not LIVE or RECORDED | Check room status before creating session |
+| Situation | SDK behavior | App response |
+| --- | --- | --- |
+| Non-watchable room status | Create session fails or returns an error | Check status before calling and show a non-playable state |
+| Missing session ID on update | Update fails because the session cannot be found | Recreate tracking only if the viewer is still watching and your product wants a new session |
+| Network unavailable during sync | Pending sessions stay local until sync can complete | Retry from the next appropriate lifecycle event |
 
 ## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Live Room Viewing" icon="play" href="/social-plus-sdk/video-new/broadcasting/live-viewing">
-    Learn how to implement live room playback
+  <Card title="Live Room Viewing" icon="signal-stream" href="../broadcasting/live-viewing">
+    Observe live room state before creating viewer sessions.
   </Card>
-  <Card title="Recorded Playback" icon="video" href="/social-plus-sdk/video-new/broadcasting/recorded-playback">
-    Implement recorded stream playback
+  <Card title="Recorded Playback" icon="play" href="../broadcasting/recorded-playback">
+    Track recorded room playback after recording metadata is available.
   </Card>
-  <Card title="Co-Host Management" icon="users" href="/social-plus-sdk/video-new/broadcasting/co-host-management">
-    Handle co-host transitions that affect analytics
+  <Card title="Co-Host Management" icon="users" href="../broadcasting/co-host-management">
+    Stop viewer tracking when a viewer becomes a co-host.
   </Card>
 </CardGroup>
