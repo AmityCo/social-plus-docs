@@ -1,301 +1,190 @@
 ---
 title: "Image Handling"
-description: "Upload and manage images (JPEG, PNG, GIF, WebP, up to 100 MB) using FileRepository in the social.plus SDK."
+description: "Upload images, read image metadata, and request sized image URLs with the Social+ SDKs."
 ---
 
-Use `FileRepository` to upload images (JPEG, PNG, GIF, WebP) and retrieve them in multiple auto-generated sizes. The SDK handles format conversion, compression, and alt text for accessibility.
+Use image handling when your app needs to upload image files for avatars, posts, comments, messages, stories, or other media surfaces. Image uploads return image file data with a `fileId`, URL, metadata, access type, and, on supported platforms, alt text.
 
-<Note>
-**Image Limits**: Maximum file size is 100MB per image. Supported formats: JPEG, PNG, GIF, WebP with automatic optimization and multi-resolution generation.
-</Note>
+For image posts, comments, messages, and avatars, first upload the image through the file repository, then pass the returned image object or `fileId` into the relevant creation or update API.
 
-## Key Features
+## Platform Surface
 
-<CardGroup cols={2}>
-  <Card title="Automatic Optimization" icon="wand-magic-sparkles">
-    Multi-resolution generation with smart compression maintaining visual quality
-  </Card>
-  <Card title="Accessibility Support" icon="universal-access">
-    Alt text and metadata for inclusive user experiences
-  </Card>
-  <Card title="Real-time Processing" icon="bolt">
-    Instant thumbnails and progressive loading
-  </Card>
-  <Card title="Global CDN Delivery" icon="globe">
-    Fast delivery worldwide with automatic format conversion
-  </Card>
-</CardGroup>
+| Platform | Upload | Fetch | Sized URLs | Alt text |
+| --- | --- | --- | --- | --- |
+| TypeScript | `FileRepository.uploadImage(formData, onProgress?, altText?)` | `FileRepository.getFile(fileId)` | `FileRepository.fileUrlWithSize(fileUrl, size)` with `small`, `medium`, `large`, `full` | Upload and `updateAltText(fileId, altText)` |
+| iOS | `AmityFileRepository.uploadImage(_:altText:progress:)` and `uploadImage(with:isFullImage:altText:progress:completion:)` | `getFile(fileId:)`, then `mapToImageData()` | `downloadImage(fromURL:size:)` with `AmityMediaSize.small`, `.medium`, `.large`, `.full` | Upload and `updateAltText(fileId:altText:)` |
+| Android | `AmityCoreClient.newFileRepository().uploadImage(uri, altText?)` | `getFile(fileId)`, then `asAmityImage()` | `AmityImage.getUrl(AmityImage.Size)` with `SMALL`, `MEDIUM`, `LARGE` | Upload and `updateAltText(fileId, altText)` |
+| Flutter | `AmityCoreClient.newFileRepository().uploadImage(file, isFullImage?)` | Not exposed as a direct public file-repository fetch method in the current SDK | `AmityImage.getUrl(AmityImageSize)` with `SMALL`, `MEDIUM`, `LARGE`, `FULL` | No public upload alt-text parameter in the current SDK |
 
-## Image Properties
+## Parameters
 
-Each uploaded image contains comprehensive metadata and multiple optimized versions:
+| Parameter | Platforms | Description |
+| --- | --- | --- |
+| `formData` / `image` / `url` / `uri` / `file` | TypeScript, iOS, Android, Flutter | The image input. TypeScript accepts `FormData`; iOS accepts `UIImage` or a local image `URL`; Android accepts `Uri`; Flutter accepts `File`. |
+| `altText` | TypeScript, iOS, Android | Optional accessibility text stored on the image file. Flutter's current public upload method does not expose this parameter. |
+| `isFullImage` / `isFullImage` | iOS, Flutter | Whether the uploaded image should be treated as the full image. iOS documents this on the URL-based upload; Flutter exposes `isFullImage` on public upload. |
+| `fileId` | TypeScript, iOS, Android | ID returned by upload or embedded in content data. Used for direct fetch, size lookup, or alt-text update where available. |
+| `size` | TypeScript, iOS, Android, Flutter | Requested display size. Size names differ slightly by platform, and Android currently exposes `SMALL`, `MEDIUM`, and `LARGE`. |
+| `onProgress` / `progress` | TypeScript, iOS, Android, Flutter | Upload progress callback or stream event. |
 
-<AccordionGroup>
-  <Accordion title="Core Properties" icon="file-image">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `fileId` | `string` | Unique identifier for the image |
-    | `fileUrl` | `string` | Original high-resolution image URL |
-    | `filename` | `string` | Original filename with extension |
-    | `altText` | `string` | Accessibility description text |
-  </Accordion>
-  
-  <Accordion title="Metadata & Attributes" icon="tags">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `attributes` | `object` | File metadata including size, type, and dimensions |
-    | `metadata` | `object` | Image-specific data like width, height, and format |
-    | `sizes` | `object` | URLs for different optimized versions |
-    | `isFullImage` | `boolean` | Indicates if original resolution is available |
-  </Accordion>
-</AccordionGroup>
-
-### Available Image Sizes
-
-<Info>
-social.plus automatically generates optimized versions for different use cases:
-</Info>
-
-<CardGroup cols={2}>
-  <Card title="Small (160px)" icon="image">
-    Perfect for thumbnails and grid previews
-  </Card>
-  <Card title="Medium (600px)" icon="images">
-    Standard content display and feeds
-  </Card>
-  <Card title="Large (1500px)" icon="expand">
-    Full-screen viewing and detailed inspection
-  </Card>
-  <Card title="Original" icon="file-image">
-    Unprocessed high-resolution version
-  </Card>
-</CardGroup>
-
-## Image Upload
-
-Upload images with automatic optimization, compression, and accessibility features. The SDK handles format conversion and generates multiple resolutions automatically.
-
-<Tip>
-The upload process includes real-time progress tracking and automatic error handling for a smooth user experience.
-</Tip>
+## Upload An Image
 
 <CodeGroup>
-```swift iOS
-func uploadImage(image: UIImage) async {
-    do {
-        let image = try await fileRepository.uploadImage(image, altText: "<optional-alt-text>", progress: { progress in
-            print("upload progress: \(progress)")
-        })
-        print("finish uploading successfully: fileId \(String(describing: image.fileId))")
-    } catch {
-        // Handle error here
-    }
+
+```typescript TypeScript
+import { FileRepository } from '@amityco/ts-sdk';
+
+async function uploadImage(image: File) {
+  const formData = new FormData();
+  formData.append('file', image);
+
+  const { data: images } = await FileRepository.uploadImage(
+    formData,
+    percent => {
+      console.log(`Upload progress: ${percent}%`);
+    },
+    'Profile photo',
+  );
+
+  return images[0].fileId;
 }
+```
+
+```swift iOS
+let image = UIImage()
+
+let uploadedImage = try await fileRepository.uploadImage(
+    image,
+    altText: "Profile photo",
+    progress: { progress in
+        print("Upload progress: \(progress)")
+    }
+)
+
+let imageFileId = uploadedImage.fileId
 ```
 
 ```kotlin Android
-fun uploadImage(imageUri: Uri, altText: String?) {
-    AmityCoreClient.newFileRepository()
-        .uploadImage(uri = imageUri, altText)
-        .doOnNext { uploadResult: AmityUploadResult<AmityImage> ->
-            when (uploadResult) {
-                is AmityUploadResult.PROGRESS -> {
-                    // upload progress event
-                    val progress = uploadResult.getUploadInfo().getProgressPercentage()
-                }
-                is AmityUploadResult.COMPLETE -> {
-                    // completion event
-                    val image: AmityImage = uploadResult.getFile()
-                }
-                is AmityUploadResult.ERROR -> {
-                    // error event
-                    val error = AmityError.from(uploadResult.getError())
-                }
-                is AmityUploadResult.CANCELLED -> {
-                    // cancelled upload event
-                }
+val imageUri = Uri.parse("file:///tmp/profile.jpg")
+
+AmityCoreClient.newFileRepository()
+    .uploadImage(uri = imageUri, altText = "Profile photo")
+    .doOnNext { result: AmityUploadResult<AmityImage> ->
+        when (result) {
+            is AmityUploadResult.PROGRESS -> {
+                val progress = result.getUploadInfo().getProgressPercentage()
+            }
+            is AmityUploadResult.COMPLETE -> {
+                val uploadedImage = result.getFile()
+                val imageFileId = uploadedImage.getFileId()
+            }
+            is AmityUploadResult.ERROR -> {
+                val error = AmityError.from(result.getError())
+            }
+            is AmityUploadResult.CANCELLED -> {
+                // Upload was canceled.
             }
         }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import React from 'react';
-import { FileRepository } from '@amityco/ts-sdk';
-
-const ImageUpload = () => {
-  const changeHandler = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files) {
-      return;
     }
-
-    const data = new FormData();
-    data.append('files', event.target.files[0]);
-
-    const { data: image } = await FileRepository.uploadImage(
-      data,
-      // This function will be called with the percentage of upload progress
-      (percent: number) => {
-        console.log(`Upload progress: ${percent}%`);
-      },
-      // This is optional and can be used to provide an alternative text for the image
-      'Alt text for the image',
-    );
-
-    return image;
-  };
-
-  return <input type="file" name="file" onChange={changeHandler} />;
-};
+    .subscribe()
 ```
 
 ```dart Flutter
-void uploadImage(File uploadingImage) async {
-  AmityCoreClient.newFileRepository().uploadImage(uploadingImage).stream.listen((amityUploadResult) {
-    amityUploadResult.when(
-      progress: (uploadInfo, cancelToken) {
-        int progress = uploadInfo.getProgressPercentage();
-      },
-      complete: (file) {
-        //check if the upload result is complete
+import 'dart:io';
 
-        final AmityImage uploadedImage = file;
-        //proceed result with uploadedImage
-      },
-      error: (error) {
-        final AmityException amityException = error;
-        //handle error
-      },
-      cancel: () {
-        //upload is cancelled
-      },
-    );
-  });
-}
+final image = File('/tmp/profile.jpg');
+
+AmityCoreClient.newFileRepository()
+    .uploadImage(image, isFullImage: true)
+    .stream
+    .listen((AmityUploadResult<AmityImage> result) {
+  result.when(
+    progress: (uploadInfo, cancelToken) {
+      final progress = uploadInfo.getProgressPercentage();
+    },
+    complete: (uploadedImage) {
+      final imageFileId = uploadedImage.fileId;
+      final fullImageUrl = uploadedImage.getUrl(AmityImageSize.FULL);
+    },
+    error: (error) {
+      final exception = error;
+    },
+    cancel: () {
+      // Upload was canceled.
+    },
+  );
+});
 ```
+
 </CodeGroup>
 
-## Image Retrieval & Optimization
-
-Retrieve images in the optimal size for your use case. social.plus automatically generates multiple resolutions for efficient loading and bandwidth optimization.
-
-<Warning>
-Always choose the appropriate image size for your container to optimize loading performance and user experience.
-</Warning>
+## Read Image Data
 
 <CodeGroup>
-```swift iOS
-
-let fileRepository = AmityFileRepository()
-
-do {
-    // Get AmityRawFile
-    let rawFile = try await fileRepository.getFile(fileId: "<image-file-id>")
-    
-    // Transform AmityRawFile to specific AmityImageData.
-    // If AmityRawFile is not the type `image`, it will return nil.
-    if rawFile.type == .image {
-        guard let imageData = rawFile.mapToImageData() else {
-            return
-        }
-        
-        // Download the image by using downloadImage api or
-        // You can use any network client to download the image.
-        fileRepository.downloadImage(fromURL: imageData.fileURL, size: .medium, completion: { path, error in
-            print("Image downloaded to local path: \(path)")
-        })
-    }
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun getImage(
-    fileRepository: AmityFileRepository,
-    fileId: String
-) {
-    fileRepository.getFile(fileId = fileId)
-        .doOnSuccess { rawFile: AmityRawFile ->
-            if(rawFile.getFileType() == AmityFileType.IMAGE) {
-                // convert result to image
-                val image : AmityImage? = rawFile.asAmityImage() // null for incorrect file type
-                image?.let {
-                    // access image url
-                    val size = AmityImage.Size.MEDIUM // size; SMALL, MEDIUM, LARGE
-                    val imageUrl = it.getUrl(size) // url by image size
-                }
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
 import { FileRepository } from '@amityco/ts-sdk';
 
-function getImage() {
-  const imageFile = FileRepository.getFile('fileId');
+async function getImage(imageFileId: string) {
+  const { data: image } = await FileRepository.getFile<'image'>(imageFileId);
+  const mediumUrl = FileRepository.fileUrlWithSize(image.fileUrl, 'medium');
 
-  return imageFile;
+  return {
+    mediumUrl,
+    altText: image.altText,
+    width: image.attributes.metadata.width,
+    height: image.attributes.metadata.height,
+  };
+}
+```
+
+```swift iOS
+let rawFile = try await fileRepository.getFile(fileId: imageFileId)
+
+if rawFile.type == .image, let imageData = rawFile.mapToImageData() {
+    let width = imageData.metadata["width"] as? Int
+    let height = imageData.metadata["height"] as? Int
+
+    fileRepository.downloadImage(fromURL: imageData.fileURL, size: .medium) { localURL, error in
+        print("Downloaded image: \(String(describing: localURL))")
+    }
+}
+```
+
+```kotlin Android
+AmityCoreClient.newFileRepository()
+    .getFile(imageFileId)
+    .doOnSuccess { rawFile: AmityRawFile ->
+        val image = rawFile.asAmityImage()
+        val mediumUrl = image?.getUrl(AmityImage.Size.MEDIUM)
+        val width = image?.getWidth()
+        val height = image?.getHeight()
+        val altText = image?.getAltText()
+    }
+    .subscribe()
+```
+
+```dart Flutter
+void inspectImage(AmityImage image) {
+  final mediumUrl = image.getUrl(AmityImageSize.MEDIUM);
+  final width = image.getWidth();
+  final height = image.getHeight();
+  final isFullImage = image.isFullImage();
 }
 ```
 
 </CodeGroup>
 
-## Troubleshooting
+## Related Topics
 
-### Common Image Issues
-
-<AccordionGroup>
-  <Accordion title="Images appear pixelated" icon="magnifying-glass">
-    **Cause**: Wrong size selected for display
-    
-    **Solution**: Use appropriate size (small/medium/large) for container. Match image resolution to display requirements.
-  </Accordion>
-
-  <Accordion title="Slow loading times" icon="clock">
-    **Cause**: Large image files or inefficient loading
-    
-    **Solution**: Implement progressive loading, use appropriate image sizes, and enable compression.
-  </Accordion>
-
-  <Accordion title="Alt text not working" icon="universal-access">
-    **Cause**: Missing or incorrect alt text
-    
-    **Solution**: Validate and update alt text using accessibility tools. Always provide descriptive alt text during upload.
-  </Accordion>
-
-  <Accordion title="Images not displaying" icon="triangle-exclamation">
-    **Cause**: Broken URLs or network issues
-    
-    **Solution**: Implement error handling and fallback images. Check network connectivity and URL validity.
-  </Accordion>
-
-  <Accordion title="Memory issues" icon="memory">
-    **Cause**: Too many high-resolution images loaded simultaneously
-    
-    **Solution**: Use image caching, implement lazy loading, and unload unused images from memory.
-  </Accordion>
-</AccordionGroup>
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Video Handling" icon="video" href="./video-handling">
-    Explore video upload, processing, and streaming capabilities
+<CardGroup cols={3}>
+  <Card title="Image Posts" icon="image" href="/social-plus-sdk/social/content-management/posts/creation/image-post">
+    Attach uploaded images to social posts.
   </Card>
-  <Card title="File Management" icon="folder" href="./file">
-    Learn comprehensive file handling and management
+  <Card title="Image Comments" icon="message" href="/social-plus-sdk/social/content-management/comments/creation/image-comment">
+    Attach uploaded images to comments.
   </Card>
-  <Card title="UI Kit Images" icon="palette" href="/uikit/overview">
-    Use pre-built image components for faster development
-  </Card>
-  <Card title="Posts with Images" icon="pen-to-square" href="/social-plus-sdk/social/content-management/posts/overview">
-    Discover how to create rich posts with image attachments
+  <Card title="File Handling" icon="file" href="./file">
+    Upload and inspect generic file attachments.
   </Card>
 </CardGroup>
