@@ -8,6 +8,8 @@ Catches the structural errors that break a Mintlify build BEFORE push/deploy:
      rest of the page, so a later </Accordion> was never seen.
   2. UNBALANCED JSX COMPONENT TAGS — <Accordion>/<Tabs>/<CardGroup>/... opened
      but never closed (or vice versa), counted OUTSIDE code fences.
+  3. CODE SNIPPETS INSIDE CARDGROUP — SDK language snippets should use
+     <CodeGroup>, while <CardGroup> is reserved for navigation/related cards.
 
 Exit 0 = clean, 1 = problems found (so it can gate locally + in CI).
 Needs no SDK source and no token, so it runs anywhere.
@@ -32,6 +34,11 @@ PAIRED = ["Accordion", "AccordionGroup", "Tabs", "Tab", "CardGroup", "Card",
           "CodeGroup", "Columns"]
 
 FENCE = re.compile(r"^\s*```")
+LANGUAGE_FENCE = re.compile(
+    r"^\s*```(typescript|ts|tsx|javascript|js|kotlin|java|swift|dart)\b",
+    re.IGNORECASE,
+)
+CARDGROUP_BLOCK = re.compile(r"<CardGroup\b[^>]*>[\s\S]*?</CardGroup>")
 
 
 def fence_balance(text):
@@ -65,6 +72,17 @@ def tag_balance(text):
     return bad
 
 
+def code_in_card_groups(text):
+    """Return line numbers where language code fences are nested in CardGroup."""
+    bad = []
+    for block in CARDGROUP_BLOCK.finditer(text):
+        for offset, ln in enumerate(block.group(0).splitlines(), 0):
+            if LANGUAGE_FENCE.match(ln):
+                start_line = text[:block.start()].count("\n") + 1
+                bad.append(start_line + offset)
+    return bad
+
+
 def check_file(path):
     text = path.read_text(encoding="utf-8", errors="replace")
     problems = []
@@ -73,6 +91,12 @@ def check_file(path):
         problems.append(f"unterminated code fence (odd ``` count = {len(odd)}); fence lines: {odd[-3:]}")
     for tag, o, c in tag_balance(text):
         problems.append(f"unbalanced <{tag}>: {o} open vs {c} close")
+    for line in code_in_card_groups(text):
+        problems.append(
+            "language code fence inside <CardGroup> at line "
+            f"{line}; use <CodeGroup> for code snippets and reserve <CardGroup> "
+            "for navigation or related-topic cards"
+        )
     return problems
 
 
