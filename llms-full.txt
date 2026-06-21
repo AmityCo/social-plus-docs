@@ -4740,821 +4740,549 @@ void createUserToken(String userId, String displayname, String secureToken) {
 
 ### [File Handling](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/file)
 
-> Upload, download, and manage files up to 1 GB using FileRepository in the social.plus SDK.
+> Upload, read, and delete generic file attachments with the Social+ SDKs.
 
-Use `FileRepository` to upload, download, and manage file attachments (documents, media, and other file types) in the social.plus SDK. Uploads support real-time progress tracking, automatic retry, and resume for large files.
+Use file handling when your app needs to upload a generic attachment such as a PDF, document, archive, or audio-adjacent custom file. The SDK returns a file object with a `fileId`, URL, attributes, and access type. Pass that uploaded file or its `fileId` into post, comment, or message creation APIs when you want to attach it to user content.
 
-**File Size Limits**: Maximum file size is 1 GB per upload. Larger files should be chunked or compressed before upload.
+This page covers generic files. Use the image and video pages for media-specific helpers such as image sizes, alt text, video status, and video resolution URLs.
 
-## Key Features
+## Platform Surface
 
-    Handle documents, media files, and attachments of all types
-    Real-time upload progress with automatic retry mechanisms
-    Optimized global delivery through content distribution network
-    Enterprise-grade security with access control and encryption
+| Platform | Upload | Fetch | Delete | Notes |
+| --- | --- | --- | --- | --- |
+| TypeScript | `FileRepository.uploadFile(formData, onProgress?)` | `FileRepository.getFile(fileId)` and `getFile.locally(fileId)` | `FileRepository.deleteFile(fileId)` | `formData` must include a `files` key. Upload returns an array of uploaded files. |
+| iOS | `AmityFileRepository.uploadFile(_:progress:)` and `uploadFile(with:fileName:progress:)` | `getFile(fileId:)`, then `mapToFileData()` | `deleteFile(fileId:)` | URL-based upload is the source-recommended path for large local files. |
+| Android | `AmityCoreClient.newFileRepository().uploadFile(uri)` | `getFile(fileId)`, then `asAmityFile()` | `deleteFile(fileId)` | Upload progress is delivered through `AmityUploadResult`. |
+| Flutter | `AmityCoreClient.newFileRepository().uploadFile(file)` | Not exposed as a direct public file-repository fetch method in the current SDK | Not exposed as a direct public file-repository delete method in the current SDK | Use the uploaded `AmityFile` or file data loaded through post, comment, or message models. |
 
-## File Properties
+## Parameters
 
-The file object contains comprehensive metadata and tracking information:
+| Parameter | Platforms | Description |
+| --- | --- | --- |
+| `formData` / `file` / `url` / `uri` | TypeScript, iOS, Android, Flutter | The local file input. TypeScript expects `FormData`; iOS accepts `AmityUploadableFile` or a local `URL`; Android accepts `Uri`; Flutter accepts `File`. |
+| `fileName` | iOS | Optional filename for URL-based upload. If omitted, the SDK derives the name from the URL. |
+| `fileId` | TypeScript, iOS, Android | ID returned by upload or embedded in content data. Used for direct fetch and delete calls where available. |
+| `onProgress` / `progress` | TypeScript, iOS, Android, Flutter | Upload progress callback or stream event. TypeScript emits a percentage; iOS emits `0.0...1.0`; Android and Flutter expose progress through `AmityUploadResult`. |
+| `uploadId` | Android, Flutter | Optional lower-level identifier for tracking or canceling a specific upload. The default public upload methods generate one for you. |
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `fileId` | `string` | Unique identifier for the file |
-    | `fileUrl` | `string` | Direct download URL for the file |
-    | `filename` | `string` | Original filename with extension |
-    | `type` | `string` | MIME type of the file |
+## Upload A File
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `size` | `number` | File size in bytes |
-    | `createdAt` | `Date` | Upload timestamp |
-    | `updatedAt` | `Date` | Last modification timestamp |
-    | `attributes` | `object` | Custom metadata and file information |
-    | `isUploaded` | `boolean` | Upload completion status |
 
-### File Attributes Structure
+```typescript TypeScript
+import { FileRepository } from '@amityco/ts-sdk';
 
-The `attributes` object provides detailed file information including format-specific metadata:
+async function uploadFile(file: File) {
+  const formData = new FormData();
+  formData.append('files', file);
 
-```json
-{
-  "name": "document.pdf",
-  "extension": "pdf",
-  "size": 2048576,
-  "mimeType": "application/pdf",
-  "metadata": {
-    "duration": 120, // For video/audio files
-    "dimensions": {  // For image files
-      "width": 1920,
-      "height": 1080
-    }
-  }
+  const { data: files } = await FileRepository.uploadFile(formData, percent => {
+    console.log(`Upload progress: ${percent}%`);
+  });
+
+  const uploadedFile = files[0];
+  return uploadedFile.fileId;
 }
 ```
 
-## File Upload
-
-Upload files to social.plus with progress tracking and error handling. The SDK provides optimized upload with automatic retry and resumable uploads for large files.
-
-Large files are automatically chunked and uploaded with resume capability, ensuring reliable delivery even on unstable connections.
-
 ```swift iOS
-// Note: fileUrl must be a local file url.
-func uploadFileExample(fileUrl: URL, fileName: String) async {
-    do {
-        let file = try await fileRepository.uploadFile(with: fileUrl, fileName: fileName, progress: { progress in
-            print("uploading progress: \(progress)")
-        })
-        print("uploading finish successfully: fileId \(String(describing: file.fileId))")
-    } catch {
-        // Handle error here
+let fileURL = URL(fileURLWithPath: "/tmp/document.pdf")
+
+let uploadedFile = try await fileRepository.uploadFile(
+    with: fileURL,
+    fileName: "document.pdf",
+    progress: { progress in
+        print("Upload progress: \(progress)")
     }
-}
+)
+
+let uploadedFileId = uploadedFile.fileId
 ```
 
 ```kotlin Android
+val fileUri = Uri.parse("file:///tmp/document.pdf")
 
-fun uploadFile(fileUri: Uri) {
-    // Uploading File from URL
-    AmityCoreClient.newFileRepository()
-        .uploadFile(fileUri)
-        .doOnNext { result: AmityUploadResult<AmityFile> ->
-            when (result) {
-                is AmityUploadResult.PROGRESS -> {
-                    val progress: Int = result.getUploadInfo().getProgressPercentage()
-                }
-                is AmityUploadResult.COMPLETE -> {
-                    val amityFile: AmityFile = result.getFile()
-                }
-                is AmityUploadResult.ERROR -> {
-                    val error = AmityError.from(result.getError())
-                }
-                is AmityUploadResult.CANCELLED -> {
-                    // upload is cancelled
-                }
+AmityCoreClient.newFileRepository()
+    .uploadFile(fileUri)
+    .doOnNext { result: AmityUploadResult<AmityFile> ->
+        when (result) {
+            is AmityUploadResult.PROGRESS -> {
+                val progress = result.getUploadInfo().getProgressPercentage()
+            }
+            is AmityUploadResult.COMPLETE -> {
+                val uploadedFile = result.getFile()
+                val uploadedFileId = uploadedFile.getFileId()
+            }
+            is AmityUploadResult.ERROR -> {
+                val error = AmityError.from(result.getError())
+            }
+            is AmityUploadResult.CANCELLED -> {
+                // Upload was canceled.
             }
         }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import React from 'react';
-import { FileRepository } from '@amityco/ts-sdk';
-
-const FileUpload = () => {
-  const changeHandler = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files) {
-      return;
     }
-
-    const data = new FormData();
-    data.append('files', event.target.files[0]);
-
-    const { data: file } = await FileRepository.uploadFile(data);
-
-    return file;
-  };
-
-  return <input type="file" name="file" onChange={changeHandler} />;
-};
+    .subscribe()
 ```
 
 ```dart Flutter
+import 'dart:io';
 
-void uploadFile(File uploadingFile) async {
-  AmityCoreClient.newFileRepository()
-      .uploadFile(uploadingFile)
-      .stream
-      .listen((AmityUploadResult<AmityFile> amityUploadResult) {
-    amityUploadResult.when(
-      progress: (uploadInfo, cancelToken) {
-        int progress = uploadInfo.getProgressPercentage();
-      },
-      complete: (file) {
-        //check if the upload result is complete
+final file = File('/tmp/document.pdf');
 
-        final AmityFile uploadedFile = file;
-        //proceed result with uploadedFile
-      },
-      error: (error) {
-        final AmityException amityException = error;
-        //handle error
-      },
-      cancel: () {
-        //upload is cancelled
-      },
-    );
-  });
+AmityCoreClient.newFileRepository()
+    .uploadFile(file)
+    .stream
+    .listen((AmityUploadResult<AmityFile> result) {
+  result.when(
+    progress: (uploadInfo, cancelToken) {
+      final progress = uploadInfo.getProgressPercentage();
+    },
+    complete: (uploadedFile) {
+      final uploadedFileId = uploadedFile.fileId;
+      final uploadedFileUrl = uploadedFile.getUrl;
+    },
+    error: (error) {
+      final exception = error;
+    },
+    cancel: () {
+      // Upload was canceled.
+    },
+  );
+});
+```
+
+
+## Read File Data
+
+
+```typescript TypeScript
+import { FileRepository } from '@amityco/ts-sdk';
+
+async function getFile(fileId: string) {
+  const { data: file } = await FileRepository.getFile<'file'>(fileId);
+
+  return {
+    fileId: file.fileId,
+    fileUrl: file.fileUrl,
+    name: file.attributes.name,
+    mimeType: file.attributes.mimeType,
+  };
 }
 ```
 
-## File Retrieval
-
-Retrieve uploaded files using their unique file ID. The SDK provides efficient caching and optimized delivery through CDN.
-
-Files are automatically cached and delivered through our global CDN for optimal performance worldwide.
-
 ```swift iOS
-let fileRepository = AmityFileRepository()
+let rawFile = try await fileRepository.getFile(fileId: fileId)
 
-do {
-    // Get AmityRawFile
-    let rawFile = try await fileRepository.getFile(fileId: "<file-id>")
+if rawFile.type == .file, let fileData = rawFile.mapToFileData() {
+    let localURL = try await fileRepository.downloadFile(fromURL: fileData.fileURL)
+    print("Downloaded file to \(localURL)")
+}
+```
 
-    // Transform AmityRawFile to specific AmityFileData.
-    // If AmityRawFile is not the type `file`, it will return nil.
-    if rawFile.type == .file {
-        guard let fileData = rawFile.mapToFileData() else {
-            return
+```kotlin Android
+AmityCoreClient.newFileRepository()
+    .getFile(fileId)
+    .doOnSuccess { rawFile: AmityRawFile ->
+        if (rawFile.getFileType() == AmityFileType.FILE) {
+            val file = rawFile.asAmityFile()
+            val fileUrl = file.getUrl()
+            val fileName = file.getFileName()
         }
-
-        // Download the file by using downloadFile api or
-        // You can use any network client to download the file.
-        let path = try await fileRepository.downloadFile(fromURL: fileData.fileURL)
-        print("File downloaded to local path: \(path)")
     }
-} catch {
-    // Handle error here
+    .subscribe()
+```
+
+```dart Flutter
+void inspectFile(AmityFile uploadedFile) {
+  final uploadedFileId = uploadedFile.fileId;
+  final uploadedFileUrl = uploadedFile.getUrl;
+  final uploadedFileName = uploadedFile.fileName;
 }
 ```
 
-```kotlin Android
-fun getFile(
-    fileRepository: AmityFileRepository,
-    fileId: String
-) {
-    fileRepository.getFile(fileId = fileId)
-        .doOnSuccess { rawFile: AmityRawFile ->
-            if (rawFile.getFileType() == AmityFileType.FILE) {
-                // convert result to file
-                val file: AmityFile = rawFile.asAmityFile()
-                file.let {
-                    // access file url
-                    val fileUrl = it.getUrl()
-                }
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
+
+## Delete A File
+
+Delete only files your app no longer needs. If a file is still referenced by a post, comment, message, user profile, community, or channel, update that content first so users do not see broken attachments.
+
 
 ```typescript TypeScript
 import { FileRepository } from '@amityco/ts-sdk';
 
-async function getFile() {
-  const { data: file } = await FileRepository.getFile('fileId');
-
-  return file;
+async function deleteFile(fileId: string) {
+  const { success } = await FileRepository.deleteFile(fileId);
+  return success;
 }
 ```
-
-
-## File Deletion
-
-Remove files from social.plus storage when they're no longer needed. Deletion is permanent and cannot be undone.
-
-**Permanent Action**: File deletion cannot be undone. Ensure you have proper confirmation flows in your application before allowing users to delete files.
 
 ```swift iOS
-let fileRepository = AmityFileRepository()
-
-do {
-    let isDeleted = try await fileRepository.deleteFile(fileId: "<file-id>")
-} catch {
-    // Handle error here
-}
+try await fileRepository.deleteFile(fileId: fileId)
 ```
 
 ```kotlin Android
-fun deleteFile(fileId: String) {
-    AmityCoreClient.newFileRepository()
-        .deleteFile(fileId)
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // AmityException
-        }
-        .subscribe()
-}
+AmityCoreClient.newFileRepository()
+    .deleteFile(fileId)
+    .subscribe()
 ```
 
-```typescript TypeScript
-import { FileRepository } from '@amityco/ts-sdk';
 
-async function deleteFile() {
-  const isFileDeleted = await FileRepository.deleteFile('fileId');
+## Related Topics
 
-  return isFileDeleted;
-}
-```
-
-## Next Steps
-
-    Learn specialized image processing, compression, and thumbnail generation
-    Explore video upload, transcoding, and streaming capabilities
-    Discover how to attach files to social posts and content
-    Learn about file sharing in chat messages and conversations
+    Upload images, read image metadata, and request sized image URLs.
+    Upload videos and read transcoding status or resolution URLs.
+    Attach uploaded files to social posts.
 
 ---
 
 ### [Image Handling](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/image-handling)
 
-> Upload and manage images (JPEG, PNG, GIF, WebP, up to 100 MB) using FileRepository in the social.plus SDK.
+> Upload images, read image metadata, and request sized image URLs with the Social+ SDKs.
 
-Use `FileRepository` to upload images (JPEG, PNG, GIF, WebP) and retrieve them in multiple auto-generated sizes. The SDK handles format conversion, compression, and alt text for accessibility.
+Use image handling when your app needs to upload image files for avatars, posts, comments, messages, stories, or other media surfaces. Image uploads return image file data with a `fileId`, URL, metadata, access type, and, on supported platforms, alt text.
 
-**Image Limits**: Maximum file size is 100MB per image. Supported formats: JPEG, PNG, GIF, WebP with automatic optimization and multi-resolution generation.
+For image posts, comments, messages, and avatars, first upload the image through the file repository, then pass the returned image object or `fileId` into the relevant creation or update API.
 
-## Key Features
+## Platform Surface
 
-    Multi-resolution generation with smart compression maintaining visual quality
-    Alt text and metadata for inclusive user experiences
-    Instant thumbnails and progressive loading
-    Fast delivery worldwide with automatic format conversion
+| Platform | Upload | Fetch | Sized URLs | Alt text |
+| --- | --- | --- | --- | --- |
+| TypeScript | `FileRepository.uploadImage(formData, onProgress?, altText?)` | `FileRepository.getFile(fileId)` | `FileRepository.fileUrlWithSize(fileUrl, size)` with `small`, `medium`, `large`, `full` | Upload and `updateAltText(fileId, altText)` |
+| iOS | `AmityFileRepository.uploadImage(_:altText:progress:)` and `uploadImage(with:isFullImage:altText:progress:completion:)` | `getFile(fileId:)`, then `mapToImageData()` | `downloadImage(fromURL:size:)` with `AmityMediaSize.small`, `.medium`, `.large`, `.full` | Upload and `updateAltText(fileId:altText:)` |
+| Android | `AmityCoreClient.newFileRepository().uploadImage(uri, altText?)` | `getFile(fileId)`, then `asAmityImage()` | `AmityImage.getUrl(AmityImage.Size)` with `SMALL`, `MEDIUM`, `LARGE` | Upload and `updateAltText(fileId, altText)` |
+| Flutter | `AmityCoreClient.newFileRepository().uploadImage(file, isFullImage?)` | Not exposed as a direct public file-repository fetch method in the current SDK | `AmityImage.getUrl(AmityImageSize)` with `SMALL`, `MEDIUM`, `LARGE`, `FULL` | No public upload alt-text parameter in the current SDK |
 
-## Image Properties
+## Parameters
 
-Each uploaded image contains comprehensive metadata and multiple optimized versions:
+| Parameter | Platforms | Description |
+| --- | --- | --- |
+| `formData` / `image` / `url` / `uri` / `file` | TypeScript, iOS, Android, Flutter | The image input. TypeScript accepts `FormData`; iOS accepts `UIImage` or a local image `URL`; Android accepts `Uri`; Flutter accepts `File`. |
+| `altText` | TypeScript, iOS, Android | Optional accessibility text stored on the image file. Flutter's current public upload method does not expose this parameter. |
+| `isFullImage` / `isFullImage` | iOS, Flutter | Whether the uploaded image should be treated as the full image. iOS documents this on the URL-based upload; Flutter exposes `isFullImage` on public upload. |
+| `fileId` | TypeScript, iOS, Android | ID returned by upload or embedded in content data. Used for direct fetch, size lookup, or alt-text update where available. |
+| `size` | TypeScript, iOS, Android, Flutter | Requested display size. Size names differ slightly by platform, and Android currently exposes `SMALL`, `MEDIUM`, and `LARGE`. |
+| `onProgress` / `progress` | TypeScript, iOS, Android, Flutter | Upload progress callback or stream event. |
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `fileId` | `string` | Unique identifier for the image |
-    | `fileUrl` | `string` | Original high-resolution image URL |
-    | `filename` | `string` | Original filename with extension |
-    | `altText` | `string` | Accessibility description text |
+## Upload An Image
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `attributes` | `object` | File metadata including size, type, and dimensions |
-    | `metadata` | `object` | Image-specific data like width, height, and format |
-    | `sizes` | `object` | URLs for different optimized versions |
-    | `isFullImage` | `boolean` | Indicates if original resolution is available |
 
-### Available Image Sizes
+```typescript TypeScript
+import { FileRepository } from '@amityco/ts-sdk';
 
-social.plus automatically generates optimized versions for different use cases:
+async function uploadImage(image: File) {
+  const formData = new FormData();
+  formData.append('file', image);
 
-    Perfect for thumbnails and grid previews
-    Standard content display and feeds
-    Full-screen viewing and detailed inspection
-    Unprocessed high-resolution version
+  const { data: images } = await FileRepository.uploadImage(
+    formData,
+    percent => {
+      console.log(`Upload progress: ${percent}%`);
+    },
+    'Profile photo',
+  );
 
-## Image Upload
-
-Upload images with automatic optimization, compression, and accessibility features. The SDK handles format conversion and generates multiple resolutions automatically.
-
-The upload process includes real-time progress tracking and automatic error handling for a smooth user experience.
+  return images[0].fileId;
+}
+```
 
 ```swift iOS
-func uploadImage(image: UIImage) async {
-    do {
-        let image = try await fileRepository.uploadImage(image, altText: "<optional-alt-text>", progress: { progress in
-            print("upload progress: \(progress)")
-        })
-        print("finish uploading successfully: fileId \(String(describing: image.fileId))")
-    } catch {
-        // Handle error here
+let image = UIImage()
+
+let uploadedImage = try await fileRepository.uploadImage(
+    image,
+    altText: "Profile photo",
+    progress: { progress in
+        print("Upload progress: \(progress)")
     }
-}
+)
+
+let imageFileId = uploadedImage.fileId
 ```
 
 ```kotlin Android
-fun uploadImage(imageUri: Uri, altText: String?) {
-    AmityCoreClient.newFileRepository()
-        .uploadImage(uri = imageUri, altText)
-        .doOnNext { uploadResult: AmityUploadResult<AmityImage> ->
-            when (uploadResult) {
-                is AmityUploadResult.PROGRESS -> {
-                    // upload progress event
-                    val progress = uploadResult.getUploadInfo().getProgressPercentage()
-                }
-                is AmityUploadResult.COMPLETE -> {
-                    // completion event
-                    val image: AmityImage = uploadResult.getFile()
-                }
-                is AmityUploadResult.ERROR -> {
-                    // error event
-                    val error = AmityError.from(uploadResult.getError())
-                }
-                is AmityUploadResult.CANCELLED -> {
-                    // cancelled upload event
-                }
+val imageUri = Uri.parse("file:///tmp/profile.jpg")
+
+AmityCoreClient.newFileRepository()
+    .uploadImage(uri = imageUri, altText = "Profile photo")
+    .doOnNext { result: AmityUploadResult<AmityImage> ->
+        when (result) {
+            is AmityUploadResult.PROGRESS -> {
+                val progress = result.getUploadInfo().getProgressPercentage()
+            }
+            is AmityUploadResult.COMPLETE -> {
+                val uploadedImage = result.getFile()
+                val imageFileId = uploadedImage.getFileId()
+            }
+            is AmityUploadResult.ERROR -> {
+                val error = AmityError.from(result.getError())
+            }
+            is AmityUploadResult.CANCELLED -> {
+                // Upload was canceled.
             }
         }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import React from 'react';
-import { FileRepository } from '@amityco/ts-sdk';
-
-const ImageUpload = () => {
-  const changeHandler = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files) {
-      return;
     }
-
-    const data = new FormData();
-    data.append('files', event.target.files[0]);
-
-    const { data: image } = await FileRepository.uploadImage(
-      data,
-      // This function will be called with the percentage of upload progress
-      (percent: number) => {
-        console.log(`Upload progress: ${percent}%`);
-      },
-      // This is optional and can be used to provide an alternative text for the image
-      'Alt text for the image',
-    );
-
-    return image;
-  };
-
-  return <input type="file" name="file" onChange={changeHandler} />;
-};
+    .subscribe()
 ```
 
 ```dart Flutter
-void uploadImage(File uploadingImage) async {
-  AmityCoreClient.newFileRepository().uploadImage(uploadingImage).stream.listen((amityUploadResult) {
-    amityUploadResult.when(
-      progress: (uploadInfo, cancelToken) {
-        int progress = uploadInfo.getProgressPercentage();
-      },
-      complete: (file) {
-        //check if the upload result is complete
+import 'dart:io';
 
-        final AmityImage uploadedImage = file;
-        //proceed result with uploadedImage
-      },
-      error: (error) {
-        final AmityException amityException = error;
-        //handle error
-      },
-      cancel: () {
-        //upload is cancelled
-      },
-    );
-  });
-}
+final image = File('/tmp/profile.jpg');
+
+AmityCoreClient.newFileRepository()
+    .uploadImage(image, isFullImage: true)
+    .stream
+    .listen((AmityUploadResult<AmityImage> result) {
+  result.when(
+    progress: (uploadInfo, cancelToken) {
+      final progress = uploadInfo.getProgressPercentage();
+    },
+    complete: (uploadedImage) {
+      final imageFileId = uploadedImage.fileId;
+      final fullImageUrl = uploadedImage.getUrl(AmityImageSize.FULL);
+    },
+    error: (error) {
+      final exception = error;
+    },
+    cancel: () {
+      // Upload was canceled.
+    },
+  );
+});
 ```
 
-## Image Retrieval & Optimization
 
-Retrieve images in the optimal size for your use case. social.plus automatically generates multiple resolutions for efficient loading and bandwidth optimization.
+## Read Image Data
 
-Always choose the appropriate image size for your container to optimize loading performance and user experience.
-
-```swift iOS
-
-let fileRepository = AmityFileRepository()
-
-do {
-    // Get AmityRawFile
-    let rawFile = try await fileRepository.getFile(fileId: "<image-file-id>")
-
-    // Transform AmityRawFile to specific AmityImageData.
-    // If AmityRawFile is not the type `image`, it will return nil.
-    if rawFile.type == .image {
-        guard let imageData = rawFile.mapToImageData() else {
-            return
-        }
-
-        // Download the image by using downloadImage api or
-        // You can use any network client to download the image.
-        fileRepository.downloadImage(fromURL: imageData.fileURL, size: .medium, completion: { path, error in
-            print("Image downloaded to local path: \(path)")
-        })
-    }
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun getImage(
-    fileRepository: AmityFileRepository,
-    fileId: String
-) {
-    fileRepository.getFile(fileId = fileId)
-        .doOnSuccess { rawFile: AmityRawFile ->
-            if(rawFile.getFileType() == AmityFileType.IMAGE) {
-                // convert result to image
-                val image : AmityImage? = rawFile.asAmityImage() // null for incorrect file type
-                image?.let {
-                    // access image url
-                    val size = AmityImage.Size.MEDIUM // size; SMALL, MEDIUM, LARGE
-                    val imageUrl = it.getUrl(size) // url by image size
-                }
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
 import { FileRepository } from '@amityco/ts-sdk';
 
-function getImage() {
-  const imageFile = FileRepository.getFile('fileId');
+async function getImage(imageFileId: string) {
+  const { data: image } = await FileRepository.getFile<'image'>(imageFileId);
+  const mediumUrl = FileRepository.fileUrlWithSize(image.fileUrl, 'medium');
 
-  return imageFile;
+  return {
+    mediumUrl,
+    altText: image.altText,
+    width: image.attributes.metadata.width,
+    height: image.attributes.metadata.height,
+  };
+}
+```
+
+```swift iOS
+let rawFile = try await fileRepository.getFile(fileId: imageFileId)
+
+if rawFile.type == .image, let imageData = rawFile.mapToImageData() {
+    let width = imageData.metadata["width"] as? Int
+    let height = imageData.metadata["height"] as? Int
+
+    fileRepository.downloadImage(fromURL: imageData.fileURL, size: .medium) { localURL, error in
+        print("Downloaded image: \(String(describing: localURL))")
+    }
+}
+```
+
+```kotlin Android
+AmityCoreClient.newFileRepository()
+    .getFile(imageFileId)
+    .doOnSuccess { rawFile: AmityRawFile ->
+        val image = rawFile.asAmityImage()
+        val mediumUrl = image?.getUrl(AmityImage.Size.MEDIUM)
+        val width = image?.getWidth()
+        val height = image?.getHeight()
+        val altText = image?.getAltText()
+    }
+    .subscribe()
+```
+
+```dart Flutter
+void inspectImage(AmityImage image) {
+  final mediumUrl = image.getUrl(AmityImageSize.MEDIUM);
+  final width = image.getWidth();
+  final height = image.getHeight();
+  final isFullImage = image.isFullImage();
 }
 ```
 
 
-## Troubleshooting
+## Related Topics
 
-### Common Image Issues
-
-    **Cause**: Wrong size selected for display
-
-    **Solution**: Use appropriate size (small/medium/large) for container. Match image resolution to display requirements.
-
-    **Cause**: Large image files or inefficient loading
-
-    **Solution**: Implement progressive loading, use appropriate image sizes, and enable compression.
-
-    **Cause**: Missing or incorrect alt text
-
-    **Solution**: Validate and update alt text using accessibility tools. Always provide descriptive alt text during upload.
-
-    **Cause**: Broken URLs or network issues
-
-    **Solution**: Implement error handling and fallback images. Check network connectivity and URL validity.
-
-    **Cause**: Too many high-resolution images loaded simultaneously
-
-    **Solution**: Use image caching, implement lazy loading, and unload unused images from memory.
-
-## Next Steps
-
-    Explore video upload, processing, and streaming capabilities
-    Learn comprehensive file handling and management
-    Use pre-built image components for faster development
-    Discover how to create rich posts with image attachments
+    Attach uploaded images to social posts.
+    Attach uploaded images to comments.
+    Upload and inspect generic file attachments.
 
 ---
 
 ### [Video Handling](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/video-handling)
 
-> Comprehensive video handling with social.plus SDK including upload, transcoding, streaming, and multi-resolution support
+> Upload videos and read transcoding status or resolution URLs with the Social+ SDKs.
 
-social.plus provides advanced video handling capabilities with automatic transcoding, multi-resolution support, and streaming optimization. This guide covers everything from basic uploads to advanced video processing workflows.
+Use video handling when your app needs to upload video files for posts, messages, stories, clips, or other media experiences. Video uploads return a video file object with a `fileId`, original URL, and, on platforms that expose it, transcoding status and a map of generated resolution URLs.
 
-**Video Limits**: Maximum file size is 2GB per video. Supported formats: MP4, MOV, and AVI with automatic transcoding to optimized MP4 versions.
+The SDK exposes upload progress and video file metadata. Playback UI, caching, retry policy, and adaptive player behavior remain application concerns.
 
-## Key Features
+## Platform Surface
 
-    Multiple resolutions (360p, 480p, 720p, 1080p) generated automatically
-    During uploading and transcoding with real-time updates
-    Automatic video preview thumbnails for better user experience
-    Fast streaming performance worldwide with format optimization
+| Platform | Upload | Fetch | Status and resolutions | Notes |
+| --- | --- | --- | --- | --- |
+| TypeScript | `FileRepository.uploadVideo(formData, feedType?, onProgress?)` | `FileRepository.getFile(fileId)` | `status` and `videoUrl` on the returned file | `ContentFeedType` includes `story`, `clip`, `chat`, `post`, and `message`. |
+| iOS | `AmityFileRepository.uploadVideo(with:progress:)` and `uploadVideo(with:feedType:progress:completion:)` | `getFile(fileId:)`, then `mapToVideoData()` | `AmityVideoData.status`, `videoUrls`, and `getVideo(resolution:)` | The async upload method checks for files over 1 GB. The feed-type callback overload checks 4 GB and 2 hours. |
+| Android | `AmityCoreClient.newFileRepository().uploadVideo(uri, contentFeedType)` | `getFile(fileId)`, then `asAmityVideo()` | `getStatus()`, `getResolutions()`, and `getVideoUrl(resolution)` | `AmityContentFeedType` exposes `STORY`, `CLIP`, `MESSAGE`, and `POST`. |
+| Flutter | `AmityCoreClient.newFileRepository().uploadVideo(file, feedtype?)` | Not exposed as a direct public file-repository fetch method in the current SDK | `AmityVideo.getResolutions()` and `getVideoUrl(resolution)` on video objects | `AmityContentFeedType` exposes `STORY`, `POST`, `MESSAGE`, and `CLIP`. |
 
-## Video Properties & Transcoding
+## Parameters
 
-Each uploaded video undergoes automatic transcoding and provides comprehensive metadata:
+| Parameter | Platforms | Description |
+| --- | --- | --- |
+| `formData` / `url` / `uri` / `file` | TypeScript, iOS, Android, Flutter | The local video input. TypeScript expects `FormData` with a `files` key; iOS accepts a local `URL`; Android accepts `Uri`; Flutter accepts `File`. |
+| `feedType` / `contentFeedType` / `feedtype` | TypeScript, iOS, Android, Flutter | Optional or required video context depending on platform. It tells the backend which content surface the video is for. |
+| `fileId` | TypeScript, iOS, Android | ID returned by upload or embedded in content data. Used for direct fetch where available. |
+| `resolution` | TypeScript, iOS, Android, Flutter | Requested generated video URL. Exposed values include original, 1080p, 720p, 480p, and 360p where available for that upload. |
+| `onProgress` / `progress` | TypeScript, iOS, Android, Flutter | Upload progress callback or stream event. |
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `fileId` | `string` | Unique identifier for the video |
-    | `fileUrl` | `string` | Original video file URL (maintains original format) |
-    | `videoUrl` | `object` | URLs for different transcoded resolutions |
-    | `status` | `enum` | Transcoding status: `uploaded`, `transcoding`, `transcoded`, `error` |
+## Upload A Video
 
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `attributes` | `object` | File metadata including name, size, and type |
-    | `metadata` | `object` | Video-specific data including dimensions and duration |
-    | `thumbnailFileId` | `string` | ID of the generated thumbnail image |
 
-### Available Resolutions
+```typescript TypeScript
+import { ContentFeedType, FileRepository } from '@amityco/ts-sdk';
 
-social.plus automatically generates multiple resolutions for adaptive streaming across all devices:
+async function uploadVideo(video: File) {
+  const formData = new FormData();
+  formData.append('files', video);
 
-    Same resolution as uploaded (in optimized MP4 format)
-    1920×1080 (horizontal) / 1080×1920 (vertical)
-    1280×720 (horizontal) / 720×1280 (vertical)
-    Optimized for mobile and slower connections
+  const { data: videos } = await FileRepository.uploadVideo(
+    formData,
+    ContentFeedType.POST,
+    percent => {
+      console.log(`Upload progress: ${percent}%`);
+    },
+  );
 
-**Format Note**: The `fileUrl` provides the original file format, while `videoUrl.original` provides the same content in optimized MP4 format.
-
-## Video Upload & Processing
-
-Upload videos with automatic transcoding, progress tracking, and format optimization. The SDK handles video compression and generates multiple resolutions for adaptive streaming.
-
-Videos are automatically transcoded to multiple resolutions in the background. Use the `status` property to track transcoding progress.
+  return videos[0].fileId;
+}
+```
 
 ```swift iOS
-// Note: videoUrl must be a local file url.
-func uploadVideoExample(videoUrl: URL) async {
-    do {
-        let video = try await fileRepository.uploadVideo(with: videoUrl, progress: { progress in
-            print("uploading progress: \(progress)")
-        })
-        print("uploading finish successfully: fileId \(String(describing: video.fileId))")
-    } catch {
-        // Handle error here
+let videoURL = URL(fileURLWithPath: "/tmp/video.mov")
+
+let uploadedVideo = try await fileRepository.uploadVideo(
+    with: videoURL,
+    progress: { progress in
+        print("Upload progress: \(progress)")
     }
-}
+)
+
+let videoFileId = uploadedVideo.fileId
 ```
 
 ```kotlin Android
-fun uploadVideo(videoUri: Uri) {
-    AmityCoreClient.newFileRepository()
-        .uploadVideo(uri = videoUri, contentFeedType = AmityContentFeedType.POST)
-        .doOnNext { uploadResult: AmityUploadResult<AmityVideo> ->
-            when (uploadResult) {
-                is AmityUploadResult.PROGRESS -> {
-                    // upload progress event
-                    val progress = uploadResult.getUploadInfo().getProgressPercentage()
-                }
-                is AmityUploadResult.COMPLETE -> {
-                    // completion event
-                    val image: AmityVideo = uploadResult.getFile()
-                }
-                is AmityUploadResult.ERROR -> {
-                    // error event
-                    val error = AmityError.from(uploadResult.getError())
-                }
-                is AmityUploadResult.CANCELLED -> {
-                    // cancelled upload event
-                }
+val videoUri = Uri.parse("file:///tmp/video.mp4")
+
+AmityCoreClient.newFileRepository()
+    .uploadVideo(
+        uri = videoUri,
+        contentFeedType = AmityContentFeedType.POST
+    )
+    .doOnNext { result: AmityUploadResult<AmityVideo> ->
+        when (result) {
+            is AmityUploadResult.PROGRESS -> {
+                val progress = result.getUploadInfo().getProgressPercentage()
+            }
+            is AmityUploadResult.COMPLETE -> {
+                val uploadedVideo = result.getFile()
+                val videoFileId = uploadedVideo.getFileId()
+            }
+            is AmityUploadResult.ERROR -> {
+                val error = AmityError.from(result.getError())
+            }
+            is AmityUploadResult.CANCELLED -> {
+                // Upload was canceled.
             }
         }
-        .subscribe()
-}
+    }
+    .subscribe()
 ```
 
+```dart Flutter
+import 'dart:io';
+
+final video = File('/tmp/video.mp4');
+
+AmityCoreClient.newFileRepository()
+    .uploadVideo(video, feedtype: AmityContentFeedType.POST)
+    .stream
+    .listen((AmityUploadResult<AmityVideo> result) {
+  result.when(
+    progress: (uploadInfo, cancelToken) {
+      final progress = uploadInfo.getProgressPercentage();
+    },
+    complete: (uploadedVideo) {
+      final videoFileId = uploadedVideo.fileId;
+      final resolutions = uploadedVideo.getResolutions();
+    },
+    error: (error) {
+      final exception = error;
+    },
+    cancel: () {
+      // Upload was canceled.
+    },
+  );
+});
+```
+
+
+## Read Video Status And URLs
+
+
 ```typescript TypeScript
-import React from 'react';
-import { FileRepository, ContentFeedType } from '@amityco/ts-sdk';
+import { FileRepository } from '@amityco/ts-sdk';
 
-const VideoUpload = () => {
-  const changeHandler = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files) {
-      return;
-    }
+async function getVideo(videoFileId: string) {
+  const { data: video } = await FileRepository.getFile<'video'>(videoFileId);
+  const playbackUrl = video.videoUrl?.['720p'] ?? video.fileUrl;
 
-    const data = new FormData();
-    data.append('files', event.target.files[0]);
-
-    /*
-    Possible `feedType` value for createVideo:
-    - ContentFeedType.STORY or 'story'
-    - ContentFeedType.CLIP or 'clip'
-    - ContentFeedType.CHAT or 'chat'
-    - ContentFeedType.POST or 'post'
-     */
-    const feedType = ContentFeedType.POST;
-
-    const didVideoUpload = await FileRepository.uploadVideo(data, feedType);
-
-    return didVideoUpload;
+  return {
+    playbackUrl,
+    status: video.status,
   };
-
-  return <input type="file" name="file" onChange={changeHandler} />;
-};
-```
-
-```dart Flutter
-void uploadVideo(File uploadingVideo) async {
-  AmityCoreClient.newFileRepository()
-      .uploadVideo(uploadingVideo , feedtype: AmityContentFeedType.POST)
-      .stream
-      .listen((AmityUploadResult<AmityVideo> amityResult) {
-    amityResult.when(
-      progress: (uploadInfo, cancelToken) {},
-      complete: (file) {
-        //handle result
-        AmityVideo uploadedVideo = file;
-      },
-      error: (error) {
-        final AmityException amityException = error;
-        // handle error
-      },
-      cancel: () {
-        // handle cancel request
-      },
-    );
-  });
 }
 ```
 
-
-## Video Retrieval & Streaming
-
-Access transcoded videos in multiple resolutions for optimal playback experience. social.plus provides adaptive streaming capabilities and thumbnail generation.
-
-Choose the appropriate resolution based on your user's device and connection speed for optimal streaming performance.
-
-### Getting Video URLs
-
 ```swift iOS
-let fileRepository = AmityFileRepository()
+let rawFile = try await fileRepository.getFile(fileId: videoFileId)
 
-do {
-    // Get AmityRawFile
-    let rawFile = try await fileRepository.getFile(fileId: "<video-file-id>")
-
-    // Transform AmityRawFile to specific AmityVideoData.
-    // If AmityRawFile is not the type `video`, it will return nil.
-    if rawFile.type == .video {
-        guard let videoData = rawFile.mapToVideoData() else {
-            return
-        }
-
-        let resolutions: [AmityVideoResolution] = Array(videoData.videoUrls.keys).sorted()
-
-        for resolution in resolutions {
-            if let fileUrl = videoData.getVideo(resolution: resolution) {
-                // url of each video
-                // Download the video by using fileDownload api or
-                // You can use any network client to download the video.
-                let path = try await fileRepository.downloadFile(fromURL: fileUrl)
-                print("Video file downloaded to local path: \(path)")
-            }
-        }
-    }
-} catch {
-    // Handle error here
+if rawFile.type == .video, let videoData = rawFile.mapToVideoData() {
+    let status = videoData.status
+    let resolutions = Array(videoData.videoUrls.keys).sorted()
+    let playbackURL = videoData.getVideo(resolution: .res_720p)
 }
 ```
 
 ```kotlin Android
-fun getVideo(
-    fileRepository: AmityFileRepository,
-    fileId: String
-) {
-    fileRepository.getFile(fileId = fileId)
-        .doOnSuccess { rawFile: AmityRawFile ->
-            if (rawFile.getFileType() == AmityFileType.VIDEO) {
-                // convert result to video
-                val video: AmityVideo? = rawFile.asAmityVideo() // null for incorrect file type
-                video?.let {
-                    // available resolution options for UI rendering
-                    val resolutions: List<AmityVideoResolution> = video.getResolutions()
-                    // Possible resolutions are:
-                    // AmityVideoResolution.ORIGINAL
-                    // AmityVideoResolution.RES_1080
-                    // AmityVideoResolution.RES_720
-                    // AmityVideoResolution.RES_480
-                    // AmityVideoResolution.RES_360
-                    resolutions.forEach { resolution ->
-                        //url for each video resolution
-                        val videoUrl = it.getVideoUrl(resolution)
-                    }
-                }
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { FileRepository } from '@amityco/ts-sdk';
-
-function getVideo() {
-  const videoFile = FileRepository.getFile('fileId');
-
-  return videoFile;
-}
+AmityCoreClient.newFileRepository()
+    .getFile(videoFileId)
+    .doOnSuccess { rawFile: AmityRawFile ->
+        val video = rawFile.asAmityVideo()
+        val status = video?.getStatus()
+        val resolutions = video?.getResolutions().orEmpty()
+        val playbackUrl = video?.getVideoUrl(AmityVideoResolution.RES_720)
+    }
+    .subscribe()
 ```
 
 ```dart Flutter
-void getVideo(AmityPost post) {
-  final AmityPostData? amityPostData = post.data;
-  if (amityPostData != null) {
-    final videoData = amityPostData as VideoData;
-    //for high quality video
-    videoData.getVideo(AmityVideoQuality.HIGH).then((AmityVideo video) {
-      //handle result
-    });
-    //for low quality video
-    videoData.getVideo(AmityVideoQuality.LOW).then((AmityVideo video) {
-      //handle result
-    });
-  }
+void inspectVideo(AmityVideo video) {
+  final resolutions = video.getResolutions();
+  final playbackUrl = video.getVideoUrl(AmityVideoResolution.RES_720);
 }
 ```
 
-### Accessing Video Thumbnails
 
-social.plus automatically generates video thumbnails for preview purposes. Thumbnails are created during the transcoding process and provide visual previews for video content.
+## Related Topics
 
-Thumbnails are generated asynchronously during transcoding. Check the transcoding status before accessing thumbnail URLs.
-
-{/* doc-as-test: skip (truly-illustrative: contains '...' ellipsis placeholder — pseudocode scaffold, not compilable Swift) */}
-```swift iOS
-let fileRepository = AmityFileRepository()
-    ...
-
-    func downloadVideoThumbnailAsData(from message: AmityMessage) {
-        guard let thumbnailFileId = message.data?["thumbnailFileId"] as? String,
-              !thumbnailFileId.isEmpty,
-              let imageInfo = message.getVideoThumbnailImageInfo() else { return }
-
-
-        // Download from url and return saved image url.
-        fileRepository.downloadImage(fromURL: imageInfo.fileURL, size: .small) { imageUrl, error in
-            // Handle image url and error.
-        }
-    }
-
-    func downloadVideoThumbnailAsUIImage(from message: AmityMessage) {
-        guard let thumbnailFileId = message.data?["thumbnailFileId"] as? String,
-              !thumbnailFileId.isEmpty,
-              let imageInfo = message.getVideoThumbnailImageInfo() else { return }
-
-        // Download from url and return image.
-        fileRepository.downloadImageAsData(fromURL: imageInfo.fileURL, size: .small) { image, size, error in
-            // Handle image and error.
-        }
-    }
-```
-
-```kotlin Android
-//Example of retrieving video thumbnail from a post
-    fun getVideoThumbnail(post: AmityPost) {
-        val data = post.getData()
-        if (data is AmityPost.Data.VIDEO) {
-            //retrieving an amity image from a video
-            val thumbnail: AmityImage? = data.getThumbnailImage()
-            //retrieving a large image url from an amity image
-            //the possible sizes are SMALL, MEDIUM, LARGE
-            val largeImage: String? = thumbnail?.getUrl(AmityImage.Size.LARGE)
-        }
-    }
-```
-
-```typescript TypeScript
-import { FileRepository } from '@amityco/ts-sdk';
-
-function getVideoImageThumbnail() {
-  const videoImageThumbnail = FileRepository.fileUrlWithSize('fileId', 'medium');
-
-  return videoImageThumbnail;
-}
-```
-
-## Next Steps
-
-    Learn about image processing, compression, and optimization
-    Explore comprehensive file handling and storage capabilities
-    Discover real-time video broadcasting and streaming features
-    Learn how to create engaging posts with video content
+    Attach uploaded videos to social posts.
+    Upload and inspect generic file attachments.
+    Create short-form clip posts where supported.
 
 ---
 
