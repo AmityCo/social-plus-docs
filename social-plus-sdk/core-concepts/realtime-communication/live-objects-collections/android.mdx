@@ -1,301 +1,114 @@
 ---
-title: "Android Live Objects/Collections"
-description: "Live Objects are supported in the Android SDK with RxJava Data Streaming"
+title: "Android Live Objects & Collections"
+description: "Observe Social+ Android SDK objects and collections with RxJava Flowable, Android Paging, and coroutine flows."
 ---
 
+The Android SDK exposes live objects and collections through RxJava 3 streams. Singular reads such as `getPost(postId)` return `Flowable<T>`. Paged list queries return `Flowable<PagingData<T>>`. Some finite list queries return `Flowable<List<T>>`.
 
-The RxJava3 library is being used in Android development to achieve Live Object and Live Collection behavior.
+Use RxJava directly, or convert supported streams to Kotlin `Flow` with the SDK coroutine bridge.
 
-It is a Java VM implementation of ReactiveX, a library for composing asynchronous and event-based programs by using observable sequences. The building blocks of RxJava are Observables and Subscribers. Observable is used for emitting items and Subscriber is used for consuming those items.
+## Platform Surface
 
-<Info>
-You can visit [ReactiveX](https://reactivex.io/) for more information.
-</Info>
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Flowable<T>` | Repository methods such as `AmitySocialClient.newPostRepository().getPost(postId)`. |
+| Paged live collection | `Flowable<PagingData<T>>` | Query builders such as `getPosts().targetCommunity(...).build().query()`. |
+| Finite live collection | `Flowable<List<T>>` | Used by selected APIs such as get-by-IDs style queries. |
+| Coroutine bridge | `Flowable<T>.asFlow()` | Import `com.amity.socialcloud.sdk.helper.core.coroutines.asFlow`. |
+| Cleanup | `Disposable.dispose()` or coroutine cancellation | Dispose or cancel when the Activity, Fragment, ViewModel, or UI scope no longer needs updates. |
 
-## How it Works
+## Parameters
 
-SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object methods | ID of the object to observe. |
+| Query builder target | Live collection builders | Scope for the collection, such as `targetCommunity(communityId)` or `targetUser(userId)`. |
+| `PagingData<T>` | Paged collections | The emitted paging payload consumed by RecyclerView, Paging 3, or Compose paging. |
+| `subscribeOn(Schedulers.io())` | RxJava streams | Runs SDK work on an IO scheduler. |
+| `observeOn(AndroidSchedulers.mainThread())` | UI observers | Delivers callbacks on the Android main thread for UI updates. |
 
-Rx3 Data Stream helps in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through **Flowable Objects** and **Flowable Collection**.
+## Observe A Live Object
 
-New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
+<CodeGroup>
 
-### Data Sources
+```kotlin Android
+val disposable = AmitySocialClient.newPostRepository()
+    .getPost(postId)
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { post: AmityPost ->
+            showSuccessMessage(post.getPostId())
+        },
+        { error: Throwable ->
+            handleGeneralError(error)
+        }
+    )
 
-<CardGroup cols={3}>
-  <Card title="Local Cache" icon="database">
-    Data present in local storage
-  </Card>
-  <Card title="Server Queries" icon="server">
-    Data queried from the server
-  </Card>
-  <Card title="Real-time Events" icon="bolt">
-    Data received from real-time events
-  </Card>
-</CardGroup>
-
-## How to Retrieve Data from Rx3 Data Stream
-
-To retrieve data from the RxStream, we need to subscribe to the Stream(Flowable/Single/Completable) by defining subscribing and observing threads.
-
-```kotlin
-fun subscribeToFlowable() {
-    //Flowable
-    val flowableStream: Flowable<Any> =
-        Flowable.just("one", "two", "three") // Flowable initialization
-    flowableStream
-        .subscribeOn(Schedulers.io()) // subscribing an operation on io thread (Background thread)
-        .observeOn(AndroidSchedulers.mainThread()) // observing results on main thread (UI thread)
-        .doOnNext {
-            // data is available here
-        }.doOnError {
-            // handle error here
-        }.subscribe()
-}
+disposable.dispose()
 ```
 
-## Events a Data Stream can Emit
+</CodeGroup>
 
-In the RxJava3 framework we have these different types of objects that can be observed:
+## Observe A Paged Live Collection
 
-### Flowable
-Emits a stream of elements
+The SDK query emits `PagingData<AmityPost>`. Feed it into your Paging 3 adapter or Compose paging collector.
 
-- **doOnNext**
-- **doOnError**
+<CodeGroup>
 
-### Single
-Emits exactly one element
-
-- **doOnSuccess**  
-- **doOnError**
-
-### Completable
-Emits a "complete" event, without emitting any data type, just a success/failure
-
-- **doOnComplete**
-- **doOnError**
-
-<AccordionGroup>
-  <Accordion title="Flowable Usage">
-    ```kotlin
-    val flowableStream: Flowable<List<AmityPost>> = postRepository.getPosts()
-    
-    flowableStream
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .doOnNext { posts ->
-            // Handle stream of posts
-            updateUI(posts)
+```kotlin Android
+val disposable = AmitySocialClient.newPostRepository()
+    .getPosts()
+    .targetCommunity(communityId)
+    .includeDeleted(false)
+    .build()
+    .query()
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { pagingData: PagingData<AmityPost> ->
+            showSuccessMessage(pagingData)
+        },
+        { error: Throwable ->
+            handleGeneralError(error)
         }
-        .doOnError { error ->
-            // Handle error
-            showErrorMessage(error.message)
-        }
-        .subscribe()
-    ```
-  </Accordion>
-  
-  <Accordion title="Single Usage">
-    ```kotlin
-    val singlePost: Single<AmityPost> = postRepository.getPost(postId)
-    
-    singlePost
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .doOnSuccess { post ->
-            // Handle single post
-            displayPost(post)
-        }
-        .doOnError { error ->
-            // Handle error
-            showErrorMessage(error.message)
-        }
-        .subscribe()
-    ```
-  </Accordion>
-  
-  <Accordion title="Completable Usage">
-    ```kotlin
-    val deleteOperation: Completable = postRepository.deletePost(postId)
-    
-    deleteOperation
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .doOnComplete {
-            // Handle successful completion
-            showSuccessMessage("Operation completed")
-        }
-        .doOnError { error ->
-            // Handle error
-            showErrorMessage(error.message)
-        }
-        .subscribe()
-    ```
-  </Accordion>
-</AccordionGroup>
+    )
 
-## Flow functions
-
-By using the `.asFlow()` method, it enables the conversion of Flowable&lt;T&gt; functions of the Amity Android SDK into Flow functions.
-
-```kotlin
-fun getAllUsers(): Flow<PagingData<AmityUser>> {
-    return AmityCoreClient.newUserRepository()
-        .getUsers()
-        .build()
-        .query()
-        .asFlow()
-}
+disposable.dispose()
 ```
 
-## Jetpack Compose compatibility
+</CodeGroup>
 
-Amity Android SDK seamlessly integrates with Jetpack Compose UI, allowing you to take full advantage of the modern UI toolkit provided by Jetpack Compose. You can effortlessly incorporate our SDK into your Jetpack Compose-based projects to enhance your app's social experience. This compatibility ensures that you can leverage the power of Jetpack Compose while benefiting from the features and capabilities our SDK provides.
+## Convert To Kotlin Flow
 
-### Flow of PagingData in Compose
+Use the coroutine bridge when the rest of your app is built around Kotlin Flow.
 
-In Jetpack Compose, integrating data from a `Flow<PagingData<T>>` source into your UI is made easy through the `collectAsLazyPagingItems()` function. This function allows you to seamlessly paginate and display items within your Composable functions.
+<CodeGroup>
 
-To start using it, add compose paging dependency in your project app level build.gradle file.
+```kotlin Android
+import com.amity.socialcloud.sdk.helper.core.coroutines.asFlow
 
-```gradle
-implementation "androidx.paging:paging-compose:x.y.z"
+val postFlow = AmitySocialClient.newPostRepository()
+    .getPost(postId)
+    .asFlow()
 ```
 
-Then in your Composable functions, you can collect from flow and display data, and also can observe the load state.
+</CodeGroup>
 
-```kotlin
-@Composable
-fun UserList(
-    modifier: Modifier = Modifier
-) {
-    //  collect data from flow using collectAsLazyPagingItems
-    val users = getAllUsers().collectAsLazyPagingItems()
+## Notes
 
-    //  display data in LazyColumn or LazyRow
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        items(
-            count = users.itemCount,
-            key = users.itemKey { it.getUserId() }
-        ) { index ->
-            //  render each item here
-            val user = users[index]
-            Text(text = "UserId: ${user?.getUserId()}")
-        }
+- A live object fetches the server object and then observes the SDK local store. The internal live-object use case also checks tombstones for hard-deleted objects.
+- Paged live collections use Android Paging 3, so page loading and UI load states should be handled through your Paging adapter or Compose paging integration.
+- Dispose RxJava subscriptions in the matching lifecycle owner or ViewModel. For coroutines, cancel the collecting scope.
+- Use `subscribeOn(Schedulers.io())` for SDK work and `observeOn(AndroidSchedulers.mainThread())` before mutating UI state.
 
-        //  handle load state on loading first page
-        when (val state = users.loadState.refresh) {
-            is LoadState.Error -> {
-                //  handle error
-                item {
-                    Text(text = "Error: ${state.error.message}")
-                }
-            }
-
-            is LoadState.Loading -> {
-                //  loading first page
-                item {
-                    Column(
-                        modifier = modifier.fillParentMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(text = "Refresh/First Loading")
-                        CircularProgressIndicator(color = Color.Black)
-                    }
-                }
-            }
-
-            else -> {}
-        }
-
-        //  handle load state on loading next page
-        when (val state = users.loadState.append) {
-            is LoadState.Error -> {
-                //  handle error
-                item {
-                    Text(text = "Error: ${state.error.message}")
-                }
-            }
-
-            is LoadState.Loading -> {
-                //  loading next page
-                item {
-                    Column(
-                        modifier = modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(text = "Pagination Loading")
-                        CircularProgressIndicator(color = Color.Black)
-                    }
-                }
-            }
-
-            else -> {}
-        }
-    }
-}
-```
-
-### Flow in Compose
-
-By using `collectAsState()` method, it can deliver asynchronous data updates to your Compose UI components.
-
-```kotlin
-fun getPostAsFlow(): Flow<AmityPost> {
-    return AmitySocialClient.newPostRepository()
-        .getPost(postId = "postId")
-        .asFlow()
-}
-
-@Composable
-fun SinglePostItem() {
-    val post by getPostAsFlow().collectAsState(initial = null)
-
-    Text(text = "Post ID: ${post?.getPostId()}")
-}
-```
-
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Resource Management">
-    **Proper Disposal**: Always dispose of RxJava subscriptions to prevent memory leaks when Activities/Fragments are destroyed.
-  </Accordion>
-  
-  <Accordion title="Thread Management">
-    **Proper Scheduling**: Use `subscribeOn(Schedulers.io())` for background operations and `observeOn(AndroidSchedulers.mainThread())` for UI updates.
-  </Accordion>
-  
-  <Accordion title="Error Handling">
-    **Graceful Recovery**: Implement robust error handling with `doOnError` for all RxJava streams to prevent crashes.
-  </Accordion>
-  
-  <Accordion title="Jetpack Compose Integration">
-    **State Management**: Use `collectAsState()` for single objects and `collectAsLazyPagingItems()` for paginated collections in Compose.
-  </Accordion>
-</AccordionGroup>
-
-## Related Resources
+## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="ReactiveX Documentation" href="https://reactivex.io/" icon="book">
-    Learn more about reactive programming concepts
+  <Card title="Post Retrieval" icon="newspaper" href="/social-plus-sdk/social/content-management/posts/retrieval/get-post">
+    See post-specific Android query examples.
   </Card>
-  <Card title="Android Paging 3" href="https://developer.android.com/topic/libraries/architecture/paging/v3-overview" icon="android">
-    Explore Android's official paging library
-  </Card>
-  <Card title="Jetpack Compose" href="https://developer.android.com/jetpack/compose" icon="palette">
-    Build modern Android UI with declarative programming
-  </Card>
-  <Card title="RxJava3 GitHub" href="https://github.com/ReactiveX/RxJava" icon="code">
-    Access RxJava3 source code and documentation
+  <Card title="Android Push Notifications" icon="bell" href="/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/android-setup">
+    Configure Android notification setup alongside real-time data.
   </Card>
 </CardGroup>
-

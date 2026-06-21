@@ -1,290 +1,149 @@
 ---
-title: "TypeScript Live Objects/Collections"
-description: "Live Objects are supported in the TypeScript SDK with subscribable objects and collections for real-time data synchronization"
+title: "TypeScript Live Objects & Collections"
+description: "Observe Social+ TypeScript SDK objects and collections with callbacks, pagination helpers, and real-time topic subscriptions."
 ---
 
-In the social.plus TypeScript SDK, we have the concept of **Live Object** and **Live Collection**.
+The TypeScript SDK exposes live objects and live collections through repository callbacks. A live object callback receives one object snapshot. A live collection callback receives a list snapshot plus pagination helpers when the query supports paging.
 
-Live Object is represented by an instance of social.plus Object. It helps to observe changes in a single object whereas Live Collection is represented by an instance of social.plus LiveCollection. It helps to observe changes in a list of objects.
+Repository observers watch SDK cache state. For cross-device real-time updates, subscribe to the topic that matches the object or collection scope, then clean up both the repository observer and the topic subscription.
 
-SDK handles lots of data received from various sources. Data can be present in the local cache. It may also be queried from the server or received from real-time events. What this means is that the same data is constantly updating. The data that you are accessing at the moment can get updated and become out of sync.
+## Platform Surface
 
-Live Object and Live Collection help in syncing data so you will always get the most recent one. New data gets automatically collected every time when there is an update and the user need not refresh to get the recent data.
+| Surface | Public shape | Notes |
+| --- | --- | --- |
+| Live object | `Amity.LiveObject<T>` | Callback payload includes `data`, `loading`, `error`, and optional `origin`. |
+| Live collection | `Amity.LiveCollection<T>` | Extends the live-object shape with `onNextPage`, `hasNextPage`, `onPrevPage`, and `hasPrevPage` where available. |
+| Observer cleanup | `Amity.Unsubscriber` | Repository live methods return an unsubscribe function. |
+| Real-time topic cleanup | `Amity.Unsubscriber` | `subscribeTopic()` returns a separate unsubscribe function. |
+| Collection config | `Amity.LiveCollectionConfig` | Supports query policies except `no_fetch`. |
 
-<Info>
-Examples: `Amity.Post` for single objects or `Amity.LiveCollection<Amity.Post>` for collections.
-</Info>
+## Parameters
 
-## How it Works
+| Parameter | Used by | Description |
+| --- | --- | --- |
+| `postId` or another entity ID | Live object methods | ID of the object to observe, such as a post, message, channel, community, user, poll, room, or stream. |
+| `params.targetType` / `params.targetId` | Collection queries such as `PostRepository.getPosts()` | Scope for the list. For posts, `targetType` is commonly `user` or `community`. |
+| `limit` | Collection queries | Optional page size for the query. |
+| `callback` | Object and collection methods | Receives each live snapshot. Handle `loading` and `error` before rendering data. |
+| `onNextPage` / `hasNextPage` | Live collections | Use when the UI asks for the next page. Do not call `onNextPage` repeatedly without checking `hasNextPage`. |
+| `subscribeTopic(topic, callback?)` | Real-time updates | Subscribes the active client to a topic such as `getPostTopic(post)` or `getCommunityTopic(community, SubscriptionLevels.POST)`. |
 
-SDK handles lots of data received from various sources. Data can be present in local cache. It might also be queried from the server or received from some real-time events. What this means is that same data is constantly updating. The data that you are accessing at the moment can get updated by other sources and becomes out of sync.
+## Observe A Live Object
 
-Live Object and Live Collection help in syncing the data so you will always get the most recent one. Whenever the data updates, you will be notified through subscribable objects and collections.
+This example observes one post and subscribes to the post topic after the first post snapshot is available.
 
-New data gets automatically collected everytime when there is an updation and user need not refresh to get the recent data.
+<CodeGroup>
 
-### Data Sources
+```typescript TypeScript
+import { PostRepository, getPostTopic, subscribeTopic } from "@amityco/ts-sdk";
 
-<CardGroup cols={3}>
-  <Card title="Local Cache" icon="database">
-    Data present in local storage
-  </Card>
-  <Card title="Server Queries" icon="server">
-    Data queried from the server
-  </Card>
-  <Card title="Real-time Events" icon="bolt">
-    Data received from real-time events
-  </Card>
-</CardGroup>
+let unsubscribePostTopic: Amity.Unsubscriber | undefined;
 
-## Live Object
+const unsubscribePost = PostRepository.getPost(postId, snapshot => {
+  if (snapshot.loading) {
+    showLoading();
+  }
 
-Although live objects were introduced prior to v6. All getter methods for singular objects (example getPost) will now return a subscribe-able object.
-
-This means that if an object gets updated and you have subscribed to real-time events, the object will get updated automatically via real-time events.
-
-If for your use case, you don't require any real-time updates, you can unsubscribe immediately.
-
-<Info>
-For further information about Live Object, please visit Live Object page.
-</Info>
-
-### Getting Real Time Updates for an Object
-
-```typescript
-import { PostRepository, subscribeTopic, getPostTopic } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const disposers: Amity.Unsubscriber[] = [];
-
-const GetPost: FC<{ postId: string }> = ({ postId }) => {
-  const [post, setPost] = useState<Amity.Post>();
-
-  useEffect(() => {
-
-    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-     const { post, loading, error } = data
-     
-     if (post) {
-       /*
-       * This step is important if you wish to recieve real time updates
-       * Here, you are letting the server know that you wish to recieve real time
-       * updates regarding this post
-       */
-       disposers.push(subscribeTopic(getPostTopic(post)))
-       
-       setPost(post)
-     }
-    });
-    
-    disposers.push(unsubscribePost);
-  }, [postId]);
-
-  return null;
-};
-```
-
-### Getting the object only once
-
-```typescript
-import { PostRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const GetPostOnce: FC<{ postId: string }> = ({ postId }) => {
-  const [post, setPost] = useState<Amity.Post>();
-
-  useEffect(() => {
-    const unsubscribePost = PostRepository.getPost(postId, ({ data }) => {
-     const { post, loading, error } = data
-     
-     if (post) {       
-       setPost(post)
-     }
-    });
-    
-    unsubscribePost()
-  }, [postId]);
-
-  return null;
-};
-
-## Live Collection
-
-Although live collections were introduced prior to v6. All query methods for the collection of objects (example getPosts) will now return a subscribe-able collection.
-
-This means that if an object in the collection gets updated and you have subscribed to real-time events, the collection will get updated automatically via real-time events.
-
-If for your use case, you don't require any real-time updates, you can unsubscribe immediately. Similar to the live objects above.
-
-<Info>
-For further information about Live Collection, please visit Live Collection page.
-</Info>
-
-### Getting Real-Time updates for a collection
-
-```typescript
-import {
-  PostRepository,
-  subscribeTopic,
-  getUserTopic,
-  getCommunityTopic,
-  SubscriptionLevels,
-} from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const disposers: Amity.Unsubscriber[] = [];
-
-const GetPosts: FC<{ targetId: string; targetType: string }> = 
-({ targetId, targetType }) => {
-  const [posts, setPosts] = useState<Amity.Post[]>();
-
-  useEffect(() => {
-    const unsubscribe = PostRepository.getPosts(
-      { targetId, targetType },
-      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
-        setPosts(posts);
-        /*
-         * this is only required if you want real time updates for each
-         * post in the collection
-         */
-        subscribePostTopic(targetType, targetId);
-      },
-    );
-
-    disposers.push(unsubscribe);
-
-    return () => {
-      disposers.forEach(fn => fn());
-    };
-  });
-
-  return null;
-};
-
-const subscribePostTopic = (targetType: string, targetId: string) => {
-  if (isSubscribed) return;
-
-  if (targetType === 'user') {
-    const user = {} as Amity.User; // use getUser to get user by targetId
-    disposers.push(
-      subscribeTopic(getUserTopic(user, SubscriptionLevels.POST), () => {
-        // use callback to handle errors with event subscription
-      }),
-    );
+  if (snapshot.error) {
+    handleError(snapshot.error);
     return;
   }
 
-  if (targetType === 'community') {
-    // use getCommunity to get community by targetId
-    const community = {} as Amity.Community; 
-    disposers.push(
-      subscribeTopic(getCommunityTopic(community, SubscriptionLevels.POST), () => {
-        // use callback to handle errors with event subscription
-      }),
-    );
+  const currentPost = snapshot.data;
+  renderResults(currentPost);
+
+  if (!unsubscribePostTopic) {
+    unsubscribePostTopic = subscribeTopic(getPostTopic(currentPost), error => {
+      if (error) handleError(error);
+    });
   }
-};
+});
+
+function stopObservingPost() {
+  unsubscribePost();
+  unsubscribePostTopic?.();
+}
 ```
 
-### Getting paginated collection without real-time updates
+</CodeGroup>
 
-```typescript
+## Observe A Live Collection
+
+Use the collection callback to render the latest list. Keep the next-page function and call it only when the UI requests more data.
+
+<CodeGroup>
+
+```typescript TypeScript
 import {
   PostRepository,
-  subscribeTopic,
-  getUserTopic,
-  getCommunityTopic,
   SubscriptionLevels,
-} from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
+  getCommunityTopic,
+  subscribeTopic,
+} from "@amityco/ts-sdk";
 
-const GetPosts: FC<{ targetId: string; targetType: string }> = 
-({ targetId, targetType }) => {
-  const [posts, setPosts] = useState<Amity.Post[]>();
+let hasMorePosts = false;
+let loadNextPostsPage: (() => void) | undefined;
 
-  useEffect(() => {
-    const unsubscribe = PostRepository.getPosts(
-      { targetId, targetType },
-      ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
-        if (posts)
-          setPosts(posts);
-        
-        // to get next page use onNextPage()
-      },
-    );
+const unsubscribePostsTopic = subscribeTopic(
+  getCommunityTopic(community, SubscriptionLevels.POST),
+  error => {
+    if (error) handleError(error);
+  }
+);
 
-    unsubscribe()
-  });
+const unsubscribePosts = PostRepository.getPosts(
+  {
+    targetType: "community",
+    targetId: communityId,
+    limit: 20,
+    sortBy: "lastCreated",
+    includeDeleted: false,
+  },
+  collection => {
+    if (collection.loading) {
+      showLoading();
+    }
 
-  return null;
-};
+    if (collection.error) {
+      handleError(collection.error);
+      return;
+    }
 
-## Best Practices
+    renderResults(collection.data);
+    hasMorePosts = collection.hasNextPage ?? false;
+    loadNextPostsPage = collection.onNextPage;
+  }
+);
 
-<AccordionGroup>
-  <Accordion title="Memory Management">
-    **Always Clean Up**: Prevent memory leaks by properly disposing of subscriptions and unsubscribers.
-    
-    ```typescript
-    // Use a disposer pattern
-    const disposers: Amity.Unsubscriber[] = [];
-    
-    useEffect(() => {
-      // Add subscriptions
-      disposers.push(PostRepository.getPost(postId, callback));
-      disposers.push(subscribeTopic(getPostTopic(post)));
-      
-      return () => {
-        // Clean up all subscriptions
-        disposers.forEach(dispose => dispose());
-      };
-    }, []);
-    ```
-  </Accordion>
+function loadMorePosts() {
+  if (hasMorePosts) {
+    loadNextPostsPage?.();
+  }
+}
 
-  <Accordion title="Real-time Subscription Management">
-    **Subscribe Selectively**: Only subscribe to real-time events when you need live updates to optimize performance.
-    
-    ```typescript
-    // For static content, unsubscribe immediately
-    const unsubscribe = PostRepository.getPost(postId, callback);
-    unsubscribe(); // No real-time updates needed
-    
-    // For live content, keep subscription active
-    const unsubscribe = PostRepository.getPost(postId, callback);
-    disposers.push(unsubscribe); // Keep for real-time updates
-    ```
-  </Accordion>
-  
-  <Accordion title="Error Handling">
-    **Handle Subscription Errors**: Always provide error callbacks for topic subscriptions.
-    
-    ```typescript
-    disposers.push(
-      subscribeTopic(getPostTopic(post), (error) => {
-        if (error) {
-          console.error('Subscription failed:', error);
-          // Handle fallback or retry logic
-        }
-      })
-    );
-    ```
-  </Accordion>
-  
-  <Accordion title="Performance Optimization">
-    **Debounce Updates**: For frequently updating collections, consider debouncing UI updates.
-    
-    ```typescript
-    import { debounce } from 'lodash';
-    
-    const debouncedSetPosts = debounce(setPosts, 300);
-    
-    PostRepository.getPosts(query, ({ data: posts }) => {
-      if (posts) {
-        debouncedSetPosts(posts);
-      }
-    });
-    ```
-  </Accordion>
-</AccordionGroup>
+function stopObservingPosts() {
+  unsubscribePosts();
+  unsubscribePostsTopic();
+}
+```
 
+</CodeGroup>
+
+## Notes
+
+- `getPost()`, `getMessage()`, `getChannel()`, `getCommunity()`, `getUser()`, `getPoll()`, `getRoom()`, and similar singular methods follow the same live-object callback pattern.
+- Query methods such as `getPosts()`, `getComments()`, `getMessages()`, `getMembers()`, `getReactions()`, `getRooms()`, and `getStreams()` follow the live-collection callback pattern.
+- The callback can emit local/cache data before server data. Use `loading`, `error`, and `origin` if your UI needs to distinguish phases.
+- Keep topic subscriptions as narrow as possible. A post-detail screen should subscribe to the post topic; a community feed screen should subscribe to the community post topic.
+- Always dispose the observer returned by the repository and any topic unsubscribe functions returned by `subscribeTopic()`.
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Post Retrieval" icon="newspaper" href="/social-plus-sdk/social/content-management/posts/retrieval/get-post">
+    See post-specific live object and collection usage.
+  </Card>
+  <Card title="TypeScript Real-time Events" icon="radio-tower" href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events">
+    Subscribe to social topics for cross-device updates.
+  </Card>
+</CardGroup>
