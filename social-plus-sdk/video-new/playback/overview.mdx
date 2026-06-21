@@ -1,485 +1,275 @@
 ---
 title: "Playback Overview"
-description: "Comprehensive guide to video playback and viewer experience with social.plus SDK"
+description: "Understand the SDK room playback contract and hand live or recorded playback URLs to your player."
 ---
 
-# Playback Overview
+Playback in the social.plus SDK is a room-data workflow. The SDK gives your app room state, live playback URLs, recorded playback metadata, optional URL refresh helpers, and watch-session analytics. Your app owns the media player, autoplay policy, buffering UI, captions, DRM, seek controls, and platform playback SDK.
 
-The social.plus Video SDK provides robust video playback capabilities that deliver exceptional viewing experiences across all platforms. This guide covers everything from basic playback to advanced viewer features.
+<Note>
+  This page covers SDK playback data for rooms. Use your own player layer, such as AVPlayer, ExoPlayer, a browser video element with HLS support, or another product-approved player, after the SDK returns a playable URL.
+</Note>
 
-## What is Video Playback?
+## Platform Surface
 
-Video playback in the social.plus SDK encompasses all aspects of the viewer experience, from stream discovery to interactive viewing features. Our playback system is optimized for low latency, high quality, and seamless user experience.
+| Platform | Observe room state | Live source | Recorded source | Recorded refresh | Watch analytics |
+| --- | --- | --- | --- | --- | --- |
+| TypeScript | `RoomRepository.getRoom(roomId, callback)` | `room.livePlaybackUrl` | `room.recordedPlaybackInfos[]` | `RoomRepository.getRecordedUrl(roomId)` | `room.analytics()` |
+| iOS | `AmityRoomRepository().getRoom(withId:)` | `room.livePlaybackUrl` | `room.recordedData[]` | Re-observe or fetch the room object | `room.analytics()` |
+| Android | `AmityVideoClient.newRoomRepository().getRoom(roomId)` | `room.getLivePlaybackUrl()` | `room.getRecordedPlaybackInfos()` | `getRecordedUrls(roomId)` | `room.analytics()` |
+| Flutter | No current public room playback API found in this audit | Not available | Not available | Not available | Not available |
 
-## Key Playback Features
+## Playback Flow
 
-### Adaptive Streaming
-- **Automatic Quality Adjustment**: Adapts to network conditions in real-time
-- **Multi-bitrate Support**: Multiple quality levels for optimal viewing
-- **Smooth Transitions**: Seamless quality switching without interruption
-- **Bandwidth Optimization**: Efficient streaming for all connection types
+<Steps>
+  <Step title="Observe or fetch the room">
+    Use a room live object or room query from the platform SDK. Keep the subscription alive while the viewing screen is open.
+  </Step>
+  <Step title="Choose a playback source">
+    Use the live URL only when the room is `live` or `waitingReconnect`. Use recorded metadata only when the room is `recorded`.
+  </Step>
+  <Step title="Hand the URL to your player">
+    Pass the selected URL to your app-owned player. Do not call player APIs that are not part of the social.plus SDK.
+  </Step>
+  <Step title="Track watch time if needed">
+    Create and update a room watch session from `room.analytics()` when your product considers the viewer actively watching.
+  </Step>
+</Steps>
 
-### Interactive Viewing
-- **Live Chat**: Real-time messaging during streams
-- **Reactions**: Express emotions with animated reactions
-- **Polls and Q&A**: Participate in broadcaster interactions
-- **Super Chat**: Highlighted messages and donations
+## Choose a Playback Source
 
-### Cross-Platform Playback
-- **Web Players**: HTML5 video with WebRTC support
-- **Mobile Apps**: Native iOS and Android players
-- **Smart TVs**: Television and set-top box compatibility
-- **Desktop Apps**: Windows, macOS, and Linux support
+Select a URL from SDK room state before creating or updating your player. Return no source for statuses that are not playable.
 
-## Getting Started with Playback
+<CodeGroup>
 
-### Basic Player Setup
-
-```javascript
-import { SocialPlusVideo } from '@social-plus/video-sdk';
-
-const player = new SocialPlusVideo({
-  apiKey: 'your-api-key',
-  mode: 'viewer'
-});
-
-// Initialize player
-await player.initialize({
-  containerId: 'video-player',
-  streamId: 'stream-id-to-watch',
-  autoplay: true,
-  muted: false
-});
-```
-
-### Stream Discovery
-
-```javascript
-// Get live streams
-const liveStreams = await player.getLiveStreams({
-  category: 'gaming',
-  limit: 20,
-  sortBy: 'viewers' // 'viewers', 'recent', 'trending'
-});
-
-// Search for streams
-const searchResults = await player.searchStreams({
-  query: 'minecraft',
-  filters: {
-    live: true,
-    language: 'en',
-    category: 'gaming'
+```typescript TypeScript
+function playbackSourceForRoom(room: Amity.Room): string | undefined {
+  if (room.status === "live" || room.status === "waitingReconnect") {
+    return room.livePlaybackUrl;
   }
-});
 
-// Get recommended streams
-const recommendations = await player.getRecommendedStreams({
-  userId: 'current-user-id',
-  limit: 10
-});
+  if (room.status === "recorded") {
+    return room.recordedPlaybackInfos[0]?.url;
+  }
+
+  return undefined;
+}
 ```
 
-### Joining a Stream
+```kotlin Android
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
 
-```javascript
-// Join live stream
-await player.joinStream('stream-id', {
-  quality: 'auto', // 'auto', '1080p', '720p', '480p'
-  lowLatency: true,
-  chat: true,
-  notifications: true
-});
-
-// Handle stream events
-player.on('streamJoined', (streamInfo) => {
-  console.log('Joined stream:', streamInfo);
-  updateUI(streamInfo);
-});
-
-player.on('streamEnded', () => {
-  console.log('Stream has ended');
-  showStreamEndedMessage();
-});
-```
-
-## Player Controls
-
-### Basic Controls
-
-```javascript
-// Play/pause controls
-await player.play();
-await player.pause();
-
-// Volume control
-await player.setVolume(0.8); // 0.0 to 1.0
-const volume = player.getVolume();
-
-// Mute/unmute
-await player.mute();
-await player.unmute();
-const isMuted = player.isMuted();
-
-// Fullscreen
-await player.enterFullscreen();
-await player.exitFullscreen();
-const isFullscreen = player.isFullscreen();
-```
-
-### Quality Control
-
-```javascript
-// Set video quality
-await player.setQuality('720p');
-
-// Get available qualities
-const qualities = await player.getAvailableQualities();
-// Output: ['1080p', '720p', '480p', '360p', 'auto']
-
-// Enable adaptive streaming
-await player.enableAdaptiveStreaming({
-  algorithm: 'bandwidth', // 'bandwidth', 'buffer', 'hybrid'
-  bufferTarget: 3000, // milliseconds
-  maxBitrate: 8000000 // bits per second
-});
-```
-
-### Playback Speed
-
-```javascript
-// Set playback speed (for VOD content)
-await player.setPlaybackSpeed(1.5); // 0.5x to 2.0x
-
-// Get available speeds
-const speeds = player.getAvailablePlaybackSpeeds();
-// Output: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-```
-
-## Live Stream Features
-
-### Real-time Chat
-
-```javascript
-// Enable chat
-await player.enableChat({
-  position: 'side', // 'side', 'overlay', 'bottom'
-  moderation: true,
-  emotes: true,
-  mentions: true
-});
-
-// Send chat message
-await player.sendChatMessage('Hello everyone!');
-
-// Handle chat events
-player.on('chatMessage', (message) => {
-  displayChatMessage(message);
-});
-
-player.on('chatModerationAction', (action) => {
-  handleModerationAction(action);
-});
-```
-
-### Viewer Interactions
-
-```javascript
-// Send reaction
-await player.sendReaction('heart'); // 'heart', 'thumbs-up', 'fire', 'wow'
-
-// Participate in poll
-await player.votePoll('poll-id', 'option-1');
-
-// Ask question in Q&A
-await player.askQuestion('What camera do you use?');
-
-// Send super chat
-await player.sendSuperChat({
-  message: 'Great stream!',
-  amount: 5.00,
-  currency: 'USD'
-});
-```
-
-### Stream Information
-
-```javascript
-// Get stream details
-const streamInfo = await player.getStreamInfo();
-console.log({
-  title: streamInfo.title,
-  description: streamInfo.description,
-  category: streamInfo.category,
-  viewerCount: streamInfo.viewerCount,
-  duration: streamInfo.duration,
-  tags: streamInfo.tags
-});
-
-// Get broadcaster info
-const broadcasterInfo = await player.getBroadcasterInfo();
-console.log({
-  name: broadcasterInfo.name,
-  avatar: broadcasterInfo.avatar,
-  followers: broadcasterInfo.followers,
-  isLive: broadcasterInfo.isLive
-});
-```
-
-## VOD (Video on Demand) Playback
-
-### Playing Recorded Content
-
-```javascript
-// Load VOD content
-await player.loadVOD('video-id', {
-  startTime: 30, // Start at 30 seconds
-  quality: 'auto',
-  captions: true
-});
-
-// Seek controls
-await player.seekTo(120); // Seek to 2 minutes
-await player.seekBy(30); // Skip forward 30 seconds
-await player.seekBy(-10); // Skip backward 10 seconds
-
-// Get playback position
-const currentTime = player.getCurrentTime();
-const duration = player.getDuration();
-const progress = currentTime / duration;
-```
-
-### Video Chapters
-
-```javascript
-// Get video chapters
-const chapters = await player.getChapters();
-console.log(chapters);
-// Output: [
-//   { id: '1', title: 'Introduction', startTime: 0, endTime: 120 },
-//   { id: '2', title: 'Main Content', startTime: 120, endTime: 1800 }
-// ]
-
-// Jump to chapter
-await player.jumpToChapter('chapter-2');
-
-// Chapter navigation events
-player.on('chapterChanged', (chapter) => {
-  updateChapterDisplay(chapter);
-});
-```
-
-## Advanced Playback Features
-
-### Picture-in-Picture
-
-```javascript
-// Enable picture-in-picture
-await player.enablePictureInPicture({
-  size: 'medium', // 'small', 'medium', 'large'
-  position: 'bottom-right',
-  draggable: true,
-  controls: ['play', 'volume', 'close']
-});
-
-// Handle PiP events
-player.on('pipEnabled', () => {
-  console.log('Picture-in-picture enabled');
-});
-
-player.on('pipDisabled', () => {
-  console.log('Picture-in-picture disabled');
-});
-```
-
-### Multi-view
-
-```javascript
-// Enable multi-view for multiple streams
-await player.enableMultiView({
-  layout: 'grid', // 'grid', 'sidebar', 'overlay'
-  streams: [
-    { id: 'stream-1', position: 'main' },
-    { id: 'stream-2', position: 'secondary' },
-    { id: 'stream-3', position: 'tertiary' }
-  ],
-  audio: 'main' // Which stream's audio to play
-});
-
-// Switch main stream
-await player.switchMainStream('stream-2');
-```
-
-### Accessibility Features
-
-```javascript
-// Configure accessibility
-await player.configureAccessibility({
-  captions: {
-    enabled: true,
-    language: 'en',
-    fontSize: 'medium',
-    color: '#ffffff',
-    backgroundColor: 'rgba(0,0,0,0.8)'
-  },
-  
-  audioDescription: true,
-  
-  keyboardNavigation: {
-    enabled: true,
-    shortcuts: {
-      play: ' ', // Spacebar
-      fullscreen: 'f',
-      mute: 'm',
-      volumeUp: 'ArrowUp',
-      volumeDown: 'ArrowDown'
+fun playbackSourceForRoom(room: AmityRoom): String? {
+    return when (room.getStatus()) {
+        AmityRoomStatus.LIVE,
+        AmityRoomStatus.WAITING_RECONNECT -> room.getLivePlaybackUrl()
+        AmityRoomStatus.RECORDED -> room.getRecordedPlaybackInfos()
+            .firstOrNull()
+            ?.url
+        else -> null
     }
-  },
-  
-  screenReader: {
-    enabled: true,
-    announcements: true
-  }
-});
+}
 ```
 
-## Performance Optimization
-
-### Buffering and Preloading
-
-```javascript
-// Configure buffering
-await player.configureBuffering({
-  targetBuffer: 3000, // 3 seconds
-  maxBuffer: 10000, // 10 seconds
-  preloadStrategy: 'aggressive', // 'none', 'conservative', 'aggressive'
-  adaptiveBuffer: true
-});
-
-// Preload related content
-await player.preloadContent([
-  'related-video-1',
-  'related-video-2',
-  'recommended-stream'
-]);
-```
-
-### Network Optimization
-
-```javascript
-// Monitor network conditions
-player.on('networkQualityChanged', (quality) => {
-  console.log('Network quality:', quality); // 'excellent', 'good', 'poor'
-  
-  if (quality === 'poor') {
-    // Reduce quality or enable data saver mode
-    await player.enableDataSaver();
-  }
-});
-
-// Configure data usage
-await player.configureDataUsage({
-  dataSaverMode: false,
-  maxDataRate: 5000000, // 5 Mbps
-  wifiOnly: false,
-  mobileDataWarning: true
-});
-```
-
-## Player Events
-
-### Playback Events
-
-```javascript
-// Core playback events
-player.on('loadstart', () => console.log('Started loading'));
-player.on('loadedmetadata', () => console.log('Metadata loaded'));
-player.on('canplay', () => console.log('Can start playing'));
-player.on('play', () => console.log('Playback started'));
-player.on('pause', () => console.log('Playback paused'));
-player.on('ended', () => console.log('Playback ended'));
-
-// Quality events
-player.on('qualityChanged', (quality) => {
-  console.log('Quality changed to:', quality);
-});
-
-// Buffer events
-player.on('buffering', () => console.log('Buffering...'));
-player.on('bufferingEnd', () => console.log('Buffering ended'));
-
-// Error events
-player.on('error', (error) => {
-  console.error('Player error:', error);
-  handlePlayerError(error);
-});
-```
-
-### Stream-specific Events
-
-```javascript
-// Live stream events
-player.on('viewerCountChanged', (count) => {
-  updateViewerCount(count);
-});
-
-player.on('streamQualityChanged', (quality) => {
-  displayQualityIndicator(quality);
-});
-
-player.on('broadcasterOnline', (broadcaster) => {
-  showNotification(`${broadcaster.name} is now live!`);
-});
-
-player.on('broadcasterOffline', (broadcaster) => {
-  showNotification(`${broadcaster.name} went offline`);
-});
-```
-
-## Error Handling
-
-### Common Error Types
-
-```javascript
-player.on('error', (error) => {
-  switch (error.code) {
-    case 'STREAM_NOT_FOUND':
-      showError('Stream not found');
-      break;
-    case 'NETWORK_ERROR':
-      showError('Network connection problem');
-      break;
-    case 'PLAYBACK_ERROR':
-      showError('Playback failed');
-      break;
-    case 'PERMISSION_DENIED':
-      showError('Access denied');
-      break;
+```swift iOS
+func playbackSource(for room: AmityRoom) -> String? {
+    switch room.status {
+    case .live, .waitingReconnect:
+        return room.livePlaybackUrl
+    case .recorded:
+        return room.recordedData.first?.playbackUrl
     default:
-      showError('An unexpected error occurred');
-  }
-});
+        return nil
+    }
+}
 ```
 
-### Automatic Error Recovery
+</CodeGroup>
 
-```javascript
-// Configure error recovery
-await player.configureErrorRecovery({
-  retryAttempts: 3,
-  retryDelay: 1000,
-  fallbackQuality: '480p',
-  errorReporting: true
-});
+## Observe Playback State
+
+Observe room state while the viewer is on a playback screen. A room can move from waiting, to live playback, to ended processing, and later to recorded playback.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+function observePlaybackState(roomId: string): Amity.Unsubscriber {
+  return RoomRepository.getRoom(roomId, snapshot => {
+    if (snapshot.error) {
+      handleError(snapshot.error);
+      return;
+    }
+
+    const room = snapshot.data;
+    const source =
+      room.status === "live" || room.status === "waitingReconnect"
+        ? room.livePlaybackUrl
+        : room.status === "recorded"
+          ? room.recordedPlaybackInfos[0]?.url
+          : undefined;
+
+    if (source) {
+      showSuccessMessage(source);
+      return;
+    }
+
+    showSuccessMessage(room.status);
+  });
+}
 ```
 
-## Next Steps
+```kotlin Android
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
 
-- [Platform-Specific Players](../platform-specific) - Platform implementation guides
-- [Broadcasting](../broadcasting) - Learn about creating streams
-- [Core Concepts](../core-concepts) - Understanding video streaming
-- [Troubleshooting](../troubleshooting) - Common playback issues
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRoom(roomId)
+    .subscribe(
+        { room ->
+            when (room.getStatus()) {
+                AmityRoomStatus.LIVE,
+                AmityRoomStatus.WAITING_RECONNECT -> {
+                    showSuccessMessage(room.getLivePlaybackUrl() ?: "live")
+                }
+                AmityRoomStatus.RECORDED -> {
+                    val source = room.getRecordedPlaybackInfos()
+                        .firstOrNull()
+                        ?.url
 
-## Related Topics
+                    showSuccessMessage(source ?: "recorded")
+                }
+                else -> {
+                    showSuccessMessage(room.getStatus())
+                }
+            }
+        },
+        { error -> handleGeneralError(error) }
+    )
+```
 
-- [Notifications](../notifications) - Stream alerts and events
-- [Getting Started](../getting-started) - SDK setup and initialization
+```swift iOS
+var roomObservationToken: AmityNotificationToken?
+let roomObject = AmityRoomRepository().getRoom(withId: roomId)
+
+roomObservationToken = roomObject.observe { liveObject, error in
+    if let error {
+        handleGeneralError(error)
+        return
+    }
+
+    guard let room = liveObject.snapshot else { return }
+
+    switch room.status {
+    case .live, .waitingReconnect:
+        showSuccessMessage(room.livePlaybackUrl)
+    case .recorded:
+        showSuccessMessage(room.recordedData.first?.playbackUrl)
+    default:
+        showSuccessMessage(room.status.rawValue)
+    }
+}
+```
+
+</CodeGroup>
+
+## Refresh Recorded Playback
+
+Refresh recorded playback data before starting a recorded video, after a long pause, or when your player reports an expired or unauthorized media URL.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+async function refreshRecordedPlaybackUrl(roomId: string): Promise<string> {
+  const recordedUrl = await RoomRepository.getRecordedUrl(roomId);
+
+  showSuccessMessage(recordedUrl.expiresAt);
+
+  return recordedUrl.url;
+}
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRecordedUrls(roomId)
+    .subscribe(
+        { urls -> showSuccessMessage(urls.firstOrNull() ?: "no-recorded-url") },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+var refreshToken: AmityNotificationToken?
+let roomObject = AmityRoomRepository().getRoom(withId: roomId)
+
+refreshToken = roomObject.observeOnce { liveObject, error in
+    if let error {
+        handleGeneralError(error)
+        return
+    }
+
+    guard let room = liveObject.snapshot,
+          room.status == .recorded else {
+        return
+    }
+
+    showSuccessMessage(room.recordedData.first?.playbackUrl)
+}
+```
+
+</CodeGroup>
+
+## Playback Parameters
+
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Room ID | `room.roomId` | `room.roomId` | `room.getRoomId()` |
+| Room status | `room.status` | `room.status` | `room.getStatus()` |
+| Live URL | `room.livePlaybackUrl` | `room.livePlaybackUrl` | `room.getLivePlaybackUrl()` |
+| Recorded URL list | `room.recordedPlaybackInfos[].url` | `room.recordedData[].playbackUrl` | `room.getRecordedPlaybackInfos()[].url` |
+| Recorded thumbnail list | `room.recordedPlaybackInfos[].thumbnailUrl` | `room.recordedData[].thumbnailUrl` | `room.getRecordedPlaybackInfos()[].thumbnailUrl` |
+| Live resolution | `room.liveResolution` | `room.liveResolution` | `room.getLiveResolution()` |
+| Recorded resolution | `room.recordedResolution` | `room.recordedResolution` | `room.getRecordedResolution()` |
+| Watch analytics | `room.analytics()` | `room.analytics()` | `room.analytics()` |
+
+## Status Handling
+
+| Room status | Playback behavior |
+| --- | --- |
+| `idle` | Show a waiting or not-started state. Do not create a player source. |
+| `live` | Use the live playback URL when present. |
+| `waitingReconnect` | Keep the viewing UI available and show reconnecting state if playback stalls. |
+| `ended` | Stop live playback and show processing state while recorded metadata is not ready. |
+| `recorded` | Use recorded playback metadata or the platform refresh helper. |
+| `terminated` | TypeScript room status for a terminated room. Do not assume playback is available. |
+| `error` | Show a recoverable error state and let the viewer retry or leave. |
+
+<Warning>
+  Do not synthesize fallback playback URLs. If the SDK room state does not include a playable live or recorded source for the current viewer, show an unavailable, blocked, processing, or retry state based on your product rules.
+</Warning>
+
+## SDK and Player Boundary
+
+| Area | social.plus SDK owns | Your app/player owns |
+| --- | --- | --- |
+| Discovery | Room IDs, room post data, room state, live object updates | Ranking, placement, navigation, and empty states |
+| Source data | Live URLs, recorded URLs, thumbnails, and resolution metadata | Player initialization, buffering, seek controls, captions, DRM, and release lifecycle |
+| Freshness | Platform refresh or re-observation helpers | Retry timing, expired URL recovery, and player reload |
+| Analytics | Room watch-session APIs | Deciding which player states count as active watch time |
+
+<CardGroup cols={3}>
+  <Card title="Live Viewing" icon="tower-broadcast" href="/social-plus-sdk/video-new/broadcasting/live-viewing">
+    Observe live room state and hand the live URL to your player.
+  </Card>
+  <Card title="Recorded Playback" icon="circle-play" href="/social-plus-sdk/video-new/broadcasting/recorded-playback">
+    Wait for recorded status, read recorded metadata, and refresh URLs.
+  </Card>
+  <Card title="Livestream Analytics" icon="chart-line" href="/social-plus-sdk/video-new/analytics/overview">
+    Track room watch sessions after playback starts.
+  </Card>
+</CardGroup>
