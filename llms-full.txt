@@ -5560,1274 +5560,589 @@ function getVideoImageThumbnail() {
 
 ### [Mentions](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/mentions)
 
-> Tag users or channels in posts, comments, and messages using mentionUsers() and mentionChannel() with the AmityMention object.
+> Attach user mention payloads and mention metadata when creating or editing posts, comments, and messages.
 
-Tag users in posts, comments, and messages using `mentionUsers(userIds)`, or notify an entire channel using `mentionChannel(channelId)`. The `AmityMention` object represents each mention and is passed through the content metadata.
+Mentions are attached to content creation or edit calls. They use two pieces of data: `mentionees` tells Social+ which users or channel are mentioned, and `metadata` stores the text ranges your UI can use to render the highlighted mention text.
 
-**Mention Support**: User mentions are supported in posts, comments, and messages. Channel mentions are available in messages only.
+  User mentions are available on posts, comments, and messages. Channel mentions are message-only.
 
-## Key Features
+## Platform Surface
 
-    Tag specific users with @username notation for direct engagement
-    Mention entire channels to notify all members (messages only)
-    Automatic push notifications alert mentioned users instantly
-    Customizable mention data structure for advanced use cases
+| Platform | Mentionees payload | Mention metadata helper |
+| --- | --- | --- |
+| TypeScript | `mentionees: [{ type: "user", userIds: [...] }]` | Plain `metadata` object with `mentioned` entries |
+| iOS | `AmityMentioneesBuilder` | `AmityMetadataMapper.metadata(mentions:)` |
+| Android | `mentionUserIds` on post APIs or `mentionUsers()` on builders | `AmityMentionMetadataCreator` |
+| Flutter | `mentionUsers()` on builders | `AmityMentionMetadataCreator` |
 
-## Where Mentions Work
+## Parameters
 
-    Mention users in community posts to boost engagement and start conversations
-    Tag users in comment threads for focused discussions
-    Direct mentions in chat messages, including channel-wide mentions
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `text` | Yes | Content text that includes the mention display text, such as `@alex`. |
+| `mentionees` / mention builder | Yes for mention behavior | Users or channel being mentioned. Posts and comments support user mentionees; messages support user and channel mentionees. |
+| `metadata` | Recommended for rendering | Metadata object containing mention text ranges under `mentioned`. |
+| `type` | Yes in metadata | Use `user` for user mentions or `channel` for message channel mentions. |
+| `index` | Yes in metadata | Zero-based index where the mention starts in the content text. |
+| `length` | Yes in metadata | Length of the display name after the `@` character. For `@alex`, use `4`. |
+| `userId` | User mentions only | ID of the mentioned user. |
 
-Upon creating a model above (a post, comment, or message) with a mention, you can include a JSON object in the metadata parameter. The metadata represents the mentioned object, which depends on the design of your data structure. However, we provide a default structure to help you create the mentioned metadata.
+## Create Content With A User Mention
 
-To ensure prompt notification of the person mentioned, it's important to provide the list of user IDs for the mentioned user parameter. This will help ensure that the mentioned users are notified and able to engage with the content.
+The examples below create a community text post that mentions one user. Use the same mentionee and metadata pattern when creating comments or messages with the SDK-specific creation API.
 
-- `mentionUsers(userIds)` -  In order to mention users and notify specific users. This function supports all mentionable models.
-
-- `mentionChannel(channelId)` - In order to mention and notify the whole channel. This function supports only a message model.
-
-- `metadata` - a free-form JSON object that can accommodate any information regarding the mentioned users. Our default structure for representing mentions is also in the metadata property.
-
-## Default Mention Data Structure
-To represent mentions using our structure, you will need to utilize the AmityMention object. This object can be created during mentionable model creation, as well as during rendering.
-Tag specific users in posts and comments with @username notation.
-
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `type` | `enum` | Always `"user"` for user mentions |
-    | `index` | `number` | Start index of the mention in text |
-    | `userId` | `string` | ID of the mentioned user |
-    | `length` | `number` | Length of the mention text (excluding "@" symbol) |
-
-
-Mention entire channels in chat messages to notify all members.
-
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `type` | `enum` | Always `"channel"` for channel mentions |
-    | `index` | `number` | Start index of the mention in text |
-    | `channelId` | `string` | ID of the mentioned channel |
-    | `length` | `number` | Length of the mention text (excluding "@" symbol) |
-
-Channel mentions are only available in chat messages, not in posts or comments.
-
-**Index Calculation**: The `length` property doesn't include the "@" symbol. For "@alice", the length is 5, not 6.
-
-
-## Creating Mention Metadata
-Below is an example to create a comment with mentions by using our default mention metadata structure:
-
-
-```swift iOS
-import AmitySDK
-
-func createCommentWithMentionExample() {
-    // 1. We will create a comment containing this text.
-    let text = "Hi @john and @alice."
-    // To add mention to a comment, we need extra steps.
-    // In this example, we want to mention two users "john" and "alice".
-    //
-    // 2. We create metadata that contains mention object, via AmityMentionMapper helper class.
-    //
-    // Notice how `index` and `length` is set.
-    let metadata = AmityMentionMapper.metadata(from: [
-        AmityMention(type: .user, index: 3, length: 4, userId: "<john-user-id>"),
-        AmityMention(type: .user, index: 13, length: 5, userId: "<alice-user-id>")
-    ])
-    // 3. We create mentionees.
-    let mentionees = AmityMentioneesBuilder()
-    mentionees.mentionUsers(userIds: ["<john-user-id>", "<alice-user-id>"])
-    // Finally we pass (1) (2) and (3) to create a comment with mention.
-
-    let createOptions = AmityCommentCreateOptions(referenceId: "post-id", referenceType: .post, text: text, parentId: nil, metadata: metadata, mentioneeBuilder: mentionees)
-    commentRepository.createComment(with: createOptions) { comment, error in
-        // Comment
-    }
-}
-```
-
-```kotlin Android
-fun createCommentWithMention(
-    commentRepository: AmityCommentRepository,
-    postId: String,
-) {
-    val userId = "userId"
-    val startMentionIndex = 0
-    val mentionLength = 6
-    //create AmityMentionMetadata from userId, startIndex and length
-    val mentionMetadata: AmityMentionMetadata =
-        AmityMentionMetadata.USER(
-            userId = userId,
-            index = startMentionIndex,
-            length = mentionLength
-        )
-    //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-    val mentionMetadataCreator: JsonObject =
-        AmityMentionMetadataCreator(mentionMetaData = listOf(mentionMetadata)).create()
-    //create a comment with mention
-    commentRepository.createComment()
-        .post(postId) // or .content(contentId) for content type posts 9 .contentId(contentId)
-        .with()
-        .text("@userId Hello world!")
-        //mentionUsers to trigger push notifications
-        .mentionUsers(userIds = listOf(userId))
-        //metadata to render mention highlights
-        .metadata(mentionMetadataCreator)
-        .build()
-        .send()
-        .doOnSuccess { comment: AmityComment ->
-            //success
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
-import { CommentRepository } from '@amityco/ts-sdk';
+import { PostRepository } from "@amityco/ts-sdk";
 
-async function createMentionComment(): Promise<Amity.Comment> {
-  const newMentionComment = {
-    data: {
-      text: 'hello @userId1!',
+const text = "Hello @alex";
+const metadata = {
+  mentioned: [
+    {
+      type: "user",
+      userId,
+      index: 6,
+      length: 4,
     },
-    referenceId: 'postId',
-    referenceType: 'post' as Amity.CommentReferenceType,
-    mentionees: [{ type: 'user', userIds: ['userId1'] }] as Amity.UserMention[],
-  };
-
-  const { data: comment } = await CommentRepository.createComment(newMentionComment);
-
-  return comment;
-}
-```
-
-```dart Flutter
-//current parent comment collection
-final _amityComments = <AmityComment>[];
-
-//create comment to a post
-void createComment(String postId) {
-  const userId = 'userAId';
-  const startMentionIndex = 0;
-  const mentionLength = 6;
-  //create AmityMentionMetadata from userId, startIndex and length
-  final mentionMetadata = AmityUserMentionMetadata(
-      userId: userId, index: startMentionIndex, length: mentionLength);
-  //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-  final mentionMetadataCreator =
-      AmityMentionMetadataCreator([mentionMetadata]).create();
-
-  AmitySocialClient.newCommentRepository()
-      .createComment()
-      .post(postId)
-      .create()
-      .text('Comment from Brian!')
-      //mentionUsers to trigger push notifications
-      .mentionUsers([userId])
-      //metadata to render mention highlights
-      .metadata(mentionMetadataCreator)
-      .send()
-      .then((AmityComment comment) => {
-            //handle result
-            //optional: to present the created comment in to the current replied comment collection
-            //you will need manually put the newly created comment in to the collection
-            //for example :
-            _amityComments.add(comment)
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-
-### Parsing and Displaying Mentions
-
-As we mentioned we provided the flexibility for you to define your own mention object data structure to represent mentions. You can use the default data structure provided by the SDK to render mentions in your application, which can be accessed through the helper class. This allows you to easily retrieve mentions and render them. The mentionable model contains properties related to the mentioned feature:
-
-- `mentionUsers` - The AmityUser object array contains details about users mentioned in the current content.
-
-- `metadata` - a free-form JSON object that can accommodate any information regarding the mentioned users. Our predefined structure for representing mentions is also in the metadata property.
-
-Below is an example to render mentions in a comment by using our default mention data structure:
-
-```swift iOS
-import AmitySDK
-
-func createCommentWithMentionExample() {
-    // 1. We will create a comment containing this text.
-    let text = "Hi @john and @alice."
-    // To add mention to a comment, we need extra steps.
-    // In this example, we want to mention two users "john" and "alice".
-    //
-    // 2. We create metadata that contains mention object, via AmityMentionMapper helper class.
-    //
-    // Notice how `index` and `length` is set.
-    let metadata = AmityMentionMapper.metadata(from: [
-        AmityMention(type: .user, index: 3, length: 4, userId: "<john-user-id>"),
-        AmityMention(type: .user, index: 13, length: 5, userId: "<alice-user-id>")
-    ])
-    // 3. We create mentionees.
-    let mentionees = AmityMentioneesBuilder()
-    mentionees.mentionUsers(userIds: ["<john-user-id>", "<alice-user-id>"])
-    // Finally we pass (1) (2) and (3) to create a comment with mention.
-
-    let createOptions = AmityCommentCreateOptions(referenceId: "post-id", referenceType: .post, text: text, parentId: nil, metadata: metadata, mentioneeBuilder: mentionees)
-    commentRepository.createComment(with: createOptions) { comment, error in
-        // Comment
-    }
-}
-```
-
-```kotlin Android
-fun createCommentWithMention(
-    commentRepository: AmityCommentRepository,
-    postId: String,
-) {
-    val userId = "userId"
-    val startMentionIndex = 0
-    val mentionLength = 6
-    //create AmityMentionMetadata from userId, startIndex and length
-    val mentionMetadata: AmityMentionMetadata =
-        AmityMentionMetadata.USER(
-            userId = userId,
-            index = startMentionIndex,
-            length = mentionLength
-        )
-    //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-    val mentionMetadataCreator: JsonObject =
-        AmityMentionMetadataCreator(mentionMetaData = listOf(mentionMetadata)).create()
-    //create a comment with mention
-    commentRepository.createComment()
-        .post(postId) // or .content(contentId) for content type posts 9 .contentId(contentId)
-        .with()
-        .text("@userId Hello world!")
-        //mentionUsers to trigger push notifications
-        .mentionUsers(userIds = listOf(userId))
-        //metadata to render mention highlights
-        .metadata(mentionMetadataCreator)
-        .build()
-        .send()
-        .doOnSuccess { comment: AmityComment ->
-            //success
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { CommentRepository } from '@amityco/ts-sdk';
-
-async function createMentionComment(): Promise<Amity.Comment> {
-  const newMentionComment = {
-    data: {
-      text: 'hello @userId1!',
-    },
-    referenceId: 'postId',
-    referenceType: 'post' as Amity.CommentReferenceType,
-    mentionees: [{ type: 'user', userIds: ['userId1'] }] as Amity.UserMention[],
-  };
-
-  const { data: comment } = await CommentRepository.createComment(newMentionComment);
-
-  return comment;
-}
-```
-
-```dart Flutter
-//current parent comment collection
-final _amityComments = <AmityComment>[];
-
-//create comment to a post
-void createComment(String postId) {
-  const userId = 'userAId';
-  const startMentionIndex = 0;
-  const mentionLength = 6;
-  //create AmityMentionMetadata from userId, startIndex and length
-  final mentionMetadata = AmityUserMentionMetadata(
-      userId: userId, index: startMentionIndex, length: mentionLength);
-  //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-  final mentionMetadataCreator =
-      AmityMentionMetadataCreator([mentionMetadata]).create();
-
-  AmitySocialClient.newCommentRepository()
-      .createComment()
-      .post(postId)
-      .create()
-      .text('Comment from Brian!')
-      //mentionUsers to trigger push notifications
-      .mentionUsers([userId])
-      //metadata to render mention highlights
-      .metadata(mentionMetadataCreator)
-      .send()
-      .then((AmityComment comment) => {
-            //handle result
-            //optional: to present the created comment in to the current replied comment collection
-            //you will need manually put the newly created comment in to the collection
-            //for example :
-            _amityComments.add(comment)
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-
-
-## Best Practices
-
-        - **Validate mention data** before submitting content
-        - **Verify user IDs exist** before creating mentions
-        - **Check text positions** match mention metadata
-        - **Sanitize user input** to prevent mention abuse
-
-        - **Provide visual feedback** for mentions in UI
-        - **Make mentions clickable** for better navigation
-        - **Show autocomplete suggestions** during typing
-        - **Handle mention notifications** appropriately
-
-        - **Cache user data** for mention suggestions
-        - **Debounce search queries** for better performance
-        - **Limit suggestion results** to reasonable numbers
-        - **Index mention text** for fast searching
-
-        - **Don't mention users excessively** - respect user attention
-        - **Don't allow mention spam** - implement rate limiting
-        - **Don't mention in irrelevant contexts** - keep mentions contextual
-        - **Don't ignore user preferences** - respect notification settings
-
-        - **Don't expose private information** in mention metadata
-        - **Don't allow mentions of blocked users** - check relationships
-        - **Don't mention without permission** in private channels
-        - **Don't store sensitive data** in mention metadata
-
-        - **Don't forget mention click handlers** in your UI
-        - **Don't ignore mention parsing errors** - handle gracefully
-        - **Don't hard-code mention styling** - make it customizable
-        - **Don't skip mention validation** - always verify data
-
-## Troubleshooting
-
-**Common causes:**
-- Missing `mentionUsers` array in the parameter
-- Invalid user IDs in the mention list
-- User has disabled mention notifications
-- Network connectivity issues
-
-
-**Common causes:**
-- Incorrect mention positions in metadata
-- Missing mention parsing in UI components
-- CSS styling issues
-- Metadata not matching actual text
-
-
-**Common causes:**
-- No debouncing on search queries
-- Loading too many user suggestions
-- Inefficient mention parsing
-- Memory leaks in component state
-
-**Solutions:**
-```typescript
-// Implement debounced search
-import { debounce } from 'lodash';
-
-const debouncedSearch = debounce((query: string) => {
-  searchUsers(query).then(setSuggestions);
-}, 300);
-
-// Limit results
-const limitedSuggestions = suggestions.slice(0, 10);
-```
-
-**Common causes:**
-- Text modifications after mention creation
-- Incorrect index calculations
-- Unicode character handling issues
-- Concurrent text editing
-
-**Solutions:**
-```typescript
-// Always validate before submission
-const validateMentionData = (text: string, mentions: AmityMention[]) => {
-  for (const mention of mentions) {
-    const start = mention.index;
-    const end = start + mention.length + 1;
-    const mentionText = text.substring(start, end);
-
-    if (!mentionText.startsWith('@')) {
-      throw new Error(`Invalid mention at position ${start}`);
-    }
-  }
-  return true;
+  ],
 };
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: { text },
+  metadata,
+  mentionees: [{ type: "user", userIds: [userId] }],
+});
 ```
 
-## Next Steps
+```swift iOS
+let text = "Hello @alex"
+let mention = AmityMention(
+    type: .user,
+    index: 6,
+    length: 4,
+    userId: userId
+)
+let metadata = AmityMetadataMapper.metadata(mentions: [mention])
 
-    Learn about mentions in posts
+let mentionees = AmityMentioneesBuilder()
+mentionees.mentionUsers(userIds: [userId])
 
-    Implement mentions in comments
+let builder = AmityTextPostBuilder()
+builder.setText(text)
 
-    Add mentions to chat messages
+let post = try await postRepository.createTextPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: metadata,
+    mentionees: mentionees
+)
+```
 
-    Set up mention notifications
+```kotlin Android
+import com.amity.socialcloud.sdk.helper.core.mention.AmityMentionMetadata
+import com.amity.socialcloud.sdk.helper.core.mention.AmityMentionMetadataCreator
+
+val text = "Hello @alex"
+val mentionMetadata = AmityMentionMetadata.USER(
+    userId = userId,
+    index = 6,
+    length = 4
+)
+val metadata = AmityMentionMetadataCreator(
+    mentionMetaData = listOf(mentionMetadata)
+).create()
+
+postRepository.createTextPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    text = text,
+    metadata = metadata,
+    mentionUserIds = setOf(userId)
+)
+    .subscribe(
+        { post -> showSuccessMessage(post.getPostId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```dart Flutter
+final text = 'Hello @alex';
+final metadata = AmityMentionMetadataCreator([
+  AmityUserMentionMetadata(
+    userId: userId,
+    index: 6,
+    length: 4,
+  ),
+]).create();
+
+final creator = AmitySocialClient.newPostRepository()
+    .createPost()
+    .targetCommunity(communityId)
+    .text(text);
+
+creator.mentionUsers([userId]);
+creator.metadata(metadata);
+
+final post = await creator.createTextPost();
+```
+
+
+## Rendering Mentions
+
+Use the content text and `metadata.mentioned` entries together when rendering. The `mentionees` payload identifies mentioned users or channel targets, while `metadata` identifies where the mention appears in the text.
+
+| Metadata field | Meaning |
+| --- | --- |
+| `type` | `user` or `channel` |
+| `index` | Start position of the mention in the text |
+| `length` | Display-name length after `@` |
+| `userId` | Present for user mentions |
+
+## Notes
+
+- Keep `metadata` and `mentionees` in sync. A highlighted `@alex` without a matching mentionee payload is only display metadata.
+- Use the user IDs returned by your mention picker. Display names can change, but user IDs are the stable mention target.
+- For messages, channel mentions use a channel mentionee entry. Posts and comments use user mentionees.
+- Existing content models expose mention information after creation; use the model returned by the SDK or a fresh query when your UI needs server-confirmed state.
+
+## Related Topics
+
+    Create text posts that can carry mention metadata
+    Add user mentions to comments and replies
+    Use user and channel mentions in chat messages
 
 ---
 
 ### [Polls](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/poll)
 
-> Create single- or multiple-choice polls inside posts using AmityPollCreateOptions, with configurable answer options and expiration time.
+> Create polls, collect votes, and manage poll lifecycle with the Social+ SDKs.
 
-Create single- or multiple-choice polls inside posts using `AmityPollCreateOptions` and `pollRepository.createPoll()`. Polls support up to 10 answer options, configurable expiration, and owner-only lifecycle management.
+Polls are created first, then attached to poll posts when you want them to appear in a feed. The SDKs expose poll creation, voting, closing, and deletion APIs. TypeScript, iOS, and Android also expose an unvote API; the current Flutter public poll repository does not expose unvote.
 
-  **Note**: Polls are currently supported within posts only. Standalone polls
-  will be available in future SDK versions.
+## Platform Surface
 
-## Key Features
+| Platform | Create | Vote | Unvote | Close | Delete |
+| --- | --- | --- | --- | --- | --- |
+| TypeScript | `PollRepository.createPoll()` | `votePoll()` | `unvotePoll()` | `closePoll()` | `deletePoll()` |
+| iOS | `AmityPollRepository.createPoll()` | `votePoll(withId:answerIds:)` | `unvotePoll(withId:)` | `closePoll(withId:)` | `deletePoll(withId:)` |
+| Android | `AmitySocialClient.newPollRepository().createPoll()` | `votePoll()` | `unvotePoll()` | `closePoll()` | `deletePoll()` |
+| Flutter | `AmitySocialClient.newPollRepository().createPoll()` | `vote()` | Not exposed | `closePoll()` | `deletePoll()` |
 
-    Support for single or multiple choice voting patterns
-    Set automatic poll expiration with customizable durations
+## Parameters
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `question` | Yes | Poll question text. |
+| `answers` | Yes | Text or image answer options, depending on SDK and answer type. |
+| `answerType` | No | Single-choice or multiple-choice poll. Defaults to single-choice where the SDK builder provides a default. |
+| `closedIn` / close duration | No | Optional poll close duration. Mobile SDKs expose milliseconds or `Duration`; TypeScript passes `closedIn` through as a numeric field. |
+| `pollId` | Required after creation | ID returned by poll creation and used for voting, closing, deleting, and poll posts. |
+| `answerIds` | Required for voting | Answer IDs selected by the user. |
+
+## Create A Poll
+
+Create the poll first and keep the returned `pollId` if you need to create a poll post.
 
 
-    Owner-only management capabilities for poll lifecycle
+```typescript TypeScript
+import { PollRepository } from "@amityco/ts-sdk";
 
-## Create a Poll
+const { data: poll } = await PollRepository.createPoll({
+  question: "Which feature should we build next?",
+  answerType: "single",
+  answers: [
+    { dataType: "text", data: "Bookmarks" },
+    { dataType: "text", data: "Pinned comments" },
+  ],
+});
 
-Create engaging polls with customizable settings and up to 10 answer options.
-
-  Design polls with clear, concise questions and meaningful answer options to
-  maximize user engagement and response quality.
-
-### Configuration Options
-
-    | Parameter | Type | Description | Limits |
-    |-----------|------|-------------|---------| | `question` | String | Poll
-    question text | Max 500 characters | | `answers` | Array | Available answer
-    options | 2-10 options, max 200 chars each |
-
-    | Parameter | Type | Description | Limits |
-    |-----------|------|-------------|---------| | `answerType` | Enum | Single
-    or multiple choice | `Single` (default), `Multiple` | | `timeToClosePoll` |
-    Number | Poll duration in seconds | Default: 30 days |
+const createdPollId = poll.pollId;
+```
 
 ```swift iOS
-func createPollExample() async {
-    // Setup your poll structure
-    let builder = AmityPollCreateOptions()
-    builder.setQuestion("What is your favourite song?")
-    // Time in milliseconds.
-    builder.setTimeToClosePoll(60 * 60 * 1000)
-    builder.setAnswerType(.single)
-    let answers = ["My gift of silence", "Hope Leaves", "Lazarus"]
-    for item in answers {
-        builder.setAnswer(item)
-    }
-    // Create a poll from builder
-    do {
-        let pollId = try await pollRepository.createPoll(builder)
-    } catch {
-        // Handle error here
-    }
-}
+let pollRepository = AmityPollRepository()
+let options = AmityPollCreateOptions()
+options.setQuestion("Which feature should we build next?")
+options.setAnswerType(.single)
+options.setAnswer("Bookmarks")
+options.setAnswer("Pinned comments")
+
+let createdPollId = try await pollRepository.createPoll(options)
 ```
 
 ```kotlin Android
-fun createPoll(
-    postRepository: AmityPostRepository,
-    pollRepository: AmityPollRepository
-) {
-    pollRepository.createPoll(question = "What are your favorite songs") // a question
-        .answers(
-            answers = listOf(
-                AmityPollAnswer.Data.TEXT("First date"),
-                AmityPollAnswer.Data.TEXT("All of the small things"),
-                AmityPollAnswer.Data.TEXT("The rock show")
-            )
+import com.amity.socialcloud.sdk.model.social.poll.AmityPollAnswer
+
+val pollRepository = AmitySocialClient.newPollRepository()
+
+pollRepository.createPoll("Which feature should we build next?")
+    .answers(
+        listOf(
+            AmityPollAnswer.Data.TEXT("Bookmarks"),
+            AmityPollAnswer.Data.TEXT("Pinned comments")
         )
-        .answerType(answerType = AmityPoll.AnswerType.MULTIPLE) // allow users to vote on multiple choces.
-        .closedIn(
-            closedIn = Minutes.minutes(60).toStandardDuration().millis // open for 60 minutes
-        )
-        .build()
-        .create()
-        .flatMap { pollId: String ->
-            // To create a poll post, use pollId
-            val userTarget = AmityPost.Target.USER.create(userId = "user1")
-            postRepository.createPollPost(
-                target = userTarget,
-                pollId = pollId,
-                text = "new video post!"
-            )
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function createPoll() {
-  const newPoll = {
-    answerType: "single" as Amity.PollAnswerType,
-    answers: [
-      { dataType: "text", data: "answer1" },
-      { dataType: "text", data: "answer2" },
-    ] as Pick<Amity.PollAnswer, "data" | "dataType">[],
-    question: "question",
-  };
-
-  const { data: poll } = await PollRepository.createPoll(newPoll);
-
-  return poll;
-}
-```
-
-```dart Flutter
-void createPollPost(String postId) async {
-  //create a poll as the first step
-  final amityPoll = await AmitySocialClient.newPollRepository()
-      .createPoll(question: 'What are your favorite songs?')
-      .answers(answers: [
-        AmityPollAnswer.text('First date'),
-        AmityPollAnswer.text('All of the small things'),
-        AmityPollAnswer.text('The rock show'),
-      ])
-      .answerType(
-          //available answer types are: AmityPollAnswerType.SINGLE and AmityPollAnswerType.MULTIPLE
-          answerType: AmityPollAnswerType.MULTIPLE)
-      .closedIn(
-          closedIn: Duration(
-              milliseconds: const Duration(minutes: 45)
-                  .inMilliseconds)) //open for 45 mins
-      .create();
-}
-```
-
-
-## Vote on Polls
-
-Enable users to participate in polls with single or multiple choice voting.
-
-### Parameters
-
-    - `pollId` (String): The unique identifier of the poll - `answerIds`
-    (Array&lt;String&gt;): IDs of selected answer options
-
-```swift iOS
-do {
-    let result = try await pollRepository.votePoll(withId: "<poll-id>", answerIds: ["<answer-id>"])
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun votePoll(pollRepository: AmityPollRepository) {
-    pollRepository.votePoll(
-        pollId = "pollId",
-        answerIds = listOf("answer_id_1", "answer_id_2")
     )
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function votePoll() {
-  const { data: poll } = await PollRepository.votePoll("pollId", ["answerId"]);
-
-  return poll;
-}
-```
-
-```dart Flutter
-void votePoll() {
-  AmitySocialClient.newPollRepository().vote(
-      pollId: 'pollId', answerIds: ['answerId1', 'answerId2']).then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
-```
-
-
-## Unvote on Polls
-
-Allows users to remove their vote from a poll at any time before the poll closes.
-
-### Parameters
-
-    - `pollId` (String): The unique identifier of the poll - `answerIds`
-    (Array&lt;String&gt;): IDs of selected answer options
-
-```swift iOS
-do {
-    let result = try await pollRepository.unvotePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun unvotePoll(pollRepository: AmityPollRepository) {
-    pollRepository.unvotePoll(
-        pollId = "pollId",
+    .answerType(AmityPoll.AnswerType.SINGLE)
+    .build()
+    .create()
+    .subscribe(
+        { createdPollId -> showSuccessMessage(createdPollId) },
+        { error -> handleGeneralError(error) }
     )
-        .doOnComplete {
-            // Unvote completed
-        }
-        .doOnError {
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function unvotePoll() {
-  await PollRepository.unvotePoll("pollId");
-}
-```
-
-
-## Close Polls
-
-Poll owners and administrators can manually close polls before their scheduled end time.
-
-  **Permissions**: Only poll creators and administrators can close polls.
-
-```swift iOS
-do {
-   let result = try await pollRepository.closePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun closePoll(
-    pollRepository: AmityPollRepository,
-    poll: AmityPoll
-) {
-    pollRepository.closePoll(pollId = poll.getPollId())
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function closePoll() {
-  const { data: poll } = await PollRepository.closePoll("pollId");
-
-  return poll;
-}
 ```
 
 ```dart Flutter
-void closePoll() {
-  AmitySocialClient.newPollRepository()
-      .closePoll(pollId: 'pollId')
-      .then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+final poll = await AmitySocialClient.newPollRepository()
+    .createPoll(question: 'Which feature should we build next?')
+    .answers(answers: [
+      AmityPollAnswer.text('Bookmarks'),
+      AmityPollAnswer.text('Pinned comments'),
+    ])
+    .answerType(answerType: AmityPollAnswerType.SINGLE)
+    .create();
+
+final createdPollId = poll.pollId;
 ```
 
 
-## Delete Polls
+## Vote And Manage A Poll
 
-Permanently remove polls from the system. This action cannot be undone.
+Use answer IDs from the poll object when voting. Closing and deletion use the poll ID.
 
-  **Destructive Action**: Poll deletion is permanent and removes all associated
-  votes and data.
-
-```swift iOS
-do {
-   let result = try await pollRepository.deletePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun deletePoll(
-    pollRepository: AmityPollRepository,
-    poll: AmityPoll
-) {
-    pollRepository.deletePoll(pollId = poll.getPollId())
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
 import { PollRepository } from "@amityco/ts-sdk";
 
-async function deletePoll() {
-  const isDeleted = await PollRepository.deletePoll("pollId");
+const answerIds = ["answer-id"];
 
-  return isDeleted;
-}
+const { data: votedPoll } = await PollRepository.votePoll(pollId, answerIds);
+await PollRepository.unvotePoll(pollId);
+
+const { data: closedPoll } = await PollRepository.closePoll(pollId);
+const isDeleted = await PollRepository.deletePoll(pollId);
+```
+
+```swift iOS
+let pollRepository = AmityPollRepository()
+let answerIds = ["answer-id"]
+
+try await pollRepository.votePoll(withId: pollId, answerIds: answerIds)
+try await pollRepository.unvotePoll(withId: pollId)
+try await pollRepository.closePoll(withId: pollId)
+try await pollRepository.deletePoll(withId: pollId)
+```
+
+```kotlin Android
+val pollRepository = AmitySocialClient.newPollRepository()
+val answerIds = listOf("answer-id")
+
+pollRepository.votePoll(pollId, answerIds)
+    .subscribe(
+        { showSuccessMessage("Vote submitted") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.unvotePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Vote removed") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.closePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Poll closed") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.deletePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Poll deleted") },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-void deletePoll() {
-  AmitySocialClient.newPollRepository()
-      .deletePoll(pollId: 'pollId')
-      .then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+final pollRepository = AmitySocialClient.newPollRepository();
+final answerIds = ['answer-id'];
+
+await pollRepository.vote(pollId: pollId, answerIds: answerIds);
+final closedPoll = await pollRepository.closePoll(pollId: pollId);
+final isDeleted = await pollRepository.deletePoll(pollId: pollId);
 ```
 
 
-## Best Practices
+## Notes
 
-    - Keep questions clear and concise (under 500 characters) - Provide 2-6
-    answer options for better user experience - Use descriptive answer text
-    (avoid generic "Option 1", "Option 2") - Consider your audience when setting
-    poll duration
+- Create a poll post separately after poll creation. Poll creation returns a poll ID; poll-post creation attaches that ID to feed content.
+- Use `answerType` values that match each SDK: TypeScript uses `single` or `multiple`, iOS uses `.single` or `.multiple`, Android uses `AmityPoll.AnswerType`, and Flutter uses `AmityPollAnswerType`.
+- Flutter currently exposes `vote`, `closePoll`, and `deletePoll`, but not an unvote method on the public poll repository.
+- Deletion and close behavior depends on server-side permissions for the current user.
 
-{" "}
+## Related Topics
 
-  - Indicate poll expiration time clearly - Provide visual feedback when votes
-  are submitted - Handle edge cases (poll closed, already voted) - Show
-  real-time vote counts when appropriate
-
-{" "}
-
-  - Check poll status before allowing votes - Validate user permissions for
-  management actions - Provide clear error messages for failed operations -
-  Implement retry logic for network failures
-
-    - Cache poll results to reduce API calls - Implement efficient polling for
-    live updates - Consider pagination for polls with many votes - Optimize for
-    mobile network conditions
-
-## Next Steps
-
-    title="Social Posts"
-    icon="pen-to-square"
-    href="/social-plus-sdk/social/content-management/posts/creation/poll-post"
-  >
-    Learn how to create posts with embedded polls
-    title="Discovery & Engagement"
-    icon="compass"
-    href="/social-plus-sdk/social/discovery-engagement/overview"
-  >
-    Explore discovery, feed, search, and notification features
-    title="Real-time Updates"
-    icon="bolt"
-    href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events"
-  >
-    Implement real-time poll updates and notifications
+    Attach an existing poll to a feed post
+    Create regular text posts for the same feed targets
+    Fetch posts that contain poll data
 
 ---
 
 ### [Reactions](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/reactions)
 
-> Manage user reactions on posts, stories, and comments with querying, adding, and removing functionality
+> Query, add, and remove reactions on posts, comments, stories, and messages with the Social+ SDKs.
 
-Use `ReactionRepository` to query, add, and remove reactions on posts, stories, comments, and messages. Each reaction records the user, timestamp, reaction name, and any associated metadata.
+Reactions let signed-in users attach a named reaction such as `like` to content. The SDKs expose the same core shape on every platform: choose a reference type, pass the content ID, and pass the reaction name.
 
-    Retrieve detailed information about reactions on posts, stories, and comments
-    Allow users to express emotions with custom reaction names
-    Enable users to change or remove their reactions
+## Platform Surface
+
+| Platform | Query reactions | Add reaction | Remove reaction |
+| --- | --- | --- | --- |
+| TypeScript | `ReactionRepository.getReactions()` | `ReactionRepository.addReaction()` | `ReactionRepository.removeReaction()` |
+| iOS | `AmityReactionRepository.getReactions()` | `AmityReactionRepository.addReaction()` | `AmityReactionRepository.removeReaction()` |
+| Android | `AmityCoreClient.newReactionRepository().getReactions()` | `addReaction()` | `removeReaction()` |
+| Flutter | `AmitySocialClient.newReactionRepository().getReactions()` | `addReaction()` | `removeReaction()` |
+
+## Parameters
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `referenceType` | Yes | Content type being reacted to. Supported values are post, comment, story, and message. |
+| `referenceId` | Yes | ID of the post, comment, story, or message. |
+| `reactionName` | Yes for add/remove, optional for query | Reaction key such as `like`. Query APIs can use it as a filter. |
+| `callback` / live collection observer | Query only | Used by live collection APIs to receive reaction updates. |
 
 ## Query Reactions
 
-To further facilitate the management of reactions in your app, the social.plus SDK includes a `getReactions` method that allows you to retrieve information about a specific reaction or all reactions on a comment, post, or story.
-
-Using this method, you can fetch detailed information about:
-
-    - **User Information**: The user who made the reaction
-    - **Timestamp**: When the reaction was created
-    - **Metadata**: Any additional data associated with the reaction
-    - **Reaction Type**: The specific reaction name or emoji used
-
-    - **Community Sentiment**: Analyze overall reaction patterns
-    - **Content Performance**: Identify types of content that resonate with users
-    - **User Engagement**: Track how users interact with different content
-    - **Trending Reactions**: Discover popular reaction types in your community
-
-### Reference Types
-
-The `referenceType` parameter determines the type of reference for which reactions are queried. Supported values are:
-
-| Reference Type | Description |
-|----------------|-------------|
-| `post` | Retrieves reactions for a post |
-| `story` | Retrieves reactions for a story |
-| `comment` | Retrieves reactions for a comment |
-| `message` | Retrieves reactions to a message |
+Use `reactionName` when the UI only needs one reaction type. Omit it to read all reaction types for the content.
 
 
-### Parameters
+```typescript TypeScript
+import { ReactionRepository } from "@amityco/ts-sdk";
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content being queried for reactions |
-| `reactionName` | String | No | Filter by specific reaction type (case-sensitive) |
+const unsubscribe = ReactionRepository.getReactions(
+  {
+    referenceType: "post",
+    referenceId: postId,
+    reactionName: "like",
+  },
+  ({ data }) => {
+    renderResults(data);
+  }
+);
+```
 
 ```swift iOS
-var token: AmityNotificationToken?
-
-// Query all reactions for a post
-token = reactionRepository.getReactions(
-    "<post-id>",
-    referenceType: .post,
-    reactionName: nil
-).observe { liveCollection, changes, error in
-    // Handle result here
-    guard let reactions = liveCollection.object else { return }
-
-    for reaction in reactions {
-        print("User: \(reaction.userId)")
-        print("Reaction: \(reaction.reactionName)")
-        print("Created: \(reaction.createdAt)")
-    }
-}
-
-// Query specific reaction type
-token = reactionRepository.getReactions(
-    "<post-id>",
+let reactionRepository = AmityReactionRepository()
+let reactions = reactionRepository.getReactions(
+    postId,
     referenceType: .post,
     reactionName: "like"
-).observe { liveCollection, changes, error in
-    // Handle filtered results
+)
+
+token = reactions.observe { collection, error in
+    guard error == nil else { return }
+    let currentReactions = collection.snapshots
+    showSuccessMessage(currentReactions.count)
 }
 ```
 
 ```kotlin Android
-fun queryReactionOnPost(
-    reactionRepository: AmityReactionRepository,
-    post: AmityPost
-) {
-    reactionRepository
-        .getReactions(AmityReactionReference.POST(postId = post.getPostId()))
-        .reactionName(reactionName = "like") // filter by reactionName
-        .build()
-        .query()
-        .doOnNext { reactions: PagingData<AmityReaction> ->
-            // PagingData<AmityReaction>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
+import com.amity.socialcloud.sdk.model.core.reaction.AmityReactionReferenceType
 
-```typescript TypeScript
-import { ReactionRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-/*
- * Possible params for ReactionRepository.getReactions:
- * referenceId: 'messageId' | 'postId' | 'commentId';
- * referenceType: 'message' | 'post' | 'comment';
- * reactionName?: 'name';
- * limit?: number;
- */
-
-type LiveReactionsType = {
-  referenceId: string;
-  referenceType: 'message' | 'post' | 'comment';
-};
-
-const LiveReactions: FC<LiveReactionsType> = ({ referenceId, referenceType }) => {
-  const [data, setReactions] = useState<Amity.LiveCollection<Amity.Reactor>>();
-  const { data: reactions = [], onNextPage, hasNextPage, loading, error } = data ?? {};
-
-  useEffect(
-    () => ReactionRepository.getReactions({ referenceId, referenceType }, setReactions),
-    [referenceId, referenceType],
-  );
-
-  return null;
-};
+AmityCoreClient.newReactionRepository()
+    .getReactions(
+        referenceType = AmityReactionReferenceType.POST,
+        referenceId = postId,
+        reactionName = "like"
+    )
+    .subscribe(
+        { reactions -> showSuccessMessage(reactions) },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-  late ReactionLiveCollection reactionLiveCollection;
-  List<AmityReaction> amityReactions = [];
-  final scrollController = ScrollController();
-
-  void getReactions() {
-    // For Posts
-    final reactionReference = AmityPostReactionReference(referenceId: postId);
-
-    // For Comments
-    final reactionReference = AmityCommentReactionReference(referenceId: commentId);
-
-    // For Messages
-    final reactionReference = AmityMessageReactionReference(referenceId: messageId);
-
-    // For Stories
-    final reactionReference = AmityStoryReactionReference(referenceId: storyId);
-
-    // Initialize reaction live collection
-    reactionLiveCollection = AmitySocialClient.newReactionRepository()
-        .getReactions(reactionReference)
-        // Optional: filter by specific reaction name, e.g., "like"
-        .reactionName('like')
-        .getLiveCollection();
-
-    // Listen to data changes from live collection
-    reactionLiveCollection.getStreamController().stream.listen((event) {
-      // Update latest results here
-      amityReactions = event;
-    }, onError: (error) {
-      //handle error
-    });
-
-    // Load first page
-    reactionLiveCollection.loadNext();
-
-    // Add pagination listener when scrolling to top/bottom
-    scrollController.addListener(paginationListener);
-  }
+final reactions = AmitySocialClient.newReactionRepository()
+    .getReactions(AmityPostReactionReference(referenceId: postId))
+    .reactionName('like')
+    .getLiveCollection();
 ```
 
 
-## Add / Remove Reactions
+## Add And Remove Reactions
 
-The social.plus SDK provides comprehensive functionality for adding and removing reactions on posts. Users can add multiple reactions to express themselves more expressively and remove reactions for greater control over their engagement.
-
-### Add Reaction
-
-The `addReaction` function allows users to add a reaction to a post, comment, story, or message. Users can add any number of reactions to a particular piece of content, enabling more nuanced and expressive engagement.
-
-#### Key Features
-
-    - **Maximum Length**: 100 characters per reaction name
-    - **Case Sensitivity**: "like" and "Like" are treated as different reactions
-    - **Custom Names**: Support for any custom reaction name or emoji
-    - **Unicode Support**: Full support for emoji and international characters
-
-    - **Post**: Adds the reaction to a post
-    - **Story**: Adds the reaction to a story
-    - **Comment**: Adds the reaction to a comment
-    - **Message**: Adds the reaction to a message
-
-#### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `reactionName` | String | Yes | Name of the reaction (max 100 characters, case-sensitive) |
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content receiving the reaction |
+Adding or removing a reaction returns completion or success from the SDK call. Keep UI counts synced from the content model or the reaction live collection.
 
 
-### Remove Reaction
+```typescript TypeScript
+import { ReactionRepository } from "@amityco/ts-sdk";
 
-The `removeReaction` function allows users to remove a previously added reaction from a reference. This provides users with greater control over their engagement and allows them to change their minds or update their reactions over time.
+await ReactionRepository.addReaction("post", postId, "like");
+await ReactionRepository.removeReaction("post", postId, "like");
+```
 
-#### Parameters
+```swift iOS
+let reactionRepository = AmityReactionRepository()
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `reactionName` | String | Yes | Name of the reaction to remove (case-sensitive) |
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content where the reaction will be removed |
+try await reactionRepository.addReaction(
+    "like",
+    referenceId: postId,
+    referenceType: .post
+)
 
-**Case Sensitivity**: Reaction names are case sensitive. "like" and "Like" are treated as two different reactions, so ensure exact matching when removing reactions.
+try await reactionRepository.removeReaction(
+    "like",
+    referenceId: postId,
+    referenceType: .post
+)
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.model.core.reaction.AmityReactionReferenceType
+
+val reactionRepository = AmityCoreClient.newReactionRepository()
+
+reactionRepository.addReaction(
+    referenceType = AmityReactionReferenceType.POST,
+    referenceId = postId,
+    reactionName = "like"
+)
+    .subscribe(
+        { showSuccessMessage("Reaction added") },
+        { error -> handleGeneralError(error) }
+    )
+
+reactionRepository.removeReaction(
+    referenceType = AmityReactionReferenceType.POST,
+    referenceId = postId,
+    reactionName = "like"
+)
+    .subscribe(
+        { showSuccessMessage("Reaction removed") },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```dart Flutter
+final reactionRepository = AmitySocialClient.newReactionRepository();
+final reference = AmityPostReactionReference(referenceId: postId);
+
+await reactionRepository.addReaction(reference, 'like');
+await reactionRepository.removeReaction(reference, 'like');
+```
 
 
-## Common Reaction Types
+## Notes
 
-    - **like**: Basic positive reaction
-    - **love**: Strong positive emotion
-    - **laugh**: Humorous content appreciation
-    - **wow**: Surprise or amazement
-    - **sad**: Empathetic response
-    - **angry**: Strong negative reaction
-
-    - **👍**: Thumbs up
-    - **❤️**: Heart/love
-    - **😂**: Laughing face
-    - **😮**: Surprised face
-    - **😢**: Sad face
-    - **😡**: Angry face
-
-    - **awesome**: Community-specific positive reaction
-    - **helpful**: For educational or informative content
-    - **inspiring**: For motivational content
-    - **fire**: For trending or popular content
-    - **mind-blown**: For surprising or impressive content
-
-## Best Practices
-
-    - **Consistent Naming**: Use standardized reaction names across your app
-    - **User-Friendly**: Choose intuitive reaction names that users understand
-    - **Cultural Sensitivity**: Consider cultural differences in emoji and reaction meanings
-    - **Moderation**: Implement guidelines for appropriate reaction usage
-
-    - **Debouncing**: Prevent rapid add/remove cycles that could spam the system
-    - **Batch Operations**: Group multiple reaction operations when possible
-    - **Error Handling**: Implement robust error handling for network issues
-
-    - **Visual Feedback**: Provide immediate visual feedback when reactions are added/removed
-    - **Reaction Counts**: Display reaction counts and types clearly
-    - **User Lists**: Show who reacted with what reaction types
-
-## Use Cases
-
-    Enable reactions on posts in social media feeds
-    Use reaction patterns to identify popular or problematic content
-    Foster community interaction through expressive reactions
-    Analyze user sentiment and content performance
-    Use reactions as part of engagement and reward systems
-    Gather user feedback on different types of content
+- TypeScript accepts `post`, `comment`, `story`, and `message` as reaction reference types.
+- iOS, Android, and Flutter expose equivalent enum or reference classes for post, comment, story, and message.
+- Message reactions use the message reaction path in the SDKs. Do not use post or comment reference types for messages.
+- Reaction names are application-defined strings. Use the same values when adding, removing, and filtering.
 
 ## Related Topics
 
-    Tag users in posts and comments
-    Manage files, images, and videos for rich reactions context
-    Analyze reaction patterns and engagement metrics
+    React to comments and keep comment threads interactive
+    Use the same reaction concept with story content
+    Add and remove reactions on chat messages
 
 ---
 
-### [Advertising](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/ads)
+### [Ads](https://learn.social.plus/social-plus-sdk/core-concepts/content-handling/ads)
 
-> Seamlessly integrate ads into your social.plus application with console-driven configuration and comprehensive analytics
+> Fetch configured network ads and track ad impressions or link clicks with the Social+ SDKs.
 
-Monetize your social.plus application with intelligent ad integration that maximizes revenue while preserving user experience. Configure, track, and optimize ads through the console without requiring app updates.
+Network ads are fetched through the core ad repository. The returned ad objects include display fields, linked advertiser or image data where available, and analytics methods for impression and click tracking.
 
-# Get Ads & Settings
+## Platform Surface
 
-Dynamically fetch ad configuration from your Admin Console to display contextual ads without requiring app updates. Configure placement, frequency, and targeting rules through the console interface.
+| Platform | Fetch network ads | Track seen | Track clicked |
+| --- | --- | --- | --- |
+| TypeScript | `AdRepository.getNetworkAds()` | `ad.analytics.markAsSeen()` | `ad.analytics.markLinkAsClicked()` |
+| iOS | `AmityAdRepository.getNetworkAds()` | `ad.analytics.markAsSeen()` | `ad.analytics.markLinkAsClicked()` |
+| Android | `AmityCoreClient.newAdRepository().getNetworkAds()` | `adRepository.analytics(ad).markAsSeen()` | `adRepository.analytics(ad).markLinkAsClicked()` |
+| Flutter | `AmityCoreClient.newAdRepository().getNetworkAds()` | `adRepository.analytics(ad).markAsSeen()` | `adRepository.analytics(ad).markLinkAsClicked()` |
 
-  **Real-time Updates**: Ad settings sync immediately from console changes. No app deployment needed for ad strategy updates.
+## Parameters
 
-To retrieve all ads and settings added to your network via the console, use the getNetworkAds() function. This function provides a comprehensive view of your ads and configurations, allowing UIKit or your application to consume and display ads accordingly.
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `ad` | Tracking only | Ad object returned from the network ads response. |
+| `placement` | Tracking only | Where the ad was displayed. SDK enum values include feed, story, comment, chat, and chat list placements. |
+| `settings` | No | Network ad settings returned with the ad list. Use them to decide how your app presents ads. |
 
+## Fetch And Track Ads
 
-```swift iOS
-let adRepository = AmityAdRepository(client: client)
-do {
-    let networkAds = try await adRepository.getNetworkAds()
-
-    let allAds = networkAds.ads
-    let settings = networkAds.settings
-} catch let error {
-    // Handle error here
-}
-```
-
-
-```kotlin Android
-fun getNetworkAds(
-    adRepository: AmityAdRepository,
-) {
-    adRepository.getNetworkAds()
-        .doOnSuccess { networkAds: AmityNetworkAds ->
-            val ads: List<AmityAd> = networkAds.getAds()
-            val settings: AmityAdsSettings = networkAds.getSettings()
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
+Call the tracking methods when the ad is actually shown or when the ad link is clicked in your UI.
 
 
 ```typescript TypeScript
-import { AdRepository } from '@amityco/ts-sdk';
+import { AdRepository } from "@amityco/ts-sdk";
 
-const getNetworkAds = async () => {
-  const { ads, settings } = await AdRepository.getNetworkAds();
+const networkAds = await AdRepository.getNetworkAds();
+const ad = networkAds.ads[0];
 
-  /**
-   * Ads: Array of Ad objects
-   * Settings: ads settings
-   */
-  console.log({ ads, settings });
-};
+if (ad) {
+  const placement = Amity.AdPlacement.FEED;
+  ad.analytics.markAsSeen(placement);
+  ad.analytics.markLinkAsClicked(placement);
+}
 ```
-
-
-```dart Flutter
-AmityCoreClient.newAdRepository()
-        .getNetworkAds()
-        .then((networkAds) => {
-              final ads = networkAds.getAds();
-              final settings = networkAds.getSettings();
-            })
-        .onError((error, stackTrace) => {
-              //handle error
-            });
-```
-
-
-# Ad Impressions
-
-The Ad Impressions feature is a tool designed to collect valuable data regarding ad interactions for analytics and reporting purposes. This feature empowers users to gain insights into how their ad is performing. With this feature, users can mark specific ads as seen or clicked, and access the report via the console.
-
-  **Smart Tracking**: Impressions represent the number of users who viewed the ad, while reach represents the number of unique users who viewed the ad. Please keep in mind that ad impression data won't be updated in real-time but rather almost in real-time.
-
-## Overview
-
-Ad impression tracking provides essential metrics for monetization optimization:
-
-- **Performance Monitoring** - Track ad views, clicks, and engagement in real-time
-- **Revenue Analytics** - Correlate impressions with monetization effectiveness
-- **User Insights** - Understand audience interaction patterns
-- **A/B Testing** - Compare ad placement and format performance
-
-## Core Tracking Methods
-
-### Mark Ad as Seen
-
-Track impressions when ads become visible to users:
-
-  **Visibility Rule**: Only call `markAsSeen()` when the ad is actually visible to the user (at least 50% visible), not when loaded in memory.
-
 
 ```swift iOS
-// Mark ad which was placed in `feed` as seen
-ad.analytics.markAsSeen(placement: .feed)
-```
+let adRepository = AmityAdRepository()
+let networkAds = try await adRepository.getNetworkAds()
 
+if let ad = networkAds.ads.first {
+    ad.analytics.markAsSeen(placement: .feed)
+    ad.analytics.markLinkAsClicked(placement: .feed)
+}
+```
 
 ```kotlin Android
-fun markAdSeen(
-    ad: AmityAd
-) {
-    // available as extension function
-    ad.analytics()
-        .markAsSeen(AmityAdPlacement.FEED) // specify placement with AmityAdPlacement
-}
+import com.amity.socialcloud.sdk.model.core.ad.AmityAdPlacement
+
+val adRepository = AmityCoreClient.newAdRepository()
+
+adRepository.getNetworkAds()
+    .subscribe(
+        { networkAds ->
+            val ad = networkAds.getAds().firstOrNull()
+            if (ad != null) {
+                adRepository.analytics(ad).markAsSeen(AmityAdPlacement.FEED)
+                adRepository.analytics(ad).markLinkAsClicked(AmityAdPlacement.FEED)
+            }
+        },
+        { error -> handleGeneralError(error) }
+    )
 ```
-
-
-```typescript TypeScript
-import { AdRepository } from '@amityco/ts-sdk';
-
-const markAdAsSeen = async () => {
-  const { ads, settings } = await AdRepository.getNetworkAds();
-
-  /**
-   * Ads: Array of Ad objects
-   * Settings: ad settings
-   */
-  console.log({ ads, settings });
-
-  if (ads.length === 0) return;
-
-  ads.forEach((adItem: Amity.Ad) => {
-    // Mark ad as seen
-    adItem.analytics.markAsSeen(Amity.AdPlacement.FEED);
-  });
-```
-
 
 ```dart Flutter
-void markAdSeen(AmityAd ad) {
-  AmityCoreClient.newAdRepository()
-        .analytics(ad)
-        .markAsSeen(AmityAdPlacement.FEED) // specify placement with AmityAdPlacement
+final adRepository = AmityCoreClient.newAdRepository();
+final networkAds = await adRepository.getNetworkAds();
+final ads = networkAds.getAds() ?? [];
+
+if (ads.isNotEmpty) {
+  final ad = ads.first;
+  await adRepository.analytics(ad).markAsSeen(AmityAdPlacement.FEED);
+  await adRepository.analytics(ad).markLinkAsClicked(AmityAdPlacement.FEED);
 }
 ```
 
 
-### Mark Ad as Clicked
+## Notes
 
-Track click events for engagement analytics:
+- Fetching ads returns both `ads` and `settings`. Use settings as display configuration from the SDK response.
+- Track `markAsSeen` only after the ad is rendered in the placement you pass.
+- Track `markLinkAsClicked` from the UI action that opens or handles the ad call-to-action link.
+- Use the placement enum from each SDK instead of hardcoded placement strings.
 
+## Related Topics
 
-```swift iOS
-// Mark ad which was placed in `comment` as seen
-ad.analytics.markLinkAsClicked(placement: .comment)
-```
-
-
-```kotlin Android
-fun markAdClicked(
-    ad: AmityAd
-) {
-    // available as extension function
-    ad.analytics()
-        .markLinkAsClicked(AmityAdPlacement.FEED) // specify placement with AmityAdPlacement
-}
-```
-
-
-```typescript TypeScript
-import { AdRepository } from '@amityco/ts-sdk';
-
-const markAdAsSeen = async () => {
-  const { ads, settings } = await AdRepository.getNetworkAds();
-
-  /**
-   * Ads: Array of Ad objects
-   * Settings: ad settings
-   */
-  console.log({ ads, settings });
-
-  if (ads.length === 0) return;
-
-  ads.forEach((adItem: Amity.Ad) => {
-    // Mark ad as seen
-    adItem.analytics.markLinkAsClicked(Amity.AdPlacement.FEED);
-  });
-```
-
-
-```dart Flutter
-void markAdSeen(AmityAd ad) {
-  AmityCoreClient.newAdRepository()
-        .analytics(ad)
-        .markLinkAsClicked(AmityAdPlacement.FEED) // specify placement with AmityAdPlacement
-}
-```
-
-
-## Best Practices
-
-  **Accuracy First**: Track impressions only when ads are genuinely visible to ensure accurate analytics and fair billing.
-
-- **Visibility Threshold** - Use 50% visibility rule for impression tracking
-- **Single Tracking** - Avoid duplicate impression tracking for the same user session
-- **Error Handling** - Implement retry logic for failed tracking calls
-- **Privacy** - Respect user privacy settings and consent requirements
-
-## Next Steps
-
-    View detailed performance metrics in your dashboard
-    Configure ads in your Admin Console
-    Learn about managing files for rich media experiences
-    Integrate ads seamlessly into social content feeds
+    Place feed ads alongside feed content
+    Use story placement when ads are displayed in stories
+    Coordinate ad placement with chat surfaces
 
 ## Core Concepts — Realtime
 

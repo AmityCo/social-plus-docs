@@ -1,434 +1,183 @@
 ---
 title: "Polls"
-description: "Create single- or multiple-choice polls inside posts using AmityPollCreateOptions, with configurable answer options and expiration time."
+description: "Create polls, collect votes, and manage poll lifecycle with the Social+ SDKs."
 ---
 
-Create single- or multiple-choice polls inside posts using `AmityPollCreateOptions` and `pollRepository.createPoll()`. Polls support up to 10 answer options, configurable expiration, and owner-only lifecycle management.
+Polls are created first, then attached to poll posts when you want them to appear in a feed. The SDKs expose poll creation, voting, closing, and deletion APIs. TypeScript, iOS, and Android also expose an unvote API; the current Flutter public poll repository does not expose unvote.
 
-<Info>
-  **Note**: Polls are currently supported within posts only. Standalone polls
-  will be available in future SDK versions.
-</Info>
+## Platform Surface
 
-## Key Features
+| Platform | Create | Vote | Unvote | Close | Delete |
+| --- | --- | --- | --- | --- | --- |
+| TypeScript | `PollRepository.createPoll()` | `votePoll()` | `unvotePoll()` | `closePoll()` | `deletePoll()` |
+| iOS | `AmityPollRepository.createPoll()` | `votePoll(withId:answerIds:)` | `unvotePoll(withId:)` | `closePoll(withId:)` | `deletePoll(withId:)` |
+| Android | `AmitySocialClient.newPollRepository().createPoll()` | `votePoll()` | `unvotePoll()` | `closePoll()` | `deletePoll()` |
+| Flutter | `AmitySocialClient.newPollRepository().createPoll()` | `vote()` | Not exposed | `closePoll()` | `deletePoll()` |
 
-<CardGroup cols={2}>
-  <Card title="Flexible Answer Types" icon="list-check">
-    Support for single or multiple choice voting patterns
-  </Card>
-  <Card title="Time-Limited Voting" icon="clock">
-    Set automatic poll expiration with customizable durations
-  </Card>
+## Parameters
 
-  </CardGroup>
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `question` | Yes | Poll question text. |
+| `answers` | Yes | Text or image answer options, depending on SDK and answer type. |
+| `answerType` | No | Single-choice or multiple-choice poll. Defaults to single-choice where the SDK builder provides a default. |
+| `closedIn` / close duration | No | Optional poll close duration. Mobile SDKs expose milliseconds or `Duration`; TypeScript passes `closedIn` through as a numeric field. |
+| `pollId` | Required after creation | ID returned by poll creation and used for voting, closing, deleting, and poll posts. |
+| `answerIds` | Required for voting | Answer IDs selected by the user. |
 
-<CardGroup cols={1}>
-  <Card title="Moderation Controls" icon="shield">
-    Owner-only management capabilities for poll lifecycle
-  </Card>
-</CardGroup>
+## Create A Poll
 
-## Create a Poll
-
-Create engaging polls with customizable settings and up to 10 answer options.
-
-<Tip>
-  Design polls with clear, concise questions and meaningful answer options to
-  maximize user engagement and response quality.
-</Tip>
-
-### Configuration Options
-
-<AccordionGroup>
-  <Accordion title="Poll Structure" icon="file-text">
-    | Parameter | Type | Description | Limits |
-    |-----------|------|-------------|---------| | `question` | String | Poll
-    question text | Max 500 characters | | `answers` | Array | Available answer
-    options | 2-10 options, max 200 chars each |
-  </Accordion>
-
-  <Accordion title="Poll Behavior" icon="cog">
-    | Parameter | Type | Description | Limits |
-    |-----------|------|-------------|---------| | `answerType` | Enum | Single
-    or multiple choice | `Single` (default), `Multiple` | | `timeToClosePoll` |
-    Number | Poll duration in seconds | Default: 30 days |
-  </Accordion>
-</AccordionGroup>
+Create the poll first and keep the returned `pollId` if you need to create a poll post.
 
 <CodeGroup>
-```swift iOS 
-func createPollExample() async {
-    // Setup your poll structure
-    let builder = AmityPollCreateOptions()
-    builder.setQuestion("What is your favourite song?")
-    // Time in milliseconds.
-    builder.setTimeToClosePoll(60 * 60 * 1000)
-    builder.setAnswerType(.single)
-    let answers = ["My gift of silence", "Hope Leaves", "Lazarus"]
-    for item in answers {
-        builder.setAnswer(item)
-    }
-    // Create a poll from builder
-    do {
-        let pollId = try await pollRepository.createPoll(builder)
-    } catch {
-        // Handle error here
-    }
-}
+
+```typescript TypeScript
+import { PollRepository } from "@amityco/ts-sdk";
+
+const { data: poll } = await PollRepository.createPoll({
+  question: "Which feature should we build next?",
+  answerType: "single",
+  answers: [
+    { dataType: "text", data: "Bookmarks" },
+    { dataType: "text", data: "Pinned comments" },
+  ],
+});
+
+const createdPollId = poll.pollId;
+```
+
+```swift iOS
+let pollRepository = AmityPollRepository()
+let options = AmityPollCreateOptions()
+options.setQuestion("Which feature should we build next?")
+options.setAnswerType(.single)
+options.setAnswer("Bookmarks")
+options.setAnswer("Pinned comments")
+
+let createdPollId = try await pollRepository.createPoll(options)
 ```
 
 ```kotlin Android
-fun createPoll(
-    postRepository: AmityPostRepository,
-    pollRepository: AmityPollRepository
-) {
-    pollRepository.createPoll(question = "What are your favorite songs") // a question
-        .answers(
-            answers = listOf(
-                AmityPollAnswer.Data.TEXT("First date"),
-                AmityPollAnswer.Data.TEXT("All of the small things"),
-                AmityPollAnswer.Data.TEXT("The rock show")
-            )
+import com.amity.socialcloud.sdk.model.social.poll.AmityPollAnswer
+
+val pollRepository = AmitySocialClient.newPollRepository()
+
+pollRepository.createPoll("Which feature should we build next?")
+    .answers(
+        listOf(
+            AmityPollAnswer.Data.TEXT("Bookmarks"),
+            AmityPollAnswer.Data.TEXT("Pinned comments")
         )
-        .answerType(answerType = AmityPoll.AnswerType.MULTIPLE) // allow users to vote on multiple choces.
-        .closedIn(
-            closedIn = Minutes.minutes(60).toStandardDuration().millis // open for 60 minutes
-        )
-        .build()
-        .create()
-        .flatMap { pollId: String ->
-            // To create a poll post, use pollId
-            val userTarget = AmityPost.Target.USER.create(userId = "user1")
-            postRepository.createPollPost(
-                target = userTarget,
-                pollId = pollId,
-                text = "new video post!"
-            )
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function createPoll() {
-  const newPoll = {
-    answerType: "single" as Amity.PollAnswerType,
-    answers: [
-      { dataType: "text", data: "answer1" },
-      { dataType: "text", data: "answer2" },
-    ] as Pick<Amity.PollAnswer, "data" | "dataType">[],
-    question: "question",
-  };
-
-  const { data: poll } = await PollRepository.createPoll(newPoll);
-
-  return poll;
-}
-```
-
-```dart Flutter
-void createPollPost(String postId) async {
-  //create a poll as the first step
-  final amityPoll = await AmitySocialClient.newPollRepository()
-      .createPoll(question: 'What are your favorite songs?')
-      .answers(answers: [
-        AmityPollAnswer.text('First date'),
-        AmityPollAnswer.text('All of the small things'),
-        AmityPollAnswer.text('The rock show'),
-      ])
-      .answerType(
-          //available answer types are: AmityPollAnswerType.SINGLE and AmityPollAnswerType.MULTIPLE
-          answerType: AmityPollAnswerType.MULTIPLE)
-      .closedIn(
-          closedIn: Duration(
-              milliseconds: const Duration(minutes: 45)
-                  .inMilliseconds)) //open for 45 mins
-      .create();
-}
-```
-
-</CodeGroup>
-
-## Vote on Polls
-
-Enable users to participate in polls with single or multiple choice voting.
-
-### Parameters
-
-<AccordionGroup>
-  <Accordion title="Voting Parameters" icon="vote-yea">
-    - `pollId` (String): The unique identifier of the poll - `answerIds`
-    (Array&lt;String&gt;): IDs of selected answer options
-  </Accordion>
-</AccordionGroup>
-
-<CodeGroup>
-```swift iOS 
-do {
-    let result = try await pollRepository.votePoll(withId: "<poll-id>", answerIds: ["<answer-id>"])
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun votePoll(pollRepository: AmityPollRepository) {
-    pollRepository.votePoll(
-        pollId = "pollId",
-        answerIds = listOf("answer_id_1", "answer_id_2")
     )
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function votePoll() {
-  const { data: poll } = await PollRepository.votePoll("pollId", ["answerId"]);
-
-  return poll;
-}
-```
-
-```dart Flutter
-void votePoll() {
-  AmitySocialClient.newPollRepository().vote(
-      pollId: 'pollId', answerIds: ['answerId1', 'answerId2']).then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
-```
-
-</CodeGroup>
-
-## Unvote on Polls
-
-Allows users to remove their vote from a poll at any time before the poll closes.
-
-### Parameters
-
-<AccordionGroup>
-  <Accordion title="Voting Parameters" icon="vote-yea">
-    - `pollId` (String): The unique identifier of the poll - `answerIds`
-    (Array&lt;String&gt;): IDs of selected answer options
-  </Accordion>
-</AccordionGroup>
-
-<CodeGroup>
-```swift iOS 
-do {
-    let result = try await pollRepository.unvotePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun unvotePoll(pollRepository: AmityPollRepository) {
-    pollRepository.unvotePoll(
-        pollId = "pollId",
+    .answerType(AmityPoll.AnswerType.SINGLE)
+    .build()
+    .create()
+    .subscribe(
+        { createdPollId -> showSuccessMessage(createdPollId) },
+        { error -> handleGeneralError(error) }
     )
-        .doOnComplete {
-            // Unvote completed
-        }
-        .doOnError {
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function unvotePoll() {
-  await PollRepository.unvotePoll("pollId");
-}
-```
-
-</CodeGroup>
-
-## Close Polls
-
-Poll owners and administrators can manually close polls before their scheduled end time.
-
-<Info>
-  **Permissions**: Only poll creators and administrators can close polls.
-</Info>
-
-<CodeGroup>
-```swift iOS 
-do {
-   let result = try await pollRepository.closePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun closePoll(
-    pollRepository: AmityPollRepository,
-    poll: AmityPoll
-) {
-    pollRepository.closePoll(pollId = poll.getPollId())
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { PollRepository } from "@amityco/ts-sdk";
-
-async function closePoll() {
-  const { data: poll } = await PollRepository.closePoll("pollId");
-
-  return poll;
-}
 ```
 
 ```dart Flutter
-void closePoll() {
-  AmitySocialClient.newPollRepository()
-      .closePoll(pollId: 'pollId')
-      .then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+final poll = await AmitySocialClient.newPollRepository()
+    .createPoll(question: 'Which feature should we build next?')
+    .answers(answers: [
+      AmityPollAnswer.text('Bookmarks'),
+      AmityPollAnswer.text('Pinned comments'),
+    ])
+    .answerType(answerType: AmityPollAnswerType.SINGLE)
+    .create();
+
+final createdPollId = poll.pollId;
 ```
 
 </CodeGroup>
 
-## Delete Polls
+## Vote And Manage A Poll
 
-Permanently remove polls from the system. This action cannot be undone.
-
-<Warning>
-  **Destructive Action**: Poll deletion is permanent and removes all associated
-  votes and data.
-</Warning>
+Use answer IDs from the poll object when voting. Closing and deletion use the poll ID.
 
 <CodeGroup>
-```swift iOS 
-do {
-   let result = try await pollRepository.deletePoll(withId: "<poll-id>")
-} catch {
-    // Handle error here
-}
-```
-
-```kotlin Android
-fun deletePoll(
-    pollRepository: AmityPollRepository,
-    poll: AmityPoll
-) {
-    pollRepository.deletePoll(pollId = poll.getPollId())
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
 import { PollRepository } from "@amityco/ts-sdk";
 
-async function deletePoll() {
-  const isDeleted = await PollRepository.deletePoll("pollId");
+const answerIds = ["answer-id"];
 
-  return isDeleted;
-}
+const { data: votedPoll } = await PollRepository.votePoll(pollId, answerIds);
+await PollRepository.unvotePoll(pollId);
+
+const { data: closedPoll } = await PollRepository.closePoll(pollId);
+const isDeleted = await PollRepository.deletePoll(pollId);
+```
+
+```swift iOS
+let pollRepository = AmityPollRepository()
+let answerIds = ["answer-id"]
+
+try await pollRepository.votePoll(withId: pollId, answerIds: answerIds)
+try await pollRepository.unvotePoll(withId: pollId)
+try await pollRepository.closePoll(withId: pollId)
+try await pollRepository.deletePoll(withId: pollId)
+```
+
+```kotlin Android
+val pollRepository = AmitySocialClient.newPollRepository()
+val answerIds = listOf("answer-id")
+
+pollRepository.votePoll(pollId, answerIds)
+    .subscribe(
+        { showSuccessMessage("Vote submitted") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.unvotePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Vote removed") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.closePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Poll closed") },
+        { error -> handleGeneralError(error) }
+    )
+
+pollRepository.deletePoll(pollId)
+    .subscribe(
+        { showSuccessMessage("Poll deleted") },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-void deletePoll() {
-  AmitySocialClient.newPollRepository()
-      .deletePoll(pollId: 'pollId')
-      .then((value) {
-    //success
-  }).onError((error, stackTrace) {
-    //handle error
-  });
-}
+final pollRepository = AmitySocialClient.newPollRepository();
+final answerIds = ['answer-id'];
+
+await pollRepository.vote(pollId: pollId, answerIds: answerIds);
+final closedPoll = await pollRepository.closePoll(pollId: pollId);
+final isDeleted = await pollRepository.deletePoll(pollId: pollId);
 ```
 
 </CodeGroup>
 
-## Best Practices
+## Notes
 
-<AccordionGroup>
-  <Accordion title="Poll Design" icon="palette">
-    - Keep questions clear and concise (under 500 characters) - Provide 2-6
-    answer options for better user experience - Use descriptive answer text
-    (avoid generic "Option 1", "Option 2") - Consider your audience when setting
-    poll duration
-  </Accordion>
+- Create a poll post separately after poll creation. Poll creation returns a poll ID; poll-post creation attaches that ID to feed content.
+- Use `answerType` values that match each SDK: TypeScript uses `single` or `multiple`, iOS uses `.single` or `.multiple`, Android uses `AmityPoll.AnswerType`, and Flutter uses `AmityPollAnswerType`.
+- Flutter currently exposes `vote`, `closePoll`, and `deletePoll`, but not an unvote method on the public poll repository.
+- Deletion and close behavior depends on server-side permissions for the current user.
 
-{" "}
+## Related Topics
 
-<Accordion title="User Experience" icon="user">
-  - Indicate poll expiration time clearly - Provide visual feedback when votes
-  are submitted - Handle edge cases (poll closed, already voted) - Show
-  real-time vote counts when appropriate
-</Accordion>
-
-{" "}
-
-<Accordion title="Error Handling" icon="exclamation-triangle">
-  - Check poll status before allowing votes - Validate user permissions for
-  management actions - Provide clear error messages for failed operations -
-  Implement retry logic for network failures
-</Accordion>
-
-  <Accordion title="Performance" icon="gauge">
-    - Cache poll results to reduce API calls - Implement efficient polling for
-    live updates - Consider pagination for polls with many votes - Optimize for
-    mobile network conditions
-  </Accordion>
-</AccordionGroup>
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card
-    title="Social Posts"
-    icon="pen-to-square"
-    href="/social-plus-sdk/social/content-management/posts/creation/poll-post"
-  >
-    Learn how to create posts with embedded polls
+<CardGroup cols={3}>
+  <Card title="Poll Posts" icon="square-poll-vertical" href="/social-plus-sdk/social/content-management/posts/creation/poll-post">
+    Attach an existing poll to a feed post
   </Card>
-  <Card
-    title="Discovery & Engagement"
-    icon="compass"
-    href="/social-plus-sdk/social/discovery-engagement/overview"
-  >
-    Explore discovery, feed, search, and notification features
+  <Card title="Text Posts" icon="pen-line" href="/social-plus-sdk/social/content-management/posts/creation/text-post">
+    Create regular text posts for the same feed targets
   </Card>
-  <Card
-    title="Real-time Updates"
-    icon="bolt"
-    href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events"
-  >
-    Implement real-time poll updates and notifications
+  <Card title="Post Retrieval" icon="search" href="/social-plus-sdk/social/content-management/posts/retrieval/get-post">
+    Fetch posts that contain poll data
   </Card>
 </CardGroup>

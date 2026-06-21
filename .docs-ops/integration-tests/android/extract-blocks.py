@@ -388,10 +388,11 @@ def write_kotlin_block(slug, block_index, block, page_path):
     out_path = OUTPUT_DIR / filename
 
     extra_imports_raw, body = split_imports(block["content"])
+    preamble_imports = {line.strip() for line in PREAMBLE_IMPORTS.splitlines() if line.strip()}
     extra_imports = []
     for imp in extra_imports_raw.splitlines():
         imp = imp.strip()
-        if imp and not any(preamble_imp in imp for preamble_imp in PREAMBLE_IMPORTS.splitlines()):
+        if imp and imp not in preamble_imports:
             extra_imports.append(imp)
 
     source_comment = f"// source: {page_path}:{block['start_line']}-{block['end_line']}"
