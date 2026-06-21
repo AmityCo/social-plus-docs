@@ -227,6 +227,7 @@ KOTLIN_PARAMS = """\
     communityId: String = "community-id",
     commentId: String = "comment-id",
     pollId: String = "poll-id",
+    roomId: String = "room-id",
     fileId: String = "file-id",
     imageFileId: String = "image-file-id",
     videoFileId: String = "video-file-id",
