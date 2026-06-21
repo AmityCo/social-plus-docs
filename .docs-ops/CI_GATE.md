@@ -149,7 +149,7 @@ The Action runs on `ubuntu-latest` in **two tiers**:
 
 | Check | Why |
 |---|---|
-| **MDX validity** (`check-mdx.py`) | unterminated code fences + unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…) — i.e. **Mintlify build-breakers**. This is the layer that catches the class of bug that took down `send-a-message.mdx`. |
+| **MDX validity** (`check-mdx.py`) | unterminated code fences, unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…), and SDK language snippets nested in `CardGroup` instead of `CodeGroup`. This catches Mintlify build-breakers and keeps code snippets in the AI-friendly tabbed format. |
 
 **Tier 2 — only when `secrets.SDK_READONLY_PAT` is configured (needs the private TS SDK), BLOCKS:**
 

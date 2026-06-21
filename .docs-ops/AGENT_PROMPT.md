@@ -41,3 +41,10 @@ You are a docs-improvement agent working inside `social-plus-docs/`. Your coordi
 - All validators pass.
 - The result JSON tells a human exactly what changed and why, with line refs.
 - If the task surfaced more work, follow-up tasks land in `pending/` with clear instructions.
+
+## SDK Snippet Style
+
+- Use `<CodeGroup>` for SDK language snippets. Do not put fenced `typescript`, `swift`, `kotlin`, or `dart` snippets inside `<CardGroup>`.
+- Keep `<CardGroup>` for navigation cards, related-topic cards, and conceptual option cards.
+- For SDK function/reference pages that show code snippets, add a `## Parameters` section near the snippets that lists the relevant required and optional inputs. Use an `Operation` column when one page covers multiple SDK functions.
+- Do not add a parameter table to overview, setup, conceptual, or navigation pages unless the page is actually documenting SDK call inputs.
