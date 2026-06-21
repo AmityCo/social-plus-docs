@@ -1,246 +1,215 @@
 ---
 title: "Room Presence"
-description: "Track who is currently watching a live room and how many viewers are present, using automatic heartbeats and real-time viewer counts."
+description: "Track live room viewer heartbeat, viewer count, and online room users with room presence APIs."
 ---
 
-Room presence lets you show **who is watching** a live room and **how many viewers** are present at one moment — the building blocks for a "Who's Watching" list and a live viewer count on a livestream or co-hosted room.
-
-Each viewer periodically sends a lightweight **heartbeat** while they are in the room. The server keeps the set of currently-active viewers, and your app reads that set as a **count** and as a **list of users**.
+Room presence tracks who is currently watching a live room. Use it for viewer counts, "who is watching" panels, and host tools that need to know which users are present in a room right now.
 
 <Info>
-  **Platform availability.** Room presence is available on **iOS**, **Android**, and the **TypeScript SDK** (Web and React Native). It is not yet available on Flutter.
+Room presence is available on iOS, Android, and TypeScript. It is not available in the current Flutter SDK checkout.
 </Info>
 
-## Overview
+## Platform Surface
 
-<CardGroup cols={3}>
-  <Card title="Send Heartbeat" icon="heart-pulse">
-    Mark the current user as present in the room while they are watching.
-  </Card>
+| Platform | Repository | Main APIs |
+| --- | --- | --- |
+| TypeScript | `RoomPresenceRepository` | `startHeartbeat(roomId)`, `stopHeartbeat(roomId)`, `getRoomUserCount(roomId)`, `getRoomOnlineUsers(roomId)` |
+| iOS | `AmityRoomPresenceRepository(roomId:)` | `startHeartbeat()`, `stopHeartbeat()`, `getRoomUserCount()`, `getRoomOnlineUsers()` |
+| Android | `AmityCoreClient.newRoomPresenceRepository().roomId(roomId)` | `startHeartbeat()`, `stopHeartbeat()`, `getOnlineUsersCount()`, `observeOnlineUsersCount(interval:)`, `getOnlineUsersSnapshot()` |
+| Flutter | Not available | Not available |
 
-  <Card title="Viewer Count" icon="users">
-    Read how many users are currently watching, with optional live updates.
-  </Card>
+## Parameters
 
-  <Card title="Who's Watching" icon="eye">
-    Fetch the list of users currently present in the room.
-  </Card>
-</CardGroup>
+| Operation | Platform | Parameter | Required | Description |
+| --- | --- | --- | --- | --- |
+| Repository creation | iOS, Android | `roomId` | Yes | Room ID whose presence should be tracked. |
+| `startHeartbeat` | TypeScript | `roomId` | Yes | Room ID where the current user should be counted as present. |
+| `startHeartbeat` | iOS, Android | None | No | Uses the `roomId` already bound to the repository. |
+| `stopHeartbeat` | TypeScript | `roomId` | Yes | Room ID whose heartbeat should stop. |
+| `stopHeartbeat` | iOS, Android | None | No | Stops the active room heartbeat managed by the repository or presence service. |
+| `getRoomUserCount` / `getOnlineUsersCount` | All supported platforms | None or `roomId` | Platform-dependent | Reads the current online viewer count for the room. |
+| `observeOnlineUsersCount` | Android | `interval` | No | Poll interval in seconds. Defaults to 15 seconds. |
+| `getRoomOnlineUsers` / `getOnlineUsersSnapshot` | All supported platforms | None or `roomId` | Platform-dependent | Reads a point-in-time list or snapshot of online room users. Android snapshots paginate 20 users at a time. |
 
-## Quick Start
+## startHeartbeat()
 
-<Steps>
-  <Step title="Create a room presence reference">
-    Identify the room you want to track by its `roomId`.
-  </Step>
-  <Step title="Start the heartbeat when the viewer enters">
-    Call `startHeartbeat` when the user opens the room screen. The first heartbeat is sent immediately and then repeats automatically.
-  </Step>
-  <Step title="Read the count and the who's-watching list">
-    Display the live viewer count and, optionally, the list of present users.
-  </Step>
-  <Step title="Stop the heartbeat when the viewer leaves">
-    Call `stopHeartbeat` when the user closes the room or the screen goes to the background.
-  </Step>
-</Steps>
-
-## Send a Heartbeat
-
-Start a heartbeat when the viewer enters the room, and stop it when they leave. The SDK sends the first heartbeat immediately and then repeats it automatically at a server-controlled interval — **you do not configure the interval**.
+Start the room heartbeat when the user enters the room, and stop it when they leave. The SDK sends the first heartbeat immediately and continues at the server-configured interval.
 
 <CodeGroup>
 
 ```swift iOS
-let roomPresence = AmityRoomPresenceRepository(roomId: "<room-id>")
+let roomPresence = AmityRoomPresenceRepository(roomId: roomId)
 
-// Start when the viewer enters the room
-Task { @MainActor in
-    do {
-        try await roomPresence.startHeartbeat()
-    } catch {
-        // Room presence may be disabled for this network
-        print("Failed to start room presence: \(error)")
-    }
-}
+try await roomPresence.startHeartbeat()
 
-// Stop when the viewer leaves
+// Call when the viewer leaves the room.
 roomPresence.stopHeartbeat()
 ```
 
 ```kotlin Android
-val roomPresence = AmityCoreClient.newRoomPresenceRepository().roomId("<room-id>")
+val roomPresence = AmityCoreClient.newRoomPresenceRepository().roomId(roomId)
 
-// Start when the viewer enters the room
 roomPresence.startHeartbeat()
     .subscribeOn(Schedulers.io())
     .observeOn(AndroidSchedulers.mainThread())
-    .doOnComplete { /* heartbeat started */ }
-    .doOnError { /* room presence may be disabled */ }
-    .subscribe()
+    .subscribe({
+        showSuccessMessage("Room heartbeat started")
+    }, { error ->
+        showErrorMessage(error = error)
+    })
 
-// Stop when the viewer leaves
+// Call when the viewer leaves the room.
 roomPresence.stopHeartbeat()
 ```
 
 ```typescript TypeScript
 import { RoomPresenceRepository } from '@amityco/ts-sdk';
 
-const roomId = '<room-id>';
-
-// Start when the viewer enters the room
 RoomPresenceRepository.startHeartbeat(roomId);
 
-// Stop when the viewer leaves
+// Call when the viewer leaves the room.
 RoomPresenceRepository.stopHeartbeat(roomId);
 ```
 
 </CodeGroup>
 
-## Get the Viewer Count
+## getRoomUserCount()
 
-`getRoomUserCount` returns the number of users currently present. This is the authoritative "how many are watching" value.
+Use the count as the source of truth for how many users are currently present in the room.
 
 <CodeGroup>
 
 ```swift iOS
+let roomPresence = AmityRoomPresenceRepository(roomId: roomId)
+
 let count = try await roomPresence.getRoomUserCount()
+showSuccessMessage(count)
 ```
 
 ```kotlin Android
+val roomPresence = AmityCoreClient.newRoomPresenceRepository().roomId(roomId)
+
 roomPresence.getOnlineUsersCount()
-    .subscribe({ count -> /* update UI */ }, { error -> })
+    .subscribe({ count ->
+        showSuccessMessage(count)
+    }, { error ->
+        showErrorMessage(error = error)
+    })
 ```
 
 ```typescript TypeScript
+import { RoomPresenceRepository } from '@amityco/ts-sdk';
+
 const { count } = await RoomPresenceRepository.getRoomUserCount(roomId);
+updateUI(count);
 ```
 
 </CodeGroup>
 
-### Keep the count live
+## Keep the Count Live
 
-The count is a point-in-time read. To keep a viewer badge up to date, poll it on an interval — **we recommend about every 30 seconds**. Polling more frequently than this is discouraged because it won't return a more up-to-date count.
-
-On **Android** the SDK provides a built-in polling stream — pass `interval = 30` (it defaults to 15 seconds). On **iOS** and **TypeScript**, call `getRoomUserCount` on your own ~30-second interval.
-
-<Note>
-  **Why 30 seconds?** Viewers heartbeat roughly **every 30 seconds**, and a viewer is counted as present for **up to 60 seconds** after their last heartbeat. The underlying set of present users only changes as heartbeats arrive and expire, so the count can't get any fresher by polling faster — anything below ~30 seconds returns the same value with no meaningful update.
-</Note>
+The count is a point-in-time read. Android provides a built-in polling stream. On iOS and TypeScript, use your own timer and choose an interval that fits the UI.
 
 <CodeGroup>
 
 ```swift iOS
-// Poll on your own timer (e.g. every 30s)
+let roomPresence = AmityRoomPresenceRepository(roomId: roomId)
+
 let timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
     Task { @MainActor in
         if let count = try? await roomPresence.getRoomUserCount() {
-            // update UI
+            showSuccessMessage(count)
         }
     }
 }
+
+timer.invalidate()
 ```
 
 ```kotlin Android
-// Built-in polling stream — emits immediately, then every `interval` seconds
+val roomPresence = AmityCoreClient.newRoomPresenceRepository().roomId(roomId)
+
 roomPresence.observeOnlineUsersCount(interval = 30)
-    .subscribe({ count -> /* update UI */ }, { error -> })
+    .subscribe({ count ->
+        showSuccessMessage(count)
+    }, { error ->
+        showErrorMessage(error = error)
+    })
 ```
 
 ```typescript TypeScript
-// Poll on your own interval (e.g. every 30s)
-const handle = setInterval(async () => {
+import { RoomPresenceRepository } from '@amityco/ts-sdk';
+
+const timer = setInterval(async () => {
   const { count } = await RoomPresenceRepository.getRoomUserCount(roomId);
-  // update UI
+  updateUI(count);
 }, 30_000);
 
-// clearInterval(handle) when leaving the room
+clearInterval(timer);
 ```
 
 </CodeGroup>
 
-## Get the "Who's Watching" List
+## getRoomOnlineUsers()
 
-`getRoomOnlineUsers` returns the users currently present in the room as full user objects — ideal for rendering avatars or a "Who's Watching" panel.
+Use the online-user list when the app needs actual user objects, such as avatars in a "who is watching" panel. For large rooms, display the count as the total and treat the list as a snapshot.
 
 <CodeGroup>
 
 ```swift iOS
+let roomPresence = AmityRoomPresenceRepository(roomId: roomId)
+
 let users = try await roomPresence.getRoomOnlineUsers()
-// users: [AmityUser]
+displayUserList(users)
 ```
 
 ```kotlin Android
-// Android returns a snapshot that loads users 20 at a time
+val roomPresence = AmityCoreClient.newRoomPresenceRepository().roomId(roomId)
+
 roomPresence.getOnlineUsersSnapshot()
     .subscribe({ snapshot ->
-        val users = snapshot.getUsers()   // first page (up to 20)
+        val users = snapshot.getUsers()
         if (snapshot.canLoadMore()) {
-            snapshot.loadMore().subscribe() // appends the next 20
+            snapshot.loadMore().subscribe()
         }
-    }, { error -> })
+    }, { error ->
+        showErrorMessage(error = error)
+    })
 ```
 
 ```typescript TypeScript
+import { RoomPresenceRepository } from '@amityco/ts-sdk';
+
 const { data: users } = await RoomPresenceRepository.getRoomOnlineUsers(roomId);
-// users: Amity.User[]
+renderResults(users);
 ```
 
 </CodeGroup>
-
-<Info>
-  **The list is capped; the count is not.** The who's-watching list returns up to a maximum of **200**. The [viewer count](#get-the-viewer-count) is **not** capped, so for rooms with large audiences it can be **higher** than the number of users in the list. Use the **count** for the total number of viewers, and the **list** for showing faces.
-</Info>
-
-## Behavior to Know
-
-<AccordionGroup>
-  <Accordion title="When is a user considered present?" icon="signal">
-    A user is present while their heartbeat is recent — they are considered **online if active within the last ~60 seconds**. When a viewer leaves the room or disconnects, the server clears their presence automatically; you don't need to remove them manually beyond calling `stopHeartbeat`.
-  </Accordion>
-
-  <Accordion title="Heartbeat timing is automatic" icon="clock">
-    The SDK sends the first heartbeat immediately when you call `startHeartbeat`, then repeats at a cadence provided by the server. There is no client-side interval to configure.
-  </Accordion>
-
-  <Accordion title="Count vs. list consistency" icon="scale-balanced">
-    The count and the list come from separate reads taken at slightly different moments, and the list is capped (see above). Treat the count as the source of truth for totals and the list as a best-effort snapshot of recent viewers.
-  </Accordion>
-
-  <Accordion title="Reading does not require a heartbeat" icon="eye">
-    You can call `getRoomUserCount` and `getRoomOnlineUsers` to observe a room even if the current user is not sending a heartbeat themselves (for example, a moderator dashboard). Send a heartbeat only when you want the current user to be counted as present.
-  </Accordion>
-</AccordionGroup>
 
 ## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Lifecycle management" icon="arrows-rotate">
-    Start the heartbeat when the player screen becomes visible and stop it when it is dismissed, backgrounded, or the view model is torn down. Only run it for **live** rooms — skip recorded/ended playback. If the screen can switch rooms or the viewer's role changes, stop the old heartbeat and start a fresh one. This keeps the viewer count accurate and avoids counting users who have left.
+  <Accordion title="Heartbeat only for active viewing" icon="heart-pulse">
+    Start room heartbeat when the viewer enters the live room screen. Stop it when the viewer leaves, switches rooms, backgrounds the screen, or the view model is torn down.
   </Accordion>
 
-  <Accordion title="Choose a sensible refresh interval" icon="gauge">
-    Polling the count too frequently adds little benefit. A good rule of thumb: **~30s**. Slow it down further on screens where the count is secondary.
+  <Accordion title="Count for totals, list for faces" icon="users">
+    The count is the total active viewer number. The online-user list is best for UI that needs actual user objects, such as avatars or invite-to-cohost flows.
   </Accordion>
 
-  <Accordion title="Fetch the who's-watching list when needed" icon="list">
-    Load the list when a host opens a viewers or invite-co-host panel, and refetch to refresh. Don't keep it cached — presence changes constantly, so a stale list is misleading.
+  <Accordion title="Poll count thoughtfully" icon="clock">
+    Android defaults `observeOnlineUsersCount` to 15 seconds. On iOS and TypeScript, avoid very aggressive polling unless the count is central to the experience.
   </Accordion>
 </AccordionGroup>
 
-## Use Cases
+## Related Topics
 
 <CardGroup cols={2}>
-  <Card title="Livestream viewer count" icon="users">
-    Show a live "1,240 watching" badge on a livestream or co-hosted room.
+  <Card title="Heartbeat Sync" icon="heart-pulse" href="/social-plus-sdk/core-concepts/realtime-communication/presence-state/heartbeat-sync">
+    Learn when to start and stop current user and room heartbeats.
   </Card>
 
-  <Card title="Who's Watching panel" icon="eye">
-    Render avatars of the most recent viewers present in the room.
-  </Card>
-
-  <Card title="Co-host invitations" icon="user-plus">
-    Surface currently-watching viewers so a host can invite one as a co-host.
+  <Card title="Room Posts" icon="radio" href="/social-plus-sdk/social/content-management/posts/creation/room-post">
+    Create social posts that reference live rooms.
   </Card>
 </CardGroup>
-
-##
