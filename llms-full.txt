@@ -11131,510 +11131,325 @@ See [Recorded Playback](./recorded-playback) for playback-specific guidance.
 
 ### [Co-Host Management](https://learn.social.plus/social-plus-sdk/video-new/broadcasting/co-host-management)
 
-> Invite, manage, and coordinate co-hosts for collaborative room broadcasting
+> Invite, observe, and manage room co-hosts with current SDK room and invitation APIs.
 
-# Co-Host Management
+Co-host management is built on room invitations, room participant events, and room participant mutations. Use these APIs when a room host invites another user to broadcast, when an invited user accepts or rejects the invitation, and when the host manages a co-host during the room.
 
-Room posts support co-hosting, allowing multiple broadcasters to stream together. This guide covers the complete co-host invitation system, from sending invitations to managing co-host participation during broadcasts.
+  This page covers SDK co-host control APIs. LiveKit connection, camera and microphone publishing, and broadcaster UI are app-owned concerns after the SDK returns broadcaster data.
 
-## Overview
+## Platform Surface
 
-Co-hosts are invited broadcasters who can stream together with the room host. They appear with a special badge in the chat and have broadcasting capabilities within the room.
+| Platform | Invite | Respond | Events | Participant control |
+| --- | --- | --- | --- | --- |
+| TypeScript | `room.createInvitation(userId)` | `room.getInvitations()`, `invitation.accept()`, `invitation.reject()`, `InvitationRepository.cancelInvitation(invitationId)` | `InvitationRepository.getInvitations(...)`, `RoomRepository.onRoomParticipantJoined(...)`, `onRoomParticipantRemoved(...)`, and related room events | `RoomRepository.updateCohostPermission(...)`, `removeParticipant(...)`, `leaveRoom(...)` |
+| iOS | `AmityRoom.createInvitation(_:)` | `room.getInvitation()`, `invitation.accept()`, `invitation.reject()`, `room.cancelInvitation(_:)` | `AmityRoomRepository().getCoHostEvent(roomId:)` | `updateCohostPermissions(...)`, `removeParticipant(withId:userId:)`, `leaveRoom(withId:)` |
+| Android | `AmityRoom.createInvitation(userId)` | `room.getInvitation()`, `invitation.accept()`, `invitation.reject()`, `invitation.cancel()` | `AmityVideoClient.newRoomRepository().getCoHostEvent(roomId)` | `updateCohostPermission(...)`, `removeRoomParticipant(...)`, `leaveRoom(...)` |
+| Flutter | No current public room repository found in this audit | Not available | Not available | Not available |
 
-    Send invitations to users to join as broadcasters
-    Invited users can accept or decline invitations
-    Monitor invitation status in real-time
-    Multiple hosts broadcast together simultaneously
+## Invite a Co-Host
 
-## For Hosts
+Invite one user at a time. The invitation type is the room co-host invitation type under the hood.
 
-### Send Co-Host Invitation
-
-Hosts can invite users to join as co-hosts during a live session. Co-host invitations are sent one user at a time.
-
-Co-host invitations are sent one user at a time. To invite multiple co-hosts, call the invitation function for each user.
-
-**Parameters**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `userId` | string | Yes | User ID to invite as co-host |
-| `roomId` | string | Yes | ID of the room |
-
-```swift iOS
-do {
-    try await room.createInvitation("<user_id>")
-    print("Co-host invitation sent successfully.")
-} catch {
-    print("Failed to send co-host invitation: \(error.localizedDescription)")
-}
-```
-
-```kotlin Android
-fun inviteCoHost(
-    room: AmityRoom,
-    userId: String
-) {
-    room.createInvitation(userId)
-        .doOnComplete {
-            // Co-host invitation sent successfully
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
 
 ```typescript TypeScript
-async function inviteCoHost(room: Amity.Room, userId: string) {
-  try {
-    await room.createInvitation(userId);
-    // Handle successful invitation, e.g., show a success message
-  } catch (error) {
-    // Handle error, e.g., log it or show a message to the user
-  }
+async function inviteCoHost(room: Amity.Room, cohostUserId: string) {
+  await room.createInvitation(cohostUserId);
+  showSuccessMessage(cohostUserId);
 }
 ```
 
-### Get Sent Co-Host Invitations
-
-Hosts can view all co-host invitations they've sent to track invitation status.
-
-```swift iOS
-var token: AmityNotificationToken?
-let repository = AmityInvitationRepository(client: client)
-token = repository.getInvitations(
-    targetId: room.roomId,
-    targetType: .room
-).observe({ collection, change, error in
-    // Observe changes in the invitation collection
-})
-```
-
 ```kotlin Android
-fun getCoHostInvitations(roomId: String) {
-    AmityCoreClient.newInvitationRepository()
-        .getInvitations(
-            targetId = roomId,
-            targetType = AmityInvitation.TargetType.ROOM.value
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+
+fun inviteCoHost(room: AmityRoom, cohostUserId: String) {
+    room.createInvitation(cohostUserId)
+        .subscribe(
+            { showSuccessMessage(cohostUserId) },
+            { error -> handleGeneralError(error) }
         )
-        .doOnNext { invitations ->
-            // PagingData<AmityInvitation>
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
 }
 ```
-
-```typescript TypeScript
-import { InvitationRepository } from '@amityco/ts-sdk';
-
-function getCoHostInvitations(roomId: string) {
-  const unsubscribe = InvitationRepository.getInvitations(
-    {
-      targetId: roomId,
-      targetType: Amity.InvitationTargetType.Room,
-      limit: 20,
-    },
-    ({ data, loading, error }) => {
-      if (error) {
-        // Handle the error
-      }
-      if (loading) {
-        // Handle the loading state
-      }
-      if (data) {
-        // Process the invitations
-      }
-    },
-  );
-  return unsubscribe;
-}
-```
-
-### Cancel Co-Host Invitation
-
-Hosts can cancel pending invitations before they are accepted.
 
 ```swift iOS
-do {
-    try await invitation.cancel()
-    print("Invitation cancelled successfully")
-} catch {
-    print("Failed to cancel invitation: \(error.localizedDescription)")
+func inviteCoHost(room: AmityRoom, cohostUserId: String) async throws {
+    try await room.createInvitation(cohostUserId)
+    showSuccessMessage(cohostUserId)
 }
 ```
 
-```kotlin Android
-fun cancelInvitation(invitation: AmityInvitation) {
-    invitation.cancel()
-        .doOnComplete {
-            // Invitation cancelled successfully
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
+
+## Respond or Cancel
+
+Invited users accept or reject the pending invitation. Hosts cancel an invitation before it is accepted.
+
 
 ```typescript TypeScript
-async function cancelInvitation(invitation: Amity.Invitation) {
-  try {
-    await invitation.cancel();
-    // Handle successful cancellation
-  } catch (error) {
-    // Handle error
-  }
-}
-```
+import { InvitationRepository } from "@amityco/ts-sdk";
 
-## For Invited Users
+async function acceptPendingRoomInvitation(room: Amity.Room) {
+  const invitation = await room.getInvitations();
 
-### Get My Room Invitations
-
-Users can retrieve all their pending room co-host invitations.
-
-```swift iOS
-var token: AmityNotificationToken?
-let repository = AmityInvitationRepository(client: client)
-token = repository.getMyRoomInvitations().observe({ collection, change, error in
-    // Observe changes in the collection
-})
-```
-
-```kotlin Android
-fun getMyRoomInvitations() {
-    AmityCoreClient.newInvitationRepository()
-        .getMyRoomInvitations()
-        .doOnNext { invitations ->
-            // PagingData<AmityInvitation>
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { InvitationRepository } from '@amityco/ts-sdk';
-
-function getRoomInvitations(roomId: string) {
-  const unsubscribe = InvitationRepository.getInvitations(
-    { targetType: 'room', targetId: roomId, limit: 20 },
-    ({ data, loading, error }) => {
-      if (error) {
-        // Handle the error
-      }
-      if (loading) {
-        // Handle the loading state
-      }
-      if (data) {
-        // Process the invitations
-      }
-    },
-  );
-  return unsubscribe;
-}
-```
-
-### Check Co-Host Invitation Status
-
-Check the status of a room co-host invitation.
-
-**Status Values**
-
-| Status | Description | User Action |
-|--------|-------------|-------------|
-| `pending` | Invitation awaiting response | Can accept or decline |
-| `accepted` | User has accepted | Co-host in room |
-| `rejected` | User has declined | No further action |
-| `cancelled` | Host cancelled invitation | No longer valid |
-
-```swift iOS
-if let invitation = await room.getInvitation() {
-    switch invitation.status {
-    case .pending:
-        print("Co-host invitation is pending.")
-    case .approved:
-        print("Co-host invitation is approved.")
-    case .rejected:
-        print("Co-host invitation is rejected.")
-    case .canceled:
-        print("Co-host invitation is canceled.")
-    @unknown default:
-        print("Unknown invitation status.")
-    }
-}
-```
-
-```kotlin Android
-fun getCoHostInvitationStatus(room: AmityRoom) {
-    room.getInvitation()
-        .doOnSuccess { invitations ->
-            invitations.map { invitation ->
-                when (invitation.getStatus()) {
-                    AmityInvitationStatus.PENDING -> {
-                        // Handle pending invitation
-                    }
-                    AmityInvitationStatus.APPROVED -> {
-                        // Handle approved invitation
-                    }
-                    AmityInvitationStatus.REJECTED -> {
-                        // Handle rejected invitation
-                    }
-                    AmityInvitationStatus.CANCELLED -> {
-                        // Handle cancelled invitation
-                    }
-                }
-            }
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { InvitationStatusEnum } from '@amityco/ts-sdk';
-
-async function getCoHostInvitationStatus(room: Amity.Room) {
-  const invitation = await room.getInvitation();
-  if (invitation?.status === InvitationStatusEnum.Pending) {
-    // Handle pending invitation
-  }
-  if (invitation?.status === InvitationStatusEnum.Approved) {
-    // Handle approved invitation
-  }
-  if (invitation?.status === InvitationStatusEnum.Rejected) {
-    // Handle rejected invitation
-  }
-  if (invitation?.status === InvitationStatusEnum.Cancelled) {
-    // Handle cancelled invitation
-  }
-  return invitation;
-}
-```
-
-### Accept Co-Host Invitation
-
-Accept a pending co-host invitation to join the broadcast.
-
-```swift iOS
-if let invitation = await room.getInvitation() {
-    do {
-        try await invitation.accept()
-        print("Co-host invitation accepted successfully.")
-    } catch {
-        print("Failed to accept invitation: \(error.localizedDescription)")
-    }
-}
-```
-
-```kotlin Android
-fun acceptCoHostInvitation(invitation: AmityInvitation) {
-    invitation.accept()
-        .doOnComplete {
-            // Co-host invitation accepted successfully
-        }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-async function acceptCoHostInvitation(invitation: Amity.Invitation) {
-  try {
+  if (invitation?.status === "pending") {
     await invitation.accept();
-    // Handle successful acceptance
-  } catch (error) {
-    // Handle error
+    showSuccessMessage(invitation.invitationId);
   }
 }
-```
 
-### Decline Co-Host Invitation
-
-Decline a co-host invitation if unable to join the broadcast.
-
-```swift iOS
-if let invitation = await room.getInvitation() {
-    do {
-        try await invitation.reject()
-        print("Co-host invitation declined successfully.")
-    } catch {
-        print("Failed to decline invitation: \(error.localizedDescription)")
-    }
+async function cancelRoomInvitation(invitationId: string) {
+  await InvitationRepository.cancelInvitation(invitationId);
+  showSuccessMessage(invitationId);
 }
 ```
 
 ```kotlin Android
-fun declineCoHostInvitation(invitation: AmityInvitation) {
-    invitation.reject()
-        .doOnComplete {
-            // Co-host invitation declined successfully
+import com.amity.socialcloud.sdk.model.core.invitation.AmityInvitation
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import io.reactivex.rxjava3.core.Completable
+
+fun acceptPendingRoomInvitation(room: AmityRoom) {
+    room.getInvitation()
+        .flatMapCompletable { invitations ->
+            invitations.firstOrNull()?.accept() ?: Completable.complete()
         }
-        .doOnError { error ->
-            // Handle error
-        }
-        .subscribe()
+        .subscribe(
+            { showSuccessMessage(room.getRoomId()) },
+            { error -> handleGeneralError(error) }
+        )
+}
+
+fun cancelRoomInvitation(invitation: AmityInvitation) {
+    invitation.cancel()
+        .subscribe(
+            { showSuccessMessage(invitation.getInvitationId()) },
+            { error -> handleGeneralError(error) }
+        )
 }
 ```
+
+```swift iOS
+func acceptPendingRoomInvitation(room: AmityRoom) async throws {
+    guard let invitation = await room.getInvitation() else { return }
+
+    if invitation.status == .pending {
+        try await invitation.accept()
+        showSuccessMessage(invitation.invitationId)
+    }
+}
+
+func cancelRoomInvitation(room: AmityRoom, invitationId: String) async throws {
+    try await room.cancelInvitation(invitationId)
+    showSuccessMessage(invitationId)
+}
+```
+
+
+## Observe Co-Host Events
+
+Use invitation events for invite status and participant events for active room membership changes. Keep the returned unsubscribe, disposable, or cancellable for as long as the screen needs updates.
+
 
 ```typescript TypeScript
-async function declineCoHostInvitation(invitation: Amity.Invitation) {
-  try {
-    await invitation.reject();
-    // Handle successful decline
-  } catch (error) {
-    // Handle error
-  }
-}
-```
+import { InvitationRepository, RoomRepository } from "@amityco/ts-sdk";
 
-## Co-Host Joining the Broadcast
+function observeCoHostEvents(roomId: string): Amity.Unsubscriber {
+  const stopInvitationEvents = InvitationRepository.getInvitations(
+    { targetId: roomId, targetType: "room" },
+    invitations => {
+      invitations.forEach(invitation => {
+        showSuccessMessage(invitation.status);
+      });
+    },
+  );
 
-After accepting an invitation, co-hosts need to get their broadcast data and connect to LiveKit:
-
-```swift iOS
-import LiveKit
-
-func joinAsBroadcaster(roomId: String) async {
-    do {
-        // 1. Get broadcaster credentials
-        let broadcastData = try await roomRepository.getBroadcastData(roomId: roomId)
-
-        guard case .coHosts(let data) = broadcastData else {
-            print("Invalid broadcast data")
-            return
-        }
-
-        // 2. Connect to LiveKit
-        let liveKitRoom = Room()
-        try await liveKitRoom.connect(url: data.coHostUrl, token: data.coHostToken)
-
-        // 3. Start publishing tracks
-        try await liveKitRoom.localParticipant.setCamera(enabled: true)
-        try await liveKitRoom.localParticipant.setMicrophone(enabled: true)
-
-        print("Joined broadcast as co-host!")
-    } catch {
-        print("Failed to join: \(error)")
+  const stopJoinedEvents = RoomRepository.onRoomParticipantJoined(event => {
+    if (event.room.roomId === roomId) {
+      showSuccessMessage(event.actorInternalId);
     }
+  });
+
+  const stopRemovedEvents = RoomRepository.onRoomParticipantRemoved(event => {
+    if (event.room.roomId === roomId) {
+      showSuccessMessage(event.actorInternalId);
+    }
+  });
+
+  return () => {
+    stopInvitationEvents();
+    stopJoinedEvents();
+    stopRemovedEvents();
+  };
 }
 ```
 
 ```kotlin Android
-fun joinAsBroadcaster(roomId: String) {
-    roomRepository.getBroadcastData(roomId = roomId)
-        .subscribe({ broadcastData ->
-            when (broadcastData) {
-                is AmityRoomBroadcastData.CoHosts -> {
-                    // Connect to LiveKit
-                    val liveKitRoom = LiveKit.create(context)
-                    liveKitRoom.connect(
-                        url = broadcastData.getCoHostUrl(),
-                        token = broadcastData.getCoHostToken()
-                    )
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import com.amity.socialcloud.sdk.core.session.model.AmityCoHostEvent
 
-                    // Start publishing tracks
-                    liveKitRoom.localParticipant.setCameraEnabled(true)
-                    liveKitRoom.localParticipant.setMicrophoneEnabled(true)
-
-                    Log.d("CoHost", "Joined broadcast as co-host!")
+val disposable = AmityVideoClient.newRoomRepository()
+    .getCoHostEvent(roomId)
+    .subscribe(
+        { event ->
+            when (event) {
+                is AmityCoHostEvent.CoHostInvited -> {
+                    showSuccessMessage(event.invitation.getStatus())
+                }
+                is AmityCoHostEvent.CoHostJoined -> {
+                    showSuccessMessage(event.actorInternalId ?: "")
+                }
+                is AmityCoHostEvent.CoHostRemoved -> {
+                    showSuccessMessage(event.actorInternalId ?: "")
+                }
+                else -> {
+                    showSuccessMessage(event.roomId)
                 }
             }
-        }, { error ->
-            Log.e("CoHost", "Failed to join: ${error.message}")
-        })
-}
+        },
+        { error -> handleGeneralError(error) }
+    )
 ```
+
+```swift iOS
+let roomRepository = AmityRoomRepository()
+var coHostEventCancellable: AnyCancellable?
+
+coHostEventCancellable = roomRepository
+    .getCoHostEvent(roomId: roomId)
+    .sink { event in
+        switch event.type {
+        case .invitationInvited,
+             .invitationAccepted,
+             .invitationRejected,
+             .invitationCancelled:
+            showSuccessMessage(event.invitation?.status.rawValue)
+        case .coHostJoined,
+             .coHostLeft,
+             .coHostRemoved,
+             .coHostStageLeft:
+            showSuccessMessage(event.actorInternalId)
+        default:
+            showSuccessMessage(event.room.roomId)
+        }
+    }
+
+showSuccessMessage(coHostEventCancellable != nil)
+```
+
+
+## Manage Active Co-Hosts
+
+Hosts can update whether a co-host can manage product tags, remove a co-host from the room, and co-hosts can leave the room.
+
 
 ```typescript TypeScript
-import { RoomRepository } from '@amityco/ts-sdk';
-import { Room as LiveKitRoom } from 'livekit-client';
+import { RoomRepository } from "@amityco/ts-sdk";
 
-async function joinAsBroadcaster(roomId: string) {
-    try {
-        // 1. Get broadcaster credentials
-        const broadcastData = await RoomRepository.getBroadcasterData(roomId);
+async function updateCoHostProductPermission(
+  roomId: string,
+  cohostUserId: string,
+) {
+  const { data: updatedRoom } = await RoomRepository.updateCohostPermission(
+    roomId,
+    cohostUserId,
+    true,
+  );
 
-        if (broadcastData.type !== 'coHosts') {
-            console.log('Invalid broadcast data');
-            return;
-        }
+  showSuccessMessage(
+    updatedRoom.participants.find(participant => participant.userId === cohostUserId)
+      ?.canManageProductTags,
+  );
+}
 
-        // 2. Connect to LiveKit
-        const liveKitRoom = new LiveKitRoom();
-        await liveKitRoom.connect(
-            broadcastData.coHostUrl,
-            broadcastData.coHostToken
-        );
+async function removeCoHost(roomId: string, cohostUserId: string) {
+  await RoomRepository.removeParticipant(roomId, cohostUserId);
+  showSuccessMessage(cohostUserId);
+}
 
-        // 3. Start publishing tracks
-        await liveKitRoom.localParticipant.setCameraEnabled(true);
-        await liveKitRoom.localParticipant.setMicrophoneEnabled(true);
-
-        console.log('Joined broadcast as co-host!');
-        return liveKitRoom;
-    } catch (error) {
-        console.error('Failed to join:', error);
-    }
+async function leaveAsCoHost(roomId: string) {
+  await RoomRepository.leaveRoom(roomId);
+  showSuccessMessage(roomId);
 }
 ```
 
-## Best Practices
+```kotlin Android
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
 
-    - Coordinate with co-hosts before going live
-    - Establish clear roles and speaking order
-    - Test audio and video connections with all hosts
-    - Have a backup plan if a co-host disconnects
-    - Send invitations early to give users time to prepare
-    - Handle expired or cancelled invitations gracefully
-    - Provide clear UI feedback for invitation status
-    - Allow hosts to re-invite users who declined
-    - Monitor co-host connection status
-    - Handle co-host disconnection gracefully
-    - Use host and co-host badges for clear identification
-    - Coordinate mute/unmute to avoid audio issues
+val roomRepository = AmityVideoClient.newRoomRepository()
 
-## Troubleshooting
+roomRepository.updateCohostPermission(
+    roomId = roomId,
+    cohostId = userId,
+    canManageProductTags = true
+)
+    .andThen(roomRepository.removeRoomParticipant(roomId, userId))
+    .andThen(roomRepository.leaveRoom(roomId))
+    .subscribe(
+        { showSuccessMessage(roomId) },
+        { error -> handleGeneralError(error) }
+    )
+```
 
-    **Problem**: User doesn't see the co-host invitation
+```swift iOS
+let roomRepository = AmityRoomRepository()
 
-    **Solutions**:
-    - Verify the user ID is correct
-    - Check that the room is in a valid state
-    - Ensure the user has permissions to receive invitations
-    - Try re-sending the invitation
-    **Problem**: Co-host accepted but can't join broadcast
+let updatedRoom = try await roomRepository.updateCohostPermissions(
+    roomId: roomId,
+    cohostId: userId,
+    canManageProductTags: true
+)
+showSuccessMessage(updatedRoom.roomId)
 
-    **Solutions**:
-    - Verify the room is still live
-    - Check that broadcast data is retrieved correctly
-    - Ensure network connectivity is stable
-    - Validate LiveKit connection credentials
-    **Problem**: Co-hosts frequently disconnecting
+try await roomRepository.removeParticipant(withId: roomId, userId: userId)
 
-    **Solutions**:
-    - Check network stability for all participants
-    - Monitor bandwidth requirements
-    - Consider reducing video quality
-    - Implement reconnection logic
+_ = try await roomRepository.leaveRoom(withId: roomId)
+showSuccessMessage(roomId)
+```
 
-## Next Steps
 
-    Get broadcaster data and connect to LiveKit
-    Handle recorded room playback after broadcast ends
-    How viewers watch your live broadcast
-    Query, update, and control room lifecycle
+## Invitation Parameters
+
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Invite one user | `room.createInvitation(userId)` | `room.createInvitation(userId)` | `room.createInvitation(userId)` |
+| Current user's pending room invitation | `room.getInvitations()` | `room.getInvitation()` | `room.getInvitation()` |
+| Accept | `invitation.accept()` | `invitation.accept()` | `invitation.accept()` |
+| Reject | `invitation.reject()` | `invitation.reject()` | `invitation.reject()` |
+| Cancel | `InvitationRepository.cancelInvitation(invitationId)` | `room.cancelInvitation(invitationId)` | `invitation.cancel()` |
+| Invitation type value | `livestreamCohostInvite` | `.livestreamCoHostInvite` | `AmityInvitationType.LIVESTREAM_COHOST` |
+| Pending status | `"pending"` | `.pending` | `AmityInvitationStatus.PENDING` |
+
+## Event and Participant Parameters
+
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Room invitation events | `InvitationRepository.getInvitations({ targetId, targetType: "room" }, callback)` | `AmityInvitationRepository().getInvitations(targetId:targetType:)` or `AmityRoomRepository().getCoHostEvent(roomId:)` | `AmityCoreClient.newInvitationRepository().getInvitations(targetId, AmityInvitation.TargetType.ROOM.value)` or `getCoHostEvent(roomId)` |
+| Co-host joined | `RoomRepository.onRoomParticipantJoined(callback)` | `AmityCoHostEventType.coHostJoined` | `AmityCoHostEvent.CoHostJoined` |
+| Co-host left | `RoomRepository.onRoomParticipantLeft(callback)` | `AmityCoHostEventType.coHostLeft` | `AmityCoHostEvent.CoHostLeft` |
+| Co-host removed | `RoomRepository.onRoomParticipantRemoved(callback)` | `AmityCoHostEventType.coHostRemoved` | `AmityCoHostEvent.CoHostRemoved` |
+| Stage left | `RoomRepository.onRoomParticipantStageLeft(callback)` | `AmityCoHostEventType.coHostStageLeft` | No separate public sealed event in audited model |
+| Product-tag permission | `updateCohostPermission(roomId, cohostId, canManageProductTags)` | `updateCohostPermissions(roomId:cohostId:canManageProductTags:)` | `updateCohostPermission(roomId, cohostId, canManageProductTags)` |
+| Remove participant | `removeParticipant(roomId, participantUserId)` | `removeParticipant(withId:userId:)` | `removeRoomParticipant(roomId, userId)` |
+| Leave room | `leaveRoom(roomId)` | `leaveRoom(withId:)` | `leaveRoom(roomId)` |
+
+  TypeScript exposes room participant events as global room event subscribers, so filter by `event.room.roomId` when a screen only cares about one room. Android and iOS expose room-filtered co-host event streams from the room repository.
+
+## Broadcaster Data Boundary
+
+Accepting a co-host invitation does not connect the app to LiveKit. After a user is ready to broadcast, request broadcaster data through the room repository and connect your media stack with the returned co-host URL and token.
+
+| Platform | Broadcaster data API |
+| --- | --- |
+| TypeScript | `RoomRepository.getBroadcasterData(roomId)` returns `coHostToken` and `coHostUrl` when available |
+| iOS | `AmityRoomRepository().generateRoomToken(withId:)` returns room token data |
+| Android | `AmityVideoClient.newRoomRepository().getBroadcasterData(roomId)` returns `AmityRoomBroadcastData.CoHosts` |
+| Flutter | No public room broadcasting repository found in this audit |
+
+See [Start Broadcasting](./start-broadcasting) for media connection guidance.
+
+## Related Topics
+
+    Create a co-host room and seed its initial participant list.
+    Query, update, stop, delete, and observe rooms.
+    Connect the accepted host or co-host to the media stack.
 
 ---
 
