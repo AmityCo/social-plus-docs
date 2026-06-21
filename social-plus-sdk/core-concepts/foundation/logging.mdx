@@ -1,283 +1,154 @@
 ---
 title: "Logging & Errors"
-description: "Monitor network activity and handle errors in the social.plus SDK using observeNetworkActivities()."
+description: "Monitor SDK network activity during integration and handle SDK error codes safely."
 ---
 
-# Logging
+Use SDK logging and error surfaces while you build and debug an integration. Keep request and response logging out of production logs unless your app has an explicit redaction and retention policy.
 
-## Network Activity Monitoring
+## SDK Surface
 
-Use `observeNetworkActivities()` to inspect all HTTP requests and responses in your social.plus SDK integration during development.
+| Need | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Network activity observer | `Client.onNetworkActivities(callback)` | `client.observeNetworkActivities(_:)` | `AmityCoreClient.observeNetworkActivities()` | Not exposed as a public SDK observer |
+| Error parsing | `error.code` from SDK errors and connection events | `AmityErrorCode(rawValue:)` | `AmityError.from(...)` | `AmityException.toAmityError()` |
+| Global ban signal | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
 
 <Info>
-**Best Practice**: Enable network logging during development to troubleshoot issues, but disable it in production to avoid performance overhead.
+Use the network observer as a development diagnostic tool. It can expose request metadata, response metadata, and payloads depending on platform, so avoid storing raw logs that may contain user content or credentials.
 </Info>
 
-
-The `observeNetworkActivities()` function provides real-time insights into all HTTP requests and responses within the SDK, enabling effective debugging and performance analysis.
-
-### Key Features
-
-- **Request/Response Logging**: Monitor all API calls with detailed information
-- **Performance Metrics**: Track request timing and response sizes
-- **Error Debugging**: Identify network-related issues quickly
-- **Development Tool**: Essential for troubleshooting SDK integration
+## Network Activity
 
 <CodeGroup>
-```swift iOS
-/// Observe ongoing network activities in sdk
-client.observeNetworkActivities { request, response, data in
-    
-    // request: URLRequest // Request
-    // response: HTTPURLResponse // HTTP Protocol response
-    // data: Data // Payload returned from server
-    
-}
-```
-
-```kotlin Android
-/// Observe ongoing network activities in sdk
-    AmityCoreClient.observeNetworkActivities()
-        .doOnNext { activity ->
-            (activity as? AmityNetworkActivity.HTTP)?.run {
-                val response: Response = activity.response
-                val request = response.request
-                val processedText =
-                    "Request: ${request.method} ${request.url}\n" +
-                            "(${DateTime(response.sentRequestAtMillis)})\n" +
-                            "Response: ${response.code} ${response.message}\n" +
-                            "(${DateTime(response.receivedResponseAtMillis)})\n"
-                print(processedText)
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-```
-
 ```typescript TypeScript
 import { Client } from '@amityco/ts-sdk';
 
-/// Observe ongoing network activities in sdk
-Client.onNetworkActivities((request, response) => {
-  console.log(request);
-  console.log(response);
+const unsubscribe = Client.onNetworkActivities((request, response) => {
+  console.log(request.method, request.url);
+  console.log(response.status, response.statusText);
+  console.log(response.data);
 });
+
+// Stop observing when the debug session ends.
+unsubscribe();
+```
+
+```swift iOS
+client.observeNetworkActivities { request, response, data in
+    if let request {
+        print("\(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "")")
+    }
+
+    if let response {
+        print("status: \(response.statusCode)")
+    }
+
+    if let data {
+        print("response bytes: \(data.count)")
+    }
+}
+
+// Stop observing when the debug session ends.
+client.observeNetworkActivities(nil)
+```
+
+```kotlin Android
+val disposable = AmityCoreClient.observeNetworkActivities()
+    .doOnNext { activity ->
+        print(activity)
+    }
+    .doOnError { exception ->
+        val amityError = AmityError.from(exception)
+        print(amityError)
+    }
+    .subscribe()
+
+// Stop observing when the debug session ends.
+disposable.dispose()
 ```
 </CodeGroup>
 
-## Troubleshooting
+### Observer Parameters
 
-### Common Issues
+| Platform | Callback or stream value | Notes |
+| --- | --- | --- |
+| TypeScript | `request`, `response` | `response` includes `data`, `status`, `statusText`, and `headers`. The API returns an unsubscriber. |
+| iOS | `URLRequest?`, `HTTPURLResponse?`, `Data?` | Pass `nil` to `observeNetworkActivities` when logging should stop. |
+| Android | `Flowable<AmityNetworkActivity>` | Subscribe while debugging and dispose the subscription when finished. Avoid depending on internal activity subtypes in app code. |
+| Flutter | Not available | Use normal request-level error handling and your app's HTTP tooling for Flutter-specific network diagnostics. |
 
-<AccordionGroup>
-  <Accordion title="High Memory Usage">
-    Network logging stores request/response data in memory. Disable logging in production or implement log rotation for long-running applications.
-  </Accordion>
-  
-  <Accordion title="Performance Impact">
-    Logging adds overhead to network operations. Use conditional compilation flags to disable in release builds.
-  </Accordion>
-  
-  <Accordion title="Log Volume">
-    social.plus apps can generate many API calls. Implement filtering to log only specific endpoints or error conditions.
-  </Accordion>
-</AccordionGroup>
+## Error Handling
 
+SDK operations throw or emit platform-native errors. Convert those errors to SDK error enums before deciding whether to retry, show a user message, or end the session.
 
-# Error Handling
-
-Effective error handling is crucial for building reliable social applications. social.plus SDK provides structured error information to help you handle different scenarios gracefully.
-
-## Error Types
-
-social.plus errors are categorized into two main types:
-
-<CardGroup cols={2}>
-<Card title="Server Errors" icon="server">
-Issues on the social.plus backend (400xxx, 500xxx codes)
-</Card>
-
-<Card title="Client Errors" icon="mobile">
-Issues in the SDK or client environment (800xxx codes)
-</Card>
-</CardGroup>
-
-## Common Server Errors
-
-<AccordionGroup>
-<Accordion title="Authentication Errors (400100-400199)">
-| Code | Error | Description |
-|------|-------|-------------|
-| 400100 | `UnauthorizedError` | User not authenticated or invalid token |
-| 400101 | `TokenExpired` | Authentication token has expired |
-</Accordion>
-
-<Accordion title="Permission Errors (400300-400399)">
-| Code | Error | Description |
-|------|-------|-------------|
-| 400301 | `PermissionDenied` | User lacks permission for the action |
-| 400302 | `UserIsMuted` | Muted user attempting to send message |
-| 400304 | `UserIsBanned` | Banned user accessing restricted content |
-| 400312 | `GlobalBanError` | Globally banned user performing any action |
-| 400323 | `VisitorUsageLimitExceeded` | Visitor/bot has exhausted their 100 req/day read quota — SDK emits `visitorUsageLimitReached` event |
-</Accordion>
-
-<Accordion title="Visitor & Bot Errors (403xxx)">
-| Code | Constant | Description |
-|------|----------|-------------|
-| 403998 | `BOT_PERMISSION_DENIED` | Bot user attempted a write operation (create/update/delete) |
-| 403999 | `VISITOR_PERMISSION_DENIED` | Visitor user attempted a write operation (create/update/delete) |
-
-Write operations are blocked server-side for all visitor and bot sessions. These errors are returned synchronously on the API call; they do not affect the session.
-</Accordion>
-
-<Accordion title="Content Moderation (400307-400320)">
-| Code | Error | Description |
-|------|-------|-------------|
-| 400307 | `MaxRepetitionExceed` | Too many messages with blocked content |
-| 400308 | `BanWordFound` | Message contains blocked words |
-| 400309 | `LinkNotAllowed` | Message contains non-whitelisted links |
-| 400314 | `UnsafeContent` | Content flagged by AI moderation |
-</Accordion>
-
-<Accordion title="Data & Business Logic (400000-400999)">
-| Code | Error | Description |
-|------|-------|-------------|
-| 400000 | `BadRequestError` | Invalid request parameters |
-| 400315 | `DuplicateEntryError` | Duplicate display name or identifier |
-| 400400 | `ItemNotFound` | Requested resource not found |
-| 400900 | `Conflict` | Conflicting data operation |
-</Accordion>
-
-<Accordion title="System Errors (500000+)">
-| Code | Error | Description |
-|------|-------|-------------|
-| 500000 | `BusinessError` | Internal system error |
-</Accordion>
-</AccordionGroup>
-
-## Client Errors
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 800000 | `Unknown` | Uncategorized client-side error |
-| 800110 | `InvalidParameter` | Invalid parameter data type |
-| 800210 | `ConnectionError` | Network connectivity issues |
-
-## Error Handling Implementation
-
-### Basic Error Parsing
 <CodeGroup>
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const unsubscribe = Client.onConnectionError(error => {
+  if (error.code === Amity.ServerError.GLOBAL_BAN) {
+    console.log('The current user is globally banned.');
+  }
+});
+
+unsubscribe();
+```
+
 ```swift iOS
-func parseError(_ error: Error) {
+func handleSdkError(_ error: Error) {
     let sdkError = error as NSError
+
     guard let amityError = AmityErrorCode(rawValue: sdkError.code) else {
-        // Unknown error occurred. Please report this error code to Amity
+        showErrorMessage("Unknown SDK error", error: error)
         return
     }
-    
-    // ...
-    // Process AmityError here..
-}
-```
 
-```kotlin Android
-fun parseAmityError(exception: Exception) {
-    if (AmityError.from(exception) == AmityError.CHANNEL_IS_MUTED) {
-        // Couldn't send a message to this channel because this channel is muted.
-    }
-}
-```
-
-</CodeGroup>
-
-
-### Global Ban Handling
-
-A global ban error means that the user is banned from the system resulting in the inability to have a connection with the system. If the user already has a session, the session will be revoked, and will be unable to create a new session. 
-
-<CodeGroup>
-```swift iOS
-var client: AmityClient?
-client.clientErrorDelegate = self // set yourself as the delegate
-
-...
-
-// Implement this delegate method which gets called when error occurs
-func didReceiveAsyncError(_ error: Error) {
-        let error = error as NSError
-        guard let amityError = AmityErrorCode(rawValue: error.code) else {
-            assertionFailure("unknown error \(error.code), please report this code to Amity")
-            return
-        }
-        
-        if amityError == .globalBan {
-            // Handle global ban event here
-        }
+    if amityError == .globalBan {
+        showErrorMessage("The current user is globally banned", error: error)
     }
 }
 ```
 
 ```kotlin Android
-//error handling upon login
-fun login() {
-    AmityCoreClient.login(userId = "userId")
-        .build()
-        .submit()
-        .doOnError {
-            if (AmityError.from(it) == AmityError.USER_IS_GLOBAL_BANNED) {
-                // handle the case the user is globally banned
-            }
-        }
-        .subscribe()
-}
+fun handleSdkError(exception: Throwable) {
+    val amityError = AmityError.from(exception)
 
-//error handling thru real-time events
-fun subscribeGlobalBan() {
-    // Subscription can be done at Application lifecycle
-    // and lives through the remaining Application lifecycle
-    AmityCoreClient.getGlobalBanEvents()
-        .doOnNext {
-            // handle the case the user is globally banned
-        }
-        .subscribe()
+    if (amityError == AmityError.USER_IS_GLOBAL_BANNED) {
+        print("The current user is globally banned.")
+    }
 }
 ```
 
-```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+```dart Flutter
+final Object error = AmityException(
+  message: 'The current user is globally banned.',
+  code: 400312,
+);
 
-Client.onConnectionError(error => {
-  if (error.code === Amity.ServerError.GLOBAL_BAN) {
-    console.log('user has been globally banned!');
+if (error is AmityException) {
+  final amityError = error.toAmityError();
+
+  if (amityError == AmityError.USER_IS_GLOBAL_BANNED) {
+    showError(error);
   }
-})
+}
 ```
-
 </CodeGroup>
 
+### Common SDK Error Constants
 
-## Best Practices
+| Meaning | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Globally banned user | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
+| Unauthorized session | `Amity.ServerError.UNAUTHORIZED` | `.unauthorized` | `AmityError.UNAUTHORIZED_ERROR` | `AmityError.UNAUTHORIZED_ERROR` |
+| Item not found | `Amity.ServerError.ITEM_NOT_FOUND` | `.itemNotFound` | `AmityError.ITEM_NOT_FOUND` | `AmityError.ITEM_NOT_FOUND` |
+| Permission denied | `Amity.ServerError.PERMISSION_DENIED` | `.permissionDenied` | `AmityError.PERMISSION_DENIED` | `AmityError.PERMISSION_DENIED` |
+| Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
-### Do's ✅
+## Production Checklist
 
-- **Provide specific error messages** based on error codes
-- **Log errors** for debugging and monitoring
-- **Implement retry logic** for network errors
-- **Handle global bans** with appropriate user communication
-- **Use error boundaries** in React applications
-- **Show loading states** during error recovery
-
-### Don'ts ❌
-
-- **Don't ignore errors** - always handle them appropriately
-- **Don't show technical error codes** to end users
-- **Don't retry indefinitely** - implement maximum retry limits
-- **Don't expose sensitive information** in error messages
-
-
-<Tip>
-**Pro Tip**: Use network logging to identify performance bottlenecks, monitor error rates, and validate that your app is making expected API calls during development.
-</Tip>
+- Disable broad network payload logging outside development builds.
+- Redact tokens, authorization headers, user identifiers, and message or post bodies before writing logs.
+- Keep retry logic bounded and avoid retrying authorization or global-ban errors.
+- Show user-friendly messages in the app UI; keep SDK codes in developer logs and support diagnostics.
+- Unsubscribe or dispose observers when the screen, debug session, or application lifecycle no longer needs them.
