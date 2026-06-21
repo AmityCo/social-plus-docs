@@ -1,610 +1,110 @@
 ---
 title: "Rooms Overview"
-description: "Interactive live rooms with co-hosting, broadcasting, and playback capabilities"
+description: "SDK-backed model overview for live rooms, co-host rooms, playback fields, and room state."
 ---
 
-# Rooms Overview
+Rooms are SDK records for live broadcasting sessions. A room can be observed as a single live object or queried as a live collection, then published into a feed by creating a room post from its `roomId`.
 
-Rooms provide an advanced broadcasting infrastructure that enables interactive live streaming with co-hosting capabilities. This page covers the core concepts, data models, and architecture of the room system.
+This page focuses on source-backed room concepts. Use [Create Room](./create-room) for runnable snippets.
 
-## Overview
+## Platform Availability
 
-The Room feature extends traditional livestreaming by supporting collaborative broadcasting where multiple users can participate as co-hosts. Rooms handle video/audio synchronization, participant management, and provide comprehensive moderation controls.
-
-## Key Features
-
-<CardGroup cols={2}>
-  <Card title="Co-Hosting" icon="users">
-    **Multiple broadcasters in one stream**
-    - Invite co-hosts to join the broadcast
-    - Real-time audio/video synchronization
-    - Host and co-host role management
-    - Participant limit controls
-  </Card>
-  <Card title="Room Types" icon="diagram-project">
-    **Flexible streaming architectures**
-    - Co-Hosts: Multiple broadcasters with LiveKit
-    - Parent-child room relationships
-    - Isolated or linked chat channels
-  </Card>
-  <Card title="Lifecycle Management" icon="rotate">
-    **Complete room state handling**
-    - Idle → Live → Ended lifecycle
-    - Waiting for reconnection states
-    - Live viewing and recorded playback
-    - Automatic cleanup
-  </Card>
-  <Card title="Moderation & Safety" icon="shield-halved">
-    **AI-powered content moderation**
-    - Real-time content flagging
-    - Automatic termination rules
-    - Moderation label tracking
-    - Stream safety controls
-  </Card>
-</CardGroup>
+| Platform | Room model | Single room observer | Room list/query | Room post |
+| --- | --- | --- | --- | --- |
+| TypeScript | `Amity.Room` | `RoomRepository.getRoom(roomId, callback)` | `RoomRepository.getRooms(params, callback)` | `PostRepository.createRoomPost()` |
+| iOS | `AmityRoom` | `AmityRoomRepository().getRoom(withId:)` | `AmityRoomRepository().getRooms(with:)` | `AmityPostRepository().createRoomPost()` |
+| Android | `AmityRoom` | `AmityVideoClient.newRoomRepository().getRoom(roomId)` | `AmityVideoClient.newRoomRepository().getRooms().build().query()` | `AmitySocialClient.newPostRepository().createRoomPost()` |
+| Flutter | No current public `AmityRoom` model found | Not available | Not available | Not available |
 
 ## Room Types
 
-### Co-Hosts Room
+| Type value | Meaning | Platform notes |
+| --- | --- | --- |
+| `coHosts` | Co-host live room type | TypeScript and iOS accept this value during creation. Android exposes it as `AmityRoomType.CO_HOSTS` for queries, but current `createRoom()` does not expose a room type argument. |
+| `directStreaming` | Direct streaming room type | TypeScript and iOS expose this value. Android exposes it as `AmityRoomType.DIRECT_STREAMING` for queries. |
 
-Multi-participant broadcasting using LiveKit infrastructure:
+## Room Fields
 
-```mermaid
-graph TB
-    A[Host Creates Room] --> B[Get Broadcaster Token]
-    B --> C[Host Goes Live]
-    C --> D[Invite Co-Hosts]
-    D --> E[Co-Hosts Join Stream]
-    E --> F[Collaborative Broadcasting]
-    F --> G[End Stream]
-    
-    style A fill:#e3f2fd
-    style C fill:#c8e6c9
-    style F fill:#fff9c4
-    style G fill:#ffebee
-```
-
-**Characteristics:**
-- Multiple simultaneous broadcasters
-- Real-time audio/video mixing
-- Interactive participant management
-- Requires LiveKit tokens for each participant
-
-**Use Cases:**
-- Panel discussions
-- Interviews and Q&A sessions
-- Collaborative workshops
-- Multi-host shows
-
-## Room Lifecycle
-
-```mermaid
-graph LR
-    A[Idle] --> B[Live]
-    B --> C[Waiting Reconnect]
-    C --> B
-    B --> D[Ended]
-    D --> E[Recorded]
-    
-    style A fill:#e3f2fd
-    style B fill:#c8e6c9
-    style C fill:#fff9c4
-    style D fill:#f5f5f5
-    style E fill:#e1bee7
-```
-
-| Status | Description | Actions Available |
-|--------|-------------|-------------------|
-| **Idle** | Room created but not broadcasting | Start stream, invite co-hosts, delete room |
-| **Live** | Room is actively broadcasting | Stop stream, invite/remove co-hosts, moderate content |
-| **Waiting Reconnect** | Temporary disconnection | Auto-reconnect, manual stop |
-| **Ended** | Broadcast finished | View recording, delete room |
-| **Recorded** | Recording available | Playback, download, delete |
-
-### Status Flow
-
-1. **Creation → Idle**: Room created, awaiting first broadcast
-2. **Idle → Live**: Broadcaster starts streaming
-3. **Live → Waiting Reconnect**: Temporary disconnection (automatic)
-4. **Waiting Reconnect → Live**: Reconnection successful
-5. **Live → Ended**: Broadcast stopped (manual or automatic)
-6. **Ended → Recorded**: Recording processing complete
-
-## Room Participants
-
-Participants represent users who can broadcast in the room:
-
-<CodeGroup>
-```swift iOS
-// AmityRoomParticipant structure
-struct AmityRoomParticipant {
-    let type: AmityRoomParticipantType  // .host, .coHost, .unknown
-    let userId: String
-    let userInternalId: String?
-    let user: AmityUser?  // Linked user object
-}
-
-enum AmityRoomParticipantType {
-    case host      // Creator of the room, full control
-    case coHost    // Invited broadcaster, limited controls
-    case unknown   // Unknown participant type
-}
-```
-
-```kotlin Android
-// AmityRoomParticipant structure
-data class AmityRoomParticipant(
-    val type: AmityRoomParticipantType,  // HOST, CO_HOST, UNKNOWN
-    val userId: String,
-    val userInternalId: String?,
-    val user: AmityUser?  // Linked user object
-)
-
-enum class AmityRoomParticipantType {
-    HOST,      // Creator of the room, full control
-    CO_HOST,   // Invited broadcaster, limited controls
-    UNKNOWN    // Unknown participant type
-}
-```
-
-```typescript TypeScript
-interface AmityRoomParticipant {
-  type: ParticipantType;
-  userId: string;
-  userInternalId?: string;
-  user?: AmityUser; // Linked user object
-}
-
-enum ParticipantType {
-  HOST = "host",      // Creator of the room, full control
-  CO_HOST = "coHost", // Invited broadcaster, limited controls
-  UNKNOWN = "unknown" // Unknown participant type
-}
-```
-</CodeGroup>
-
-**Participant Roles:**
-
-| Role | Description | Permissions |
-|------|-------------|-------------|
-| **Host** | Creator of the room | Full control, invite/remove co-hosts, end stream |
-| **Co-Host** | Invited broadcaster | Broadcast audio/video, leave stream |
-| **Viewer** | Watching the stream | View only (not a room participant) |
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Room ID | `room.roomId` | `room.roomId` | `room.getRoomId()` |
+| Status | `room.status` | `room.status` | `room.getStatus()` |
+| Title and description | `title`, `description` | `title`, `description` | `getTitle()`, `getDescription()` |
+| Chat channel linkage | `liveChannelEnabled`, `liveChannelId`, `getLiveChat()` | `channelEnabled`, `channelId`, `channel` | `isChannelEnabled()`, `getChannelId()`, `getChannel()` |
+| Feed/post reference | `referenceType`, `referenceId`, `post` | `referenceType`, `referenceId`, `post` | `getReferenceType()`, `getReferenceId()`, `getPost()` |
+| Live playback | `livePlaybackUrl`, `liveThumbnailUrl`, `liveResolution` | `livePlaybackUrl`, `liveThumbnailUrl`, `liveResolution` | `getLivePlaybackUrl()`, `getLiveThumbnailUrl()`, `getLiveResolution()` |
+| Recorded playback | `recordedPlaybackInfos`, `recordedResolution` | `recordedData`, `recordedResolution` | `getRecordedPlaybackInfos()`, `getRecordedResolution()` |
+| Parent and child rooms | `parentRoomId`, `childRoomIds`, `childRooms` | `parentRoomId`, `childRoomIds`, `childRooms` | `getParentRoomId()`, `getChildRoomIds()`, `getChildRooms()` |
+| Creator and deletion | `createdBy`, `isDeleted`, `deletedBy` | `creatorId`, `creator`, `isDeleted`, `deletedById` | `getCreatorId()`, `getCreator()`, `isDeleted()` |
+| Custom metadata | `metadata` | `metadata` | `getMetadata()` |
+| Moderation | `moderation` | `moderation` | `getModeration()` |
 
 <Info>
-For detailed co-host invitation and management workflows, see [Co-Host Management](./co-host-management).
+  Android's current public `AmityRoom` model does not expose a direct `getType()` accessor even though room type is available in query filters and internal model construction.
 </Info>
 
-## Room Targets
+## Participants
 
-Rooms can be created for different contexts:
+Participants are users who can broadcast in the room. Viewers are not room participants.
 
-### Community Room
+| Field | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Role/type | `type: "host" | "coHost"` | `type: String` | `ParticipantType.HOST`, `ParticipantType.CoHost`, or `ParticipantType.Unknown` |
+| User ID | `userId` | `userId` | `userId` |
+| Internal user ID | `userInternalId` | `userInternalId` | `userInternalId` |
+| Linked user | `user` | `user` | `user` |
+| Product-tag permission | `canManageProductTags` | `canManageProductTags` | `canManageProductTags` |
 
-<CodeGroup>
-```swift iOS
-// Community target
-let target = AmityRoomTarget(
-    type: .community,
-    communityId: "community-123",
-    community: community  // Linked AmityCommunity object
-)
-```
+## Status Model
 
-```kotlin Android
-// Community target
-val target = AmityRoomTarget(
-    type = AmityRoomTargetType.COMMUNITY,
-    communityId = "community-123",
-    community = community  // Linked AmityCommunity object
-)
-```
+| Status | Meaning |
+| --- | --- |
+| `idle` | The room exists but is not broadcasting. |
+| `live` | The room is currently broadcasting. |
+| `waitingReconnect` | The live session is waiting for reconnection. |
+| `ended` | The live session has stopped. |
+| `recorded` | Recorded playback metadata is available. |
+| `terminated` | The room was terminated. TypeScript and iOS expose this status. |
+| `error` | The room is in an error state. |
 
-```typescript TypeScript
-// Community target
-{
-  type: "community",
-  communityId: "community-123",
-  community: AmityCommunity // Linked object
-}
-```
-</CodeGroup>
+## Room Posts and Feed Distribution
 
-Broadcast to a specific community's audience.
+Creating a room does not by itself document a feed post in the SDK examples. To publish the room into a feed, create a room post with the room ID.
 
-### User Room
+<CardGroup cols={2}>
+  <Card title="Room Posts" icon="newspaper" href="/social-plus-sdk/social/content-management/posts/creation/room-post">
+    Create a user or community feed post that references an existing room.
+  </Card>
+  <Card title="Create Room" icon="plus" href="./create-room">
+    Create a room before publishing it as a room post.
+  </Card>
+</CardGroup>
 
-<CodeGroup>
-```swift iOS
-// User target
-let target = AmityRoomTarget(
-    type: .user,
-    userId: "user-123",
-    user: user  // Linked AmityUser object
-)
-```
+## Media and Playback Fields
 
-```kotlin Android
-// User target
-val target = AmityRoomTarget(
-    type = AmityRoomTargetType.USER,
-    userId = "user-123",
-    user = user  // Linked AmityUser object
-)
-```
+The room model exposes media fields that your app can use for live or recorded playback. The SDK does not render the player for SDK integrations.
 
-```typescript TypeScript
-// User target
-{
-  type: "user",
-  userId: "user-123",
-  user: AmityUser // Linked object
-}
-```
-</CodeGroup>
-
-Broadcast to user's timeline followers.
-
-## Room References
-
-Link rooms to other content types:
-
-**Supported References:**
-- **Community**: Room associated with community content
-- **User**: Room on user's timeline
-- **Event**: Room linked to a scheduled event
-
-<CodeGroup>
-```swift iOS
-struct AmityRoomReference {
-    let referenceType: AmityRoomReferenceType  // .community, .user, .event
-    let referenceId: String
-}
-```
-
-```kotlin Android
-data class AmityRoomReference(
-    val referenceType: AmityRoomReferenceType,  // COMMUNITY, USER, EVENT
-    val referenceId: String
-)
-```
-
-```typescript TypeScript
-interface AmityRoomReference {
-  referenceType: string; // "community" | "user" | "event"
-  referenceId: string;
-}
-```
-</CodeGroup>
-
-## Channel Integration
-
-Rooms can have integrated live chat channels for viewer interaction. Channels must be manually created after the livestream post is created.
-
-<CodeGroup>
-```swift iOS
-// Channel properties on AmityRoom
-let channelEnabled: Bool      // Indicates room supports live chat
-let channelId: String?        // Set after channel is created
-let channel: AmityChannel?    // Linked channel object
-```
-
-```kotlin Android
-// Channel properties on AmityRoom
-val channelEnabled: Boolean      // Indicates room supports live chat
-val channelId: String?           // Set after channel is created
-val channel: AmityChannel?       // Linked channel object
-```
-
-```typescript TypeScript
-// Channel properties on AmityRoom
-{
-  channelEnabled: boolean, // Indicates room supports live chat
-  channelId: string,       // Set after channel is created
-  channel: AmityChannel    // Linked channel object
-}
-```
-</CodeGroup>
-
-**Channel Features:**
-- Live chat during broadcast
-- Host/Co-host badges
-- Moderation tools
-- Message history
-
-<Warning>
-**Manual Channel Creation Required**: Channels are **not** automatically created. You must create the channel after the post is created, passing both `postId` and `roomId`. See [Create Room - Room with Live Chat Channel](./create-room#room-with-live-chat-channel) for the complete workflow.
-</Warning>
-
-## Moderation System
-
-AI-powered moderation monitors room content in real-time:
-
-<CodeGroup>
-```swift iOS
-struct AmityRoomModeration {
-    let moderationId: String
-    let roomId: String
-    let flagLabels: [AmityRoomModerationLabel]
-    let terminateLabels: [AmityRoomModerationLabel]
-    let createdAt: Date
-    let updatedAt: Date
-}
-
-struct AmityRoomModerationLabel {
-    let category: String  // e.g., "violence", "nudity", "hate_speech"
-    let detectedAt: Date
-}
-```
-
-```kotlin Android
-data class AmityRoomModeration(
-    val moderationId: String,
-    val roomId: String,
-    val flagLabels: List<AmityRoomModerationLabel>,
-    val terminateLabels: List<AmityRoomModerationLabel>,
-    val createdAt: DateTime,
-    val updatedAt: DateTime
-)
-
-data class AmityRoomModerationLabel(
-    val category: String,  // e.g., "violence", "nudity", "hate_speech"
-    val detectedAt: DateTime
-)
-```
-
-```typescript TypeScript
-interface AmityRoomModeration {
-  moderationId: string;
-  roomId: string;
-  flagLabels: AmityRoomModerationLabel[];
-  terminateLabels: AmityRoomModerationLabel[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface AmityRoomModerationLabel {
-  category: string; // e.g., "violence", "nudity", "hate_speech"
-  detectedAt: string;
-}
-```
-</CodeGroup>
-
-**Flag Labels**: Content detected but stream continues
-**Terminate Labels**: Content causes automatic stream termination
-
-<Warning>
-**Automatic Termination**: When terminate-level content is detected, the room status changes to "ended" automatically and cannot be restarted.
-</Warning>
-
-## Parent-Child Room Relationships
-
-Rooms can have hierarchical relationships for complex streaming scenarios:
-
-<CodeGroup>
-```swift iOS
-// Parent-child properties on AmityRoom
-let parentRoomId: String?
-let parentRoom: AmityRoom?       // Linked parent room
-let childRoomIds: [String]       // Array of child room IDs
-```
-
-```kotlin Android
-// Parent-child properties on AmityRoom
-val parentRoomId: String?
-val parentRoom: AmityRoom?           // Linked parent room
-val childRoomIds: List<String>       // Array of child room IDs
-```
-
-```typescript TypeScript
-// Parent-child properties on AmityRoom
-{
-  parentRoomId: string,
-  parentRoom: AmityRoom, // Linked parent room
-  childRoomIds: string[] // Array of child room IDs
-}
-```
-</CodeGroup>
-
-**Use Cases:**
-- Breakout sessions from main room
-- Multi-language streams
-- Regional broadcasts
-
-## Room Data Model
-
-Complete room object structure:
-
-```typescript
-interface AmityRoom {
-  roomId: string;
-  type: AmityRoomType; // "coHosts"
-  
-  // Target
-  targetType: string;
-  targetId: string;
-  target: AmityRoomTarget;
-  
-  // Reference
-  referenceType: string;
-  referenceId: string;
-  reference: AmityRoomReference;
-  
-  // Content
-  title: string;
-  description?: string;
-  thumbnailFileId?: string;
-  
-  // Status
-  status: AmityRoomStatus;
-  
-  // Participants
-  participants: AmityRoomParticipant[];
-  
-  // Channel
-  channelEnabled: boolean;
-  channelId?: string;
-  channel?: AmityChannel;
-  
-  // Streaming
-  livePlaybackUrl?: string;
-  liveThumbnailUrl?: string;
-  liveResolution?: AmityRoomResolution;
-  durationSeconds?: number;
-  
-  // Recorded playback
-  recordedPlaybackInfos?: AmityRoomRecordedPlaybackInfo[];
-  recordedResolution?: AmityRoomResolution;
-  
-  // Relationships
-  parentRoomId?: string;
-  parentRoom?: AmityRoom;
-  childRoomIds: string[];
-  
-  // Creator
-  creatorId: string;
-  creator?: AmityUser;
-  
-  // Timestamps
-  createdAt: string;
-  updatedAt?: string;
-  liveAt?: string;
-  endedAt?: string;
-  recordedAt?: string;
-  
-  // Deletion
-  isDeleted: boolean;
-  deletedAt?: string;
-  deletedById?: string;
-  deletedBy?: AmityUser;
-  
-  // Moderation
-  moderation?: AmityRoomModeration;
-  
-  // Custom data
-  metadata?: Record<string, any>;
-}
-
-interface AmityRoomResolution {
-  aspectRatio?: string;   // e.g. "16:9"
-  width?: number;         // e.g. 1920
-  height?: number;        // e.g. 1080
-}
-
-interface AmityRoomRecordedPlaybackInfo {
-  url: string;
-  thumbnailUrl: string;
-}
-```
-
-### Automatic Thumbnail Generation
-
-The backend automatically generates thumbnail images for live stream sessions. No manual action is required from the stream creator.
-
-| Field | Available When | Description |
-|-------|---------------|-------------|
-| `thumbnailFileId` | Any status | Creator-uploaded cover image |
-| `liveThumbnailUrl` | `live`, `waitingReconnect` | Auto-generated live thumbnail URL from the streaming backend. Available as soon as the room goes live. |
-| `recordedPlaybackInfos[].thumbnailUrl` | `recorded` | Auto-generated thumbnail for recorded playback. Available after recording processing completes. |
-
-<Info>
-The `liveThumbnailUrl` and recorded thumbnails are automatically populated by the backend during the live stream session. You do not need to upload or configure anything for these to be available.
-</Info>
-
-### Resolution Metadata
-
-Resolution metadata is automatically provided by the backend alongside thumbnails:
-
-| Field | Available When | Description |
-|-------|---------------|-------------|
-| `liveResolution` | `live`, `waitingReconnect` | Resolution and aspect ratio of the live stream (e.g., `{ aspectRatio: "16:9", width: 1920, height: 1080 }`) |
-| `recordedResolution` | `recorded` | Resolution and aspect ratio of the recorded stream |
-
-## Integration with Posts
-
-Rooms are linked to posts for social distribution. See [Room Posts](/social-plus-sdk/social/content-management/posts/creation/room-post) for detailed post creation.
-
-```typescript
-// Create room post
-const post = await postRepository.createPost({
-  dataType: PostContentType.ROOM,
-  targetType: 'community',
-  targetId: 'community-123',
-  data: {
-    text: 'Join us live!',
-    roomId: room.roomId,
-    title: room.title
-  }
-});
-
-// Access room from post
-console.log(post.data.room.status); // "live"
-console.log(post.data.room.livePlaybackUrl);
-```
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Room Setup" icon="gear">
-    Configure rooms appropriately for your use case:
-    
-    - Use Co-Hosts type for interactive sessions
-    - Enable channels for viewer interaction
-    - Set clear titles and descriptions
-    - Upload thumbnails before going live
-    - Configure participant limits
-  </Accordion>
-  
-  <Accordion title="Co-Host Coordination" icon="users-gear">
-    Manage co-hosts effectively:
-    
-    - Invite co-hosts before going live
-    - Set clear moderation rules
-    - Monitor participant count
-    - Have backup hosts ready
-    - Test audio/video before live
-  </Accordion>
-  
-  <Accordion title="Moderation" icon="shield">
-    Implement safety measures:
-    
-    - Review moderation labels regularly
-    - Have moderation guidelines
-    - Monitor flag labels proactively
-    - Respond to violations quickly
-    - Keep logs of moderation events
-  </Accordion>
-  
-  <Accordion title="Performance" icon="gauge-high">
-    Optimize streaming performance:
-    
-    - Test network bandwidth
-    - Use appropriate video quality
-    - Monitor connection stability
-    - Have reconnection strategies
-    - Clean up ended rooms
-  </Accordion>
-</AccordionGroup>
+| Field | Availability | Use |
+| --- | --- | --- |
+| `livePlaybackUrl` | While live when available | Viewer playback URL. |
+| `liveThumbnailUrl` | Live or reconnecting sessions when available | Live thumbnail generated by the streaming backend. |
+| `liveResolution` | Live or reconnecting sessions when available | Live stream aspect ratio, width, and height. |
+| `recordedPlaybackInfos` / `recordedData` | After recording is available | Recorded playback URL and thumbnail metadata. |
+| `recordedResolution` | After recording is available | Recorded stream aspect ratio, width, and height. |
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Create Room" href="./create-room" icon="plus">
-    Set up new rooms for broadcasting
+  <Card title="Create Room" icon="plus" href="./create-room">
+    Create rooms and retrieve broadcaster data.
   </Card>
-  <Card title="Start Broadcasting" href="./start-broadcasting" icon="play">
-    Connect to LiveKit and go live
+  <Card title="Manage Rooms" icon="gear" href="./manage-rooms">
+    Observe, query, update, stop, and delete rooms.
   </Card>
-  <Card title="Co-Host Management" href="./co-host-management" icon="users">
-    Invite and manage co-hosts
+  <Card title="Co-Host Management" icon="users" href="./co-host-management">
+    Manage co-host invitations, removal, and permissions.
   </Card>
-  <Card title="Live Viewing" href="./live-viewing" icon="eye">
-    Watch live streams in real-time
-  </Card>
-  <Card title="Recorded Playback" href="./recorded-playback" icon="video">
-    Play back recorded streams
-  </Card>
-  <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
-    Query, update, and control rooms
+  <Card title="Recorded Playback" icon="video" href="./recorded-playback">
+    Read recorded playback fields after processing completes.
   </Card>
 </CardGroup>
