@@ -7721,512 +7721,283 @@ renderResults(users);
 
 ### [Logging & Errors](https://learn.social.plus/social-plus-sdk/core-concepts/foundation/logging)
 
-> Monitor network activity and handle errors in the social.plus SDK using observeNetworkActivities().
+> Monitor SDK network activity during integration and handle SDK error codes safely.
 
-# Logging
+Use SDK logging and error surfaces while you build and debug an integration. Keep request and response logging out of production logs unless your app has an explicit redaction and retention policy.
 
-## Network Activity Monitoring
+## SDK Surface
 
-Use `observeNetworkActivities()` to inspect all HTTP requests and responses in your social.plus SDK integration during development.
+| Need | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Network activity observer | `Client.onNetworkActivities(callback)` | `client.observeNetworkActivities(_:)` | `AmityCoreClient.observeNetworkActivities()` | Not exposed as a public SDK observer |
+| Error parsing | `error.code` from SDK errors and connection events | `AmityErrorCode(rawValue:)` | `AmityError.from(...)` | `AmityException.toAmityError()` |
+| Global ban signal | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
 
-**Best Practice**: Enable network logging during development to troubleshoot issues, but disable it in production to avoid performance overhead.
+Use the network observer as a development diagnostic tool. It can expose request metadata, response metadata, and payloads depending on platform, so avoid storing raw logs that may contain user content or credentials.
 
-
-The `observeNetworkActivities()` function provides real-time insights into all HTTP requests and responses within the SDK, enabling effective debugging and performance analysis.
-
-### Key Features
-
-- **Request/Response Logging**: Monitor all API calls with detailed information
-- **Performance Metrics**: Track request timing and response sizes
-- **Error Debugging**: Identify network-related issues quickly
-- **Development Tool**: Essential for troubleshooting SDK integration
-
-```swift iOS
-/// Observe ongoing network activities in sdk
-client.observeNetworkActivities { request, response, data in
-
-    // request: URLRequest // Request
-    // response: HTTPURLResponse // HTTP Protocol response
-    // data: Data // Payload returned from server
-
-}
-```
-
-```kotlin Android
-/// Observe ongoing network activities in sdk
-    AmityCoreClient.observeNetworkActivities()
-        .doOnNext { activity ->
-            (activity as? AmityNetworkActivity.HTTP)?.run {
-                val response: Response = activity.response
-                val request = response.request
-                val processedText =
-                    "Request: ${request.method} ${request.url}\n" +
-                            "(${DateTime(response.sentRequestAtMillis)})\n" +
-                            "Response: ${response.code} ${response.message}\n" +
-                            "(${DateTime(response.receivedResponseAtMillis)})\n"
-                print(processedText)
-            }
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-```
+## Network Activity
 
 ```typescript TypeScript
 import { Client } from '@amityco/ts-sdk';
 
-/// Observe ongoing network activities in sdk
-Client.onNetworkActivities((request, response) => {
-  console.log(request);
-  console.log(response);
+const unsubscribe = Client.onNetworkActivities((request, response) => {
+  console.log(request.method, request.url);
+  console.log(response.status, response.statusText);
+  console.log(response.data);
 });
+
+// Stop observing when the debug session ends.
+unsubscribe();
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-    Network logging stores request/response data in memory. Disable logging in production or implement log rotation for long-running applications.
-
-    Logging adds overhead to network operations. Use conditional compilation flags to disable in release builds.
-
-    social.plus apps can generate many API calls. Implement filtering to log only specific endpoints or error conditions.
-
-
-# Error Handling
-
-Effective error handling is crucial for building reliable social applications. social.plus SDK provides structured error information to help you handle different scenarios gracefully.
-
-## Error Types
-
-social.plus errors are categorized into two main types:
-
-Issues on the social.plus backend (400xxx, 500xxx codes)
-
-Issues in the SDK or client environment (800xxx codes)
-
-## Common Server Errors
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 400100 | `UnauthorizedError` | User not authenticated or invalid token |
-| 400101 | `TokenExpired` | Authentication token has expired |
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 400301 | `PermissionDenied` | User lacks permission for the action |
-| 400302 | `UserIsMuted` | Muted user attempting to send message |
-| 400304 | `UserIsBanned` | Banned user accessing restricted content |
-| 400312 | `GlobalBanError` | Globally banned user performing any action |
-| 400323 | `VisitorUsageLimitExceeded` | Visitor/bot has exhausted their 100 req/day read quota — SDK emits `visitorUsageLimitReached` event |
-
-| Code | Constant | Description |
-|------|----------|-------------|
-| 403998 | `BOT_PERMISSION_DENIED` | Bot user attempted a write operation (create/update/delete) |
-| 403999 | `VISITOR_PERMISSION_DENIED` | Visitor user attempted a write operation (create/update/delete) |
-
-Write operations are blocked server-side for all visitor and bot sessions. These errors are returned synchronously on the API call; they do not affect the session.
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 400307 | `MaxRepetitionExceed` | Too many messages with blocked content |
-| 400308 | `BanWordFound` | Message contains blocked words |
-| 400309 | `LinkNotAllowed` | Message contains non-whitelisted links |
-| 400314 | `UnsafeContent` | Content flagged by AI moderation |
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 400000 | `BadRequestError` | Invalid request parameters |
-| 400315 | `DuplicateEntryError` | Duplicate display name or identifier |
-| 400400 | `ItemNotFound` | Requested resource not found |
-| 400900 | `Conflict` | Conflicting data operation |
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 500000 | `BusinessError` | Internal system error |
-
-## Client Errors
-
-| Code | Error | Description |
-|------|-------|-------------|
-| 800000 | `Unknown` | Uncategorized client-side error |
-| 800110 | `InvalidParameter` | Invalid parameter data type |
-| 800210 | `ConnectionError` | Network connectivity issues |
-
-## Error Handling Implementation
-
-### Basic Error Parsing
 ```swift iOS
-func parseError(_ error: Error) {
+client.observeNetworkActivities { request, response, data in
+    if let request {
+        print("\(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "")")
+    }
+
+    if let response {
+        print("status: \(response.statusCode)")
+    }
+
+    if let data {
+        print("response bytes: \(data.count)")
+    }
+}
+
+// Stop observing when the debug session ends.
+client.observeNetworkActivities(nil)
+```
+
+```kotlin Android
+val disposable = AmityCoreClient.observeNetworkActivities()
+    .doOnNext { activity ->
+        print(activity)
+    }
+    .doOnError { exception ->
+        val amityError = AmityError.from(exception)
+        print(amityError)
+    }
+    .subscribe()
+
+// Stop observing when the debug session ends.
+disposable.dispose()
+```
+
+### Observer Parameters
+
+| Platform | Callback or stream value | Notes |
+| --- | --- | --- |
+| TypeScript | `request`, `response` | `response` includes `data`, `status`, `statusText`, and `headers`. The API returns an unsubscriber. |
+| iOS | `URLRequest?`, `HTTPURLResponse?`, `Data?` | Pass `nil` to `observeNetworkActivities` when logging should stop. |
+| Android | `Flowable<AmityNetworkActivity>` | Subscribe while debugging and dispose the subscription when finished. Avoid depending on internal activity subtypes in app code. |
+| Flutter | Not available | Use normal request-level error handling and your app's HTTP tooling for Flutter-specific network diagnostics. |
+
+## Error Handling
+
+SDK operations throw or emit platform-native errors. Convert those errors to SDK error enums before deciding whether to retry, show a user message, or end the session.
+
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const unsubscribe = Client.onConnectionError(error => {
+  if (error.code === Amity.ServerError.GLOBAL_BAN) {
+    console.log('The current user is globally banned.');
+  }
+});
+
+unsubscribe();
+```
+
+```swift iOS
+func handleSdkError(_ error: Error) {
     let sdkError = error as NSError
+
     guard let amityError = AmityErrorCode(rawValue: sdkError.code) else {
-        // Unknown error occurred. Please report this error code to Amity
+        showErrorMessage("Unknown SDK error", error: error)
         return
     }
 
-    // ...
-    // Process AmityError here..
-}
-```
-
-```kotlin Android
-fun parseAmityError(exception: Exception) {
-    if (AmityError.from(exception) == AmityError.CHANNEL_IS_MUTED) {
-        // Couldn't send a message to this channel because this channel is muted.
-    }
-}
-```
-
-
-### Global Ban Handling
-
-A global ban error means that the user is banned from the system resulting in the inability to have a connection with the system. If the user already has a session, the session will be revoked, and will be unable to create a new session.
-
-```swift iOS
-var client: AmityClient?
-client.clientErrorDelegate = self // set yourself as the delegate
-
-...
-
-// Implement this delegate method which gets called when error occurs
-func didReceiveAsyncError(_ error: Error) {
-        let error = error as NSError
-        guard let amityError = AmityErrorCode(rawValue: error.code) else {
-            assertionFailure("unknown error \(error.code), please report this code to Amity")
-            return
-        }
-
-        if amityError == .globalBan {
-            // Handle global ban event here
-        }
+    if amityError == .globalBan {
+        showErrorMessage("The current user is globally banned", error: error)
     }
 }
 ```
 
 ```kotlin Android
-//error handling upon login
-fun login() {
-    AmityCoreClient.login(userId = "userId")
-        .build()
-        .submit()
-        .doOnError {
-            if (AmityError.from(it) == AmityError.USER_IS_GLOBAL_BANNED) {
-                // handle the case the user is globally banned
-            }
-        }
-        .subscribe()
-}
+fun handleSdkError(exception: Throwable) {
+    val amityError = AmityError.from(exception)
 
-//error handling thru real-time events
-fun subscribeGlobalBan() {
-    // Subscription can be done at Application lifecycle
-    // and lives through the remaining Application lifecycle
-    AmityCoreClient.getGlobalBanEvents()
-        .doOnNext {
-            // handle the case the user is globally banned
-        }
-        .subscribe()
+    if (amityError == AmityError.USER_IS_GLOBAL_BANNED) {
+        print("The current user is globally banned.")
+    }
 }
 ```
 
-```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+```dart Flutter
+final Object error = AmityException(
+  message: 'The current user is globally banned.',
+  code: 400312,
+);
 
-Client.onConnectionError(error => {
-  if (error.code === Amity.ServerError.GLOBAL_BAN) {
-    console.log('user has been globally banned!');
+if (error is AmityException) {
+  final amityError = error.toAmityError();
+
+  if (amityError == AmityError.USER_IS_GLOBAL_BANNED) {
+    showError(error);
   }
-})
+}
 ```
 
+### Common SDK Error Constants
 
-## Best Practices
+| Meaning | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Globally banned user | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
+| Unauthorized session | `Amity.ServerError.UNAUTHORIZED` | `.unauthorized` | `AmityError.UNAUTHORIZED_ERROR` | `AmityError.UNAUTHORIZED_ERROR` |
+| Item not found | `Amity.ServerError.ITEM_NOT_FOUND` | `.itemNotFound` | `AmityError.ITEM_NOT_FOUND` | `AmityError.ITEM_NOT_FOUND` |
+| Permission denied | `Amity.ServerError.PERMISSION_DENIED` | `.permissionDenied` | `AmityError.PERMISSION_DENIED` | `AmityError.PERMISSION_DENIED` |
+| Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
-### Do's ✅
+## Production Checklist
 
-- **Provide specific error messages** based on error codes
-- **Log errors** for debugging and monitoring
-- **Implement retry logic** for network errors
-- **Handle global bans** with appropriate user communication
-- **Use error boundaries** in React applications
-- **Show loading states** during error recovery
-
-### Don'ts ❌
-
-- **Don't ignore errors** - always handle them appropriately
-- **Don't show technical error codes** to end users
-- **Don't retry indefinitely** - implement maximum retry limits
-- **Don't expose sensitive information** in error messages
-
-
-**Pro Tip**: Use network logging to identify performance bottlenecks, monitor error rates, and validate that your app is making expected API calls during development.
+- Disable broad network payload logging outside development builds.
+- Redact tokens, authorization headers, user identifiers, and message or post bodies before writing logs.
+- Keep retry logic bounded and avoid retrying authorization or global-ban errors.
+- Show user-friendly messages in the app UI; keep SDK codes in developer logs and support diagnostics.
+- Unsubscribe or dispose observers when the screen, debug session, or application lifecycle no longer needs them.
 
 ---
 
 ### [PII Detection](https://learn.social.plus/social-plus-sdk/core-concepts/safety-privacy/pii-detection)
 
-> Automatically detect and optionally redact personally identifiable information (PII) in user-generated text across posts, comments, and messages.
+> Read and redact personally identifiable information metadata on supported SDK text objects.
 
-PII Detection classifies sensitive data (emails, phone numbers, names, and similar categories) within post, comment, and message text, and exposes a redaction helper so client apps can mask or highlight detected content before display or export.
+PII detection metadata is attached to text content when your network has PII detection enabled server-side. The native SDK helpers let apps read detected entities and produce redacted display text without changing the original post, comment, or message.
 
-Automatically locate and classify personally identifiable information (PII) within text content (Posts, Comments, Messages) and optionally redact it before display or export.
+This page covers the client SDK surface only. Feature enablement, quota, billing, and moderation-console behavior are product or backend concerns and are intentionally not documented here.
 
-## Why It Matters
-Moderating user-generated content requires balancing safety, privacy, and transparency. PII Detection helps you:
+## SDK Surface
 
-- Reduce accidental exposure of sensitive user data.
-- Enforce compliance (GDPR, SOC2 readiness, internal data handling policies).
-- Streamline moderator workflows with structured PII metadata.
-- Give client apps a consistent way to mask or highlight sensitive snippets.
+| Platform | PII metadata helper | Redaction helper | Current SDK note |
+| --- | --- | --- | --- |
+| iOS | `getPIIData()` on `AmityPost`, `AmityComment`, and `AmityMessage` | `redactedText(piiCategories:replaceChar:)` on the same objects | Public helper API is available. |
+| Android | `getPIIData()` on `AmityPost`, `AmityComment`, and `AmityMessage` | `redactedText(piiCategories, replaceChar)` on `Data.TEXT` | Public helper API is available for text data. |
+| TypeScript | Not exposed in the current public SDK source | Not exposed | Use backend-provided data only if your integration has a separate API contract for it. |
+| Flutter | Not exposed in the current public SDK source | Not exposed | Use native SDK helpers through platform code only if your app owns that bridge. |
 
-## Core Capabilities
-		Works uniformly on Post, Comment, and Message text bodies.
-		Offset + length + category + confidence for each detection.
-		Simple helpers to produce redacted strings per category set.
+## Data Model
 
-## Quick Start
+Each detected entity is represented as a PII item.
 
-## Availability & Billing
-PII Detection is available on <strong>Max plan and above</strong>. It is disabled by default; contact Support to have the feature flag enabled for your network.
+| Field | iOS type | Android type | Meaning |
+| --- | --- | --- | --- |
+| `offset` | `Int` | `Int` | Start index of the detected entity in the text. |
+| `length` | `Int` | `Int` | Number of characters in the detected entity. |
+| `category` | `AmityPIICategory` | `AmityPII.Category` | Normalized category when the SDK has one, or an `others` value for unknown categories. |
+| `confidence` | `Double` | `Double` | Detection confidence score from the server-provided metadata. |
 
-Each processed text item (post, comment, or message) that runs through PII Detection counts toward your <strong>AI Moderation quota</strong>. Large backfills or bulk imports can consume quota quickly—coordinate with Support before running retrospective scans.
+## Categories
 
-Staging / sandbox environments share quota policies; throttle batch operations or segment traffic if you are load‑testing PII detection.
+The current native SDK helpers define dedicated categories for these values.
 
-## High-Level Flow
-1. User submits text (post/comment/message create or update).
-2. Backend pipeline runs PII classification (synchronous or queued depending on volume).
-3. Detected entities are appended to the stored object as an embedded `pii` (or array) structure.
-4. Fetching the object via SDK includes PII metadata.
-5. Client optionally calls helper to generate a redacted representation for UI rendering, logs, or exports.
+| Category | iOS | Android |
+| --- | --- | --- |
+| Email | `.email` | `AmityPII.Category.EMAIL` |
+| Phone number | `.phoneNumber` | `AmityPII.Category.PHONE_NUMBER` |
+| IP address | `.ipAddress` | `AmityPII.Category.IP_ADDRESS` |
+| Address | `.address` | `AmityPII.Category.ADDRESS` |
+| Passport number | `.passportNumber` | `AmityPII.Category.PASSPORT_NUMBER` |
+| Unknown or newer category | `.others(value)` | `AmityPII.Category.OTHERS(value)` |
 
-## Data Model Extension
-The core schema is augmented with an embedded PII block per detection. (Shown conceptually below — actual shape may be array-based in future revisions.)
+Handle unknown categories deliberately. The server can introduce category strings before every client UI has a named enum case.
 
-```json
-{
-	"...": "other content fields",
-	"pii": {
-		"category": "string",          // e.g. email, phone, name
-		"offset": 123,                  // UTF-16 / SDK string index start
-		"length": 14,                   // number of characters in match
-		"confidenceScore": 0.96         // 0..1 model confidence
-	}
+## Read And Redact
+
+Use `getPIIData()` when you need entity metadata for moderation UI, highlighting, or audit views. Use `redactedText(...)` when the app should display masked text.
+
+```swift iOS
+var cancellables = Set<AnyCancellable>()
+
+let livePost = postRepository.getPost(withId: postId)
+livePost.$snapshot
+    .sink { post in
+        guard let post else { return }
+
+        let piiItems = post.getPIIData()
+        let redactedText = post.redactedText(
+            piiCategories: [.email, .phoneNumber],
+            replaceChar: "#"
+        )
+
+        piiItems.forEach { pii in
+            print("\(pii.category.value): \(pii.offset)-\(pii.length)")
+        }
+
+        showSuccessMessage(redactedText)
+    }
+    .store(in: &cancellables)
+
+let liveComment = commentRepository.getComment(withId: commentId)
+liveComment.$snapshot
+    .sink { comment in
+        guard let comment else { return }
+        showSuccessMessage(comment.redactedText())
+    }
+    .store(in: &cancellables)
+
+let liveMessage = messageRepository.getMessage(messageId)
+liveMessage.$snapshot
+    .sink { message in
+        guard let message else { return }
+        showSuccessMessage(message.redactedText())
+    }
+    .store(in: &cancellables)
+```
+
+```kotlin Android
+import AmityPII
+
+val piiItems = post?.getPIIData().orEmpty()
+val redactedText = (post?.getData() as? AmityPost.Data.TEXT)
+    ?.redactedText(
+        piiCategories = listOf(
+            AmityPII.Category.EMAIL,
+            AmityPII.Category.PHONE_NUMBER
+        ),
+        replaceChar = '#'
+    )
+    .orEmpty()
+
+piiItems.forEach { pii ->
+    print("${pii.category}: ${pii.offset}-${pii.length}")
 }
+
+val redactedComment = (comment?.getData() as? AmityComment.Data.TEXT)
+    ?.redactedText()
+    .orEmpty()
+
+val redactedMessage = (message?.getData() as? AmityMessage.Data.TEXT)
+    ?.redactedText()
+    .orEmpty()
+
+print(redactedText + redactedComment + redactedMessage)
 ```
 
-If multiple PII entities are present, SDKs may expose them as a list. Plan for zero, one, or many.
+### Redaction Parameters
 
-## Typical Moderation Use Case
-> As an admin, I want to filter the moderation feed by AI-detected topic so I can efficiently review content flagged under specific PII categories.
+| Parameter | iOS type | Android type | Default | Behavior |
+| --- | --- | --- | --- | --- |
+| `piiCategories` | `[AmityPIICategory]` | `List<AmityPII.Category>` | Empty list | Empty means redact every detected category. Provide categories to redact only selected types. |
+| `replaceChar` | `Character` | `Char` | `*` | Character used to replace each redacted character. |
 
-You can index `pii.category` in internal tools to provide: facet filters, auto-redaction toggles, and export safeguards.
+## Behavior Notes
 
-## Redaction Strategy
-Client apps decide how to display sensitive text:
-
-- Full mask (default replacement char, e.g. `*`).
-- Partial mask (apply only to specific categories, e.g. email + phone, keep names visible).
-- Contextual highlight (do NOT replace, but visually annotate; implement using offsets).
-
-Redaction is a presentation concern. Raw original content remains accessible to authorized roles unless you also purge/transform at the source.
-
-## SDK Usage
-PII data is accessed through helper methods exposed on Post / Comment / Message models. Use redaction helpers to mask selected categories before rendering.
-
-Supported today on Backend API, native Android & iOS SDKs. Web / React Native can consume metadata via API but must implement redaction manually. UIKit has no built‑in toggle yet (see integration section below).
-
-
-  **Accessing PII Data**
-
-```swift
-// Post
-var post: AmityPost // fetched from SDK
-post.getPIIData()
-
-// Comment
-var comment: AmityComment
-comment.getPIIData()
-
-// Message
-var message: AmityMessage
-message.getPIIData()
-```
-
-  **PII Data Object**
-
-```swift
-let piiInfo: AmityPII = post.getPIIData()
-
-piiInfo.offset      // Start index
-piiInfo.length      // Length of detected entity
-piiInfo.category    // Category returned by server
-piiInfo.confidence  // 0.0 - 1.0
-```
-
-  **Redaction Helper**
-
-```swift
-let post: AmityPost
-
-// Mask all categories with '*':  Hi Steve -> Hi *****
-let redactedAll = post.redactedText()
-
-// Mask only email entities, use '#'
-let redactedEmail = post.redactedText(piiCategories: [.email], replaceChar: "#")
-```
-
-
-  **Accessing PII Data**
-
-```kotlin
-// Post
-val post: AmityPost // fetched from SDK
-val postPii: List<AmityPII> = post.getPIIData()
-
-// Comment
-val comment: AmityComment
-val commentPii: List<AmityPII> = comment.getPIIData()
-
-// Message
-val message: AmityMessage
-val messagePii: List<AmityPII> = message.getPIIData()
-```
-
-  **Iterate Entities**
-
-```kotlin
-postPii.forEach { pii ->
-	  val offset = pii.offset
-	  val length = pii.length
-	  val category = pii.category
-	  val confidence = pii.confidence
-}
-```
-
-  **Redaction Helper**
-
-```kotlin
-// Post – redact all
-val postRedactedAll: String =
-	  (post.getData() as? AmityPost.Data.TEXT)?.redactedText() ?: "N/A"
-
-// Comment – only email
-val commentRedacted: String =
-	  (comment.getData() as? AmityComment.Data.TEXT)?.redactedText(
-		  piiCategories = listOf(AmityPII.Category.EMAIL),
-		  replaceChar = '#'
-	  ) ?: "N/A"
-```
-
-
-### Handling Multiple Entities
-When multiple detections exist, either:
-1. Apply redaction helper (handles ordering internally), or
-2. Sort entities by offset descending and splice manually if you need custom formatting (e.g. colored highlights).
-
-## Categories (Full Current Set)
-Below is the current set of PII categories emitted by the detection service:
-
-```json
-[
-	"Person",
-	"PersonType",
-	"LicensePlate",
-	"SortCode",
-	"PhoneNumber",
-	"Organization",
-	"Address",
-	"Email",
-	"IPAddress",
-	"DateTime",
-	"BankAccountNumber",
-	"DriversLicenseNumber",
-	"PassportNumber"
-]
-```
-
-### SDK Representation (Android / Kotlin)
-Below is the model structure (as provided) used within the Android SDK:
-
-```kotlin
-class AmityPII(
-		val offset: Int,          // Start index of detected entity
-		val length: Int,          // Length of the entity
-		val confidence: Double,   // 0.0 - 1.0 confidence score
-		val category: Category    // Normalized category type
-)
-
-sealed class Category {
-		object EMAIL : Category()
-		object PHONE_NUMBER : Category()
-		object IP_ADDRESS : Category()
-		object ADDRESS : Category()
-		object PASSPORT_NUMBER : Category()
-		class OTHERS(val value: String) : Category() // For categories not enumerated above
-}
-```
-
-Categories like <code>Person</code>, <code>PersonType</code>, <code>LicensePlate</code>, <code>SortCode</code>, <code>BankAccountNumber</code>, <code>DriversLicenseNumber</code>, and generic IDs are surfaced via <code>Category.OTHERS(value)</code> when a dedicated constant is not defined. Handle them gracefully (e.g., map <code>OTHERS("Person")</code> to a user-friendly label and redaction policy).
-
-### Redaction Policy Tips
-- Maintain a mapping table from raw category string → display label → redact (Y/N) → replacement char.
-- Keep an allowlist of safe categories to show unmasked (e.g., DateTime) if policy permits.
-- Log unexpected new category strings to monitoring so you can update UI mappings.
-
-Not all detected categories must be redacted. Align category → action mappings with your internal compliance & privacy matrix.
-
-## Confidence Handling
-- Treat very low confidence (e.g. < 0.50) as informational only.
-- Provide UI toggle to show/hide low-confidence detections.
-- Consider server-side thresholding to reduce noise (e.g. only persist ≥0.60).
-
-## Performance & Scaling
-- Detection runs server-side; client cost is O(n) over number of entities for redaction.
-- Multiple entities are safe; ensure your UI redaction logic accounts for shifting indices if you transform the string manually.
-
-## Privacy & Compliance Notes
-- PII metadata is derivative; deleting the parent object removes the metadata.
-- For export/audit pipelines, store only redacted form unless explicit legal basis for raw text access.
-- Log access to unredacted content if operating in regulated environments.
-
-
-## FAQ
-**Q: Can I force server-side redaction so raw text never leaves?**
-A: Roadmap item; today redaction is client-driven using provided metadata.
-**Q: What if multiple overlapping detections occur?**
-A: Use highest-confidence or merge spans before rendering.
-**Q: Do offsets reflect UTF-8 or UTF-16?**
-A: Follow SDK string index semantics (documented per platform); when in doubt, validate with sample extraction.
-
-## UIKit Integration (Optional Customization)
-Although UIKit does not yet ship a pre-wired PII redaction toggle, you can layer the redacted text helpers into the relevant content rendering components:
-
-### Android UIKit
-- Post component: `AmityPostContentElement`
-- Comment component: `AmityCommentContentContainer`
-
-Usage pattern:
-1. Fetch the `AmityPost` / `AmityComment` as usual.
-2. Call the underlying SDK method (e.g. `redactedText(...)`).
-3. Inject the resulting string into your custom view binding inside the component.
-
-### iOS UIKit
-- Post component: `AmityPostContentComponent`
-- Comment component: `AmityCommentView`
-
-Usage pattern:
-1. Retrieve the model (e.g. `AmityPost`).
-2. Generate the redacted variant via `redactedText(...)` (choose categories / replacement char).
-3. Assign to the text label / attributed string before layout.
-
-Keep both original and redacted strings in memory if you offer a user role–based toggle (e.g., moderators can reveal originals). Avoid recomputing on every bind to reduce UI churn.
-
-If you cache redacted content, ensure cache keys include the selected category set and replacement character to prevent stale or mismatched redactions.
-
----
-Next: integrate PII category filters into your moderation console and add unit tests around redaction formatting.
+- Redaction is non-destructive: it returns a string for display and does not change the stored text.
+- The native helpers skip PII ranges that overlap with mention ranges so user and channel mentions are not accidentally masked.
+- Metadata can be empty even when content is text. Treat an empty list as "no PII metadata on this object", not as a detection failure.
+- Android redaction is available on `Data.TEXT`; non-text post, comment, or message data returns no redacted text through this helper.
+- TypeScript and Flutter do not expose public PII helper methods in the current SDK source, so do not document `getPIIData()` or `redactedText()` for those SDKs.
 
 ## Core Concepts — Push Notifications
 
