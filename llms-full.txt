@@ -8938,1629 +8938,326 @@ await AmityCoreClient
 
 ### [Android Push Notifications](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/android-setup)
 
-> Complete guide to implementing Firebase Cloud Messaging (FCM) and Baidu push notifications in Android social.plus SDK
+> Connect Android push tokens to the current social.plus Android SDK.
 
-Integrate real-time push notifications into your Android app using Firebase Cloud Messaging (FCM) or Baidu Push (for China market) to ensure users never miss important updates.
+Android push setup has two separate responsibilities:
 
-Push notifications require proper FCM setup and valid server configuration. Test thoroughly before production deployment.
+1. Configure the Android app and provider, such as Firebase Cloud Messaging.
+2. Connect the provider token and signed-in device to social.plus through the SDK.
 
-## Prerequisites
+Push delivery also requires server-side credentials in the social.plus Console. The client SDK can register a device only after the platform push provider and console configuration are complete.
 
-Before implementing push notifications, ensure you have:
+## SDK Surface
 
-    Active Firebase project with FCM enabled
-    google-services.json file in your app module
-    social.plus Android SDK properly configured
-    Required notification permissions declared
+| Purpose | Current Android API | When to call |
+| --- | --- | --- |
+| Store an FCM token with the SDK push adapter | `AmityFcm.create().setup(fcmToken)` | When Firebase gives your app an FCM token, including token refresh. |
+| Register the current signed-in device/user | `AmityCoreClient.registerPushNotification()` | After the SDK has a signed-in user session. |
+| Unregister the current device/user | `AmityCoreClient.unregisterPushNotification()` | On sign-out or when this installation should stop receiving push notifications. |
 
-## Setup Dependencies
+## Parameters
 
-Add the FCM dependency to your app-level `build.gradle` file:
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `fcmToken` | `String` | Yes | The FCM registration token returned by Firebase for this app installation. |
+| `baiduApiKey` | `String` | Only for Baidu builds | API key passed to the optional Baidu push adapter when that module is included in your Android build. |
 
-```gradle
+## 1. Configure FCM
+
+Follow the Android and Firebase setup flow for your app:
+
+- Add `google-services.json` to your app module.
+- Apply the Google Services Gradle plugin.
+- Add Firebase Messaging using the version recommended for your Firebase setup.
+- Request `POST_NOTIFICATIONS` at runtime on Android 13+ when your product needs visible notifications.
+
+If your Android dependency setup installs SDK modules separately, include the FCM push adapter with the same version as your social.plus Android SDK:
+
+```gradle Gradle
 dependencies {
-    // social.plus FCM Push Notifications
-    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-fcm:6.x.x'
-
-    // Firebase Cloud Messaging (if not already included)
-    implementation 'com.google.firebase:firebase-messaging:23.4.0'
-    implementation 'com.google.firebase:firebase-analytics:21.5.0'
+    implementation 'co.amity.android:amity-push-fcm:x.y.z'
 }
 ```
 
-Always use the latest version numbers. Check the [releases page](https://github.com/AmityCo/Amity-Social-Cloud-SDK-Android/releases) for current versions.
+Use the same `x.y.z` version you use for `co.amity.android:amity-sdk`. If your package already bundles the FCM adapter, do not add a duplicate dependency.
 
-## FCM Token Management
+## 2. Upload Provider Credentials
 
-### Retrieving FCM Token
+In the social.plus Console, open **Settings > Push Notifications** and upload the Firebase service account JSON for your app. Without this server-side credential, client registration can succeed while push delivery still fails.
 
-Before initializing push notifications, obtain the FCM token that uniquely identifies each app instance:
+## 3. Connect the FCM Token
 
-```kotlin
-import com.google.firebase.messaging.FirebaseMessaging
-import com.amity.socialcloud.sdk.core.AmityFcm
+Pass every current FCM token to the SDK push adapter. Do this for the initial token and every token refresh.
 
-class PushNotificationManager {
 
-    fun initializePushNotifications() {
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (!task.isSuccessful) {
-                Log.w(TAG, "Fetching FCM registration token failed", task.exception)
-                return@addOnCompleteListener
-            }
+```kotlin Android
+import com.amity.socialcloud.sdk.push.AmityFcm
 
-            // Get new FCM registration token
-            val token = task.result
-            Log.d(TAG, "FCM Registration Token: $token")
+val fcmToken = "fcm-token"
 
-            // Initialize Amity FCM with the token
-            initAmityFcmNotification(token)
-        }
-    }
-
-    private fun initAmityFcmNotification(fcmToken: String) {
-        AmityFcm.create()
-            .setup(fcmToken)
-            .subscribe(
-                onSuccess = {
-                    Log.d(TAG, "FCM initialized successfully")
-                },
-                onError = { error ->
-                    Log.e(TAG, "FCM initialization failed", error)
-                }
-            )
-    }
-
-    companion object {
-        private const val TAG = "PushNotificationManager"
-    }
-}
+AmityFcm.create()
+    .setup(fcmToken)
+    .subscribe()
 ```
 
-### Monitoring Token Changes
 
-FCM tokens can change during the app lifecycle. Implement token monitoring:
+The Android sample app calls the same adapter from `FirebaseMessagingService.onNewToken(token)`.
 
-```kotlin
-import com.google.firebase.messaging.FirebaseMessagingService
+## 4. Register the Signed-In Device
 
-class AmityFirebaseMessagingService : FirebaseMessagingService() {
+After the SDK has a signed-in user session and the app has connected the FCM token, register the current device/user with social.plus.
 
-    override fun onNewToken(token: String) {
-        super.onNewToken(token)
-        Log.d(TAG, "Refreshed token: $token")
 
-        // Send token to your server if needed
-        sendTokenToServer(token)
-
-        // Update Amity SDK with new token
-        updateAmityFcmToken(token)
+```kotlin Android
+AmityCoreClient.registerPushNotification()
+    .doOnComplete {
+        // Device registration completed.
     }
-
-    private fun updateAmityFcmToken(token: String) {
-        AmityFcm.create()
-            .setup(token)
-            .subscribe(
-                onSuccess = {
-                    Log.d(TAG, "FCM token updated successfully")
-                },
-                onError = { error ->
-                    Log.e(TAG, "FCM token update failed", error)
-                }
-            )
+    .doOnError { error ->
+        // Handle registration error.
     }
-
-    private fun sendTokenToServer(token: String) {
-        // Implement your server communication logic here
-        // This is useful for sending targeted notifications from your backend
-    }
-
-    companion object {
-        private const val TAG = "AmityFCMService"
-    }
-}
+    .subscribe()
 ```
 
-Don't forget to register the service in your `AndroidManifest.xml`:
 
-```xml
-<application>
-    <!-- Other components -->
+Call unregister when the user signs out or disables push for this installation.
 
-    <service
-        android:name=".AmityFirebaseMessagingService"
-        android:exported="false">
-        <intent-filter>
-            <action android:name="com.google.firebase.MESSAGING_EVENT" />
-        </intent-filter>
-    </service>
-</application>
+
+```kotlin Android
+AmityCoreClient.unregisterPushNotification()
+    .doOnComplete {
+        // Device unregistration completed.
+    }
+    .doOnError { error ->
+        // Handle unregistration error.
+    }
+    .subscribe()
 ```
 
-## Handling Push Notifications
 
-## China Market Support (Baidu Push)
+`registerPushNotification()` has no token parameter in the current Android SDK. The token is handled by the push adapter through `AmityFcm.create().setup(fcmToken)`.
 
-For apps targeting the Chinese market where Google Play Services are not available, use Baidu Push as an alternative.
+## Optional Baidu Adapter
 
-### Baidu Setup
+The Android source also contains an optional Baidu push adapter, `AmityBaidu.create(context).setup(baiduApiKey)`, for builds that include the Baidu push module. The default Android SDK build path uses the FCM adapter, so treat Baidu setup as a China-market build decision and verify the module distribution before enabling it.
 
-Add Baidu dependency:
+## Setup Checklist
 
-```gradle
-dependencies {
-    // social.plus Baidu Push Notifications
-    implementation 'com.github.AmityCo.Amity-Social-Cloud-SDK-Android:amity-push-baidu:6.x.x'
-
-    // Baidu Push SDK
-    implementation 'com.baidu:push:4.7.0'
-}
-```
-
-### Required Permissions
-
-Add these permissions to your `AndroidManifest.xml`:
-
-```xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Baidu Push required permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.ACCESS_DOWNLOAD_MANAGER"/>
-    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-
-    <application>
-        <!-- Your app components -->
-    </application>
-</manifest>
-```
-
-### Baidu Initialization
-
-```kotlin
-import com.amity.socialcloud.sdk.core.AmityBaidu
-
-class BaiduPushManager {
-
-    fun initializeBaiduPush(context: Context, apiKey: String) {
-        AmityBaidu.create(context)
-            .setup(apiKey)
-            .subscribe(
-                onSuccess = {
-                    Log.d(TAG, "Baidu Push initialized successfully")
-                },
-                onError = { error ->
-                    Log.e(TAG, "Baidu Push initialization failed", error)
-                }
-            )
-    }
-
-    companion object {
-        private const val TAG = "BaiduPushManager"
-    }
-}
-```
-
-**Priority System**: social.plus SDK prioritizes FCM over Baidu. If Google Play Services are detected, Baidu Push will not be initialized.
-
-## Best Practices
-
-    **Keep Tokens Updated**: Always handle token refresh events and update the SDK with new tokens.
-
-```kotlin
-// Store token locally for backup
-class TokenManager(private val context: Context) {
-    private val prefs = context.getSharedPreferences("push_tokens", Context.MODE_PRIVATE)
-
-    fun saveToken(token: String) {
-        prefs.edit().putString("fcm_token", token).apply()
-    }
-
-    fun getStoredToken(): String? = prefs.getString("fcm_token", null)
-
-    fun hasTokenChanged(newToken: String): Boolean {
-        return getStoredToken() != newToken
-    }
-}
-```
-
-    **Robust Error Management**: Implement comprehensive error handling for push notification failures.
-
-```kotlin
-class PushErrorHandler {
-    fun handlePushError(error: Throwable) {
-        when (error) {
-            is FirebaseMessagingException -> handleFCMError(error)
-            is SecurityException -> handlePermissionError()
-            is NetworkException -> handleNetworkError()
-            else -> handleGenericError(error)
-        }
-    }
-
-    private fun handleFCMError(error: FirebaseMessagingException) {
-        Log.e(TAG, "FCM Error: ${error.message}")
-        // Implement retry logic
-    }
-
-    private fun handlePermissionError() {
-        // Request notification permissions
-    }
-
-    private fun handleNetworkError() {
-        // Retry when network is available
-    }
-}
-```
-
-    **Efficient Processing**: Optimize notification handling for better performance.
-
-```kotlin
-class OptimizedNotificationHandler {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    fun processNotification(data: Map<String, String>) {
-        scope.launch {
-            try {
-                // Process in background thread
-                val processedData = processNotificationData(data)
-
-                // Switch to main thread for UI updates
-                withContext(Dispatchers.Main) {
-                    updateUI(processedData)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Notification processing failed", e)
-            }
-        }
-    }
-}
-```
-
-    **Comprehensive Testing**: Test push notifications thoroughly across different scenarios.
-
-```kotlin
-class PushNotificationTester {
-    fun testPushNotification() {
-        // Test with Firebase Console
-        // Test with server-side sending
-        // Test token refresh scenarios
-        // Test offline/online scenarios
-    }
-
-    fun enableDebugLogging() {
-        if (BuildConfig.DEBUG) {
-            FirebaseMessaging.getInstance().isAutoInitEnabled = true
-            // Enable verbose logging
-        }
-    }
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-    **Check these common causes:**
-
-    1. **Invalid FCM Token**: Verify token is correctly retrieved and sent to server
-    2. **App in Background**: Ensure notification permissions are granted
-    3. **Network Issues**: Check internet connectivity
-    4. **Server Configuration**: Verify server-side FCM setup
-    5. **Token Refresh**: Handle token updates properly
-
-```kotlin
-// Debug token issues
-FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-    if (task.isSuccessful) {
-        Log.d(TAG, "Current token: ${task.result}")
-    } else {
-        Log.e(TAG, "Token retrieval failed", task.exception)
-    }
-}
-```
-
-    **Baidu Push troubleshooting:**
-
-    1. **API Key Validation**: Ensure Baidu API key is correct
-    2. **Permissions**: Verify all required permissions are declared
-    3. **Google Play Services**: Check that GPS is properly disabled
-    4. **Network Access**: Ensure app can access Baidu servers
-
-    **SDK integration problems:**
-
-    1. **Dependency Conflicts**: Check for version conflicts
-    2. **ProGuard Rules**: Add necessary keep rules for push classes
-    3. **Manifest Registration**: Verify service registration in manifest
-
-```proguard
-# social.plus Push SDK
--keep class com.amity.socialcloud.sdk.** { *; }
--keep class com.google.firebase.** { *; }
--keep class com.baidu.** { *; }
-```
-
-## Related Resources
-
-    Official FCM Android documentation
-    Baidu Push Android SDK documentation
-    Android notification channels guide
-    Handle notification taps with deep links
+- FCM is configured in the Android app.
+- The Firebase service account JSON is uploaded in the social.plus Console.
+- The latest FCM token is passed to `AmityFcm.create().setup(fcmToken)`.
+- The signed-in device/user is registered with `AmityCoreClient.registerPushNotification()`.
+- The device is unregistered on sign-out when the app should stop receiving push notifications for that user.
 
 ---
 
 ### [Flutter Push Notification Setup](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/flutter-setup)
 
-> Implement cross-platform push notifications in Flutter apps using Firebase Cloud Messaging for both Android and iOS
+> Register Flutter push tokens with the current social.plus Flutter SDK.
 
-Integrate push notifications into your Flutter app using Firebase Cloud Messaging (FCM) to deliver real-time updates across both Android and iOS platforms with a unified codebase.
+Flutter push setup combines native platform configuration with one SDK registration call. Your app obtains the push token through Firebase or the native platform, then passes that token to the social.plus Flutter SDK after the user is signed in.
 
-Flutter's cross-platform nature allows you to implement push notifications once and deploy to both platforms, but platform-specific configuration is still required.
+The Flutter SDK does not create Firebase projects, APNs certificates, or platform permission prompts for you. It registers the token that your app receives from those platform systems.
 
-## Prerequisites
+## SDK Surface
 
-    Active Firebase project with FCM enabled
-    Android google-services.json and iOS GoogleService-Info.plist
-    social.plus Flutter SDK properly integrated
-    iOS APNs certificate and Android FCM configuration
+| Purpose | Current Flutter API | When to call |
+| --- | --- | --- |
+| Register the current device token | `AmityCoreClient.registerDeviceNotification(fcmToken)` | After the SDK has a signed-in user session and your app has a current token. |
+| Unregister the current device | `AmityCoreClient.unregisterDeviceNotification()` | On sign-out or when this installation should stop receiving push notifications. |
 
-## Step 1: Install Dependencies
+## Parameters
 
-Add the Firebase Messaging plugin to your `pubspec.yaml`:
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `fcmToken` | `String` | Yes | The token your Flutter app receives from Firebase Messaging or the platform push provider. |
 
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
+## 1. Configure Platform Push
 
-  # social.plus SDK
-  amity_sdk: ^6.x.x
+Configure Firebase Messaging for Flutter using your app's Firebase project:
 
-  # Firebase dependencies
-  firebase_core: ^2.24.2
-  firebase_messaging: ^14.7.10
+- Add the Firebase packages that match your FlutterFire setup.
+- Run FlutterFire configuration for Android and iOS.
+- Add `google-services.json` for Android.
+- Add `GoogleService-Info.plist` for iOS.
+- Enable Push Notifications capability for the iOS target.
+- Upload the required push credentials in the social.plus Console under **Settings > Push Notifications**.
 
-  # Optional: For local notifications
-  flutter_local_notifications: ^16.3.2
+Keep Firebase and FlutterFire package versions in your app, not hardcoded in this docs page. Follow the version matrix for your Flutter, Firebase, and React Native toolchain.
 
-  # Optional: For permission handling
-  permission_handler: ^11.1.0
+## 2. Register the Token
+
+Once your app has a token and the user is signed in to social.plus, register the device token with the SDK.
+
+
+```dart Flutter
+final fcmToken = '<fcm-token>';
+
+await AmityCoreClient.registerDeviceNotification(fcmToken);
 ```
 
-Always use the latest stable versions. Check [pub.dev](https://pub.dev) for current version numbers.
 
-## Step 2: Configure Firebase with FlutterFire CLI
+Call the same SDK method again when Firebase reports a refreshed token. The last registration replaces the previous token state for this app installation.
 
-Before proceeding with push notification setup, you need to configure Firebase for your Flutter app using the FlutterFire CLI.
+## 3. Unregister on Sign-Out
 
-Follow the official Firebase documentation to install and configure FlutterFire CLI for your platform:
-- [Firebase Flutter Setup for iOS](https://firebase.google.com/docs/flutter/setup?platform=ios)
-- [Firebase Flutter Setup for Android](https://firebase.google.com/docs/flutter/setup?platform=android)
+Unregister when the user signs out or when this app installation should stop receiving push notifications for the current social.plus user.
 
-The FlutterFire CLI will automatically handle Firebase project setup, app registration, and configuration file generation for both platforms.
 
-### Initialize Firebase in Your App
-
-After running `flutterfire configure`, initialize Firebase in your app's `main()` function:
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; // Generated by FlutterFire CLI
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  runApp(MyApp());
-}
+```dart Flutter
+await AmityCoreClient.unregisterDeviceNotification();
 ```
 
-You must initialize Firebase before using any Firebase services, including FCM. The `firebase_options.dart` file is automatically generated by the FlutterFire CLI.
 
-## Step 3: Platform Configuration
+## Setup Checklist
 
-If you've run `flutterfire configure`, the configuration files are already in place. You still need to update the build files and permissions as shown below.
-
-### Android Configuration
-
-1. **Add google-services.json** to `android/app/` (automatically done by FlutterFire CLI)
-2. **Update build.gradle files**:
-
-```gradle
-// android/build.gradle
-buildscript {
-  dependencies {
-    classpath 'com.google.gms:google-services:4.3.15'
-  }
-}
-
-// android/app/build.gradle
-apply plugin: 'com.google.gms.google-services'
-
-android {
-  compileSdkVersion 34
-
-  defaultConfig {
-    minSdkVersion 21
-    targetSdkVersion 34
-  }
-}
-```
-
-3. **Add permissions** to `android/app/src/main/AndroidManifest.xml`:
-
-```xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Push notification permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <application
-        android:label="Your App"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-
-        <!-- Your activities -->
-
-    </application>
-</manifest>
-```
-
-### iOS Configuration
-
-1. **Add GoogleService-Info.plist** to `ios/Runner/` (automatically done by FlutterFire CLI)
-2. **Enable Push Notifications capability** in Xcode
-3. **Generate APNs certificate** following the [iOS setup guide](./ios-setup)
-4. **Update Runner-Info.plist** for background modes:
-
-```xml
-<!-- ios/Runner/Info.plist -->
-<dict>
-    <!-- Existing keys -->
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>background-fetch</string>
-        <string>remote-notification</string>
-    </array>
-
-    <key>FirebaseAppDelegateProxyEnabled</key>
-    <false/>
-</dict>
-```
-
-5. **Update AppDelegate.swift**:
-
-```swift
-// ios/Runner/AppDelegate.swift
-import UIKit
-import Flutter
-import Firebase
-import UserNotifications
-
-@UIApplicationMain
-@objc class AppDelegate: FlutterAppDelegate {
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    FirebaseApp.configure()
-
-    if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
-    }
-
-    GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  override func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                       willPresent notification: UNNotification,
-                                       withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-    let userInfo = notification.request.content.userInfo
-    let title = notification.request.content.title
-    let body = notification.request.content.body
-
-    completionHandler([.banner, .badge, .sound])
-  }
-
-  // Handle notification tap when app is in background or terminated
-  override func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                       didReceive response: UNNotificationResponse,
-                                       withCompletionHandler completionHandler: @escaping () -> Void) {
-    let userInfo = response.notification.request.content.userInfo
-    let title = response.notification.request.content.title
-    let body = response.notification.request.content.body
-
-    completionHandler()
-  }
-}
-```
-
-**Note**: The notification handlers above allow you to:
-- **Display notifications when app is in foreground** (`willPresent`)
-- **Handle user taps on notifications** (`didReceive`)
-- **Access notification payload** through `userInfo` dictionary
-- **Customize notification presentation** options
-
-## Step 4: Register Device for Push Notifications
-
-After configuring the platform settings, you need to register the device token with social.plus SDK.
-
-### Implementation
-
-Create a function to handle device token registration:
-
-```dart
-import 'dart:io';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:amity_sdk/amity_sdk.dart';
-
-Future<void> registerPushNotification({
-  String? fcmToken,
-  Function(bool success, String? error)? callback,
-}) async {
-  try {
-    final messaging = FirebaseMessaging.instance;
-
-    // Request notification permissions (iOS)
-    if (Platform.isIOS) {
-      NotificationSettings settings = await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-
-      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-        if (callback != null) {
-          callback(false, "Notification permission denied");
-        }
-        return;
-      }
-    }
-
-    // Get device token
-    String? token;
-    if (Platform.isIOS) {
-      // For iOS, try to get APNs token first
-      token = await messaging.getAPNSToken();
-      // Fall back to FCM token if APNs token is not available
-      if (token == null) {
-        token = await messaging.getToken();
-      }
-    } else {
-      // For Android, get FCM token
-      token = await messaging.getToken();
-    }
-
-    // Use provided FCM token or fallback to retrieved token
-    final deviceToken = fcmToken ?? token;
-
-    if (deviceToken == null) {
-      if (callback != null) {
-        callback(
-          false,
-          "Failed to get device token. Please ensure push notifications are enabled in device settings and APNs is configured in Firebase Console.",
-        );
-      }
-      return;
-    }
-
-    // Register device token with Amity SDK
-    await AmityCoreClient.registerDeviceNotification(deviceToken)
-        .then((value) {
-      if (callback != null) {
-        callback(true, null);
-      }
-    }).onError((error, stackTrace) {
-      if (callback != null) {
-        callback(false, "Failed to register push notification: $error");
-      }
-    });
-  } catch (e) {
-    if (callback != null) {
-      callback(false, e.toString());
-    }
-  }
-}
-```
-
-### Usage Example
-
-Call the registration function after the user is logged in to social.plus:
-
-```dart
-// After user login to Amity
-await AmityCoreClient.login(userId: 'user123')
-    .then((value) async {
-  print('✅ Logged in successfully');
-
-  // Register for push notifications after successful login
-  await registerPushNotification(
-    callback: (success, error) {
-      if (success) {
-        print('✅ Push notifications registered successfully');
-      } else {
-        print('❌ Failed to register push notifications: $error');
-      }
-    },
-  );
-}).onError((error, stackTrace) {
-  print('❌ Login failed: $error');
-});
-```
-
-**Important Notes**:
-- **iOS**: The function attempts to get the APNs token first, then falls back to the FCM token if unavailable
-- **Android**: Directly retrieves the FCM token
-- **Permissions**: iOS requires explicit permission request, which is handled in the function
-- **Timing**: Register after user authentication with social.plus SDK
-
-## Step 5: Upload Certificates to social.plus Console
-
-Before registering devices, you must upload your certificates to the social.plus Console. Push notifications will not work without proper certificate configuration.
-
-### Android - FCM Service Account
-
-1. **Generate FCM service account JSON**:
-   - Go to Firebase Console → Project Settings → Service Accounts
-   - Click "Generate new private key"
-   - Download the JSON file
-
-2. **Upload to social.plus Console**:
-   - Navigate to **Settings → Push Notifications**
-   - Upload the FCM service account JSON file
-
-### iOS - APNs Certificate
-
-1. **Generate .p12 certificate** following the [iOS setup guide](./ios-setup)
-2. **Upload to social.plus Console**:
-   - Navigate to **Settings → Push Notifications**
-   - Upload the .p12 file with password
-
-For detailed instructions on creating and obtaining your APNs certificate, refer to the [iOS Push Notification Setup Guide](./ios-setup).
-
-#### Firebase Cloud Messaging (FCM) for iOS
-
-iOS also supports Firebase Cloud Messaging (FCM) for push notifications. To set this up:
-
-1. **Upload APNS Auth Key to Firebase**:
-   - Go to your Firebase Console
-   - Navigate to **Project Settings → Cloud Messaging → Apple app configuration**
-   - Upload your Apple Push Notification service (APNs) Authentication Key (.p8 file)
-   - Provide your Key ID and Team ID
-
-2. **Upload APNS Certificate to social.plus Console**:
-   - Get your iOS APNs Certificate (.p8 file)
-   - Go to social.plus Console
-   - Navigate to **Settings → Push Notifications**
-   - Upload your APNs Certificate (.p8 file) with the appropriate configuration
-
-## Best Practices
-
-    **Platform-Specific Handling**: While Flutter allows shared code, some platform-specific handling is necessary.
-
-```dart
-// Handle platform differences
-Future<void> handlePlatformSpecificSetup() async {
-  if (Platform.isIOS) {
-    // iOS-specific handling
-    await _handleIOSSpecificSetup();
-  } else if (Platform.isAndroid) {
-    // Android-specific handling
-    await _handleAndroidSpecificSetup();
-  }
-}
-```
-
-    **Token State Management**: Keep token state consistent across app lifecycle.
-
-```dart
-class NotificationState extends ChangeNotifier {
-  String? _fcmToken;
-  bool _isRegistered = false;
-
-  String? get fcmToken => _fcmToken;
-  bool get isRegistered => _isRegistered;
-
-  Future<void> updateToken(String token) async {
-    _fcmToken = token;
-    await _registerWithSDK(token);
-    _isRegistered = true;
-    notifyListeners();
-  }
-}
-```
-
-    **Robust Error Management**: Handle various failure scenarios gracefully.
-
-```dart
-class PushNotificationErrorHandler {
-  static void handleError(dynamic error) {
-    if (error is FirebaseException) {
-      _handleFirebaseError(error);
-    } else if (error is PlatformException) {
-      _handlePlatformError(error);
-    } else {
-      _handleGenericError(error);
-    }
-  }
-
-  static void _handleFirebaseError(FirebaseException error) {
-    // Handle Firebase-specific errors
-    print('Firebase error: ${error.message}');
-  }
-}
-```
-
-## Troubleshooting
-
-    **Token Not Generated**:
-    - Verify Firebase configuration files are correctly placed
-    - Check internet connectivity
-    - Ensure permissions are granted
-
-    **iOS Notifications Not Working**:
-    - Verify APNs certificate is uploaded to social.plus Console
-    - Test with TestFlight or App Store build (not debug)
-    - Check iOS project capabilities
-
-    **Android Notifications Not Working**:
-    - Verify FCM service account JSON is uploaded
-    - Check google-services.json placement
-    - Ensure minSdkVersion >= 21
-
-    **iOS Debug Builds**:
-    - Push notifications don't work with debug builds
-    - Use TestFlight for testing
-
-    **Android 13+ Permission**:
-    - Runtime notification permission required
-    - Handle permission request properly
-
-```dart
-// Check Android version and request permission
-if (Platform.isAndroid) {
-  final androidInfo = await DeviceInfoPlugin().androidInfo;
-  if (androidInfo.version.sdkInt >= 33) {
-    await Permission.notification.request();
-  }
-}
-```
-
-## Related Resources
-
-    Official Firebase Messaging for Flutter documentation
-    Plugin for displaying local notifications
-    Detailed iOS certificate setup
-    Android Firebase configuration
-
-**Testing Strategy**: Always test push notifications on physical devices with production builds, as simulators and debug builds have limitations with push notification delivery.
+- Firebase Messaging is configured for the Flutter app.
+- Android and iOS platform files are present in the correct native projects.
+- APNs or FCM credentials are uploaded in the social.plus Console.
+- The signed-in user token is registered through `AmityCoreClient.registerDeviceNotification(fcmToken)`.
+- The device is unregistered through `AmityCoreClient.unregisterDeviceNotification()` on sign-out.
 
 ---
 
 ### [iOS Push Notifications](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/ios-setup)
 
-> Complete guide to implementing Apple Push Notification service (APNs) with iOS social.plus SDK for real-time messaging and engagement
+> Register APNs device tokens with the current social.plus iOS SDK.
 
-Integrate Apple Push Notifications into your iOS app to deliver instant updates about messages, mentions, and community activities, keeping users engaged even when your app isn't active.
+iOS push setup has two parts: configure APNs for your app, then register the APNs device token with the social.plus iOS SDK after the user is signed in.
 
-Push notifications require proper APNs certificate setup and valid entitlements. Production certificates work with App Store and TestFlight builds only.
+Push notifications require an Apple Developer account, the Push Notifications capability, and valid APNs credentials uploaded in the social.plus Console.
 
-## Prerequisites
+## SDK Surface
 
-Before implementing push notifications, ensure you have:
+| Purpose | Current iOS API | When to call |
+| --- | --- | --- |
+| Register the current device token | `client.registerPushNotification(withDeviceToken:)` | After APNs returns a device token and the SDK has a signed-in user session. |
+| Unregister the current device | `client.unregisterPushNotification()` | On sign-out or when this installation should stop receiving push notifications. |
 
-    Active Apple Developer Program membership
-    iOS project with proper Bundle ID configured
-    social.plus iOS SDK properly integrated
-    Push Notifications capability enabled in Xcode
+## Parameters
 
-## Step 1: Generate APNs Certificate
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | `String` | Yes | APNs device token converted from the `Data` value returned by iOS. |
 
-### Create Certificate in Apple Developer Console
+## 1. Configure APNs
 
-1. **Navigate to Certificates**
-   - Go to [Apple Developer Console](https://developer.apple.com/)
-   - Select **Certificates, Identifiers & Profiles**
-   - Click on **Certificates** → **+** button
+In Apple Developer Console:
 
-2. **Select Certificate Type**
-   - Choose **Apple Push Notification service SSL (Sandbox & Production)**
-   - This universal certificate works for both development and production
+1. Open **Certificates, Identifiers & Profiles**.
+2. Select your app's Bundle ID.
+3. Enable Push Notifications.
+4. Create the APNs certificate or auth key your release process uses.
 
-**Universal Certificate**: The Sandbox & Production certificate eliminates the need for separate development and production certificates, simplifying your workflow.
+In Xcode:
 
-3. **Configure Certificate**
-   - Select your app's **Bundle ID** from the dropdown
-   - Follow Apple's certificate creation wizard
-   - Download the generated **.cer** file
+1. Select your app target.
+2. Open **Signing & Capabilities**.
+3. Add **Push Notifications**.
+4. Add background remote-notification mode only if your app needs background notification handling.
 
-### Convert Certificate to .p12 Format
+In the social.plus Console, open **Settings > Push Notifications** and upload the iOS APNs credential for the same Bundle ID.
 
-1. **Install Certificate**
-   - Double-click the downloaded **.cer** file
-   - Keychain Access will open automatically
-   - The certificate will be installed in your **Login** keychain
+## 2. Request System Registration
 
-2. **Export as .p12**
-   - In Keychain Access, navigate to **Login → My Certificates**
-   - Locate your **Apple Push Services** certificate
-   - Right-click and select **Export "Apple Push Services..."**
-   - Choose **.p12** format and set a secure password
-   - Save the file (you'll need both the file and password for console upload)
+Ask the user for notification permission at a product moment that makes sense, then ask iOS to register the app for remote notifications.
 
-**Certificate Security**: Store your .p12 file and password securely. When you create a new certificate, the previous one is automatically revoked.
 
-## Step 2: Upload to social.plus Console
-
-1. **Access Console**
-   - Open your [social.plus Console](https://console.amity.co)
-   - Navigate to **Settings → Push Notifications**
-
-2. **Upload Certificate**
-   - Click **Upload Certificate** in the iOS section
-   - Select your **.p12** file
-   - Enter the password you set during export
-   - Click **Save** to complete the setup
-
-**Certificate Validation**: The console will validate your certificate upon upload. If there are issues, check that the Bundle ID matches your app configuration.
-
-## Step 3: iOS App Configuration
-
-### Enable Push Notifications Capability
-
-In Xcode, enable the Push Notifications capability:
-
-1. Select your app target
-2. Go to **Signing & Capabilities**
-3. Click **+ Capability**
-4. Add **Push Notifications**
-
-### Request Permission and Handle Registration
-
-```swift
-import UIKit
+```swift iOS
 import UserNotifications
-import AmitySDK
 
-@main
-class AppDelegate: UIResponder, UIApplicationDelegate {
-
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-
-        // Configure notification center
-        UNUserNotificationCenter.current().delegate = self
-
-        // Request notification permissions
-        requestNotificationPermissions()
-
-        return true
-    }
-
-    private func requestNotificationPermissions() {
-        UNUserNotificationCenter.current().requestAuthorization(
-            options: [.alert, .badge, .sound, .provisional]
-        ) { granted, error in
-            if let error = error {
-                print("Push notification permission error: \(error.localizedDescription)")
-                return
-            }
-
-            if granted {
-                print("Push notifications authorized")
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            } else {
-                print("Push notifications denied")
-            }
-        }
-    }
-}
-```
-
-### Handle Device Token Registration
-
-```swift
-extension AppDelegate {
-
-    func application(_ application: UIApplication,
-                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-
-        // Convert token to string
-        let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        print("Device token: \(tokenString)")
-
-        // Register with social.plus SDK
-        registerDeviceWithAmitySDK(token: tokenString)
-    }
-
-    func application(_ application: UIApplication,
-                    didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("Failed to register for remote notifications: \(error.localizedDescription)")
-
-        // Handle registration failure
-        handleRegistrationFailure(error: error)
-    }
-
-    private func registerDeviceWithAmitySDK(token: String) {
-        AmityManager.shared.client?.registerDevice(
-            withToken: token,
-            completion: { [weak self] success, error in
-                if success {
-                    print("Successfully registered device with Amity SDK")
-                    self?.onDeviceRegistrationSuccess(token: token)
-                } else {
-                    print("Failed to register device: \(error?.localizedDescription ?? "Unknown error")")
-                    self?.handleRegistrationFailure(error: error)
-                }
-            }
-        )
-    }
-
-    private func onDeviceRegistrationSuccess(token: String) {
-        // Store token locally for reference
-        UserDefaults.standard.set(token, forKey: "device_token")
-
-        // Update UI or perform additional setup
-        NotificationCenter.default.post(
-            name: .deviceTokenRegistered,
-            object: nil,
-            userInfo: ["token": token]
-        )
-    }
-
-    private func handleRegistrationFailure(error: Error?) {
-        // Implement retry logic
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+    if granted {
+        DispatchQueue.main.async {
             UIApplication.shared.registerForRemoteNotifications()
         }
     }
 }
-
-// MARK: - Notification Names
-extension Notification.Name {
-    static let deviceTokenRegistered = Notification.Name("deviceTokenRegistered")
-}
 ```
 
-## Best Practices
 
-    **Strategic Permission Requests**: Don't ask for notification permissions immediately on app launch. Request them at meaningful moments.
+## 3. Register the APNs Token
 
-```swift
-// Good: Request after user joins a channel
-func didJoinChannel() {
-    NotificationPermissionManager.shared.requestPermissionIfNeeded { granted in
-        if granted {
-            print("User enabled notifications for channel updates")
-        }
-    }
-}
+When iOS calls your app delegate with the device token, convert the token data to a hex string and pass it to the SDK.
 
-// Bad: Request immediately on app launch
-func application(_ application: UIApplication, didFinishLaunchingWithOptions...) -> Bool {
-    // Don't do this immediately
-    // UNUserNotificationCenter.current().requestAuthorization(...)
-    return true
-}
-```
 
-    **Robust Token Management**: Implement comprehensive error handling for token registration failures.
+```swift iOS
+func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+) {
+    let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
 
-```swift
-class TokenRetryManager {
-    private var retryCount = 0
-    private let maxRetries = 3
-    private let retryDelay: TimeInterval = 30
-
-    func registerWithRetry(token: String) {
-        AmityManager.shared.client?.registerDevice(withToken: token) { [weak self] success, error in
-            if success {
-                self?.retryCount = 0
-                print("Token registered successfully")
-            } else if let self = self, self.retryCount < self.maxRetries {
-                self.retryCount += 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + self.retryDelay) {
-                    self.registerWithRetry(token: token)
-                }
-            } else {
-                print("Failed to register token after \(self?.maxRetries ?? 0) attempts")
-            }
+    Task { @MainActor in
+        do {
+            try await client.registerPushNotification(withDeviceToken: token)
+        } catch {
+            handleError(error)
         }
     }
 }
 ```
 
-    **Notification State Tracking**: Keep track of notification-related state across app lifecycle.
 
-```swift
-class NotificationStateManager {
-    static let shared = NotificationStateManager()
+`registerPushNotification(withDeviceToken:)` is available for signed-in users. The SDK throws for guest users.
 
-    private(set) var isRegistered = false
-    private(set) var deviceToken: String?
-    private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+## 4. Unregister on Sign-Out
 
-    func updateRegistrationState(isRegistered: Bool, token: String?) {
-        self.isRegistered = isRegistered
-        self.deviceToken = token
+Call unregister when the current app installation should stop receiving push notifications for the signed-in social.plus user.
 
-        // Notify observers
-        NotificationCenter.default.post(
-            name: .notificationStateChanged,
-            object: self
-        )
-    }
 
-    func updateAuthorizationStatus(_ status: UNAuthorizationStatus) {
-        self.authorizationStatus = status
-    }
-}
-
-extension Notification.Name {
-    static let notificationStateChanged = Notification.Name("notificationStateChanged")
-}
+```swift iOS
+try await client.unregisterPushNotification()
 ```
 
-    **Comprehensive Testing**: Test push notifications across different scenarios and device states.
 
-```swift
-#if DEBUG
-class NotificationTestingHelper {
-    static func logNotificationStatus() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            print("Authorization Status: \(settings.authorizationStatus.rawValue)")
-            print("Alert Setting: \(settings.alertSetting.rawValue)")
-            print("Badge Setting: \(settings.badgeSetting.rawValue)")
-            print("Sound Setting: \(settings.soundSetting.rawValue)")
-        }
-    }
+## Setup Checklist
 
-    static func simulateNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "Test Notification"
-        content.body = "This is a test notification"
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "test",
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        )
-
-        UNUserNotificationCenter.current().add(request)
-    }
-}
-#endif
-```
-
-## Testing & Debugging
-
-### Debug Notification Status
-
-```swift
-class NotificationDebugger {
-
-    static func printDebugInfo() {
-        print("=== Notification Debug Info ===")
-
-        // Check authorization status
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            print("Authorization Status: \(settings.authorizationStatus)")
-            print("Alert Setting: \(settings.alertSetting)")
-            print("Badge Setting: \(settings.badgeSetting)")
-            print("Sound Setting: \(settings.soundSetting)")
-        }
-
-        // Check device token
-        if let token = UserDefaults.standard.string(forKey: "device_token") {
-            print("Stored Device Token: \(token)")
-        } else {
-            print("No device token stored")
-        }
-
-        // Check badge count
-        print("Current Badge Count: \(UIApplication.shared.applicationIconBadgeNumber)")
-    }
-
-    static func testLocalNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "Test Notification"
-        content.body = "This is a test notification from your app"
-        content.sound = .default
-        content.badge = 1
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
-        )
-
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Failed to schedule test notification: \(error)")
-            } else {
-                print("Test notification scheduled")
-            }
-        }
-    }
-}
-```
-
-## Troubleshooting
-
-    **Notifications Not Received**:
-
-    1. **Certificate Issues**: Verify .p12 certificate is valid and uploaded correctly
-    2. **Build Configuration**: Use TestFlight or App Store builds (not debug builds)
-    3. **Permissions**: Check notification permissions in iOS Settings
-    4. **Token Registration**: Ensure device token is successfully registered with social.plus SDK
-    5. **Bundle ID Mismatch**: Verify certificate Bundle ID matches your app
-
-```swift
-// Debug token registration
-func debugTokenRegistration() {
-    print("App Bundle ID: \(Bundle.main.bundleIdentifier ?? "Unknown")")
-
-    if let token = UserDefaults.standard.string(forKey: "device_token") {
-        print("Current Token: \(token)")
-    }
-
-    // Re-register token
-    UIApplication.shared.registerForRemoteNotifications()
-}
-```
-
-    **Certificate Validation Issues**:
-
-    1. **Expired Certificate**: Check certificate expiration date
-    2. **Wrong Environment**: Ensure using Sandbox & Production certificate
-    3. **Password Incorrect**: Verify .p12 password in console
-    4. **Bundle ID Mismatch**: Certificate must match exact Bundle ID
-
-```swift
-// Validate certificate setup
-func validateCertificateSetup() {
-    print("Bundle ID: \(Bundle.main.bundleIdentifier ?? "Not found")")
-    print("Push capability enabled: \(Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") != nil)")
-}
-```
-
-    **Platform-Specific Problems**:
-
-    1. **Simulator Limitations**: Push notifications don't work in iOS Simulator
-    2. **Debug Build Restrictions**: Debug builds can't receive production push notifications
-    3. **Background App Refresh**: Check if disabled in iOS Settings
-    4. **Do Not Disturb Mode**: May suppress notification display
-
-```swift
-// Check background refresh status
-func checkBackgroundRefreshStatus() {
-    let status = UIApplication.shared.backgroundRefreshStatus
-    switch status {
-    case .available:
-        print("Background refresh available")
-    case .denied:
-        print("Background refresh denied")
-    case .restricted:
-        print("Background refresh restricted")
-    @unknown default:
-        print("Unknown background refresh status")
-    }
-}
-```
-
-## Related Resources
-
-    Official Apple push notification documentation
-    UserNotifications framework reference
-    Apple Developer certificate portal
-    Test push notifications with TestFlight
-
-**Production Requirements**: Push notifications only work with production builds distributed through App Store or TestFlight. Debug builds from Xcode cannot receive push notifications.
+- Push Notifications capability is enabled for the app target.
+- The APNs credential for the app Bundle ID is uploaded in the social.plus Console.
+- The app calls `UIApplication.shared.registerForRemoteNotifications()` after permission is granted.
+- The APNs device token is passed to `client.registerPushNotification(withDeviceToken:)`.
+- The app calls `client.unregisterPushNotification()` on sign-out when push should stop for that user.
 
 ---
 
 ### [React Native Push Notifications](https://learn.social.plus/social-plus-sdk/core-concepts/realtime-communication/push-notifications/setup/react-native-setup)
 
-> Complete guide to implementing cross-platform push notifications in React Native using Firebase Cloud Messaging and Apple Push Notification service
+> Understand React Native push-notification support in the SDK docs.
 
-Integrate real-time push notifications into your React Native app using Firebase Cloud Messaging (FCM) for Android and Apple Push Notification service (APNs) for iOS, ensuring users stay connected across both platforms.
+The TypeScript SDK does not currently expose a client-side push device registration API. That means a React Native app cannot complete social.plus push registration by calling a TypeScript SDK method from JavaScript.
 
-React Native's cross-platform nature allows unified push notification handling, but platform-specific configuration and certificates are still required.
+Do not build React Native push setup around a TypeScript SDK method such as `registerPushNotification()` or `registerDeviceNotification()`. Those APIs are not exported by `@amityco/ts-sdk`.
 
-## Prerequisites
+## Current Support Boundary
 
-Before implementing push notifications, ensure you have:
+| Layer | Status | What to use |
+| --- | --- | --- |
+| React Native JavaScript with `@amityco/ts-sdk` | No client device registration API | Use the TypeScript SDK for supported chat and social data features, not push device registration. |
+| Android native SDK | Supported | Use [Android Push Notifications](./android-setup) and call the native Android SDK registration APIs. |
+| iOS native SDK | Supported | Use [iOS Push Notifications](./ios-setup) and call the native iOS SDK registration APIs. |
+| Flutter SDK | Supported | Use [Flutter Push Notification Setup](./flutter-setup) for Flutter apps. |
 
-    Active Firebase project with FCM enabled for both platforms
-    Android FCM service account JSON and iOS APNs .p12 certificate
-    social.plus TypeScript SDK properly integrated
-    React Native development environment configured for both platforms
+## Integration Options
 
-## Step 1: Install Dependencies
+For a React Native app that needs social.plus push notifications, choose one of these supported paths:
 
-### Core Firebase Dependencies
+1. Implement push registration in native Android and iOS layers using the native SDKs.
+2. Bridge the native registration result into React Native only for app state or UI, not as a TypeScript SDK call.
+3. If you use a React Native UI Kit package, follow the UI Kit's push-notification instructions for that package. UI Kit APIs are outside this SDK-first audit.
 
-```bash
-# Install React Native Firebase
-npm install @react-native-firebase/app @react-native-firebase/messaging
+## Console Configuration Still Applies
 
-# Optional: For enhanced notification handling
-npm install @react-native-async-storage/async-storage
-npm install react-native-permissions
+Even when registration happens through native code, the app still needs provider credentials in the social.plus Console:
 
-# For iOS, install pods
-cd ios && pod install && cd ..
-```
+- Android builds need the Firebase service account JSON uploaded under **Settings > Push Notifications**.
+- iOS builds need the APNs credential for the app Bundle ID uploaded under **Settings > Push Notifications**.
 
-Always use the latest stable versions. Check the [React Native Firebase documentation](https://rnfirebase.io/) for current compatibility.
+## Related Setup
 
-### Additional Utility Libraries
-
-```bash
-# For better permission handling
-npm install react-native-permissions
-
-# For local storage
-npm install @react-native-async-storage/async-storage
-
-# For device info (optional)
-npm install react-native-device-info
-```
-
-## Step 2: Platform Configuration
-
-### Android Configuration
-
-1. **Add google-services.json** to `android/app/`
-
-2. **Update build.gradle files**:
-
-```gradle
-// android/build.gradle
-buildscript {
-  dependencies {
-    classpath 'com.google.gms:google-services:4.3.15'
-  }
-}
-
-// android/app/build.gradle
-apply plugin: 'com.google.gms.google-services'
-
-android {
-  compileSdkVersion 34
-
-  defaultConfig {
-    minSdkVersion 21
-    targetSdkVersion 34
-  }
-}
-```
-
-3. **Add permissions to AndroidManifest.xml**:
-
-```xml
-<!-- android/app/src/main/AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Push notification permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <application>
-        <!-- Firebase messaging service -->
-        <service
-            android:name="io.invertase.firebase.messaging.RNFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <!-- Your activities -->
-    </application>
-</manifest>
-```
-
-### iOS Configuration
-
-1. **Add GoogleService-Info.plist** to iOS project in Xcode
-
-2. **Enable Push Notifications capability** in Xcode:
-   - Select your target → Signing & Capabilities → + Capability → Push Notifications
-
-3. **Update AppDelegate** for Firebase:
-
-```objc
-// ios/YourApp/AppDelegate.mm
-#import <Firebase.h>
-#import <UserNotifications/UserNotifications.h>
-
-@interface AppDelegate () <UNUserNotificationCenterDelegate>
-@end
-
-@implementation AppDelegate
-
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
-{
-  // Configure Firebase
-  [FIRApp configure];
-
-  // Set notification delegate
-  [UNUserNotificationCenter currentNotificationCenter].delegate = self;
-
-  return [super application:application didFinishLaunchingWithOptions:launchOptions];
-}
-
-// Handle notification when app is in foreground
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-  completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionBadge | UNNotificationPresentationOptionSound);
-}
-
-@end
-```
-
-4. **Update Info.plist** for background modes:
-
-```xml
-<!-- ios/YourApp/Info.plist -->
-<dict>
-    <!-- Existing keys -->
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>background-fetch</string>
-        <string>remote-notification</string>
-    </array>
-
-    <key>FirebaseAppDelegateProxyEnabled</key>
-    <false/>
-</dict>
-```
-
-## Step 3: Upload Certificates to social.plus Console
-
-### Android - FCM Service Account
-
-1. **Generate FCM service account JSON**:
-   - Go to Firebase Console → Project Settings → Service Accounts
-   - Click "Generate new private key"
-   - Download the JSON file
-
-2. **Upload to social.plus Console**:
-   - Navigate to **Settings → Push Notifications**
-   - Upload the FCM service account JSON file
-
-### iOS - APNs Certificate
-
-1. **Generate .p12 certificate** following the [iOS setup guide](./ios-setup)
-2. **Upload to social.plus Console**:
-   - Navigate to **Settings → Push Notifications**
-   - Upload the .p12 file with password
-
-Refer to the [iOS Push Notification Certificate Setup Guide](./ios-setup) for detailed certificate generation instructions.
-
-
-## Best Practices
-
-    **Platform-Specific Handling**: While React Native allows code sharing, handle platform differences appropriately.
-
-```typescript
-// Handle platform-specific token retrieval
-const getTokenForPlatform = async () => {
-  if (Platform.OS === 'ios') {
-    // iOS requires APNs token first
-    const apnsToken = await messaging().getAPNSToken();
-    if (!apnsToken) {
-      console.log('APNs token not available, requesting...');
-      // Handle APNs token unavailability
-      return null;
-    }
-    return messaging().getToken();
-  } else {
-    // Android uses FCM token directly
-    return messaging().getToken();
-  }
-};
-```
-
-    **Strategic Permission Requests**: Request permissions at meaningful moments, not app launch.
-
-```typescript
-// Good: Request when user joins a channel
-const handleChannelJoin = async () => {
-  await joinChannel();
-
-  // Now request notification permissions for channel updates
-  const hasPermission = await requestNotificationPermission();
-  if (hasPermission) {
-    console.log('User will receive channel notifications');
-  }
-};
-
-// Bad: Request immediately on app launch
-useEffect(() => {
-  // Don't do this immediately
-  // requestNotificationPermission();
-}, []);
-```
-
-    **Token State Synchronization**: Keep token state consistent across app lifecycle and updates.
-
-```typescript
-// Use context for app-wide token state
-const NotificationContext = createContext({
-  token: null,
-  permissionStatus: 'not-determined',
-  refreshToken: () => {},
-});
-
-const NotificationProvider = ({ children }) => {
-  const [token, setToken] = useState(null);
-  const [permissionStatus, setPermissionStatus] = useState('not-determined');
-
-  const refreshToken = useCallback(async () => {
-    const newToken = await TokenManager.refreshTokenIfNeeded();
-    setToken(newToken);
-  }, []);
-
-  return (
-    <NotificationContext.Provider value={{ token, permissionStatus, refreshToken }}>
-      {children}
-    </NotificationContext.Provider>
-  );
-};
-```
-
-    **Robust Error Management**: Implement comprehensive error handling for various failure scenarios.
-
-```typescript
-class NotificationErrorHandler {
-  static handleError(error: any, context: string) {
-    console.error(`Notification error in ${context}:`, error);
-
-    // Log to crash reporting service
-    // crashlytics().recordError(error);
-
-    // Handle specific error types
-    if (error.code === 'messaging/unknown') {
-      this.handleUnknownError(error);
-    } else if (error.code === 'messaging/registration-token-not-registered') {
-      this.handleTokenNotRegistered();
-    } else if (error.code === 'messaging/invalid-registration-token') {
-      this.handleInvalidToken();
-    }
-  }
-
-  static handleTokenNotRegistered() {
-    // Clear stored token and re-register
-    TokenManager.clearStoredData();
-    // Re-initialize push notifications
-  }
-
-  static handleInvalidToken() {
-    // Get new token
-    TokenManager.refreshTokenIfNeeded();
-  }
-}
-```
-
-## Testing Strategies
-
-### Firebase Console Testing
-
-1. **Use Firebase Console** to send test messages:
-   - Go to Firebase Console → Cloud Messaging → Send Test Message
-   - Use the FCM token from your debug component
-   - Test different message types and data payloads
-
-2. **Test Both Platforms**:
-   - iOS: Test with TestFlight builds (debug builds don't receive push notifications)
-   - Android: Test with both debug and release builds
-
-## Troubleshooting
-
-    **Token Not Generated**:
-
-    1. **Firebase Configuration**: Verify `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) are correctly placed
-    2. **Permissions**: Ensure notification permissions are granted
-    3. **Network Connectivity**: Check internet connection
-    4. **APNs Token (iOS)**: Verify APNs token is available before requesting FCM token
-
-```typescript
-// Debug token generation issues
-const debugTokenIssues = async () => {
-  console.log('=== Token Debug ===');
-
-  // Check permissions
-  const authStatus = await messaging().hasPermission();
-  console.log('Permission status:', authStatus);
-
-  // Check device registration
-  console.log('Device registered:', messaging.isDeviceRegisteredForRemoteMessages);
-
-  // For iOS, check APNs token
-  if (Platform.OS === 'ios') {
-    const apnsToken = await messaging().getAPNSToken();
-    console.log('APNs token available:', !!apnsToken);
-  }
-
-  // Try to get token
-  try {
-    const token = await messaging().getToken();
-    console.log('FCM token:', token ? 'Available' : 'Not available');
-  } catch (error) {
-    console.error('Token generation error:', error);
-  }
-};
-```
-
-    **iOS Specific**:
-    - Push notifications don't work in iOS Simulator
-    - Debug builds can't receive push notifications
-    - Requires valid APNs certificate uploaded to social.plus Console
-
-    **Android Specific**:
-    - Android 13+ requires runtime notification permission
-    - Verify FCM service account JSON is uploaded to console
-    - Check that `google-services.json` matches your package name
-
-```typescript
-// Platform-specific debugging
-const debugPlatformIssues = async () => {
-  if (Platform.OS === 'ios') {
-    console.log('iOS Debug Info:');
-    console.log('- Running on simulator:', __DEV__ && Platform.isPad);
-    console.log('- Bundle ID:', getBundleId());
-
-    const apnsToken = await messaging().getAPNSToken();
-    console.log('- APNs token available:', !!apnsToken);
-  } else {
-    console.log('Android Debug Info:');
-    console.log('- Android version:', Platform.Version);
-    console.log('- Package name:', getPackageName());
-
-    if (Platform.Version >= 33) {
-      const hasPermission = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-      );
-      console.log('- POST_NOTIFICATIONS permission:', hasPermission);
-    }
-  }
-};
-```
-
-
-## Related Resources
-
-    Official React Native Firebase documentation
-    Detailed iOS APNs certificate generation guide
-    Android Firebase Cloud Messaging configuration
-
-**Testing Requirements**: iOS push notifications require TestFlight or App Store builds. Android notifications work in both debug and release builds, but release builds are recommended for production testing.
+    Configure FCM and register the signed-in device through the Android SDK.
+    Configure APNs and register the device token through the iOS SDK.
+    Compare device registration APIs across supported SDK platforms.
 
 ## Video — Getting Started
 
