@@ -1,532 +1,277 @@
 ---
-title: Recorded Room Playback
-description: Play recorded rooms after broadcast ends with full video player controls
+title: "Recorded Room Playback"
+description: "Observe recorded room availability and pass SDK playback URLs to your player."
 ---
 
-# Recorded Room Playback
+Recorded playback becomes available after a room finishes broadcasting and the backend publishes recorded playback metadata. The social.plus SDK owns room status, recorded playback URLs, recorded thumbnails, and recorded resolution metadata. Your app owns the actual player, queueing, seek controls, buffering, and retry UI.
 
-This guide covers how to access and play recorded rooms after a live broadcast ends, including handling recording availability, implementing video players with seek controls, and managing recordings across all platforms.
+<Note>
+  This page covers SDK-recorded playback data. AVPlayer, ExoPlayer, HLS.js, browser autoplay handling, DRM, captions, and player UI are app-owned concerns after the SDK returns a recorded playback URL.
+</Note>
 
-## Understanding Recording Status
+## Platform Surface
 
-### Recording Lifecycle
+| Platform | Observe availability | Recorded metadata | URL refresh helper | Notes |
+| --- | --- | --- | --- | --- |
+| TypeScript | `RoomRepository.getRoom(roomId, callback)` | `room.recordedPlaybackInfos[]`, `room.recordedResolution` | `RoomRepository.getRecordedUrl(roomId)` | `getRecordedUrl()` returns a URL and optional expiry timestamp. |
+| iOS | `AmityRoomRepository().getRoom(withId:)` | `room.recordedData[]`, `room.recordedResolution` | Re-observe or fetch the room object | Retain the returned `AmityNotificationToken` while observing. |
+| Android | `AmityVideoClient.newRoomRepository().getRoom(roomId)` | `room.getRecordedPlaybackInfos()`, `room.getRecordedResolution()` | `getRecordedUrls(roomId)` | `getRecordedUrls()` returns URL strings only. |
+| Flutter | No current public room recorded playback API found in this audit | Not available | Not available | The Flutter SDK source exposes older stream APIs, not the room broadcasting repository. |
 
-When a live room ends, recordings go through a processing phase:
+## Wait for Recorded Status
 
-| Room Status | Recording Available | Playback Method |
-|-------------|---------------------|-----------------|
-| **idle** | No | Room not started yet |
-| **live** | No | Use `getLivePlaybackUrl()` instead |
-| **ended** | No (processing) | Wait for `recorded` status |
-| **recorded** | Yes | Use `getRecordedPlaybackInfos()` |
-
-### Check Recording Availability
+Observe the room while the playback screen is open. Treat `ended` as a processing state and only hand a recorded URL to your player after the room status becomes `recorded`.
 
 <CodeGroup>
-```swift iOS
-import AmitySDK
 
-class RecordingChecker {
-    
-    func checkRecordingAvailability(roomId: String) {
-        let roomRepository = AmityVideoClient.newRoomRepository()
-        let liveRoom = roomRepository.getRoom(roomId)
-        
-        liveRoom.observeOnce { liveObject, error in
-            guard let room = liveObject.object else {
-                print("Room not found")
-                return
-            }
-            
-            switch room.status {
-            case .recorded:
-                let recordedInfos = room.getRecordedPlaybackInfos()
-                if !recordedInfos.isEmpty {
-                    print("Recording available: \(recordedInfos.count) segments")
-                    self.playRecording(infos: recordedInfos)
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+function observeRecordedAvailability(roomId: string): Amity.Unsubscriber {
+  return RoomRepository.getRoom(roomId, snapshot => {
+    if (snapshot.error) {
+      handleError(snapshot.error);
+      return;
+    }
+
+    const room = snapshot.data;
+
+    if (room.status === "recorded" && room.recordedPlaybackInfos.length > 0) {
+      showSuccessMessage(room.recordedPlaybackInfos[0].url);
+      return;
+    }
+
+    if (room.status === "ended") {
+      showSuccessMessage("recording-processing");
+      return;
+    }
+
+    showSuccessMessage(room.status);
+  });
+}
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
+
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRoom(roomId)
+    .subscribe(
+        { room ->
+            when (room.getStatus()) {
+                AmityRoomStatus.RECORDED -> {
+                    val firstUrl = room.getRecordedPlaybackInfos()
+                        .mapNotNull { it.url }
+                        .firstOrNull()
+
+                    showSuccessMessage(firstUrl ?: "recorded")
                 }
-            case .ended:
-                print("Room ended, recording is being processed...")
-                self.showProcessingMessage()
-            case .live:
-                print("Room is still live")
-            case .idle:
-                print("Room hasn't started yet")
-            default:
-                break
-            }
-        }
-    }
-    
-    private func playRecording(infos: [AmityRecordedPlaybackInfo]) {
-        // Handle recording playback
-    }
-    
-    private func showProcessingMessage() {
-        // Show UI indicating recording is processing
-    }
-}
-```
-
-```kotlin Android
-import com.amity.socialcloud.sdk.video.*
-
-class RecordingChecker(private val context: Context) {
-    
-    fun checkRecordingAvailability(roomId: String) {
-        AmityVideoClient.newRoomRepository()
-            .getRoom(roomId)
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe({ room ->
-                when (room.getStatus()) {
-                    AmityRoomStatus.RECORDED -> {
-                        val recordedInfos = room.getRecordedPlaybackInfos()
-                        if (!recordedInfos.isNullOrEmpty()) {
-                            Log.d("Recording", "Recording available: ${recordedInfos.size} segments")
-                            playRecording(recordedInfos)
-                        }
-                    }
-                    AmityRoomStatus.ENDED -> {
-                        Log.d("Recording", "Room ended, recording is being processed...")
-                        showProcessingMessage()
-                    }
-                    AmityRoomStatus.LIVE -> {
-                        Log.d("Recording", "Room is still live")
-                    }
-                    AmityRoomStatus.IDLE -> {
-                        Log.d("Recording", "Room hasn't started yet")
-                    }
-                    else -> {}
+                AmityRoomStatus.ENDED -> {
+                    showSuccessMessage("recording-processing")
                 }
-            }, { error ->
-                Log.e("Recording", "Error checking room: ${error.message}")
-            })
-    }
-    
-    private fun playRecording(infos: List<AmityRecordedPlaybackInfo>) {
-        // Handle recording playback
-    }
-    
-    private fun showProcessingMessage() {
-        // Show UI indicating recording is processing
-    }
-}
-```
-
-```typescript TypeScript
-import { RoomRepository } from '@amityco/ts-sdk';
-
-class RecordingChecker {
-    
-    async checkRecordingAvailability(roomId: string) {
-        try {
-            const room = await RoomRepository.getRoom(roomId);
-            
-            switch (room.status) {
-                case 'recorded':
-                    const recordedInfos = room.recordedPlaybackInfos || [];
-                    if (recordedInfos.length > 0) {
-                        console.log(`Recording available: ${recordedInfos.length} segments`);
-                        this.playRecording(recordedInfos);
-                    }
-                    break;
-                case 'ended':
-                    console.log('Room ended, recording is being processed...');
-                    this.showProcessingMessage();
-                    break;
-                case 'live':
-                    console.log('Room is still live');
-                    break;
-                case 'idle':
-                    console.log("Room hasn't started yet");
-                    break;
+                else -> {
+                    showSuccessMessage(room.getStatus())
+                }
             }
-        } catch (error) {
-            console.error('Error checking room:', error);
-        }
+        },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+var roomObservationToken: AmityNotificationToken?
+let roomObject = AmityRoomRepository().getRoom(withId: roomId)
+
+roomObservationToken = roomObject.observe { liveObject, error in
+    if let error {
+        handleGeneralError(error)
+        return
     }
-    
-    private playRecording(infos: any[]) {
-        // Handle recording playback
-    }
-    
-    private showProcessingMessage() {
-        // Show UI indicating recording is processing
+
+    guard let room = liveObject.snapshot else { return }
+
+    switch room.status {
+    case .recorded:
+        showSuccessMessage(room.recordedData.first?.playbackUrl)
+    case .ended:
+        showSuccessMessage("recording-processing")
+    default:
+        showSuccessMessage(room.status.rawValue)
     }
 }
 ```
+
 </CodeGroup>
 
+## Read Recorded Sources
 
-## Accessing Recorded Playback
-
-### Get Recorded Playback Info
-
-Use `getRecordedPlaybackInfos()` to retrieve recording segments:
+Recorded metadata can contain more than one playback item. Preserve the SDK order unless your product has a backend-defined reason to reorder segments.
 
 <CodeGroup>
-```swift iOS
-class RecordedRoomPlayer {
-    
-    func getRecordedPlaybackInfo(from room: AmityRoom) -> [AmityRecordedPlaybackInfo] {
-        guard room.status == .recorded else {
-            print("Recording not available yet")
-            return []
-        }
-        
-        let recordedInfos = room.getRecordedPlaybackInfos()
-        
-        // Log recording details
-        for (index, info) in recordedInfos.enumerated() {
-            print("Segment \(index + 1):")
-            print("  URL: \(info.url)")
-            print("  Duration: \(info.duration) seconds")
-            print("  Resolution: \(info.width) x \(info.height)")
-        }
-        
-        return recordedInfos
-    }
-    
-    func playFirstRecording(from room: AmityRoom) {
-        let infos = getRecordedPlaybackInfo(from: room)
-        
-        guard let firstInfo = infos.first else {
-            print("No recordings available")
-            return
-        }
-        
-        playRecording(url: firstInfo.url, duration: firstInfo.duration)
-    }
-    
-    private func playRecording(url: String, duration: TimeInterval) {
-        guard let videoURL = URL(string: url) else { return }
-        
-        let player = AVPlayer(url: videoURL)
-        let playerViewController = AVPlayerViewController()
-        playerViewController.player = player
-        
-        // Enable seek controls for recorded content
-        playerViewController.showsPlaybackControls = true
-        
-        present(playerViewController, animated: true) {
-            player.play()
-        }
-    }
+
+```typescript TypeScript
+type RecordedPlaybackSource = {
+  url: string;
+  thumbnailUrl: string;
+};
+
+function recordedPlaybackSources(room: Amity.Room): RecordedPlaybackSource[] {
+  if (room.status !== "recorded") {
+    return [];
+  }
+
+  return room.recordedPlaybackInfos.map(info => ({
+    url: info.url,
+    thumbnailUrl: info.thumbnailUrl,
+  }));
 }
 ```
 
 ```kotlin Android
-class RecordedRoomPlayer(private val context: Context) {
-    
-    fun getRecordedPlaybackInfo(room: AmityRoom): List<AmityRecordedPlaybackInfo> {
-        if (room.getStatus() != AmityRoomStatus.RECORDED) {
-            Log.d("Recording", "Recording not available yet")
-            return emptyList()
-        }
-        
-        val recordedInfos = room.getRecordedPlaybackInfos() ?: emptyList()
-        
-        // Log recording details
-        recordedInfos.forEachIndexed { index, info ->
-            Log.d("Recording", "Segment ${index + 1}:")
-            Log.d("Recording", "  URL: ${info.url}")
-            Log.d("Recording", "  Duration: ${info.duration} seconds")
-            Log.d("Recording", "  Resolution: ${info.width} x ${info.height}")
-        }
-        
-        return recordedInfos
+import com.amity.socialcloud.sdk.model.video.room.AmityRoom
+import com.amity.socialcloud.sdk.model.video.room.AmityRoomStatus
+
+data class RecordedPlaybackSource(
+    val url: String,
+    val thumbnailUrl: String?
+)
+
+fun recordedPlaybackSources(room: AmityRoom): List<RecordedPlaybackSource> {
+    if (room.getStatus() != AmityRoomStatus.RECORDED) {
+        return emptyList()
     }
-    
-    fun playFirstRecording(room: AmityRoom) {
-        val infos = getRecordedPlaybackInfo(room)
-        
-        if (infos.isEmpty()) {
-            Log.d("Recording", "No recordings available")
-            return
+
+    return room.getRecordedPlaybackInfos().mapNotNull { info ->
+        info.url?.let { url ->
+            RecordedPlaybackSource(
+                url = url,
+                thumbnailUrl = info.thumbnailUrl
+            )
         }
-        
-        val firstInfo = infos.first()
-        playRecording(firstInfo.url, firstInfo.duration)
-    }
-    
-    private fun playRecording(url: String, duration: Long) {
-        val exoPlayer = ExoPlayer.Builder(context).build()
-        val mediaItem = MediaItem.fromUri(url)
-        
-        exoPlayer.setMediaItem(mediaItem)
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
     }
 }
 ```
 
-```typescript TypeScript
-interface RecordedPlaybackInfo {
-    url: string;
-    duration: number;
-    width: number;
-    height: number;
+```swift iOS
+struct RecordedPlaybackSource {
+    let playbackUrl: String
+    let thumbnailUrl: String
 }
 
-class RecordedRoomPlayer {
-    
-    getRecordedPlaybackInfo(room: any): RecordedPlaybackInfo[] {
-        if (room.status !== 'recorded') {
-            console.log('Recording not available yet');
-            return [];
+func recordedPlaybackSources(for room: AmityRoom) -> [RecordedPlaybackSource] {
+    guard room.status == .recorded else { return [] }
+
+    return room.recordedData
+        .filter { !$0.playbackUrl.isEmpty }
+        .map { data in
+            RecordedPlaybackSource(
+                playbackUrl: data.playbackUrl,
+                thumbnailUrl: data.thumbnailUrl
+            )
         }
-        
-        const recordedInfos = room.recordedPlaybackInfos || [];
-        
-        // Log recording details
-        recordedInfos.forEach((info: RecordedPlaybackInfo, index: number) => {
-            console.log(`Segment ${index + 1}:`);
-            console.log(`  URL: ${info.url}`);
-            console.log(`  Duration: ${info.duration} seconds`);
-            console.log(`  Resolution: ${info.width} x ${info.height}`);
-        });
-        
-        return recordedInfos;
-    }
-    
-    playFirstRecording(room: any) {
-        const infos = this.getRecordedPlaybackInfo(room);
-        
-        if (infos.length === 0) {
-            console.log('No recordings available');
-            return;
-        }
-        
-        const firstInfo = infos[0];
-        this.playRecording(firstInfo.url, firstInfo.duration);
-    }
-    
-    private playRecording(url: string, duration: number) {
-        const videoElement = document.getElementById('recordedVideo') as HTMLVideoElement;
-        videoElement.src = url;
-        videoElement.play();
-    }
 }
 ```
+
 </CodeGroup>
 
-## Multiple Recording Segments
+## Refresh a Playback URL
 
-Some rooms may have multiple recording segments. Handle them appropriately:
+Refresh recorded playback data before starting playback, after a long pause, or when your player reports an expired or unauthorized media URL.
 
 <CodeGroup>
-```swift iOS
-class MultiSegmentPlayer {
-    private var player: AVQueuePlayer?
-    private var playerItems: [AVPlayerItem] = []
-    
-    func playAllSegments(recordedInfos: [AmityRecordedPlaybackInfo]) {
-        playerItems = recordedInfos.compactMap { info in
-            guard let url = URL(string: info.url) else { return nil }
-            return AVPlayerItem(url: url)
-        }
-        
-        player = AVQueuePlayer(items: playerItems)
-        
-        let playerViewController = AVPlayerViewController()
-        playerViewController.player = player
-        
-        present(playerViewController, animated: true) {
-            self.player?.play()
-        }
-    }
-}
+
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+const recordedUrl = await RoomRepository.getRecordedUrl(roomId);
+
+showSuccessMessage(recordedUrl.url);
+showSuccessMessage(recordedUrl.expiresAt);
 ```
 
 ```kotlin Android
-class MultiSegmentPlayer(private val context: Context) {
-    private var exoPlayer: ExoPlayer? = null
-    
-    fun playAllSegments(recordedInfos: List<AmityRecordedPlaybackInfo>) {
-        exoPlayer = ExoPlayer.Builder(context).build()
-        
-        val mediaItems = recordedInfos.map { info ->
-            MediaItem.fromUri(info.url)
-        }
-        
-        exoPlayer?.apply {
-            setMediaItems(mediaItems)
-            prepare()
-            playWhenReady = true
-        }
-    }
-    
-    fun release() {
-        exoPlayer?.release()
-    }
-}
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+
+val disposable = AmityVideoClient.newRoomRepository()
+    .getRecordedUrls(roomId)
+    .subscribe(
+        { urls -> showSuccessMessage(urls.firstOrNull() ?: "no-recorded-url") },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
-```typescript TypeScript
-class MultiSegmentPlayer {
-    private videoElement: HTMLVideoElement;
-    private segments: any[] = [];
-    private currentSegmentIndex = 0;
-    
-    constructor(videoElementId: string) {
-        this.videoElement = document.getElementById(videoElementId) as HTMLVideoElement;
-        this.setupEventListeners();
-    }
-    
-    playAllSegments(recordedInfos: any[]) {
-        this.segments = recordedInfos;
-        this.currentSegmentIndex = 0;
-        this.playSegment(0);
-    }
-    
-    private playSegment(index: number) {
-        if (index >= this.segments.length) {
-            console.log('All segments played');
-            return;
-        }
-        
-        this.videoElement.src = this.segments[index].url;
-        this.videoElement.play();
-    }
-    
-    private setupEventListeners() {
-        this.videoElement.addEventListener('ended', () => {
-            this.currentSegmentIndex++;
-            this.playSegment(this.currentSegmentIndex);
-        });
-    }
-}
-```
-</CodeGroup>
-
-
-## Error Handling
-
-<CodeGroup>
 ```swift iOS
-class RecordingErrorHandler {
-    
-    func handleError(_ error: Error, for room: AmityRoom) {
-        let errorDescription = error.localizedDescription.lowercased()
-        
-        if errorDescription.contains("not found") || errorDescription.contains("404") {
-            // Recording may have been deleted or not available
-            showError("Recording Not Available", message: "This recording is no longer available")
-        } else if errorDescription.contains("network") {
-            showError("Network Error", message: "Please check your connection and try again")
-        } else if errorDescription.contains("expired") {
-            // Recording URL expired, refresh it
-            refreshRecordingUrl(room: room)
-        } else {
-            showError("Playback Error", message: error.localizedDescription)
-        }
+var refreshToken: AmityNotificationToken?
+let roomObject = AmityRoomRepository().getRoom(withId: roomId)
+
+refreshToken = roomObject.observeOnce { liveObject, error in
+    if let error {
+        handleGeneralError(error)
+        return
     }
-    
-    private func refreshRecordingUrl(room: AmityRoom) {
-        // Re-fetch room to get fresh recording URLs
-        let roomRepository = AmityVideoClient.newRoomRepository()
-        let liveRoom = roomRepository.getRoom(room.roomId)
-        
-        liveRoom.observeOnce { liveObject, error in
-            guard let freshRoom = liveObject.object else { return }
-            let newInfos = freshRoom.getRecordedPlaybackInfos()
-            // Retry playback with new URLs
-        }
+
+    guard let room = liveObject.snapshot,
+          room.status == .recorded else {
+        return
     }
+
+    showSuccessMessage(room.recordedData.first?.playbackUrl)
 }
 ```
 
-```kotlin Android
-class RecordingErrorHandler(private val context: Context) {
-    
-    fun handleError(error: String, room: AmityRoom) {
-        when {
-            error.contains("not found", ignoreCase = true) ||
-            error.contains("404") -> {
-                showError("Recording Not Available", "This recording is no longer available")
-            }
-            error.contains("network", ignoreCase = true) -> {
-                showError("Network Error", "Please check your connection and try again")
-            }
-            error.contains("expired", ignoreCase = true) -> {
-                refreshRecordingUrl(room)
-            }
-            else -> {
-                showError("Playback Error", error)
-            }
-        }
-    }
-    
-    private fun refreshRecordingUrl(room: AmityRoom) {
-        AmityVideoClient.newRoomRepository()
-            .getRoom(room.getRoomId())
-            .take(1)
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe({ freshRoom ->
-                val newInfos = freshRoom.getRecordedPlaybackInfos()
-                // Retry playback with new URLs
-            }, { error ->
-                Log.e("Recording", "Failed to refresh URL: ${error.message}")
-            })
-    }
-}
-```
-
-```typescript TypeScript
-class RecordingErrorHandler {
-    
-    async handleError(error: any, roomId: string) {
-        const errorMessage = error?.message?.toLowerCase() || '';
-        
-        if (errorMessage.includes('not found') || errorMessage.includes('404')) {
-            this.showError('Recording Not Available', 'This recording is no longer available');
-        } else if (errorMessage.includes('network')) {
-            this.showError('Network Error', 'Please check your connection and try again');
-        } else if (errorMessage.includes('expired')) {
-            await this.refreshRecordingUrl(roomId);
-        } else {
-            this.showError('Playback Error', error?.message || 'Unknown error');
-        }
-    }
-    
-    private async refreshRecordingUrl(roomId: string) {
-        try {
-            const freshRoom = await RoomRepository.getRoom(roomId);
-            const newInfos = freshRoom.recordedPlaybackInfos || [];
-            // Retry playback with new URLs
-        } catch (error) {
-            console.error('Failed to refresh URL:', error);
-        }
-    }
-}
-```
 </CodeGroup>
+
+## Recorded Playback Parameters
+
+| Concept | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Observe room | `RoomRepository.getRoom(roomId, callback)` | `AmityRoomRepository().getRoom(withId:)` | `AmityVideoClient.newRoomRepository().getRoom(roomId)` |
+| Recorded status | `room.status === "recorded"` | `room.status == .recorded` | `room.getStatus() == AmityRoomStatus.RECORDED` |
+| Processing status | `room.status === "ended"` | `room.status == .ended` | `room.getStatus() == AmityRoomStatus.ENDED` |
+| Playback URL metadata | `room.recordedPlaybackInfos[].url` | `room.recordedData[].playbackUrl` | `room.getRecordedPlaybackInfos()[].url` |
+| Thumbnail metadata | `room.recordedPlaybackInfos[].thumbnailUrl` | `room.recordedData[].thumbnailUrl` | `room.getRecordedPlaybackInfos()[].thumbnailUrl` |
+| Recorded resolution | `room.recordedResolution` | `room.recordedResolution` | `room.getRecordedResolution()` |
+| Fresh URL helper | `RoomRepository.getRecordedUrl(roomId)` | Re-observe `AmityRoom` | `getRecordedUrls(roomId)` |
+
+## Status Handling
+
+| Room status | Recorded playback behavior |
+| --- | --- |
+| `idle` | No recording exists. Show a waiting or not-started state. |
+| `live` / `waitingReconnect` | Use live playback, not recorded playback. |
+| `ended` | Broadcast has ended, but recording metadata may still be processing. Keep observing or offer retry. |
+| `recorded` | Read recorded playback metadata and pass a URL to your player. |
+| `terminated` | TypeScript room status for a terminated room. Do not assume recorded playback is available. |
+| `error` | Show a recoverable error state and let the viewer retry or leave. |
+
+<Warning>
+  Do not treat `ended` as playable recorded content. Wait for `recorded` status or a successful platform URL refresh response before handing a recorded URL to the player.
+</Warning>
+
+## Segment and Player Boundary
+
+| Area | SDK responsibility | App/player responsibility |
+| --- | --- | --- |
+| Availability | Room status updates and recorded metadata | Processing, empty, retry, and unavailable UI |
+| Source list | Recorded URLs, thumbnails, and recorded resolution | Segment queueing, autoplay policy, seek controls, buffering, captions, and DRM |
+| Freshness | TS `getRecordedUrl()`, Android `getRecordedUrls()`, iOS room re-observation | Retry timing, expired URL recovery, and player reload |
+| Cleanup | Unsubscribe, invalidate tokens, or dispose Rx subscriptions | Release player instances and audio/video resources |
 
 <Info>
-**Recording Storage**: Recordings are stored based on your network configuration. Contact support if you need to modify retention policies or storage limits.
+  Multiple recorded playback items can represent multiple files for one recording. Preserve the SDK order and let the player layer decide whether to play only the first URL or queue all URLs.
 </Info>
 
-<Tip>
-**Performance**: For long recordings, consider implementing progressive loading or chunked playback to reduce initial load times and memory usage.
-</Tip>
+## Related Topics
 
-## Next Steps
-
-With recorded playback implemented:
-
-<CardGroup cols={2}>
-  <Card title="Live Viewing" href="./live-viewing" icon="signal-stream">
-    Watch live rooms in real-time as they broadcast
+<CardGroup cols={3}>
+  <Card title="Live Room Viewing" icon="signal-stream" href="./live-viewing">
+    Discover room posts, observe live rooms, and choose playback sources.
   </Card>
-  <Card title="Start Broadcasting" href="./start-broadcasting" icon="play">
-    Learn how to start your own broadcast
+  <Card title="Start Broadcasting" icon="radio" href="./start-broadcasting">
+    Fetch broadcaster credentials and start the host-side media session.
   </Card>
-  <Card title="Co-Host Management" href="./co-host-management" icon="users">
-    Invite and manage broadcast co-hosts
-  </Card>
-  <Card title="Manage Rooms" href="./manage-rooms" icon="gear">
-    Query, update, and delete rooms
+  <Card title="Manage Rooms" icon="settings" href="./manage-rooms">
+    Observe, query, update, stop, or delete room records.
   </Card>
 </CardGroup>
