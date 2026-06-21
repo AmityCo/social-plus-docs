@@ -1,502 +1,168 @@
 ---
 title: "Mentions"
-description: "Tag users or channels in posts, comments, and messages using mentionUsers() and mentionChannel() with the AmityMention object."
+description: "Attach user mention payloads and mention metadata when creating or editing posts, comments, and messages."
 ---
 
-Tag users in posts, comments, and messages using `mentionUsers(userIds)`, or notify an entire channel using `mentionChannel(channelId)`. The `AmityMention` object represents each mention and is passed through the content metadata.
+Mentions are attached to content creation or edit calls. They use two pieces of data: `mentionees` tells Social+ which users or channel are mentioned, and `metadata` stores the text ranges your UI can use to render the highlighted mention text.
 
 <Note>
-**Mention Support**: User mentions are supported in posts, comments, and messages. Channel mentions are available in messages only.
+  User mentions are available on posts, comments, and messages. Channel mentions are message-only.
 </Note>
 
-## Key Features
+## Platform Surface
 
-<CardGroup cols={2}>
-  <Card title="User Mentions" icon="at">
-    Tag specific users with @username notation for direct engagement
-  </Card>
-  <Card title="Channel Mentions" icon="hashtag">
-    Mention entire channels to notify all members (messages only)
-  </Card>
-  <Card title="Smart Notifications" icon="bell">
-    Automatic push notifications alert mentioned users instantly
-  </Card>
-  <Card title="Flexible Structure" icon="code">
-    Customizable mention data structure for advanced use cases
-  </Card>
-</CardGroup>
+| Platform | Mentionees payload | Mention metadata helper |
+| --- | --- | --- |
+| TypeScript | `mentionees: [{ type: "user", userIds: [...] }]` | Plain `metadata` object with `mentioned` entries |
+| iOS | `AmityMentioneesBuilder` | `AmityMetadataMapper.metadata(mentions:)` |
+| Android | `mentionUserIds` on post APIs or `mentionUsers()` on builders | `AmityMentionMetadataCreator` |
+| Flutter | `mentionUsers()` on builders | `AmityMentionMetadataCreator` |
 
-## Where Mentions Work
+## Parameters
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `text` | Yes | Content text that includes the mention display text, such as `@alex`. |
+| `mentionees` / mention builder | Yes for mention behavior | Users or channel being mentioned. Posts and comments support user mentionees; messages support user and channel mentionees. |
+| `metadata` | Recommended for rendering | Metadata object containing mention text ranges under `mentioned`. |
+| `type` | Yes in metadata | Use `user` for user mentions or `channel` for message channel mentions. |
+| `index` | Yes in metadata | Zero-based index where the mention starts in the content text. |
+| `length` | Yes in metadata | Length of the display name after the `@` character. For `@alex`, use `4`. |
+| `userId` | User mentions only | ID of the mentioned user. |
+
+## Create Content With A User Mention
+
+The examples below create a community text post that mentions one user. Use the same mentionee and metadata pattern when creating comments or messages with the SDK-specific creation API.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const text = "Hello @alex";
+const metadata = {
+  mentioned: [
+    {
+      type: "user",
+      userId,
+      index: 6,
+      length: 4,
+    },
+  ],
+};
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: { text },
+  metadata,
+  mentionees: [{ type: "user", userIds: [userId] }],
+});
+```
+
+```swift iOS
+let text = "Hello @alex"
+let mention = AmityMention(
+    type: .user,
+    index: 6,
+    length: 4,
+    userId: userId
+)
+let metadata = AmityMetadataMapper.metadata(mentions: [mention])
+
+let mentionees = AmityMentioneesBuilder()
+mentionees.mentionUsers(userIds: [userId])
+
+let builder = AmityTextPostBuilder()
+builder.setText(text)
+
+let post = try await postRepository.createTextPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: metadata,
+    mentionees: mentionees
+)
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.helper.core.mention.AmityMentionMetadata
+import com.amity.socialcloud.sdk.helper.core.mention.AmityMentionMetadataCreator
+
+val text = "Hello @alex"
+val mentionMetadata = AmityMentionMetadata.USER(
+    userId = userId,
+    index = 6,
+    length = 4
+)
+val metadata = AmityMentionMetadataCreator(
+    mentionMetaData = listOf(mentionMetadata)
+).create()
+
+postRepository.createTextPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    text = text,
+    metadata = metadata,
+    mentionUserIds = setOf(userId)
+)
+    .subscribe(
+        { post -> showSuccessMessage(post.getPostId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```dart Flutter
+final text = 'Hello @alex';
+final metadata = AmityMentionMetadataCreator([
+  AmityUserMentionMetadata(
+    userId: userId,
+    index: 6,
+    length: 4,
+  ),
+]).create();
+
+final creator = AmitySocialClient.newPostRepository()
+    .createPost()
+    .targetCommunity(communityId)
+    .text(text);
+
+creator.mentionUsers([userId]);
+creator.metadata(metadata);
+
+final post = await creator.createTextPost();
+```
+
+</CodeGroup>
+
+## Rendering Mentions
+
+Use the content text and `metadata.mentioned` entries together when rendering. The `mentionees` payload identifies mentioned users or channel targets, while `metadata` identifies where the mention appears in the text.
+
+| Metadata field | Meaning |
+| --- | --- |
+| `type` | `user` or `channel` |
+| `index` | Start position of the mention in the text |
+| `length` | Display-name length after `@` |
+| `userId` | Present for user mentions |
+
+## Notes
+
+- Keep `metadata` and `mentionees` in sync. A highlighted `@alex` without a matching mentionee payload is only display metadata.
+- Use the user IDs returned by your mention picker. Display names can change, but user IDs are the stable mention target.
+- For messages, channel mentions use a channel mentionee entry. Posts and comments use user mentionees.
+- Existing content models expose mention information after creation; use the model returned by the SDK or a fresh query when your UI needs server-confirmed state.
+
+## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="Posts" icon="pen-to-square">
-    Mention users in community posts to boost engagement and start conversations
+  <Card title="Text Posts" icon="pen-line" href="/social-plus-sdk/social/content-management/posts/creation/text-post">
+    Create text posts that can carry mention metadata
   </Card>
-  <Card title="Comments" icon="comment">
-    Tag users in comment threads for focused discussions
+  <Card title="Text Comment" icon="message-square" href="/social-plus-sdk/social/content-management/comments/creation/text-comment">
+    Add user mentions to comments and replies
   </Card>
-  <Card title="Messages" icon="message" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message">
-    Direct mentions in chat messages, including channel-wide mentions
-  </Card>
-</CardGroup>
-
-Upon creating a model above (a post, comment, or message) with a mention, you can include a JSON object in the metadata parameter. The metadata represents the mentioned object, which depends on the design of your data structure. However, we provide a default structure to help you create the mentioned metadata. 
-
-To ensure prompt notification of the person mentioned, it's important to provide the list of user IDs for the mentioned user parameter. This will help ensure that the mentioned users are notified and able to engage with the content.
-
-- `mentionUsers(userIds)` -  In order to mention users and notify specific users. This function supports all mentionable models. 
-
-- `mentionChannel(channelId)` - In order to mention and notify the whole channel. This function supports only a message model. 
-
-- `metadata` - a free-form JSON object that can accommodate any information regarding the mentioned users. Our default structure for representing mentions is also in the metadata property.
-
-## Default Mention Data Structure
-To represent mentions using our structure, you will need to utilize the AmityMention object. This object can be created during mentionable model creation, as well as during rendering.
-<Tabs>
-<Tab title="User Mentions">
-Tag specific users in posts and comments with @username notation.
-
-<AccordionGroup>
-  <Accordion title="Mention Properties" icon="tags" defaultOpen = "true">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `type` | `enum` | Always `"user"` for user mentions |
-    | `index` | `number` | Start index of the mention in text |
-    | `userId` | `string` | ID of the mentioned user |
-    | `length` | `number` | Length of the mention text (excluding "@" symbol) |
-  </Accordion>
-
-</AccordionGroup>
-
-</Tab>
-
-<Tab title="Channel Mentions">
-Mention entire channels in chat messages to notify all members.
-
-<AccordionGroup>
-  <Accordion title="Channel Mention Properties" icon="hash">
-    | Property | Type | Description |
-    |----------|------|-------------|
-    | `type` | `enum` | Always `"channel"` for channel mentions |
-    | `index` | `number` | Start index of the mention in text |
-    | `channelId` | `string` | ID of the mentioned channel |
-    | `length` | `number` | Length of the mention text (excluding "@" symbol) |
-  </Accordion>
-</AccordionGroup>
-
-<Warning>
-Channel mentions are only available in chat messages, not in posts or comments.
-</Warning>
-</Tab>
-</Tabs>
-
-<Info>
-**Index Calculation**: The `length` property doesn't include the "@" symbol. For "@alice", the length is 5, not 6.
-</Info>
-
-
-## Creating Mention Metadata
-Below is an example to create a comment with mentions by using our default mention metadata structure:
-
-
-<CodeGroup>
-```swift iOS
-import AmitySDK
-
-func createCommentWithMentionExample() {
-    // 1. We will create a comment containing this text.
-    let text = "Hi @john and @alice."
-    // To add mention to a comment, we need extra steps.
-    // In this example, we want to mention two users "john" and "alice".
-    //
-    // 2. We create metadata that contains mention object, via AmityMentionMapper helper class.
-    //
-    // Notice how `index` and `length` is set.
-    let metadata = AmityMentionMapper.metadata(from: [
-        AmityMention(type: .user, index: 3, length: 4, userId: "<john-user-id>"),
-        AmityMention(type: .user, index: 13, length: 5, userId: "<alice-user-id>")
-    ])
-    // 3. We create mentionees.
-    let mentionees = AmityMentioneesBuilder()
-    mentionees.mentionUsers(userIds: ["<john-user-id>", "<alice-user-id>"])
-    // Finally we pass (1) (2) and (3) to create a comment with mention.
-    
-    let createOptions = AmityCommentCreateOptions(referenceId: "post-id", referenceType: .post, text: text, parentId: nil, metadata: metadata, mentioneeBuilder: mentionees)
-    commentRepository.createComment(with: createOptions) { comment, error in
-        // Comment
-    }
-}
-```
-
-```kotlin Android
-fun createCommentWithMention(
-    commentRepository: AmityCommentRepository,
-    postId: String,
-) {
-    val userId = "userId"
-    val startMentionIndex = 0
-    val mentionLength = 6
-    //create AmityMentionMetadata from userId, startIndex and length
-    val mentionMetadata: AmityMentionMetadata =
-        AmityMentionMetadata.USER(
-            userId = userId,
-            index = startMentionIndex,
-            length = mentionLength
-        )
-    //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-    val mentionMetadataCreator: JsonObject =
-        AmityMentionMetadataCreator(mentionMetaData = listOf(mentionMetadata)).create()
-    //create a comment with mention
-    commentRepository.createComment()
-        .post(postId) // or .content(contentId) for content type posts 9 .contentId(contentId)
-        .with()
-        .text("@userId Hello world!")
-        //mentionUsers to trigger push notifications
-        .mentionUsers(userIds = listOf(userId))
-        //metadata to render mention highlights
-        .metadata(mentionMetadataCreator)
-        .build()
-        .send()
-        .doOnSuccess { comment: AmityComment ->
-            //success
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { CommentRepository } from '@amityco/ts-sdk';
-
-async function createMentionComment(): Promise<Amity.Comment> {
-  const newMentionComment = {
-    data: {
-      text: 'hello @userId1!',
-    },
-    referenceId: 'postId',
-    referenceType: 'post' as Amity.CommentReferenceType,
-    mentionees: [{ type: 'user', userIds: ['userId1'] }] as Amity.UserMention[],
-  };
-
-  const { data: comment } = await CommentRepository.createComment(newMentionComment);
-
-  return comment;
-}
-```
-
-```dart Flutter
-//current parent comment collection
-final _amityComments = <AmityComment>[];
-
-//create comment to a post
-void createComment(String postId) {
-  const userId = 'userAId';
-  const startMentionIndex = 0;
-  const mentionLength = 6;
-  //create AmityMentionMetadata from userId, startIndex and length
-  final mentionMetadata = AmityUserMentionMetadata(
-      userId: userId, index: startMentionIndex, length: mentionLength);
-  //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-  final mentionMetadataCreator =
-      AmityMentionMetadataCreator([mentionMetadata]).create();
-
-  AmitySocialClient.newCommentRepository()
-      .createComment()
-      .post(postId)
-      .create()
-      .text('Comment from Brian!')
-      //mentionUsers to trigger push notifications
-      .mentionUsers([userId])
-      //metadata to render mention highlights
-      .metadata(mentionMetadataCreator)
-      .send()
-      .then((AmityComment comment) => {
-            //handle result
-            //optional: to present the created comment in to the current replied comment collection
-            //you will need manually put the newly created comment in to the collection
-            //for example :
-            _amityComments.add(comment)
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-</CodeGroup>
-
-### Parsing and Displaying Mentions
-
-As we mentioned we provided the flexibility for you to define your own mention object data structure to represent mentions. You can use the default data structure provided by the SDK to render mentions in your application, which can be accessed through the helper class. This allows you to easily retrieve mentions and render them. The mentionable model contains properties related to the mentioned feature:
-
-- `mentionUsers` - The AmityUser object array contains details about users mentioned in the current content.
-
-- `metadata` - a free-form JSON object that can accommodate any information regarding the mentioned users. Our predefined structure for representing mentions is also in the metadata property.
-
-Below is an example to render mentions in a comment by using our default mention data structure:
-
-<CodeGroup>
-```swift iOS
-import AmitySDK
-
-func createCommentWithMentionExample() {
-    // 1. We will create a comment containing this text.
-    let text = "Hi @john and @alice."
-    // To add mention to a comment, we need extra steps.
-    // In this example, we want to mention two users "john" and "alice".
-    //
-    // 2. We create metadata that contains mention object, via AmityMentionMapper helper class.
-    //
-    // Notice how `index` and `length` is set.
-    let metadata = AmityMentionMapper.metadata(from: [
-        AmityMention(type: .user, index: 3, length: 4, userId: "<john-user-id>"),
-        AmityMention(type: .user, index: 13, length: 5, userId: "<alice-user-id>")
-    ])
-    // 3. We create mentionees.
-    let mentionees = AmityMentioneesBuilder()
-    mentionees.mentionUsers(userIds: ["<john-user-id>", "<alice-user-id>"])
-    // Finally we pass (1) (2) and (3) to create a comment with mention.
-    
-    let createOptions = AmityCommentCreateOptions(referenceId: "post-id", referenceType: .post, text: text, parentId: nil, metadata: metadata, mentioneeBuilder: mentionees)
-    commentRepository.createComment(with: createOptions) { comment, error in
-        // Comment
-    }
-}
-```
-
-```kotlin Android
-fun createCommentWithMention(
-    commentRepository: AmityCommentRepository,
-    postId: String,
-) {
-    val userId = "userId"
-    val startMentionIndex = 0
-    val mentionLength = 6
-    //create AmityMentionMetadata from userId, startIndex and length
-    val mentionMetadata: AmityMentionMetadata =
-        AmityMentionMetadata.USER(
-            userId = userId,
-            index = startMentionIndex,
-            length = mentionLength
-        )
-    //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-    val mentionMetadataCreator: JsonObject =
-        AmityMentionMetadataCreator(mentionMetaData = listOf(mentionMetadata)).create()
-    //create a comment with mention
-    commentRepository.createComment()
-        .post(postId) // or .content(contentId) for content type posts 9 .contentId(contentId)
-        .with()
-        .text("@userId Hello world!")
-        //mentionUsers to trigger push notifications
-        .mentionUsers(userIds = listOf(userId))
-        //metadata to render mention highlights
-        .metadata(mentionMetadataCreator)
-        .build()
-        .send()
-        .doOnSuccess { comment: AmityComment ->
-            //success
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { CommentRepository } from '@amityco/ts-sdk';
-
-async function createMentionComment(): Promise<Amity.Comment> {
-  const newMentionComment = {
-    data: {
-      text: 'hello @userId1!',
-    },
-    referenceId: 'postId',
-    referenceType: 'post' as Amity.CommentReferenceType,
-    mentionees: [{ type: 'user', userIds: ['userId1'] }] as Amity.UserMention[],
-  };
-
-  const { data: comment } = await CommentRepository.createComment(newMentionComment);
-
-  return comment;
-}
-```
-
-```dart Flutter
-//current parent comment collection
-final _amityComments = <AmityComment>[];
-
-//create comment to a post
-void createComment(String postId) {
-  const userId = 'userAId';
-  const startMentionIndex = 0;
-  const mentionLength = 6;
-  //create AmityMentionMetadata from userId, startIndex and length
-  final mentionMetadata = AmityUserMentionMetadata(
-      userId: userId, index: startMentionIndex, length: mentionLength);
-  //construct AmityMentionMetadata to JsonObject using AmityMentionMetadataCreator
-  final mentionMetadataCreator =
-      AmityMentionMetadataCreator([mentionMetadata]).create();
-
-  AmitySocialClient.newCommentRepository()
-      .createComment()
-      .post(postId)
-      .create()
-      .text('Comment from Brian!')
-      //mentionUsers to trigger push notifications
-      .mentionUsers([userId])
-      //metadata to render mention highlights
-      .metadata(mentionMetadataCreator)
-      .send()
-      .then((AmityComment comment) => {
-            //handle result
-            //optional: to present the created comment in to the current replied comment collection
-            //you will need manually put the newly created comment in to the collection
-            //for example :
-            _amityComments.add(comment)
-          })
-      .onError((error, stackTrace) => {
-            //handle error
-          });
-}
-```
-</CodeGroup>
-
-
-
-## Best Practices
-
-<CardGroup cols={2}>
-  <Card title="Do's" icon="check">
-    <AccordionGroup>
-      <Accordion title="Validation & Data Integrity" icon="shield-check">
-        - **Validate mention data** before submitting content
-        - **Verify user IDs exist** before creating mentions
-        - **Check text positions** match mention metadata
-        - **Sanitize user input** to prevent mention abuse
-      </Accordion>
-      
-      <Accordion title="User Experience" icon="user">
-        - **Provide visual feedback** for mentions in UI
-        - **Make mentions clickable** for better navigation
-        - **Show autocomplete suggestions** during typing
-        - **Handle mention notifications** appropriately
-      </Accordion>
-      
-      <Accordion title="Performance" icon="gauge-high">
-        - **Cache user data** for mention suggestions
-        - **Debounce search queries** for better performance
-        - **Limit suggestion results** to reasonable numbers
-        - **Index mention text** for fast searching
-      </Accordion>
-    </AccordionGroup>
-  </Card>
-  
-  <Card title="Don'ts" icon="xmark">
-    <AccordionGroup>
-      <Accordion title="Spam Prevention" icon="ban">
-        - **Don't mention users excessively** - respect user attention
-        - **Don't allow mention spam** - implement rate limiting
-        - **Don't mention in irrelevant contexts** - keep mentions contextual
-        - **Don't ignore user preferences** - respect notification settings
-      </Accordion>
-      
-      <Accordion title="Security & Privacy" icon="lock">
-        - **Don't expose private information** in mention metadata
-        - **Don't allow mentions of blocked users** - check relationships
-        - **Don't mention without permission** in private channels
-        - **Don't store sensitive data** in mention metadata
-      </Accordion>
-      
-      <Accordion title="Technical Issues" icon="triangle-exclamation">
-        - **Don't forget mention click handlers** in your UI
-        - **Don't ignore mention parsing errors** - handle gracefully
-        - **Don't hard-code mention styling** - make it customizable
-        - **Don't skip mention validation** - always verify data
-      </Accordion>
-    </AccordionGroup>
-  </Card>
-</CardGroup>
-
-## Troubleshooting
-
-<AccordionGroup>
-<Accordion title="Mentions not triggering notifications" icon="bell-slash">
-**Common causes:**
-- Missing `mentionUsers` array in the parameter
-- Invalid user IDs in the mention list
-- User has disabled mention notifications
-- Network connectivity issues
-
-</Accordion>
-
-<Accordion title="Mention highlighting not working" icon="highlighter">
-**Common causes:**
-- Incorrect mention positions in metadata
-- Missing mention parsing in UI components
-- CSS styling issues
-- Metadata not matching actual text
-
-</Accordion>
-
-<Accordion title="Performance issues with mention input" icon="clock">
-**Common causes:**
-- No debouncing on search queries
-- Loading too many user suggestions
-- Inefficient mention parsing
-- Memory leaks in component state
-
-**Solutions:**
-```typescript
-// Implement debounced search
-import { debounce } from 'lodash';
-
-const debouncedSearch = debounce((query: string) => {
-  searchUsers(query).then(setSuggestions);
-}, 300);
-
-// Limit results
-const limitedSuggestions = suggestions.slice(0, 10);
-```
-</Accordion>
-
-<Accordion title="Mention data inconsistency" icon="triangle-exclamation">
-**Common causes:**
-- Text modifications after mention creation
-- Incorrect index calculations
-- Unicode character handling issues
-- Concurrent text editing
-
-**Solutions:**
-```typescript
-// Always validate before submission
-const validateMentionData = (text: string, mentions: AmityMention[]) => {
-  for (const mention of mentions) {
-    const start = mention.index;
-    const end = start + mention.length + 1;
-    const mentionText = text.substring(start, end);
-    
-    if (!mentionText.startsWith('@')) {
-      throw new Error(`Invalid mention at position ${start}`);
-    }
-  }
-  return true;
-};
-```
-</Accordion>
-</AccordionGroup>
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Posts" icon="pen-to-square" href="/social-plus-sdk/core-concepts/content-handling/mentions">
-    Learn about mentions in posts
-  </Card>
-  
-  <Card title="Comments" icon="comment" href="/social-plus-sdk/core-concepts/content-handling/mentions">
-    Implement mentions in comments
-  </Card>
-  
-  <Card title="Messages" icon="message" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message">
-    Add mentions to chat messages
-  </Card>
-  
-  <Card title="Push Notifications" icon="bell" href="/social-plus-sdk/core-concepts/realtime-communication/push-notifications">
-    Set up mention notifications
+  <Card title="Send A Message" icon="message-circle" href="/social-plus-sdk/chat/messaging-features/message-creation/send-a-message">
+    Use user and channel mentions in chat messages
   </Card>
 </CardGroup>

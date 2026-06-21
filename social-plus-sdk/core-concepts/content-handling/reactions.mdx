@@ -1,333 +1,170 @@
 ---
 title: "Reactions"
-description: "Manage user reactions on posts, stories, and comments with querying, adding, and removing functionality"
+description: "Query, add, and remove reactions on posts, comments, stories, and messages with the Social+ SDKs."
 ---
 
-import AddReaction from '/snippets/social/reactions/add-reaction.mdx';
-import RemoveReaction from '/snippets/social/reactions/remove-reaction.mdx';
+Reactions let signed-in users attach a named reaction such as `like` to content. The SDKs expose the same core shape on every platform: choose a reference type, pass the content ID, and pass the reaction name.
 
+## Platform Surface
 
-Use `ReactionRepository` to query, add, and remove reactions on posts, stories, comments, and messages. Each reaction records the user, timestamp, reaction name, and any associated metadata.
+| Platform | Query reactions | Add reaction | Remove reaction |
+| --- | --- | --- | --- |
+| TypeScript | `ReactionRepository.getReactions()` | `ReactionRepository.addReaction()` | `ReactionRepository.removeReaction()` |
+| iOS | `AmityReactionRepository.getReactions()` | `AmityReactionRepository.addReaction()` | `AmityReactionRepository.removeReaction()` |
+| Android | `AmityCoreClient.newReactionRepository().getReactions()` | `addReaction()` | `removeReaction()` |
+| Flutter | `AmitySocialClient.newReactionRepository().getReactions()` | `addReaction()` | `removeReaction()` |
 
-<CardGroup cols={3}>
-  <Card title="Query Reactions" icon="magnifying-glass">
-    Retrieve detailed information about reactions on posts, stories, and comments
-  </Card>
-  <Card title="Add Reactions" icon="heart">
-    Allow users to express emotions with custom reaction names
-  </Card>
-  <Card title="Remove Reactions" icon="heart-crack">
-    Enable users to change or remove their reactions
-  </Card>
-</CardGroup>
+## Parameters
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `referenceType` | Yes | Content type being reacted to. Supported values are post, comment, story, and message. |
+| `referenceId` | Yes | ID of the post, comment, story, or message. |
+| `reactionName` | Yes for add/remove, optional for query | Reaction key such as `like`. Query APIs can use it as a filter. |
+| `callback` / live collection observer | Query only | Used by live collection APIs to receive reaction updates. |
 
 ## Query Reactions
 
-To further facilitate the management of reactions in your app, the social.plus SDK includes a `getReactions` method that allows you to retrieve information about a specific reaction or all reactions on a comment, post, or story.
-
-Using this method, you can fetch detailed information about:
-
-<AccordionGroup>
-  <Accordion title="Reaction Details">
-    - **User Information**: The user who made the reaction
-    - **Timestamp**: When the reaction was created
-    - **Metadata**: Any additional data associated with the reaction
-    - **Reaction Type**: The specific reaction name or emoji used
-  </Accordion>
-  
-  <Accordion title="Analytics Benefits">
-    - **Community Sentiment**: Analyze overall reaction patterns
-    - **Content Performance**: Identify types of content that resonate with users
-    - **User Engagement**: Track how users interact with different content
-    - **Trending Reactions**: Discover popular reaction types in your community
-  </Accordion>
-</AccordionGroup>
-
-### Reference Types
-
-The `referenceType` parameter determines the type of reference for which reactions are queried. Supported values are:
-
-| Reference Type | Description |
-|----------------|-------------|
-| `post` | Retrieves reactions for a post |
-| `story` | Retrieves reactions for a story |
-| `comment` | Retrieves reactions for a comment |
-| `message` | Retrieves reactions to a message |
-
-
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content being queried for reactions |
-| `reactionName` | String | No | Filter by specific reaction type (case-sensitive) |
+Use `reactionName` when the UI only needs one reaction type. Omit it to read all reaction types for the content.
 
 <CodeGroup>
+
+```typescript TypeScript
+import { ReactionRepository } from "@amityco/ts-sdk";
+
+const unsubscribe = ReactionRepository.getReactions(
+  {
+    referenceType: "post",
+    referenceId: postId,
+    reactionName: "like",
+  },
+  ({ data }) => {
+    renderResults(data);
+  }
+);
+```
+
 ```swift iOS
-var token: AmityNotificationToken?
-
-// Query all reactions for a post
-token = reactionRepository.getReactions(
-    "<post-id>",
-    referenceType: .post,
-    reactionName: nil
-).observe { liveCollection, changes, error in
-    // Handle result here
-    guard let reactions = liveCollection.object else { return }
-    
-    for reaction in reactions {
-        print("User: \(reaction.userId)")
-        print("Reaction: \(reaction.reactionName)")
-        print("Created: \(reaction.createdAt)")
-    }
-}
-
-// Query specific reaction type
-token = reactionRepository.getReactions(
-    "<post-id>",
+let reactionRepository = AmityReactionRepository()
+let reactions = reactionRepository.getReactions(
+    postId,
     referenceType: .post,
     reactionName: "like"
-).observe { liveCollection, changes, error in
-    // Handle filtered results
+)
+
+token = reactions.observe { collection, error in
+    guard error == nil else { return }
+    let currentReactions = collection.snapshots
+    showSuccessMessage(currentReactions.count)
 }
 ```
 
 ```kotlin Android
-fun queryReactionOnPost(
-    reactionRepository: AmityReactionRepository,
-    post: AmityPost
-) {
-    reactionRepository
-        .getReactions(AmityReactionReference.POST(postId = post.getPostId()))
-        .reactionName(reactionName = "like") // filter by reactionName
-        .build()
-        .query()
-        .doOnNext { reactions: PagingData<AmityReaction> ->
-            // PagingData<AmityReaction>
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
-```
+import com.amity.socialcloud.sdk.model.core.reaction.AmityReactionReferenceType
 
-```typescript TypeScript
-import { ReactionRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-/*
- * Possible params for ReactionRepository.getReactions:
- * referenceId: 'messageId' | 'postId' | 'commentId';
- * referenceType: 'message' | 'post' | 'comment';
- * reactionName?: 'name';
- * limit?: number;
- */
-
-type LiveReactionsType = {
-  referenceId: string;
-  referenceType: 'message' | 'post' | 'comment';
-};
-
-const LiveReactions: FC<LiveReactionsType> = ({ referenceId, referenceType }) => {
-  const [data, setReactions] = useState<Amity.LiveCollection<Amity.Reactor>>();
-  const { data: reactions = [], onNextPage, hasNextPage, loading, error } = data ?? {};
-
-  useEffect(
-    () => ReactionRepository.getReactions({ referenceId, referenceType }, setReactions),
-    [referenceId, referenceType],
-  );
-
-  return null;
-};
+AmityCoreClient.newReactionRepository()
+    .getReactions(
+        referenceType = AmityReactionReferenceType.POST,
+        referenceId = postId,
+        reactionName = "like"
+    )
+    .subscribe(
+        { reactions -> showSuccessMessage(reactions) },
+        { error -> handleGeneralError(error) }
+    )
 ```
 
 ```dart Flutter
-  late ReactionLiveCollection reactionLiveCollection;
-  List<AmityReaction> amityReactions = [];
-  final scrollController = ScrollController();
-
-  void getReactions() {
-    // For Posts
-    final reactionReference = AmityPostReactionReference(referenceId: postId);
-
-    // For Comments
-    final reactionReference = AmityCommentReactionReference(referenceId: commentId);
-
-    // For Messages
-    final reactionReference = AmityMessageReactionReference(referenceId: messageId);
-
-    // For Stories
-    final reactionReference = AmityStoryReactionReference(referenceId: storyId);
-
-    // Initialize reaction live collection
-    reactionLiveCollection = AmitySocialClient.newReactionRepository()
-        .getReactions(reactionReference)
-        // Optional: filter by specific reaction name, e.g., "like"
-        .reactionName('like')
-        .getLiveCollection();
-
-    // Listen to data changes from live collection
-    reactionLiveCollection.getStreamController().stream.listen((event) {
-      // Update latest results here
-      amityReactions = event;
-    }, onError: (error) {
-      //handle error
-    });
-
-    // Load first page
-    reactionLiveCollection.loadNext();
-
-    // Add pagination listener when scrolling to top/bottom
-    scrollController.addListener(paginationListener);
-  }
+final reactions = AmitySocialClient.newReactionRepository()
+    .getReactions(AmityPostReactionReference(referenceId: postId))
+    .reactionName('like')
+    .getLiveCollection();
 ```
 
 </CodeGroup>
 
+## Add And Remove Reactions
 
-## Add / Remove Reactions
+Adding or removing a reaction returns completion or success from the SDK call. Keep UI counts synced from the content model or the reaction live collection.
 
-The social.plus SDK provides comprehensive functionality for adding and removing reactions on posts. Users can add multiple reactions to express themselves more expressively and remove reactions for greater control over their engagement.
+<CodeGroup>
 
-### Add Reaction
+```typescript TypeScript
+import { ReactionRepository } from "@amityco/ts-sdk";
 
-The `addReaction` function allows users to add a reaction to a post, comment, story, or message. Users can add any number of reactions to a particular piece of content, enabling more nuanced and expressive engagement.
+await ReactionRepository.addReaction("post", postId, "like");
+await ReactionRepository.removeReaction("post", postId, "like");
+```
 
-#### Key Features
+```swift iOS
+let reactionRepository = AmityReactionRepository()
 
-<AccordionGroup>
-  <Accordion title="Reaction Naming">
-    - **Maximum Length**: 100 characters per reaction name
-    - **Case Sensitivity**: "like" and "Like" are treated as different reactions
-    - **Custom Names**: Support for any custom reaction name or emoji
-    - **Unicode Support**: Full support for emoji and international characters
-  </Accordion>
-  
-  <Accordion title="Reference Types">
-    - **Post**: Adds the reaction to a post
-    - **Story**: Adds the reaction to a story
-    - **Comment**: Adds the reaction to a comment
-    - **Message**: Adds the reaction to a message
-  </Accordion>
-</AccordionGroup>
+try await reactionRepository.addReaction(
+    "like",
+    referenceId: postId,
+    referenceType: .post
+)
 
-#### Parameters
+try await reactionRepository.removeReaction(
+    "like",
+    referenceId: postId,
+    referenceType: .post
+)
+```
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `reactionName` | String | Yes | Name of the reaction (max 100 characters, case-sensitive) |
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content receiving the reaction |
+```kotlin Android
+import com.amity.socialcloud.sdk.model.core.reaction.AmityReactionReferenceType
 
-<AddReaction />
+val reactionRepository = AmityCoreClient.newReactionRepository()
 
-### Remove Reaction
+reactionRepository.addReaction(
+    referenceType = AmityReactionReferenceType.POST,
+    referenceId = postId,
+    reactionName = "like"
+)
+    .subscribe(
+        { showSuccessMessage("Reaction added") },
+        { error -> handleGeneralError(error) }
+    )
 
-The `removeReaction` function allows users to remove a previously added reaction from a reference. This provides users with greater control over their engagement and allows them to change their minds or update their reactions over time.
+reactionRepository.removeReaction(
+    referenceType = AmityReactionReferenceType.POST,
+    referenceId = postId,
+    reactionName = "like"
+)
+    .subscribe(
+        { showSuccessMessage("Reaction removed") },
+        { error -> handleGeneralError(error) }
+    )
+```
 
-#### Parameters
+```dart Flutter
+final reactionRepository = AmitySocialClient.newReactionRepository();
+final reference = AmityPostReactionReference(referenceId: postId);
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `reactionName` | String | Yes | Name of the reaction to remove (case-sensitive) |
-| `referenceId` | String | Yes | ID of the post, comment, story, or message |
-| `referenceType` | Enum | Yes | Type of content where the reaction will be removed |
+await reactionRepository.addReaction(reference, 'like');
+await reactionRepository.removeReaction(reference, 'like');
+```
 
-<Warning>
-**Case Sensitivity**: Reaction names are case sensitive. "like" and "Like" are treated as two different reactions, so ensure exact matching when removing reactions.
-</Warning>
+</CodeGroup>
 
-<RemoveReaction />
+## Notes
 
-## Common Reaction Types
-
-<AccordionGroup>
-  <Accordion title="Standard Reactions">
-    - **like**: Basic positive reaction
-    - **love**: Strong positive emotion
-    - **laugh**: Humorous content appreciation
-    - **wow**: Surprise or amazement
-    - **sad**: Empathetic response
-    - **angry**: Strong negative reaction
-  </Accordion>
-  
-  <Accordion title="Emoji Reactions">
-    - **👍**: Thumbs up
-    - **❤️**: Heart/love
-    - **😂**: Laughing face
-    - **😮**: Surprised face
-    - **😢**: Sad face
-    - **😡**: Angry face
-  </Accordion>
-  
-  <Accordion title="Custom Community Reactions">
-    - **awesome**: Community-specific positive reaction
-    - **helpful**: For educational or informative content
-    - **inspiring**: For motivational content
-    - **fire**: For trending or popular content
-    - **mind-blown**: For surprising or impressive content
-  </Accordion>
-</AccordionGroup>
-
-## Best Practices
-
-<AccordionGroup>
-  <Accordion title="Reaction Design">
-    - **Consistent Naming**: Use standardized reaction names across your app
-    - **User-Friendly**: Choose intuitive reaction names that users understand
-    - **Cultural Sensitivity**: Consider cultural differences in emoji and reaction meanings
-    - **Moderation**: Implement guidelines for appropriate reaction usage
-  </Accordion>
-  
-  <Accordion title="Performance Optimization">
-    - **Debouncing**: Prevent rapid add/remove cycles that could spam the system
-    - **Batch Operations**: Group multiple reaction operations when possible
-    - **Error Handling**: Implement robust error handling for network issues
-  </Accordion>
-  
-  <Accordion title="User Experience">
-    - **Visual Feedback**: Provide immediate visual feedback when reactions are added/removed
-    - **Reaction Counts**: Display reaction counts and types clearly
-    - **User Lists**: Show who reacted with what reaction types
-  </Accordion>
-</AccordionGroup>
-
-## Use Cases
-
-<CardGroup cols={3}>
-  <Card title="Social Feeds" icon="list">
-    Enable reactions on posts in social media feeds
-  </Card>
-  <Card title="Content Moderation" icon="shield-check">
-    Use reaction patterns to identify popular or problematic content
-  </Card>
-  <Card title="Community Engagement" icon="users">
-    Foster community interaction through expressive reactions
-  </Card>
-  <Card title="Content Analytics" icon="chart-line">
-    Analyze user sentiment and content performance
-  </Card>
-  <Card title="Gamification" icon="trophy">
-    Use reactions as part of engagement and reward systems
-  </Card>
-  <Card title="Feedback Loops" icon="arrow-path">
-    Gather user feedback on different types of content
-  </Card>
-</CardGroup>
+- TypeScript accepts `post`, `comment`, `story`, and `message` as reaction reference types.
+- iOS, Android, and Flutter expose equivalent enum or reference classes for post, comment, story, and message.
+- Message reactions use the message reaction path in the SDKs. Do not use post or comment reference types for messages.
+- Reaction names are application-defined strings. Use the same values when adding, removing, and filtering.
 
 ## Related Topics
 
 <CardGroup cols={3}>
-  <Card title="User Mentions" href="/social-plus-sdk/core-concepts/content-handling/mentions" icon="at">
-    Tag users in posts and comments
+  <Card title="Comments" icon="message-square" href="/social-plus-sdk/social/content-management/comments/overview">
+    React to comments and keep comment threads interactive
   </Card>
-  <Card title="Content Handling" href="/social-plus-sdk/core-concepts/content-handling/files-images-and-videos/file" icon="object-group">
-    Manage files, images, and videos for rich reactions context
+  <Card title="Stories" icon="images" href="/social-plus-sdk/social/content-management/stories/overview">
+    Use the same reaction concept with story content
   </Card>
-  <Card title="Post Analytics" href="/social-plus-sdk/social/content-management/posts/analytics/post-impressions" icon="chart-bar">
-    Analyze reaction patterns and engagement metrics
+  <Card title="Messages" icon="message-circle" href="/social-plus-sdk/chat/messaging-features/messages/get-and-view-a-message">
+    Add and remove reactions on chat messages
   </Card>
 </CardGroup>
