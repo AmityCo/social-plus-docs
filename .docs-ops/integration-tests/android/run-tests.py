@@ -118,6 +118,8 @@ def build_classpath():
     amity_sdk = AMITY_SDK_ROOT / "amity-sdk/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
     amity_rxbridge = AMITY_SDK_ROOT / "amity-rxbridge/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
     amity_log = AMITY_SDK_ROOT / "amity-log/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
+    core_push = AMITY_SDK_ROOT / "core-push/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
+    amity_push_fcm = AMITY_SDK_ROOT / "amity-push-fcm/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
     android_jar = Path("/Users/admin/Library/Android/sdk/platforms/android-34/android.jar")
 
     missing = []
@@ -133,6 +135,8 @@ def build_classpath():
         (amity_sdk, "amity-sdk"),
         (amity_rxbridge, "amity-rxbridge"),
         (amity_log, "amity-log"),
+        (core_push, "core-push"),
+        (amity_push_fcm, "amity-push-fcm"),
         (android_jar, "android.jar"),
     ]:
         if jar is None or not Path(jar).exists():
@@ -141,7 +145,7 @@ def build_classpath():
         raise FileNotFoundError(f"Missing required JARs: {missing}")
 
     compile_cp = ":".join(str(j) for j in [
-        amity_sdk, amity_rxbridge, amity_log, rxjava3, rxjava2, kotlin_stdlib, android_jar, annotations,
+        amity_sdk, amity_rxbridge, amity_log, core_push, amity_push_fcm, rxjava3, rxjava2, kotlin_stdlib, android_jar, annotations,
         rxandroid, reactive_streams, coroutines_core, paging_common, gson, joda_time,
     ])
     return compile_cp, kotlin_stdlib, annotations
