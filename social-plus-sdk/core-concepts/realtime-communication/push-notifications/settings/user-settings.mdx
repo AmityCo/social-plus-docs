@@ -1,188 +1,244 @@
 ---
 title: "User Notification Settings"
-description: "Configure global push notification preferences for individual users across all their devices"
+description: "Read and update account-wide push notification settings for the signed-in user."
 ---
 
-Manage user-level push notification preferences that apply across all devices logged in with the same user account. Users can control notifications for different feature modules like chat, social features, and live streams.
+User notification settings apply across the signed-in user's devices. Use this scope for global push preferences and module-level choices for chat, social, and video-streaming notifications.
 
-<Info>
-**Global Settings**: User notification settings are synchronized across all devices where the user is logged in, ensuring consistent notification preferences.
-</Info>
+## API Surface
 
-## Overview
+| Platform | Manager | Read | Enable | Disable all |
+| --- | --- | --- | --- | --- |
+| TypeScript | `Client.notifications().user()` | `getSettings()` | `enable(modules?)` | `disableAllNotifications()` |
+| iOS | `client.notificationManager` | `getSettings()` | `enable(for:)` | `disableAllNotifications()` |
+| Android | `AmityCoreClient.notifications().user()` | `getSettings()` | `enable(moduleModifiers?)` | `disableAllNotifications()` |
+| Flutter | `AmityCoreClient.notifications().user()` | `getSettings()` | `enable(eventModifiers)` | `disable()` |
 
-User notification settings provide granular control over which types of notifications users receive. Settings are organized by feature modules and persist across user sessions and devices.
+## Parameters
 
-### Supported Modules
+| Name | Platform | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `modules` | TypeScript | `Amity.UserNotificationModule[]` | No | Module-level settings to send with `enable`. |
+| `modules` | iOS | `[AmityUserNotificationModule]?` | No | Module-level settings passed to `enable(for:)`. |
+| `moduleModifiers` | Android | `List<AmityUserNotificationModule.MODIFIER>?` | No | Module modifiers passed to `enable`. |
+| `eventModifiers` | Flutter | `List<UserNotificationModifier>?` | Nullable | Module modifiers passed to `enable`. |
+| `roleFilter` | TypeScript, iOS, Android, Flutter | Role filter | No | Optional filter for receiving notifications only from matching sender roles. |
 
-- **`CHAT`** - Direct messages, channel messages, and mentions
-- **`SOCIAL`** - Posts, comments, reactions, and community activities  
-- **`LIVE_STREAM`** - Stream notifications, chat messages, and live events
+## Modules
 
-## Get Current Settings
+| Module value | TypeScript enum | iOS case | Android/Flutter modifier |
+| --- | --- | --- | --- |
+| `chat` | `CHAT` | `.chat` | `CHAT` / `Chat` |
+| `social` | `SOCIAL` | `.social` | `SOCIAL` / `Social` |
+| `video-streaming` | `VIDEO_STREAMING` | `.videoStreaming` | `VIDEO_STREAMING` / `VideoStreaming` |
 
-Retrieve the user's current notification preferences:
+## Get User Settings
 
 <CodeGroup>
 
-```swift iOS
-let userNotificationManager = client.notificationManager
+```typescript TypeScript
+import { Client, NotificationRolesFilterTypeEnum } from '@amityco/ts-sdk';
 
-// Get user notification settings
-do {
-    let notification = try await userNotificationManager.getSettings()
-    
-    // Notification top-level setting
-    print("user notification enabled: \(notification.isEnabled)")
-    
-    // Each module setting
-    for module in notification.modules {
-        switch module.moduleType {
-        case .chat:
-            print("- module chat enabled: \(module.isEnabled)")
-        case .social:
-            print("- module social enabled: \(module.isEnabled)")
-        case .videoStreaming:
-            print("- module videoStreaming enabled: \(module.isEnabled)")
-        @unknown default:
-            print("- module unknown enabled: \(module.isEnabled)")
-        }
+const settings = await Client.notifications()
+  .user()
+  .getSettings();
+
+const isEnabled = settings.isEnabled;
+
+settings.modules.forEach(module => {
+  const moduleName = module.moduleName;
+  const moduleEnabled = module.isEnabled;
+
+  if (module.rolesFilter?.type === NotificationRolesFilterTypeEnum.ONLY) {
+    const roleIds = module.rolesFilter.roleIds;
+    updateUI({ moduleName, moduleEnabled, roleIds });
+  }
+});
+```
+
+```swift iOS
+let notificationManager = client.notificationManager
+let settings = try await notificationManager.getSettings()
+
+let isEnabled = settings.isEnabled
+
+for module in settings.modules {
+    switch module.moduleType {
+    case .chat:
+        print("chat enabled: \(module.isEnabled)")
+    case .social:
+        print("social enabled: \(module.isEnabled)")
+    case .videoStreaming:
+        print("video streaming enabled: \(module.isEnabled)")
+    @unknown default:
+        print("unknown module enabled: \(module.isEnabled)")
     }
-} catch {
-    // Handle error here
-    print("Failed to get notification settings: \(error)")
 }
 ```
 
 ```kotlin Android
-fun getUserNotificationSettings() {
-    val notification: AmityUserNotification = AmityCoreClient.notifications().user()
-    notification.getSettings()
-        .doOnSuccess { notificationSettings ->
-            // is push notification enabled by the user
-            val isEnabled = notificationSettings.isEnabled()
+AmityCoreClient.notifications()
+    .user()
+    .getSettings()
+    .doOnSuccess { settings ->
+        val isEnabled = settings.isEnabled()
 
-            // which module is enabled or disabled by the user
-            notificationSettings.getModules()?.forEach { module ->
-                when (module) {
-                    is AmityUserNotificationModule.SOCIAL -> {
-                        // is push notification enabled on this module by the user
-                        val isEnabled = module.isEnabled()
-
-                        // can receive push from which roles in this module
-                        val filterByRoles: AmityRoles = when (val filter = module.getRolesFilter()) {
-                            is AmityRolesFilter.ONLY -> {
-                                filter.getRoles()
-                            }
-                            else -> {
-                                // empty list => receive push from everyone
-                                AmityRoles()
-                            }
-                        }
-                    }
-                    is AmityUserNotificationModule.CHAT -> {
-                        // is push notification enabled on this module by the user
-                        val isEnabled = module.isEnabled()
-                    }
-                    is AmityUserNotificationModule.VIDEO_STREAMING -> {
-                        // is push notification enabled on this module by the user
-                        val isEnabled = module.isEnabled()
-                    }
-                    else -> {}
+        settings.getModules()?.forEach { module ->
+            when (module) {
+                is AmityUserNotificationModule.CHAT -> {
+                    val moduleEnabled = module.isEnabled()
                 }
+                is AmityUserNotificationModule.SOCIAL -> {
+                    val moduleEnabled = module.isEnabled()
+                    val rolesFilter = module.getRolesFilter()
+                }
+                is AmityUserNotificationModule.VIDEO_STREAMING -> {
+                    val moduleEnabled = module.isEnabled()
+                }
+                else -> Unit
             }
         }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
+    }
+    .doOnError { error ->
+        // Handle error.
+    }
+    .subscribe()
+```
+
+```dart Flutter
+final settings = await AmityCoreClient
+    .notifications()
+    .user()
+    .getSettings();
+
+final isEnabled = settings.isEnabled;
+
+settings.events?.forEach((module) {
+  final moduleEnabled = module.isEnabled;
+  final rolesFilter = module.rolesFilter;
+});
 ```
 
 </CodeGroup>
 
-## Update Settings
-
-Modify notification preferences for specific modules:
+## Update User Settings
 
 <CodeGroup>
 
+```typescript TypeScript
+import {
+  Client,
+  NotificationRolesFilterTypeEnum,
+  UserNotificationModuleNameEnum,
+} from '@amityco/ts-sdk';
+
+await Client.notifications()
+  .user()
+  .enable([
+    {
+      moduleName: UserNotificationModuleNameEnum.CHAT,
+      isEnabled: true,
+    },
+    {
+      moduleName: UserNotificationModuleNameEnum.SOCIAL,
+      isEnabled: true,
+      rolesFilter: {
+        type: NotificationRolesFilterTypeEnum.ONLY,
+        roleIds: ['community-moderator'],
+      },
+    },
+    {
+      moduleName: UserNotificationModuleNameEnum.VIDEO_STREAMING,
+      isEnabled: false,
+    },
+  ]);
+
+await Client.notifications()
+  .user()
+  .disableAllNotifications();
+```
+
 ```swift iOS
-let userNotificationManager = client.notificationManager
+let notificationManager = client.notificationManager
 
-// Update settings for a particular module
-// In case you would like to disable/enable notification for particular modules,
-// Passing `AmityUserNotificationModule` instance that responsible for module settings.
-//
-// For example, to mute social notification.
-do {
-    let result = try await userNotificationManager.enable(for: [
-        AmityUserNotificationModule(moduleType: .social, isEnabled: false, roleFilter: nil)
-    ])
-} catch {
-    // Handle error here
-    print("Failed to update notification settings: \(error)")
-}
+try await notificationManager.enable(for: [
+    AmityUserNotificationModule(
+        moduleType: .chat,
+        isEnabled: true,
+        roleFilter: nil
+    ),
+    AmityUserNotificationModule(
+        moduleType: .social,
+        isEnabled: true,
+        roleFilter: AmityRoleFilter.onlyFilter(withRoleIds: ["community-moderator"])
+    ),
+    AmityUserNotificationModule(
+        moduleType: .videoStreaming,
+        isEnabled: false,
+        roleFilter: nil
+    ),
+])
 
-// Update notification top-level setting, to disable all notifications.
-do {
-    let result = try await userNotificationManager.disableAllNotifications()
-} catch {
-    // Handle error here
-    print("Failed to disable all notifications: \(error)")
-}
+try await notificationManager.disableAllNotifications()
 ```
 
 ```kotlin Android
-fun updateUserNotificationSettings() {
-    // Define which module to enable
-    val chatModuleModifier = AmityUserNotificationModule.CHAT.enable()
+val rolesFilter = AmityRolesFilter.ONLY(AmityRoles(listOf("community-moderator")))
 
-    // Receive push notification only from community-moderator in this module
-    val rolesFilter = AmityRolesFilter.ONLY(AmityRoles(listOf("community-moderator")))
-    val socialModuleModifier = AmityUserNotificationModule.SOCIAL.enable(rolesFilter)
+val chatModifier = AmityUserNotificationModule.CHAT.enable()
+val socialModifier = AmityUserNotificationModule.SOCIAL.enable(rolesFilter)
+val videoStreamingModifier = AmityUserNotificationModule.VIDEO_STREAMING.disable()
 
-    // Define which module to disable
-    val videoStreamingModuleModifier = AmityUserNotificationModule.VIDEO_STREAMING.disable()
+AmityCoreClient.notifications()
+    .user()
+    .enable(
+        moduleModifiers = listOf(
+            chatModifier,
+            socialModifier,
+            videoStreamingModifier
+        )
+    )
+    .doOnComplete {
+        // User notification settings updated.
+    }
+    .doOnError { error ->
+        // Handle error.
+    }
+    .subscribe()
 
-    AmityCoreClient.notifications()
-        .user()
-        .enable(moduleModifiers = listOf(
-            chatModuleModifier,
-            socialModuleModifier,
-            videoStreamingModuleModifier
-        ))
-        .doOnComplete {
-            // Void
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
+AmityCoreClient.notifications()
+    .user()
+    .disableAllNotifications()
+    .subscribe()
+```
 
-    // To disable all push notifications
-    AmityCoreClient.notifications()
-        .user()
-        .disableAllNotifications()
-        .doOnComplete {
-            // Complete
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
+```dart Flutter
+final rolesFilter = Only(AmityRoles(roles: ['community-moderator']));
+
+await AmityCoreClient
+    .notifications()
+    .user()
+    .enable([
+      Chat.enable(null),
+      Social.enable(rolesFilter),
+      VideoStreaming.disable(),
+    ]);
+
+await AmityCoreClient
+    .notifications()
+    .user()
+    .disable();
 ```
 
 </CodeGroup>
 
-## Next Steps
+## Related
 
 <CardGroup cols={2}>
   <Card title="Channel Settings" href="./channel-settings">
-    Configure notifications for specific channels
+    Configure push settings for a chat channel.
   </Card>
   <Card title="Community Settings" href="./community-settings">
-    Manage community-wide notification rules
+    Configure push settings for social community events.
   </Card>
 </CardGroup>

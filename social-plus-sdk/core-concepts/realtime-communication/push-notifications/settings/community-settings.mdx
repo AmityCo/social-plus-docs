@@ -1,160 +1,220 @@
 ---
 title: "Community Notification Settings"
-description: "Manage push notification preferences for communities and social features"
+description: "Read and update push notification settings for one community."
 ---
 
+Community notification settings control whether the signed-in user receives push notifications from one community. You can also pass event modifiers to enable or disable specific community notification events.
 
-Community settings control notifications for social features like posts, comments, reactions, and member activities within communities. These settings work alongside user and channel preferences.
+## API Surface
+
+| Platform | Manager | Read | Enable | Disable |
+| --- | --- | --- | --- | --- |
+| TypeScript | `Client.notifications().community(communityId)` | `getSettings()` | `enable(events?)` | `disable()` |
+| iOS | `communityRepository.notificationManager(forCommunityId:)` | `getSettings()` | `enable(events:)` | `disable()` |
+| Android | `AmityCoreClient.notifications().community(communityId)` | `getSettings()` | `enable(eventModifiers?)` | `disable()` |
+| Flutter | `AmityCoreClient.notifications().community(communityId)` | `getSettings()` | `enable(eventModifiers)` | `disable()` |
+
+## Parameters
+
+| Name | Platform | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `communityId` | TypeScript, iOS, Android, Flutter | `String` / `string` | Yes | ID of the community whose push setting should be read or updated. |
+| `events` | TypeScript, iOS | Community notification event list | No on TypeScript, yes on iOS | Event-level modifiers to send with `enable`. |
+| `eventModifiers` | Android, Flutter | Community notification modifier list | No on Android, nullable on Flutter | Event-level modifiers to send with `enable`. |
+| `roleFilter` | TypeScript, iOS, Android, Flutter | Role filter | No | Optional filter for receiving notifications only from matching sender roles. |
+
+## Community Events
+
+| Event value | TypeScript enum | iOS case | Android/Flutter modifier |
+| --- | --- | --- | --- |
+| `post.created` | `POST_CREATED` | `.postCreated` | `POST_CREATED` / `PostCreated` |
+| `post.reacted` | `POST_REACTED` | `.postReacted` | `POST_REACTED` / `PostReacted` |
+| `comment.created` | `COMMENT_CREATED` | `.commentCreated` | `COMMENT_CREATED` / `CommentCreated` |
+| `comment.replied` | `COMMENT_REPLIED` | `.commentReplied` | `COMMENT_REPLIED` / `CommentReplied` |
+| `comment.reacted` | `COMMENT_REACTED` | `.commentReacted` | `COMMENT_REACTED` / `CommentReacted` |
+| `story.created` | `STORY_CREATED` | `.storyCreated` | `STORY_CREATED` / `StoryCreated` |
+| `story.reacted` | `STORY_REACTED` | `.storyReacted` | `STORY_REACTED` / `StoryReacted` |
+| `story-comment.created` | `STORY_COMMENT_CREATED` | `.storyCommentCreated` | `STORY_COMMENT_CREATED` / `StoryCommentCreated` |
+| `video-streaming.didStart` | `LIVESTREAM_START` | `.livestreamStart` | `LIVESTREAM_START` |
 
 ## Get Community Settings
-Retrieve the user’s current notification preferences:
+
 <CodeGroup>
 
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const settings = await Client.notifications()
+  .community(communityId)
+  .getSettings();
+
+const isEnabled = settings.isEnabled;
+
+settings.events.forEach(event => {
+  const eventName = event.eventName;
+  const eventEnabled = event.isEnabled;
+  const networkEnabled = event.isNetworkEnabled;
+
+  updateUI({ eventName, eventEnabled, networkEnabled });
+});
+```
+
 ```swift iOS
+let notificationManager = communityRepository.notificationManager(forCommunityId: communityId)
+let settings = try await notificationManager.getSettings()
 
-let notificationManager = communityRepository.notificationManager(forCommunityId: "<community-id>")
+let isEnabled = settings.isEnabled
 
-// Get community notification settings
-do {
-    let notification = try await notificationManager.getSettings()
-    // Notification top-level setting
-    print("community notification enabled: \(notification.isEnabled)")
-    // Each module setting.
-    for event in notification.events {
-        print("- event '\(event.eventName)' enabled: \(event.isEnabled)")
-    }
-} catch {
-    print("error: \(error)")
+for event in settings.events {
+    print("- event \(event.eventName) enabled: \(event.isEnabled)")
 }
 ```
 
 ```kotlin Android
-fun getCommunityNotificationSettings(
-    community: AmityCommunity
-) {
-    AmityCoreClient.notifications()
-        .community(communityId = community.getCommunityId())
-        .getSettings()
-        .doOnSuccess { notificationSettings : AmityCommunityNotificationSettings ->
-            // is push notification enabled on this community by the user
-            val isEnabled = notificationSettings.isEnabled()
+AmityCoreClient.notifications()
+    .community(communityId)
+    .getSettings()
+    .doOnSuccess { settings: AmityCommunityNotificationSettings ->
+        val isEnabled = settings.isEnabled()
 
-            // which event is enabled or disabled on this community
-            notificationSettings.getNotificationEvents().forEach { notificationEvent ->
-                when (notificationEvent) {
-                    is AmityCommunityNotificationEvent.POST_REACTED -> {
-                        // is this event enabled on this community by the user
-                        val isEnabled = notificationEvent.isEnabled()
-
-                        // is this event enabled by admin => network level, config from admin console
-                        val isNetworkEnabled = notificationEvent.isNetworkEnabled()
-                    }
-                    else -> {}
+        settings.getNotificationEvents().forEach { event ->
+            when (event) {
+                is AmityCommunityNotificationEvent.POST_CREATED -> {
+                    val eventEnabled = event.isEnabled()
+                    val networkEnabled = event.isNetworkEnabled()
                 }
+                else -> Unit
             }
         }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
+    }
+    .doOnError { error ->
+        // Handle error.
+    }
+    .subscribe()
 ```
+
+```dart Flutter
+final settings = await AmityCoreClient
+    .notifications()
+    .community(communityId)
+    .getSettings();
+
+final isEnabled = settings.isEnabled;
+
+settings.events?.forEach((event) {
+  final eventEnabled = event.isEnabled;
+  final networkEnabled = event.isNetworkEnabled;
+});
+```
+
 </CodeGroup>
 
 ## Update Community Settings
-Modify notification preferences for a specific community:
+
 <CodeGroup>
 
+```typescript TypeScript
+import {
+  Client,
+  CommunityNotificationEventNameEnum,
+  NotificationRolesFilterTypeEnum,
+} from '@amityco/ts-sdk';
+
+await Client.notifications()
+  .community(communityId)
+  .enable([
+    {
+      eventName: CommunityNotificationEventNameEnum.POST_CREATED,
+      isEnabled: true,
+      rolesFilter: {
+        type: NotificationRolesFilterTypeEnum.ONLY,
+        roleIds: ['community-moderator'],
+      },
+    },
+    {
+      eventName: CommunityNotificationEventNameEnum.STORY_REACTED,
+      isEnabled: false,
+    },
+  ]);
+
+await Client.notifications()
+  .community(communityId)
+  .disable();
+```
+
 ```swift iOS
-let notificationManager = communityRepository.notificationManager(forCommunityId: "<community-id>")
+let notificationManager = communityRepository.notificationManager(forCommunityId: communityId)
 
-// Update community settings with enable status for particular modules
-do {
-    try await notificationManager.enable(events: [
-        AmityCommunityNotificationEvent(eventType: .postCreated, isEnabled: false, roleFilter: nil)
-    ])
-    // handler success
-} catch {
-    // handler error
-}
+try await notificationManager.enable(events: [
+    AmityCommunityNotificationEvent(
+        eventType: .postCreated,
+        isEnabled: true,
+        roleFilter: AmityRoleFilter.onlyFilter(withRoleIds: ["community-moderator"])
+    ),
+    AmityCommunityNotificationEvent(
+        eventType: .storyReacted,
+        isEnabled: false,
+        roleFilter: nil
+    ),
+])
 
-// update community settings with disable status
-do {
-    try await notificationManager.disable()
-    // Handle the result
-} catch {
-    // Handle error
-}
+try await notificationManager.disable()
 ```
 
 ```kotlin Android
-fun updateCommunityNotificationSettings(
-    community: AmityCommunity
-) {
-    // define which event to enable in this community
-    val postCreatedEventModifier = AmityCommunityNotificationEvent.POST_CREATED.enable()
-    val postReactedEventModifier = AmityCommunityNotificationEvent.POST_REACTED.enable()
-    val commentCreatedModifier = AmityCommunityNotificationEvent.COMMENT_CREATED.enable()
-    val commentReactedModifier = AmityCommunityNotificationEvent.COMMENT_REACTED.enable()
-    val commentRepliedModifier = AmityCommunityNotificationEvent.COMMENT_REPLIED.enable()
+val rolesFilter = AmityRolesFilter.ONLY(AmityRoles(listOf("community-moderator")))
 
-    // define which event to receive from specific roles in this community
-    val rolesFilter = AmityRolesFilter.ONLY(AmityRoles(listOf("community-moderator")))
-    val storyCreatedEventModifier = AmityCommunityNotificationEvent.STORY_CREATED.enable(rolesFilter)
+val postCreatedModifier = AmityCommunityNotificationEvent.POST_CREATED.enable(rolesFilter)
+val storyReactedModifier = AmityCommunityNotificationEvent.STORY_REACTED.disable()
 
-    // define event to disable in this community
-    val storyReactedEventModifier = AmityCommunityNotificationEvent.STORY_REACTED.disable()
-    val storyCommentCreatedEventModifier = AmityCommunityNotificationEvent.STORY_COMMENT_CREATED.disable()
-
-    AmityCoreClient.notifications()
-        .community(communityId = community.getCommunityId())
-        .enable(
-            eventModifiers = listOf(
-                postCreatedEventModifier,
-                postReactedEventModifier,
-                commentCreatedModifier,
-                commentReactedModifier,
-                commentRepliedModifier,
-                storyCreatedEventModifier,
-                storyReactedEventModifier,
-                storyCommentCreatedEventModifier
-            )
+AmityCoreClient.notifications()
+    .community(communityId)
+    .enable(
+        eventModifiers = listOf(
+            postCreatedModifier,
+            storyReactedModifier
         )
-        .doOnComplete {
-            // Complete
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
+    )
+    .doOnComplete {
+        // Community notification settings updated.
+    }
+    .doOnError { error ->
+        // Handle error.
+    }
+    .subscribe()
 
-    // To disable all notifications on this community
-    AmityCoreClient.notifications()
-        .community(communityId = community.getCommunityId())
-        .disable()
-        .doOnComplete {
-            // Complete
-        }
-        .doOnError {
-            // Exception
-        }
-        .subscribe()
-}
+AmityCoreClient.notifications()
+    .community(communityId)
+    .disable()
+    .subscribe()
 ```
+
+```dart Flutter
+final rolesFilter = Only(AmityRoles(roles: ['community-moderator']));
+
+await AmityCoreClient
+    .notifications()
+    .community(communityId)
+    .enable([
+      PostCreated.enable(rolesFilter),
+      StoryReacted.disable(),
+    ]);
+
+await AmityCoreClient
+    .notifications()
+    .community(communityId)
+    .disable();
+```
+
 </CodeGroup>
 
-## Settings Options
-
-- **Posts** - New posts in the community
-- **Comments** - Comments on posts
-- **Reactions** - Likes and reactions on content
-- **Replies** - Replies to posts or comments
+## Related
 
 <CardGroup cols={2}>
   <Card title="User Settings" href="./user-settings">
-    Global notification preferences
+    Configure account-wide push preferences and module modifiers.
   </Card>
   <Card title="Channel Settings" href="./channel-settings">
-    Per-channel notification control
+    Configure push settings for a chat channel.
   </Card>
 </CardGroup>
