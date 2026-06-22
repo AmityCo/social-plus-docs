@@ -22,9 +22,9 @@ Install the social.plus SDK and add social features to your app, whether you're 
     2. Navigate to **Settings** → **Integrations**
     3. Copy your API key from the **API Key** section
 
-      Keep your API key secure. Never expose it in client-side code in production.
+      Keep production API keys in environment or build configuration instead of hardcoding them in public source. Backend auth tokens and secrets must stay server-side.
     1. Install the SDK using the [platform-specific instructions](https://learn.social.plus/social-plus-sdk/getting-started/platform-setup/mobile/ios-quick-start)
-    2. Initialize the SDK with your API key and the [region](https://learn.social.plus/uikit/getting-started/authentication#regional-configuration) where your social.plus application was created (US, EU, or SG)
+    2. Initialize the SDK with your API key and the region where your social.plus application was created (US, EU, or SG)
 
 
 ```swift iOS
@@ -37,7 +37,7 @@ class ChatApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AmityCoreClient.setup(
-            apiKey = "apikey",
+            apiKey = "your-api-key",
             endpoint = AmityEndpoint.EU // optional param, defaulted as SG region
         )
     }
@@ -56,7 +56,7 @@ const client = Client.createClient('your-api-key', 'sg');
 void setup() async {
   await AmityCoreClient.setup(
       option: AmityCoreClientOption.create(
-        apiKey: 'apiKey',
+        apiKey: 'your-api-key',
         endpoint: AmityEndpoint.SG
       ),
       sycInitialization: true);
@@ -121,7 +121,7 @@ const handleConnect = async (userId: string, displayName: string) => {
    *    apiEndpoint?: { http?: 'http.endpoint', mqtt?: 'mqtt.endpoint'  }
    * }
    */
-  const client = Client.createClient('apiKey', 'apiRegion');
+  const client = Client.createClient('your-api-key', 'sg');
 
   await Client.login({ userId, displayName }, sessionHandler);
 };
@@ -193,7 +193,7 @@ social.plus uses a **dual authentication approach** to ensure both application s
     **Purpose**: Identifies your application to social.plus servers\
     **Scope**: Application-level authentication\
     **Usage**: Required for SDK initialization\
-    **Security**: Keep secure, never expose in client code
+    **Security**: Store in app configuration; do not hardcode in public source
     **Purpose**: Server-to-server verification that the user is validated by your backend\
     **Scope**: User-level authentication with your system\
     **Usage**: Optional for development, required for production\
@@ -947,7 +947,7 @@ app.post('/api/auth/social-plus-token', async (req, res) => {
     - **Don't store sensitive data** when user is not authenticated
     - **Don't make API calls** before reaching `established` state
     - **`Don't forget to handle the terminated state`** - users may be banned
-    - **Don't expose API keys** in client-side code
+    - **Don't hardcode production API keys** in public source or logs
     - **Don't use plain text storage** for auth tokens
 
 ## Troubleshooting
@@ -1025,7 +1025,7 @@ Visitor mode enables **anonymous public access** to your community, allowing use
 
     **Purpose**: Anonymous users who browse public content\
     **Access**: Read-only permissions enforced server-side\
-    **Tracking**: Identified by device fingerprinting\
+    **Tracking**: Identified by an SDK-generated device ID\
     **Use Case**: Public content discovery, growth funnel
 
     **Purpose**: Search engine crawlers and automated indexers\
@@ -1035,10 +1035,10 @@ Visitor mode enables **anonymous public access** to your community, allowing use
 
 ### How Visitor Mode Works
 
-Visitor mode uses **device fingerprinting** to identify anonymous users while maintaining privacy:
+Visitor mode uses an **SDK-generated device ID** to identify anonymous users while maintaining privacy:
 
-    Your app generates or retrieves a unique device fingerprint for the anonymous user
-    The SDK logs in the user as a visitor using the device fingerprint, with optional secure mode via authSignature
+    The SDK generates or retrieves a stable device ID for the anonymous user
+    The SDK logs in the user as a visitor using the device ID, with optional secure mode via authSignature
     social.plus server assigns the "Visitor" or "Bot" role based on the request (User-Agent for bots)
     Server-side permissions enforce read-only access, allowing content discovery without modification capabilities
 
@@ -1061,7 +1061,7 @@ sequenceDiagram
     App->>Device: Show Public Content
 ```
 
-  **Why Device Fingerprinting?** This approach allows tracking unique anonymous visitors for analytics while maintaining privacy. Visitors are restricted to read-only access, protecting community integrity.
+  **Why device IDs?** This approach lets social.plus distinguish anonymous visitor sessions without requiring a signed-in user account. Visitors are restricted to read-only access, protecting community integrity.
 
 ### User Type Comparison
 
@@ -1072,7 +1072,7 @@ Understanding the different user types helps you design the right access pattern
 // Full authenticated user with read/write access
 import { Client } from '@amityco/ts-sdk';
 
-const client = Client.createClient('apiKey', 'apiRegion');
+const client = Client.createClient('your-api-key', 'sg');
 
 // ... your app setup code
 
@@ -1598,7 +1598,7 @@ All visitor restrictions are enforced **server-side** - attempting restricted ac
 
 
 ```typescript Error Codes
-// Error codes for visitor/bot permission denial
+// TypeScript and Android server error codes for visitor/bot permission denial
 ServerError.VISITOR_PERMISSION_DENIED: 403999
 ServerError.BOT_PERMISSION_DENIED: 403998
 ```
@@ -1607,7 +1607,7 @@ ServerError.BOT_PERMISSION_DENIED: 403998
 try {
     await createPost({ text: 'Hello world' });
 } catch (error) {
-    if (error.message.includes('488999')) {
+    if (String(error).includes('403999')) {
         // Show visitor upgrade prompt
         showVisitorWarning('Create an account or sign in to post');
     }
@@ -1645,7 +1645,10 @@ if (userType === UserTypeEnum.VISITOR || userType === UserTypeEnum.BOT) {
 
 ```typescript
 // Push notification registration is blocked
-if (userType === AmityUserType.VISITOR || userType === AmityUserType.BOT) {
+import { Client, UserTypeEnum } from '@amityco/ts-sdk';
+
+const userType = Client.getCurrentUserType();
+if (userType === UserTypeEnum.VISITOR || userType === UserTypeEnum.BOT) {
     // registerPushNotification() throws error or no-ops
 }
 ```
@@ -1674,11 +1677,11 @@ Visitor and bot users share a **daily read request quota**. Once the quota is ex
 
 ### Error Code
 
-| Error Constant | Code | Trigger |
-| --- | --- | --- |
-| `VISITOR_USAGE_LIMIT_EXCEEDED` | `400323` | Visitor/bot has exhausted their daily read quota |
-| `VISITOR_PERMISSION_DENIED` | `403999` | Visitor attempted a write operation |
-| `BOT_PERMISSION_DENIED` | `403998` | Bot attempted a restricted operation |
+| Error Constant | TypeScript / Android Code | iOS Code | Trigger |
+| --- | --- | --- | --- |
+| `VISITOR_USAGE_LIMIT_EXCEEDED` | `400323` | `.visitorUsageLimitExceeded` / `400323` | Visitor/bot has exhausted their daily read quota |
+| `VISITOR_PERMISSION_DENIED` | `403999` | `.visitorPermissionDenied` / `488999` | Visitor attempted a restricted operation |
+| `BOT_PERMISSION_DENIED` | `403998` | `.botPermissionDenied` / `488998` | Bot attempted a restricted operation |
 
 ### SDK Event Subscription
 
@@ -1698,10 +1701,10 @@ AmityCoreClient.getVisitorUsageLimitEvents()
 
 
 ```typescript
-import { onVisitorUsageLimitReached } from '@amityco/ts-sdk';
+import { Client } from '@amityco/ts-sdk';
 
 // Subscribe to usage limit events after visitor login
-const unsubscribe = onVisitorUsageLimitReached(() => {
+const unsubscribe = Client.onVisitorUsageLimitReached(() => {
     // Navigate to sign-in or show custom error UI
     console.log('Visitor usage limit reached');
 });
@@ -1733,7 +1736,7 @@ To prevent accumulation of transient visitor data, social.plus automatically cle
     **What's Deleted**:
 
     - Guest user profile records
-    - Device fingerprint associations
+    - Visitor device ID associations
     - Session history
     - Any cached visitor data
 
@@ -1819,12 +1822,12 @@ await Client.loginAsVisitor({ sessionHandler }); // No auth signature
     - Supports automatic token renewal
     - Maintains audit trail of visitor sessions
 
-    **Privacy-First Approach:**
+    **Privacy-conscious approach:**
 
-    - Device IDs are anonymized
-    - No personal information collected
+    - Visitor device IDs are pseudonymous SDK identifiers
+    - Visitor mode does not require a signed-in user profile
     - Automatic cleanup of inactive visitors
-    - Compliant with GDPR/CCPA requirements
+    - Your app remains responsible for its own privacy notice and consent requirements
 
     **Best Practices:**
 
@@ -3426,7 +3429,7 @@ if (canMute) {
 
 ## Common Permission Constants
 
-Permission constants are not identical across every SDK. Use the enum or string constants exposed by your target SDK before passing a value to `hasPermission()`. Some Console/API permissions, such as community category or network notification settings, may not be available as typed client SDK permissions on every platform.
+Permission constants are not identical across every SDK. Use the enum or string constants exposed by your target SDK before passing a value to `hasPermission()`. Some Console/API permissions, such as community category, role management, or network notification settings, may not be available as typed client SDK permissions on every platform.
 
 ### Channel Permissions
 
@@ -3593,6 +3596,10 @@ Permission constants are not identical across every SDK. Use the enum or string 
 <td>Can delete all posts in community feed</td>
 </tr>
 <tr>
+<td><code>PIN_COMMUNITY_POST</code></td>
+<td>Can pin or unpin community feed posts where the target SDK exposes this permission</td>
+</tr>
+<tr>
 <td><code>EDIT_COMMUNITY_COMMENT</code></td>
 <td>Can edit all comments in community feed</td>
 </tr>
@@ -3605,8 +3612,51 @@ Permission constants are not identical across every SDK. Use the enum or string 
 <td>Can review community post</td>
 </tr>
 <tr>
+<td><code>CREATE_COMMUNITY_POST</code></td>
+<td>Can create community posts; exposed as a typed permission in the current iOS SDK source</td>
+</tr>
+<tr>
 <td><code>MANAGE_COMMUNITY_STORY</code></td>
 <td>Can create and delete community story</td>
+</tr>
+<tr>
+<td><code>CREATE_PRIVILEGED_POST</code></td>
+<td>Can create privileged community posts where the target SDK exposes this permission</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+### Event Permissions
+
+<div className="overflow-x-auto">
+<table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CREATE_EVENT</code></td>
+<td>Can create community events where event permissions are exposed by the target SDK</td>
+</tr>
+<tr>
+<td><code>DELETE_EVENT</code></td>
+<td>Can delete community events where event permissions are exposed by the target SDK</td>
+</tr>
+<tr>
+<td><code>UPDATE_EVENT</code></td>
+<td>Can update community events; exposed as a typed permission in the current iOS SDK source</td>
+</tr>
+<tr>
+<td><code>CREATE_EVENT_WITH_LIVESTREAM</code></td>
+<td>Can create events with livestream capability where exposed by the target SDK</td>
+</tr>
+<tr>
+<td><code>MANAGE_COMMUNITY_EVENTS</code></td>
+<td>Can manage community events where exposed by the target SDK</td>
 </tr>
 </tbody>
 </table>
@@ -3679,7 +3729,7 @@ Permission constants are not identical across every SDK. Use the enum or string 
 <tbody>
 <tr>
 <td><code>MANAGE_NOTIFICATION_NETWORK_SETTING</code></td>
-<td>Can manage notification settings</td>
+<td>Console/API permission for network notification settings; not exposed as a typed permission in the current SDK sources checked for this page</td>
 </tr>
 </tbody>
 </table>
@@ -3838,7 +3888,7 @@ const handleConnect = async (userId: string, displayName: string) => {
    *    apiEndpoint?: { http?: 'http.endpoint', mqtt?: 'mqtt.endpoint'  }
    * }
    */
-  const client = Client.createClient('apiKey', 'apiRegion');
+  const client = Client.createClient('your-api-key', 'sg');
 
   await Client.login({ userId, displayName }, sessionHandler);
 };
@@ -7984,6 +8034,9 @@ if (error is AmityException) {
 | Unauthorized session | `Amity.ServerError.UNAUTHORIZED` | `.unauthorized` | `AmityError.UNAUTHORIZED_ERROR` | `AmityError.UNAUTHORIZED_ERROR` |
 | Item not found | `Amity.ServerError.ITEM_NOT_FOUND` | `.itemNotFound` | `AmityError.ITEM_NOT_FOUND` | `AmityError.ITEM_NOT_FOUND` |
 | Permission denied | `Amity.ServerError.PERMISSION_DENIED` | `.permissionDenied` | `AmityError.PERMISSION_DENIED` | `AmityError.PERMISSION_DENIED` |
+| Visitor usage limit exceeded | `Amity.ServerError.VISITOR_USAGE_LIMIT_EXCEEDED` | `.visitorUsageLimitExceeded` | `AmityError.VISITOR_USAGE_LIMIT_EXCEEDED` | Not exposed as a public Flutter SDK enum in the current source |
+| Visitor permission denied | `Amity.ServerError.VISITOR_PERMISSION_DENIED` | `.visitorPermissionDenied` | `AmityError.VISITOR_PERMISSION_DENIED` | Not exposed as a public Flutter SDK enum in the current source |
+| Bot permission denied | `Amity.ServerError.BOT_PERMISSION_DENIED` | `.botPermissionDenied` | `AmityError.BOT_PERMISSION_DENIED` | Not exposed as a public Flutter SDK enum in the current source |
 | Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
 ## Production checklist
