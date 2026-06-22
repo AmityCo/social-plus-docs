@@ -23,6 +23,8 @@ This directory is the coordination surface between AI agents (Claude, Copilot CL
     score.schema.json        ← JSON schema for a per-page rubric score
   sdk-audit/
     tracker.csv              ← generated SDK page list plus human review ledger
+  sdk-style/
+    README.md                ← structure/cosmetic contract for SDK pages
   tasks/
     pending/                 ← unclaimed task files
     in_progress/             ← claimed (filename includes agent_id + claimed_at)
