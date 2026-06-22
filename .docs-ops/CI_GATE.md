@@ -150,6 +150,7 @@ The Action runs on `ubuntu-latest` in **two tiers**:
 | Check | Why |
 |---|---|
 | **MDX validity** (`check-mdx.py`) | unterminated code fences, unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…), and SDK language snippets nested in `CardGroup` instead of `CodeGroup`. This catches Mintlify build-breakers and keeps code snippets in the AI-friendly tabbed format. |
+| **SDK page style** (`check-sdk-style.py`) | changed SDK pages must follow the structure contract in `.docs-ops/sdk-style/README.md`: no body H1, no repeated title heading, no platform-H2 snippet grouping, SDK language snippets inside `CodeGroup`, and a short method explanation before grouped snippets. |
 
 **Tier 2 — only when `secrets.SDK_READONLY_PAT` is configured (needs the private TS SDK), BLOCKS:**
 
