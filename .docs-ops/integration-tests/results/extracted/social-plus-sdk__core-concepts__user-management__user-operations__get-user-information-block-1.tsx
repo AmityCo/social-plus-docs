@@ -1,5 +1,5 @@
 /// <reference path="../../preamble.d.ts" />
-// source: social-plus-sdk/core-concepts/user-management/user-operations/get-user-information.mdx:54-72
+// source: social-plus-sdk/core-concepts/user-management/user-operations/get-user-information.mdx:62-80
 
 import { UserRepository } from '@amityco/ts-sdk';
 import { FC, useEffect, useState } from 'react';
