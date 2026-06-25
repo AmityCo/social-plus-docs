@@ -25,6 +25,9 @@ This directory is the coordination surface between AI agents (Claude, Copilot CL
     tracker.csv              ← generated SDK page list plus human review ledger
   sdk-style/
     README.md                ← structure/cosmetic contract for SDK pages
+  inferential-review/
+    README.md                ← local-only agent review workflow for judgment issues
+    sdk-page-review.md       ← structured prompt for SDK page findings
   tasks/
     pending/                 ← unclaimed task files
     in_progress/             ← claimed (filename includes agent_id + claimed_at)
@@ -70,10 +73,16 @@ pip install pre-commit
 pre-commit install --hook-type pre-push
 ```
 
-After that, every `git push` is compared against `origin/main` and blocked if it introduces new (file, API-ref) pairs to the drift report.
+After that, every `git push` runs MDX validity, changed-page SDK style, and drift checks against `origin/main`.
 
 For SDK-first page-by-page accuracy work, use `sdk-audit/tracker.csv` as the review ledger. Regenerate it with:
 
 ```bash
 python3 .docs-ops/sdk-audit/build-tracker.py
 ```
+
+## Deterministic vs inferential layers
+
+Deterministic checks live in `ci/` and may run in CI. They enforce known contracts: MDX validity, SDK style, API drift, and doc-as-test.
+
+Inferential review lives in `inferential-review/` and is local-agent only. It is for judgment calls that should not block CI directly: platform nuance, page clarity, product-manager readability, AI ambiguity, and new recurring issue classes. When the same inferential finding repeats and can be detected mechanically, promote it into a deterministic check.

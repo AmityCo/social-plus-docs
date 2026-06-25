@@ -12,7 +12,9 @@ The CI gate is what makes the cleanup work in this directory *durable*. Without 
                                   ▼
                 ┌────────────────────────────────────┐
                 │  pre-push hook                      │
-                │  → .docs-ops/ci/check-drift.py     │
+                │  → check-mdx.py                     │
+                │  → check-sdk-style.py               │
+                │  → check-drift.py                   │
                 └─────────────────┬──────────────────┘
                                   │
                 ┌─────────────────┴──────────────────┐
@@ -50,7 +52,7 @@ Increase in count → **FAIL** by definition (always includes new pairs).
 
 ## What it doesn't gate (yet)
 
-- **Prose, structure, IA**: the gate is API-accuracy-only. The 6-dimension rubric is broader; per-PR scoring is a future addition.
+- **Inferential prose judgment**: CI enforces known deterministic structure/style rules, but it does not judge overall prose quality, product clarity, or nuanced conceptual framing. Use `.docs-ops/inferential-review/` locally for that.
 - **SDK changes**: the gate compares docs against the SDK surface AS COMMITTED in this repo. When the upstream SDK changes, someone must re-run the extractor and commit the new `sdk-surface/*.json`. A separate workflow (TBD) will detect SDK changes and open docs PRs to update.
 
 ## Doc-as-test layer
@@ -150,7 +152,7 @@ The Action runs on `ubuntu-latest` in **two tiers**:
 | Check | Why |
 |---|---|
 | **MDX validity** (`check-mdx.py`) | unterminated code fences, unbalanced JSX tags (`Accordion`/`Tabs`/`CardGroup`/…), and SDK language snippets nested in `CardGroup` instead of `CodeGroup`. This catches Mintlify build-breakers and keeps code snippets in the AI-friendly tabbed format. |
-| **SDK page style** (`check-sdk-style.py`) | changed SDK pages must follow the structure contract in `.docs-ops/sdk-style/README.md`: no body H1, no repeated title heading, no platform-H2 snippet grouping, SDK language snippets inside `CodeGroup`, and a short method explanation before grouped snippets. |
+| **SDK page style** (`check-sdk-style.py`) | changed SDK pages must follow the archetype-aware structure contract in `.docs-ops/sdk-style/README.md`: no body H1, no repeated title heading, no platform-H2 snippet grouping, SDK language snippets inside `CodeGroup`, operation pages include parameters, platform-dependent parameter tables include `Platforms`, known Live Object / Live Collection wording is platform-qualified, and generic TypeScript snippets avoid accidental React dependence. |
 
 **Tier 2 — only when `secrets.SDK_READONLY_PAT` is configured (needs the private TS SDK), BLOCKS:**
 
@@ -165,6 +167,10 @@ The Action runs on `ubuntu-latest` in **two tiers**:
 **If `SDK_READONLY_PAT` is NOT set, Tier 2 is SKIPPED with a notice in the PR comment — it does not fail the PR.** This is deliberate: a missing-secret config state is not a regression, and Tier 1 (MDX validity) still guards every PR. Add the secret to switch Tier 2 on. (The same checks run locally via the pre-push hook — see "For contributors" — where the SDK sibling is already present, so the full set runs with no token.)
 
 Uncovered Tier-2 layers are **surfaced in the PR comment** as `unavailable` — never silently assumed green.
+
+### Local-only inferential review
+
+Inferential review is intentionally not part of CI. Use `.docs-ops/inferential-review/` with a local agent when a page needs judgment about concept separation, platform nuance, product-manager clarity, or AI ambiguity. Repeated inferential findings should be promoted into deterministic checks once they become mechanically detectable.
 
 ### Extending coverage
 
@@ -184,7 +190,7 @@ pip install pre-commit
 pre-commit install --hook-type pre-push
 ```
 
-**Daily**: just `git push`. The hook runs in a few seconds against `origin/main`. If it fails, the output tells you exactly which (file, ref) pairs are new.
+**Daily**: just `git push`. The hook runs MDX validity, changed-page SDK style, and drift checks against `origin/main`. If it fails, the output tells you which deterministic rule failed or which new `(file, ref)` pairs appeared.
 
 **Running manually** at any time:
 ```bash
