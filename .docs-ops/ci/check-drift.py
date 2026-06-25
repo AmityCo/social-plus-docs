@@ -372,6 +372,68 @@ def run_android_doc_as_test_check() -> dict:
     }
 
 
+def ios_developer_dir_candidates() -> list[str | None]:
+    candidates: list[str | None] = [os.environ.get("DEVELOPER_DIR")]
+    for path in [
+        "/Applications/Xcode.app/Contents/Developer",
+        "/Applications/Xcode-beta.app/Contents/Developer",
+        str(Path.home() / "Downloads/Xcode.app/Contents/Developer"),
+        str(Path.home() / "Applications/Xcode.app/Contents/Developer"),
+    ]:
+        if Path(path).exists():
+            candidates.append(path)
+
+    for apps_dir in [
+        Path("/Applications"),
+        Path.home() / "Downloads",
+        Path.home() / "Applications",
+    ]:
+        if apps_dir.exists():
+            for developer_dir in sorted(apps_dir.glob("Xcode*.app/Contents/Developer")):
+                candidates.append(str(developer_dir))
+
+    seen = set()
+    unique: list[str | None] = []
+    for candidate in candidates:
+        key = candidate or ""
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def resolve_iphonesimulator_env() -> tuple[dict[str, str] | None, str]:
+    errors = []
+    base_env = os.environ.copy()
+    for developer_dir in ios_developer_dir_candidates():
+        env = base_env.copy()
+        label = "active developer directory"
+        if developer_dir:
+            env["DEVELOPER_DIR"] = developer_dir
+            label = developer_dir
+
+        try:
+            result = run(
+                ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"],
+                cwd=REPO_ROOT,
+                check=False,
+                env=env,
+            )
+        except FileNotFoundError as e:
+            errors.append(f"{label}: xcrun not found ({e})")
+            continue
+
+        if result.returncode == 0 and result.stdout.strip():
+            return env, ""
+        errors.append(f"{label}: {(result.stderr or result.stdout).strip()}")
+
+    return None, (
+        "iPhoneSimulator SDK not found. Install/select full Xcode, or set "
+        "DEVELOPER_DIR to an Xcode.app Contents/Developer path. "
+        f"Tried: {' | '.join(errors)}"
+    )
+
+
 def run_ios_doc_as_test_check() -> dict:
     """Run iOS doc-as-test framework on the candidate working tree.
 
@@ -388,11 +450,17 @@ def run_ios_doc_as_test_check() -> dict:
                 "crash_reason": "swiftc not found — install Xcode CLI tools",
                 "stats": {}, "blocking_failures": [], "warning_failures": []}
 
+    ios_env, ios_unavailable_reason = resolve_iphonesimulator_env()
+    if ios_env is None:
+        return {"available": False, "crashed": False,
+                "crash_reason": ios_unavailable_reason,
+                "stats": {}, "blocking_failures": [], "warning_failures": []}
+
     if not IOS_DAT_EXTRACTOR.exists() or not IOS_DAT_RUNNER.exists():
         return {"available": False, "crashed": False, "crash_reason": "",
                 "stats": {}, "blocking_failures": [], "warning_failures": []}
 
-    env = os.environ.copy()
+    env = ios_env.copy()
     env["SP_SDKS_ROOT"] = str(REPO_ROOT.parent)
 
     try:
