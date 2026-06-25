@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -42,14 +43,69 @@ SWIFT_ERROR_RE = re.compile(
 )
 
 
-def get_ios_sdk() -> str:
-    result = subprocess.run(
-        ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"],
-        capture_output=True, text=True
+class ToolchainUnavailable(RuntimeError):
+    """Raised when swiftc exists but the iPhoneSimulator SDK is not installed."""
+
+
+def developer_dir_candidates() -> list[str | None]:
+    candidates: list[str | None] = [os.environ.get("DEVELOPER_DIR")]
+    for path in [
+        "/Applications/Xcode.app/Contents/Developer",
+        "/Applications/Xcode-beta.app/Contents/Developer",
+        str(Path.home() / "Downloads/Xcode.app/Contents/Developer"),
+        str(Path.home() / "Applications/Xcode.app/Contents/Developer"),
+    ]:
+        if Path(path).exists():
+            candidates.append(path)
+
+    for apps_dir in [
+        Path("/Applications"),
+        Path.home() / "Downloads",
+        Path.home() / "Applications",
+    ]:
+        if apps_dir.exists():
+            for developer_dir in sorted(apps_dir.glob("Xcode*.app/Contents/Developer")):
+                candidates.append(str(developer_dir))
+
+    seen = set()
+    unique: list[str | None] = []
+    for candidate in candidates:
+        key = candidate or ""
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def get_ios_sdk() -> tuple[str, dict[str, str]]:
+    errors = []
+    base_env = os.environ.copy()
+    for developer_dir in developer_dir_candidates():
+        env = base_env.copy()
+        label = "active developer directory"
+        if developer_dir:
+            env["DEVELOPER_DIR"] = developer_dir
+            label = developer_dir
+
+        try:
+            result = subprocess.run(
+                ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        except FileNotFoundError as e:
+            errors.append(f"{label}: xcrun not found ({e})")
+            continue
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip(), env
+        errors.append(f"{label}: {(result.stderr or result.stdout).strip()}")
+
+    raise ToolchainUnavailable(
+        "iPhoneSimulator SDK not found. Install/select full Xcode, or set "
+        "DEVELOPER_DIR to an Xcode.app Contents/Developer path. "
+        f"Tried: {' | '.join(errors)}"
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"xcrun failed: {result.stderr.strip()}")
-    return result.stdout.strip()
 
 
 def ensure_xcframework():
@@ -67,7 +123,7 @@ def ensure_xcframework():
     print(f"  xcframework ready at {XCFW_PATH}")
 
 
-def typecheck_file(swift_file: Path, ios_sdk: str, fw_dir: Path) -> dict:
+def typecheck_file(swift_file: Path, ios_sdk: str, fw_dir: Path, env: dict[str, str]) -> dict:
     """Run swiftc -typecheck on a single .swift file. Returns result dict."""
     result = subprocess.run(
         [
@@ -79,6 +135,7 @@ def typecheck_file(swift_file: Path, ios_sdk: str, fw_dir: Path) -> dict:
         ],
         capture_output=True,
         text=True,
+        env=env,
     )
     stderr = result.stderr
     errors: list[dict] = []
@@ -128,6 +185,12 @@ def main():
         spec.loader.exec_module(mod)
         mod.main()
 
+    try:
+        ios_sdk, toolchain_env = get_ios_sdk()
+    except ToolchainUnavailable as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+
     # Ensure xcframework is available
     if not args.no_download:
         ensure_xcframework()
@@ -135,7 +198,6 @@ def main():
         print("ERROR: xcframework not cached and --no-download set.", file=sys.stderr)
         sys.exit(1)
 
-    ios_sdk = get_ios_sdk()
     fw_dir = XCFW_SIM_SLICE
     print(f"  SDK: {ios_sdk}")
     print(f"  Framework: {fw_dir}")
@@ -163,7 +225,7 @@ def main():
             failed.append({**entry, "errors": [{"message": "file not found after extraction"}], "warnings": []})
             continue
 
-        result = typecheck_file(swift_file, ios_sdk, fw_dir)
+        result = typecheck_file(swift_file, ios_sdk, fw_dir, toolchain_env)
         entry_result = {
             **entry,
             "errors": result["errors"],

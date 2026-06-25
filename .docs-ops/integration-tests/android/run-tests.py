@@ -11,6 +11,7 @@ Compilation engine:
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,12 +25,12 @@ RESULTS_DIR = SCRIPT_DIR / "results"
 
 # Kotlin compiler setup
 GRADLE_HOME = Path.home() / ".gradle"
-GRADLE_LIB = (
+PREFERRED_GRADLE_LIB = (
     GRADLE_HOME / "wrapper/dists/gradle-8.7-bin/bhs2wmbdwecv87pi65oeuq5iu/gradle-8.7/lib"
 )
 GRADLE_CACHE = GRADLE_HOME / "caches/modules-2/files-2.1"
-
-AMITY_SDK_ROOT = Path(__file__).parent.parent.parent.parent.parent / "Amity-Social-Cloud-SDK-Android"
+SP_SDKS_ROOT = Path(os.environ.get("SP_SDKS_ROOT", Path(__file__).resolve().parents[4]))
+AMITY_SDK_ROOT = SP_SDKS_ROOT / "Amity-Social-Cloud-SDK-Android"
 
 
 def find_jar(base_path, pattern, required=True):
@@ -40,6 +41,35 @@ def find_jar(base_path, pattern, required=True):
             raise FileNotFoundError(f"JAR not found matching {pattern} under {base_path}")
         return None
     return sorted(matches)[-1]
+
+
+def find_gradle_lib_dir():
+    """Find a Gradle distribution that contains the embeddable Kotlin compiler."""
+    if (PREFERRED_GRADLE_LIB / "kotlin-compiler-embeddable-1.9.22.jar").exists():
+        return PREFERRED_GRADLE_LIB
+
+    wrapper_dists = GRADLE_HOME / "wrapper/dists"
+    preferred = []
+    fallback = []
+    for compiler in wrapper_dists.glob("**/lib/kotlin-compiler-embeddable-*.jar"):
+        lib_dir = compiler.parent
+        if not list(lib_dir.glob("kotlin-reflect-*.jar")):
+            continue
+        if not list(lib_dir.glob("kotlin-stdlib-*.jar")):
+            continue
+        if not list(lib_dir.glob("trove4j-*.jar")):
+            continue
+        if list(lib_dir.glob("kotlin-compiler-embeddable-1.9*.jar")):
+            preferred.append(lib_dir)
+        else:
+            fallback.append(lib_dir)
+
+    candidates = preferred or fallback
+    if not candidates:
+        raise FileNotFoundError(
+            f"Kotlin compiler JARs not found under {wrapper_dists}"
+        )
+    return sorted(candidates)[-1]
 
 
 def extract_aar_classes(aar_path, label):
@@ -58,15 +88,54 @@ def extract_aar_classes(aar_path, label):
     return out_path
 
 
+def find_android_jar():
+    sdk_roots = [
+        os.environ.get("ANDROID_HOME"),
+        os.environ.get("ANDROID_SDK_ROOT"),
+        str(Path.home() / "Library/Android/sdk"),
+    ]
+    candidates = []
+    for sdk_root in sdk_roots:
+        if not sdk_root:
+            continue
+        platforms_dir = Path(sdk_root) / "platforms"
+        candidates.extend(platforms_dir.glob("android-*/android.jar"))
+    if not candidates:
+        raise FileNotFoundError(
+            "android.jar not found. Install an Android SDK platform or set ANDROID_HOME."
+        )
+    return sorted(candidates)[-1]
+
+
 def build_classpath():
     """Assemble the compiler runtime classpath. Raises if critical JARs are missing."""
+    gradle_lib = find_gradle_lib_dir()
     kotlin_stdlib = find_jar(
         GRADLE_CACHE / "org.jetbrains.kotlin/kotlin-stdlib",
         "kotlin-stdlib-1.9*.jar",
+        required=False,
+    ) or find_jar(
+        gradle_lib,
+        "kotlin-stdlib-1.9*.jar",
+        required=False,
+    ) or find_jar(
+        gradle_lib,
+        "kotlin-stdlib-*.jar",
     )
+    kotlin_compiler = find_jar(gradle_lib, "kotlin-compiler-embeddable-*.jar")
+    kotlin_reflect = find_jar(gradle_lib, "kotlin-reflect-*.jar")
+    trove4j = find_jar(gradle_lib, "trove4j-*.jar")
     annotations = find_jar(
         GRADLE_CACHE / "org.jetbrains/annotations",
         "annotations-23.0.0.jar",
+        required=False,
+    ) or find_jar(
+        GRADLE_CACHE / "org.jetbrains/annotations",
+        "annotations-*.jar",
+        required=False,
+    ) or find_jar(
+        gradle_lib,
+        "annotations-*.jar",
     )
     rxjava3 = find_jar(
         GRADLE_CACHE / "io.reactivex.rxjava3/rxjava",
@@ -109,7 +178,7 @@ def build_classpath():
         )
     gson = find_jar(
         GRADLE_CACHE / "com.google.code.gson/gson",
-        "gson-2.10.1.jar",
+        "gson-2.*.jar",
     )
     joda_time = find_jar(
         GRADLE_CACHE / "joda-time/joda-time",
@@ -120,7 +189,7 @@ def build_classpath():
     amity_log = AMITY_SDK_ROOT / "amity-log/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
     core_push = AMITY_SDK_ROOT / "core-push/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
     amity_push_fcm = AMITY_SDK_ROOT / "amity-push-fcm/build/intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar"
-    android_jar = Path("/Users/admin/Library/Android/sdk/platforms/android-34/android.jar")
+    android_jar = find_android_jar()
 
     missing = []
     for jar, name in [
@@ -138,6 +207,9 @@ def build_classpath():
         (core_push, "core-push"),
         (amity_push_fcm, "amity-push-fcm"),
         (android_jar, "android.jar"),
+        (kotlin_compiler, "kotlin-compiler-embeddable"),
+        (kotlin_reflect, "kotlin-reflect"),
+        (trove4j, "trove4j"),
     ]:
         if jar is None or not Path(jar).exists():
             missing.append(name)
@@ -148,16 +220,55 @@ def build_classpath():
         amity_sdk, amity_rxbridge, amity_log, core_push, amity_push_fcm, rxjava3, rxjava2, kotlin_stdlib, android_jar, annotations,
         rxandroid, reactive_streams, coroutines_core, paging_common, gson, joda_time,
     ])
-    return compile_cp, kotlin_stdlib, annotations
+    return compile_cp, {
+        "kotlin_compiler": kotlin_compiler,
+        "kotlin_reflect": kotlin_reflect,
+        "trove4j": trove4j,
+        "kotlin_stdlib": kotlin_stdlib,
+        "annotations": annotations,
+    }
 
 
-def build_kotlinc_cmd(source_file, classpath, kotlin_stdlib, annotations):
+def hydrate_android_sdk_artifacts():
+    """Resolve dependency artifacts and build local SDK class jars when the cache is cold."""
+    gradlew = AMITY_SDK_ROOT / "gradlew"
+    if not gradlew.exists():
+        return False
+
+    print(
+        "Android doc-as-test: classpath incomplete; running "
+        "`./gradlew :amity-sdk:compileReleaseKotlin --no-daemon` "
+        "in the Android SDK repo..."
+    )
+    result = subprocess.run(
+        [str(gradlew), ":amity-sdk:compileReleaseKotlin", "--no-daemon"],
+        cwd=AMITY_SDK_ROOT,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def resolve_classpath():
+    try:
+        return build_classpath()
+    except FileNotFoundError as first_error:
+        if hydrate_android_sdk_artifacts():
+            try:
+                return build_classpath()
+            except FileNotFoundError as second_error:
+                raise FileNotFoundError(
+                    f"{second_error} (after Gradle artifact hydration)"
+                ) from second_error
+        raise first_error
+
+
+def build_kotlinc_cmd(source_file, classpath, compiler_jars):
     compiler_cp = ":".join([
-        str(GRADLE_LIB / "kotlin-compiler-embeddable-1.9.22.jar"),
-        str(GRADLE_LIB / "kotlin-reflect-1.9.22.jar"),
-        str(GRADLE_LIB / "trove4j-1.0.20200330.jar"),
-        str(kotlin_stdlib),
-        str(annotations),
+        str(compiler_jars["kotlin_compiler"]),
+        str(compiler_jars["kotlin_reflect"]),
+        str(compiler_jars["trove4j"]),
+        str(compiler_jars["kotlin_stdlib"]),
+        str(compiler_jars["annotations"]),
     ])
     return [
         "java",
@@ -238,10 +349,10 @@ def parse_source_meta(source_file):
     return str(source_file), [0, 0]
 
 
-def compile_kotlin(source_file, classpath, kotlin_stdlib, annotations):
+def compile_kotlin(source_file, classpath, compiler_jars):
     import os
     os.makedirs("/tmp/android_doc_test_out", exist_ok=True)
-    cmd = build_kotlinc_cmd(source_file, classpath, kotlin_stdlib, annotations)
+    cmd = build_kotlinc_cmd(source_file, classpath, compiler_jars)
     result = subprocess.run(cmd, capture_output=True, text=True)
     output = result.stderr + result.stdout
     errors, warnings = parse_kotlin_output(output, source_file)
@@ -261,7 +372,7 @@ def compile_java(source_file, classpath):
 def run_all():
     print("Android doc-as-test: building classpath...")
     try:
-        compile_cp, kotlin_stdlib, annotations = build_classpath()
+        compile_cp, compiler_jars = resolve_classpath()
     except FileNotFoundError as e:
         print(f"FATAL: {e}", file=sys.stderr)
         sys.exit(1)
@@ -289,7 +400,7 @@ def run_all():
         is_kt = src.suffix == ".kt"
 
         if is_kt:
-            errors, warnings, rc = compile_kotlin(src, compile_cp, kotlin_stdlib, annotations)
+            errors, warnings, rc = compile_kotlin(src, compile_cp, compiler_jars)
         else:
             errors, warnings, rc = compile_java(src, compile_cp)
 
