@@ -9,13 +9,21 @@ section.
 
 | Proxy | Flags a page when… | Confidence |
 |---|---|---|
-| **Parity** | a `<CodeGroup>` shows code for some platforms but is missing the Flutter tab (high-confidence) or has a large per-platform depth disparity | high = CodeGroup intent |
+| **Parity** | a `<CodeGroup>` shows code for some platforms but is missing a platform without explicitly marking it unavailable, or has a large per-platform depth disparity | high = CodeGroup intent |
 | **Clarity** | the opener uses marketing-register words, or the page opens with a component before any functional sentence | — |
-| **Completeness** | a page shows a **multi-parameter / options-object** call but ships no parameter table | precision-filtered |
+| **Completeness** | a page shows a **multi-parameter / options-object** call but ships no parameter table, including any table inside `## Parameters` | precision-filtered |
 
 Each proxy is gated so its count is a *defect* count, not a raw match (e.g. a
 single-arg call doesn't demand a param table; a page that legitimately opens
 with `<Update>` like a changelog is not a clarity defect).
+
+Changelog pages keep their raw scan fields in JSON, but they are excluded from
+the clarity and completeness defect counts because they are not SDK operation
+pages.
+
+Parity keeps explicitly unavailable platforms separate from missing platforms,
+so pages that say Flutter has no current public API do not count as Flutter
+coverage defects.
 
 ## Usage
 

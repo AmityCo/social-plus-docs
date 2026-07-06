@@ -382,10 +382,10 @@ def operation_method_consistency(sections):
 
     for section in sections:
         heading = normalize_heading(section["heading"])
-        body = "\n".join(section["lines"])
+        code = "\n".join(fence["code"] for fence in code_fences("\n".join(section["lines"])))
         if "multiple" not in heading and "by id" not in heading and "by ids" not in heading:
             continue
-        if batch_pattern.search(body) and query_pattern.search(body):
+        if batch_pattern.search(section["heading"] + "\n" + code) and query_pattern.search(code):
             problems.append(
                 f"line {section['line']}: section mixes batch-by-ID lookup with paginated user query; "
                 "split these into separate operation sections"

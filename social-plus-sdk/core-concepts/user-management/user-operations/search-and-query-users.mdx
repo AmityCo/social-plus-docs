@@ -1,64 +1,90 @@
 ---
 title: "Search and Query Users"
-description: "Learn how to search for users by display name and query user collections in social.plus SDK"
+description: "Search for users by display name and query paginated user collections in social.plus SDK."
 ---
 
-Use the user repository to find users by display name, or query the full user list sorted by creation date where the platform supports it. Search API names differ by SDK: iOS and Android use `searchUsers`, while TypeScript and Flutter use `searchUserByDisplayName`.
+Use the user repository when your app needs to find people by display name or browse a paginated user list. Search is for keyword-driven flows such as member pickers, while query is for directory-style lists where sorting and pagination matter more than a search keyword.
 
 <Info>
-Deleted users are automatically excluded from all search and query results to maintain data integrity.
+Deleted users are automatically excluded from search and query results.
 </Info>
 
 ## Parameters
 
-| Operation | Parameter | Required | Platforms | Description |
+This page covers two user-list operations. Choose the operation first, then use the inputs table in each section for the exact SDK call shape.
+
+| Operation | Use when | Required inputs | Platforms |
+| --- | --- | --- | --- |
+| Search users by display name | You have a display-name keyword and want matching users. | Display-name keyword, callback or collection observer where required. | TypeScript, iOS, Android, Flutter |
+| Query users | You need a paginated user list without a search keyword. | Callback or sort option where required. | TypeScript, iOS, Android, Flutter |
+
+## Search users by display name
+
+Use search when the user types a display-name keyword. Search keywords must be at least 3 characters long. When a keyword is provided, the server ranks matching results by search relevance; supported sort options can then control the returned order.
+
+### Inputs
+
+| Platform | Method | Required inputs | Optional inputs | Result shape |
 | --- | --- | --- | --- | --- |
-| Search users | Display-name keyword | Yes | TypeScript, iOS, Android, Flutter | Search term for user display names. Search keywords must be at least 3 characters long. |
-| Search users | Sort option | No | TypeScript, iOS | Display-name sorting for search results where supported. |
-| Query users | Sort option | No | TypeScript, iOS, Android, Flutter | Sort user collections by display name or creation time where supported. |
-| Search or query users | Pagination handle | No | TypeScript, iOS, Android, Flutter | Platform-specific live collection, paging data, or callback controls used to load more users. |
-
-## Search Users by Display Name
-
-Query for users by their display name, receiving a collection of AmityUser matching your search. It requires two parameters: the display name you're searching for, and a 'sort option' from the AmityUserSortOption enum.
-
-### Search Requirements
+| TypeScript | `UserRepository.searchUserByDisplayName(params, callback)` | `displayName`, callback | `limit`, `matchType`, `searchBy` | Starts a live collection observer and returns an unsubscriber. |
+| iOS | `userRepository.searchUsers(displayName, sortBy:, matchType:)` | `displayName`, `sortBy` | `matchType` | Returns a live collection observed with an `AmityNotificationToken`. |
+| Android | `userRepository.searchUsers(keyword).build().query()` | `keyword` | `sortBy(...)`, `matchType(...)` | Returns `Flowable<PagingData<AmityUser>>`. |
+| Flutter | `AmityCoreClient.newUserRepository().searchUserByDisplayName(keyword)` | `keyword` | `sortBy(...)`, `matchType(...)`, paging token, limit | Returns paging data through the query builder. |
 
 <Note>
-- **Search keywords must be at least 3 characters long**
-- When a keyword is provided, the list will be arranged based on search rank
-- iOS and TypeScript expose display-name sorting for search results
+TypeScript search parameters intentionally do not include `sortBy`; use `getUsers(...)` when you need TypeScript user-list sorting.
 </Note>
 
-### Sorting Options
-
-Users have the option to sort by:
-- **displayName**: Alphabetical sorting using ICU collation for English locale (default)
-- **lastCreated**: Most recently created users first  
-- **firstCreated**: Oldest users first
-
-### Special Character Handling
+### Special character handling
 
 <Info>
-With the displayName sorting option, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as Ä are treated as variants of A. For example, a sorted list might appear as: **adam, Älex, Alice, Arthur, charlie, Kristen**.
+With display-name sorting, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as Ä are treated as variants of A. For example, a sorted list might appear as: **adam, Älex, Alice, Arthur, charlie, Kristen**.
 
-When providing a search keyword, the API performs an **exact-match lookup for special characters**:
-- Searching for "Äli" will only return users whose display name contains "Äli" (e.g., "Älise")
-- Searching for "Alice" will NOT return "Älice"
+When providing a search keyword, the API performs an exact-match lookup for special characters:
+- Searching for "Äli" only returns users whose display name contains "Äli", such as "Älise".
+- Searching for "Alice" does not return "Älice".
 </Info>
-
-### Search Code Examples
 
 Use the platform search method to retrieve users whose display name matches the search keyword.
 
 <CodeGroup>
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+let loadMoreUsers: (() => void) | undefined;
+
+const unsubscribe = UserRepository.searchUserByDisplayName(
+  { displayName: 'Joe', limit: 20 },
+  ({ data: users, loading, error, hasNextPage, onNextPage }) => {
+    if (loading) return;
+
+    if (error) {
+      console.error('Failed to search users', error);
+      return;
+    }
+
+    console.log(`Found ${users.length} users`);
+    console.log(`More pages available: ${hasNextPage}`);
+    loadMoreUsers = onNextPage;
+  },
+);
+
+// Call loadMoreUsers?.() from your load-more action.
+// Call unsubscribe() when the screen no longer needs search updates.
+```
+
 ```swift iOS
 var token: AmityNotificationToken?
 
 func searchUserExample() {
-    let liveCollection = userRepository.searchUsers("<display-name>", sortBy: .displayName)
+    let liveCollection = userRepository.searchUsers(
+        "<display-name>",
+        sortBy: .displayName,
+        matchType: .default
+    )
     token = liveCollection.observe { collection, error in
-        // Handle live collection notification here
+        let users = collection.snapshots
+        print("Found \(users.count) users")
     }
 }
 ```
@@ -66,26 +92,17 @@ func searchUserExample() {
 ```kotlin Android
 fun searchUsers(userRepository: AmityUserRepository) {
     userRepository.searchUsers("Brian")
+        .sortBy(sortOption = AmityUserSortOption.DISPLAYNAME) // optional
         .build()
         .query()
         .doOnNext { users: PagingData<AmityUser> ->
             // PagingData<AmityUser>
         }
-        .doOnError {
-            // Exception
+        .doOnError { error ->
+            Log.e("UserRepo", "Failed to search users", error)
         }
         .subscribe()
 }
-```
-
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-
-const unsub = UserRepository.searchUserByDisplayName({ displayName: 'Joe' }, ({ data: users }) =>
-  console.log(users),
-);
-
-unsub();
 ```
 
 ```dart Flutter
@@ -96,19 +113,15 @@ void searchUserByDisplayName(String keyword) {
   _amityUsersController = PagingController(
     pageFuture: (token) => AmityCoreClient.newUserRepository()
         .searchUserByDisplayName(keyword)
+        .sortBy(AmityUserSortOption.DISPLAY)
+        .matchType(AmityUserSearchMatchType.DEFAULT)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
   )..addListener(
       () {
         if (_amityUsersController.error == null) {
-          //handle _amityUsersController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
           _amityUsers.clear();
           _amityUsers.addAll(_amityUsersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
         }
       },
     );
@@ -116,30 +129,59 @@ void searchUserByDisplayName(String keyword) {
 ```
 </CodeGroup>
 
-## Query Users
+## Query users
 
-Query for users to receive a collection of AmityUser objects. iOS, Android, and Flutter expose display-name sorting for query results. TypeScript query sorting supports `firstCreated` and `lastCreated`.
+Use `getUsers()` when you need a paginated user list without a display-name keyword. TypeScript query sorting supports `firstCreated` and `lastCreated`; iOS, Android, and Flutter also expose display-name sorting.
 
-### Sorting Behavior
+### Inputs
+
+| Platform | Method | Required inputs | Optional inputs | Result shape |
+| --- | --- | --- | --- | --- |
+| TypeScript | `UserRepository.getUsers(params, callback)` | callback | `sortBy`, `limit`, `filter`, `matchType` | Starts a live collection observer and returns an unsubscriber. |
+| iOS | `userRepository.getUsers(sortBy)` | `sortBy` | None in this call shape | Returns a live collection observed with an `AmityNotificationToken`. |
+| Android | `userRepository.getUsers().build().query()` | None | `sortBy(...)` | Returns `Flowable<PagingData<AmityUser>>`. |
+| Flutter | `AmityCoreClient.newUserRepository().getUsers()` | None | `sortBy(...)`, paging token, limit | Returns paging data through the query builder. |
 
 <Info>
-With the displayName sorting option, users are sorted alphabetically by their display names using ICU collation for the English locale. This means that special characters such as Ä are treated as variants of A. For example, a sorted list might appear as: **adam, Älex, Alice, Arthur, charlie, Kristen**.
-
-**Deleted users are excluded from the results**
+Deleted users are excluded from query results.
 </Info>
-
-### Query Code Examples
 
 Use the platform query method when you need a paginated user list rather than keyword search.
 
 <CodeGroup>
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+let loadMoreUsers: (() => void) | undefined;
+
+const unsubscribe = UserRepository.getUsers(
+  { sortBy: 'lastCreated', limit: 20 },
+  ({ data: users, loading, error, hasNextPage, onNextPage }) => {
+    if (loading) return;
+
+    if (error) {
+      console.error('Failed to query users', error);
+      return;
+    }
+
+    console.log(`Loaded ${users.length} users`);
+    console.log(`More pages available: ${hasNextPage}`);
+    loadMoreUsers = onNextPage;
+  },
+);
+
+// Call loadMoreUsers?.() from your load-more action.
+// Call unsubscribe() when the screen no longer needs user list updates.
+```
+
 ```swift iOS
 var token: AmityNotificationToken?
 
 func queryUsersExample() {
     let liveCollection = userRepository.getUsers(.displayName)
     token = liveCollection.observe { collection, error in
-        // Handle live collection notification here
+        let users = collection.snapshots
+        print("Loaded \(users.count) users")
     }
 }
 ```
@@ -153,70 +195,29 @@ fun queryUsers(userRepository: AmityUserRepository) {
         .doOnNext { users: PagingData<AmityUser> ->
             // PagingData<AmityUser>
         }
-        .doOnError {
-            // Exception
+        .doOnError { error ->
+            Log.e("UserRepo", "Failed to query users", error)
         }
         .subscribe()
 }
-```
-
-```typescript TypeScript
-import { UserRepository, subscribeTopic, getUserTopic } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const disposers: Amity.Unsubscriber[] = [];
-
-const GetUsers: FC = () => {
-  const [data, setUsers] = useState<Amity.LiveCollection<Amity.User>>();
-  const { data: users = [], onNextPage, hasNextPage, loading, error } = data ?? {};
-
-  useEffect(() => {
-    const unsubscribe = UserRepository.getUsers(
-      { sortBy: 'lastCreated' },
-      ({ data: users, onNextPage, hasNextPage, loading, error }) => {
-        setUsers({
-          data: users,
-          onNextPage,
-          hasNextPage,
-          loading,
-          error,
-        });
-      },
-    );
-
-  });
-
-  return null;
-};
 ```
 
 ```dart Flutter
 final _amityUsers = <AmityUser>[];
 late PagingController<AmityUser> _amityUsersController;
 
-// Available sort options
-// AmityUserSortOption.DISPLAY;
-// AmityUserSortOption.FIRST_CREATED;
-// AmityUserSortOption.LAST_CREATED;
-
-void getUsers(AmityUserSortOption amityUserSortOption) {
+void getUsers(AmityUserSortOption sortOption) {
   _amityUsersController = PagingController(
     pageFuture: (token) => AmityCoreClient.newUserRepository()
         .getUsers()
-        .sortBy(amityUserSortOption)
+        .sortBy(sortOption)
         .getPagingData(token: token, limit: 20),
     pageSize: 20,
   )..addListener(
       () {
         if (_amityUsersController.error == null) {
-          //handle _amityUsersController, we suggest to clear the previous items
-          //and add with the latest _controller.loadedItems
           _amityUsers.clear();
           _amityUsers.addAll(_amityUsersController.loadedItems);
-          //update widgets
-        } else {
-          //error on pagination controller
-          //update widgets
         }
       },
     );
@@ -224,38 +225,20 @@ void getUsers(AmityUserSortOption amityUserSortOption) {
 ```
 </CodeGroup>
 
-## Best Practices
+## Platform notes
 
-<AccordionGroup>
-  <Accordion title="Search performance">
-    - Implement debouncing for real-time search to reduce API calls.
-    - Use minimum character requirements before triggering search.
-    - Cache search results for better user experience.
-    - Show loading states during search operations.
-  </Accordion>
-  
-  <Accordion title="Result handling">
-    - Implement pagination for large result sets.
-    - Handle empty search results gracefully.
-    - Provide clear feedback for search criteria that return no results.
-    - Show user count and result statistics when helpful.
-  </Accordion>
-  
-  <Accordion title="User experience">
-    - Sort results by relevance when using search keywords.
-    - Highlight matching text in search results.
-    - Provide filters for different user types or statuses.
-    - Enable sorting options based on user needs.
-  </Accordion>
-</AccordionGroup>
+- TypeScript `searchUserByDisplayName(...)` starts a live collection observer, but its search params do not expose `sortBy`.
+- iOS search and query methods require an `AmityUserSortOption`.
+- Android and Flutter default user search/query sorting to display name when no explicit sort is provided.
+- Use pagination controls from the callback, live collection, `PagingData`, or Flutter `PagingController` instead of loading all users at once.
 
-## Related Topics
+## Related topics
 
 <CardGroup cols={2}>
   <Card title="Get User Information" href="./get-user-information" icon="user">
-    Learn how to retrieve detailed user profiles.
+    Retrieve one user, batch lookup users where supported, or query user collections.
   </Card>
   <Card title="Update User Information" href="./update-user-information" icon="pencil">
-    Discover how to modify user profiles.
+    Modify user profile fields.
   </Card>
 </CardGroup>

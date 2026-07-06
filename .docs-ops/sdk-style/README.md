@@ -35,6 +35,8 @@ SDK operation pages should use this order:
 6. `## Platform notes` for SDK differences that do not belong inside snippets.
 7. `## Related topics` with `CardGroup` links when useful.
 
+For single-method operation pages, `## Parameters` should usually be the method's parameter table. For multi-operation pages, use `## Parameters` as a compact operation-level input summary, then add `### Inputs` tables inside method sections when each operation has a different input shape. Avoid mixing result controls such as callbacks, live collections, or pagination handles into a parameter table unless the SDK call accepts them directly as arguments.
+
 ## Headings
 
 - Do not add a visible `#` heading in page content. Mintlify renders the frontmatter `title`.
@@ -69,6 +71,8 @@ Every method section should include a short explanation before the code:
 - The important required inputs or permission caveats.
 
 If a method has several important inputs, add a compact parameters table before the `CodeGroup`.
+
+On multi-operation pages, each method section should be self-contained enough that a developer or AI agent can extract the method name, supported platforms, required inputs, and return/observe shape without reading unrelated sections.
 
 ## Cards
 

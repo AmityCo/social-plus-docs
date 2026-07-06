@@ -6,12 +6,11 @@ Use it when deterministic checks pass but a page still needs judgment about clar
 
 ## Workflow
 
-1. Run deterministic checks first:
+1. Run the fast deterministic checks first:
 
 ```bash
 python3 .docs-ops/ci/check-mdx.py <page.mdx>
 python3 .docs-ops/ci/check-sdk-style.py <page.mdx>
-python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-test all
 ```
 
 2. Ask the local agent to review the page with `sdk-page-review.md`.
@@ -36,9 +35,15 @@ python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-te
 }
 ```
 
-4. Fix the page and rerun deterministic checks.
+4. Fix the page and rerun the fast deterministic checks.
 
-5. If the same inferential finding repeats across pages, promote it into `.docs-ops/ci/check-sdk-style.py`.
+5. For an SDK accuracy proof, or before declaring a larger slice complete, run the full doc-as-test gate:
+
+```bash
+python3 .docs-ops/ci/check-drift.py --base HEAD --skip-fetch --require-doc-as-test all
+```
+
+6. If the same inferential finding repeats across pages, promote it into `.docs-ops/ci/check-sdk-style.py`.
 
 ## What Belongs Here
 
