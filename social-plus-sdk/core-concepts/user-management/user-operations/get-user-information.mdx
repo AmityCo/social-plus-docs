@@ -1,118 +1,120 @@
 ---
 title: "Get User Information"
-description: "Retrieve user profiles and information using the UserRepository with real-time updates"
+description: "Retrieve user profiles by ID, batch user lookups where supported, and query paginated user collections."
 ---
 
-Retrieve user information using the UserRepository to display profiles, user cards, and social metadata. User objects contain core identity information and provide real-time updates when user data changes.
+Retrieve user profiles for profile screens, user cards, and directory views with the user repository. Use the single-user API when you know the exact user ID, batch lookup when your SDK exposes `getUserByIds`, and `getUsers()` when you need a sorted list instead of a fixed set of IDs.
 
 <Info>
-**Live Objects**: User data is returned as Live Objects that automatically update when the underlying data changes, keeping your UI synchronized.
+iOS and TypeScript expose live-object or live-collection wrappers for user observation. Android uses `Flowable<T>` for the same operations, while Flutter returns `Future<AmityUser>` for `getUser(userId)` and query builders for paginated collections.
 </Info>
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
+This page covers three user-read operations. Use this table to choose the operation first, then use the inputs table in each section for the exact SDK call shape.
+
+| Operation | Use when | Required inputs | Platforms |
 | --- | --- | --- | --- |
-| Get a single user | `userId` | Yes | Unique identifier of the user to retrieve. |
-| Get multiple users by ID | `userIds` | Yes | User IDs to retrieve in one batch where the platform exposes a batch API. |
-| Query users | Sort option | No | Sort order for user collections, such as display name or creation time where supported. |
-| Query users | Pagination handle | No | Platform-specific live collection, paging data, or callback controls used to load additional users. |
-| All operations | Observer or callback | Platform-dependent | Receives live object or live collection updates where supported. |
+| Get a single user | You already know one user ID and need that profile. | `userId` | TypeScript, iOS, Android, Flutter |
+| Get multiple users by ID | You already have a fixed set of user IDs and need those profiles together. | `userIds` | TypeScript, Android |
+| Query users | You need a sorted or paginated user list rather than a fixed set of IDs. | None globally; sort options vary by platform. | TypeScript, iOS, Android, Flutter |
 
-## Get a Single User
+## Get a single user
 
-Retrieve a specific user by their unique ID:
+Use the single-user API when your app already knows the user ID and needs the latest profile details for that specific user. The examples below show the native return shape for each SDK.
+
+### Inputs
+
+| Platform | Method | Required inputs | Result shape |
+| --- | --- | --- | --- |
+| TypeScript | `UserRepository.getUser(userId, callback)` | `userId`, callback | Starts a live observer and returns an unsubscriber. |
+| iOS | `userRepository.getUser(userId)` | `userId` | Returns a live object observed with an `AmityNotificationToken`. |
+| Android | `userRepository.getUser(userId)` | `userId` | Returns `Flowable<AmityUser>`. |
+| Flutter | `AmityCoreClient.newUserRepository().getUser(userId)` | `userId` | Returns `Future<AmityUser>`. |
 
 <CodeGroup>
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = UserRepository.getUser('user_123', ({ data: user, loading, error }) => {
+  if (loading) return;
+
+  if (error || !user) {
+    console.error('Failed to get user', error);
+    return;
+  }
+
+  console.log(user.userId, user.displayName);
+});
+
+// Call unsubscribe() when the screen no longer needs user updates.
+```
+
 ```swift iOS
 var token: AmityNotificationToken?
 
 func observeUser() {
-    let liveObject = userRepository.getUser("<user-id>")
+    let liveObject = userRepository.getUser("user_123")
     token = liveObject.observe { liveObject, error in
-        // Handle live object notification
         guard let user = liveObject.snapshot else {
-            print("Error: \(String(describing: error))")
+            print("error: \(String(describing: error))")
             return
         }
-        print("User ID: \(user.userId), Display Name: \(user.displayName ?? "Unknown")")
+
+        print("userId: \(user.userId), displayName: \(String(describing: user.displayName))")
     }
 }
 ```
 
 ```kotlin Android
 fun getUser(userRepository: AmityUserRepository) {
-    // Get user with live updates
     userRepository.getUser(userId = "user_123")
         .doOnNext { user: AmityUser ->
-            // Handle user data updates
             val displayName = user.getDisplayName()
             val userId = user.getUserId()
-            
-            // Update UI with user information
-            updateUserProfile(user)
+            Log.d("UserRepo", "User: $displayName ($userId)")
         }
         .doOnError { error ->
-            // Handle error
             Log.e("UserRepo", "Failed to get user", error)
         }
         .subscribe()
 }
 ```
 
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-import { FC, useEffect, useState } from 'react';
-
-const GetUser: FC<{ userId: string }> = ({ userId }) => {
-  const [userData, setUserData] = useState<Amity.LiveObject<Amity.User>>();
-  const { data: user, loading, error } = userData ?? {};
-
-  useEffect(() => {
-    // Get user with live updates
-    const unsubscribe = UserRepository.getUser(userId, setUserData);
-
-    return () => unsubscribe();
-  }, [userId]);
-
-  if (loading) return null;
-  if (error) return null;
-
-  return <div>{user?.displayName}</div>;
-};
-```
-
 ```dart Flutter
-void getUser() {
-  AmityCoreClient.newUserRepository()
-      .getUser('userId')
-      .then((AmityUser user) {
-    //handle result
-  }).onError<AmityException>((error, stackTrace) {
-    //handle error
-  });
+Future<void> getUser() async {
+  try {
+    final user = await AmityCoreClient.newUserRepository().getUser('user_123');
+    print('User: ${user.displayName}');
+  } on AmityException catch (error) {
+    print('Failed to get user: $error');
+  }
 }
 ```
 </CodeGroup>
 
-## Get Multiple Users
+## Get multiple users by ID
 
-Retrieve multiple users efficiently using batch operations:
+Use batch lookup when your app already has a fixed set of user IDs and needs those profiles together. This API is available on TypeScript and Android. For browse flows, use the query operation below.
+
+### Inputs
+
+| Platform | Method | Required inputs | Result shape |
+| --- | --- | --- | --- |
+| TypeScript | `UserRepository.getUserByIds(userIds)` | `userIds: string[]` | Returns a promise with cached user data. |
+| Android | `userRepository.getUserByIds(userIds)` | `userIds: Set<String>` | Returns `Flowable<List<AmityUser>>`. |
 
 <CodeGroup>
-```swift iOS
-// Get all users with pagination (observe live collection)
-let liveCollection = userRepository.getUsers(.displayName)
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
 
-token = liveCollection.observe { collection, error in
-    let users = collection.snapshots
-    print("Loaded \(users.count) users")
-    displayUserList(users)
-}
+async function getUsersByIds() {
+  const userIds = ['user_123', 'user_456'];
+  const { data: users } = await UserRepository.getUserByIds(userIds);
 
-// Load next page
-if liveCollection.hasNext {
-    liveCollection.nextPage()
+  users.forEach(user => {
+    console.log(user.userId, user.displayName);
+  });
 }
 ```
 
@@ -121,139 +123,118 @@ fun getUsersByIds(
     userRepository: AmityUserRepository,
     userIds: Set<String>
 ) {
-    // Get multiple users by IDs
     userRepository.getUserByIds(userIds = userIds)
         .doOnNext { users: List<AmityUser> ->
-            // Handle list of users
             users.forEach { user ->
                 Log.d("UserRepo", "User: ${user.getDisplayName()}")
             }
         }
         .doOnError { error ->
-            // Handle error
             Log.e("UserRepo", "Failed to get users", error)
         }
         .subscribe()
 }
-
-// Get all users with pagination
-fun getAllUsers(userRepository: AmityUserRepository) {
-    userRepository.getUsers()
-        .build()
-        .query()
-        .doOnNext { pagingData ->
-            // Handle paginated users
-            Log.d("UserRepo", "Loaded page of users")
-        }
-        .doOnError { error ->
-            Log.e("UserRepo", "Failed to get users", error)
-        }
-        .subscribe()
-}
-```
-
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-
-// Get multiple users by IDs
-const getUsersByIds = async (userIds: string[]) => {
-  try {
-    const { data: users } = await UserRepository.getUserByIds(userIds);
-    
-    users.forEach(user => {
-      console.log(`${user.userId}: ${user.displayName}`);
-    });
-    
-    return users;
-  } catch (error) {
-    console.error('Error getting users:', error);
-    throw error;
-  }
-};
-
-// Get all users with pagination and live updates
-const UserListComponent: FC = () => {
-  const [usersData, setUsersData] = useState<Amity.LiveCollection<Amity.User>>();
-  const { data: users, loading, error, hasNextPage } = usersData ?? {};
-
-  useEffect(() => {
-    const unsubscribe = UserRepository.getUsers({}, (liveCollection) => {
-      setUsersData(liveCollection);
-      
-      if (liveCollection.data) {
-        console.log(`Loaded ${liveCollection.data.length} users`);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadMore = () => {
-    if (usersData && hasNextPage) {
-      usersData.nextPage();
-    }
-  };
-
-  if (loading) return <div>Loading users...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div>
-      {users?.map(user => (
-        <div key={user.userId}>
-          <h4>{user.displayName}</h4>
-          <p>ID: {user.userId}</p>
-        </div>
-      ))}
-      
-      {hasNextPage && (
-        <button onClick={loadMore}>Load More</button>
-      )}
-    </div>
-  );
-};
-```
-
-```dart Flutter
-final userRepo = AmityCoreClient.newUserRepository();
-
-// Get a single user by ID
-Future<AmityUser?> getSingleUser(String userId) async {
-  try {
-    final user = await userRepo.getUser(userId);
-    print('User: ${user.displayName}');
-    return user;
-  } catch (error) {
-    print('Error getting user: $error');
-    return null;
-  }
-}
-
-// Get multiple users by ID — fetch individually (no batch API)
-Future<List<AmityUser>> getUsersByIds(List<String> userIds) async {
-  final users = <AmityUser>[];
-  for (final id in userIds) {
-    try {
-      final user = await userRepo.getUser(id);
-      users.add(user);
-    } catch (error) {
-      print('Error getting user $id: $error');
-    }
-  }
-  return users;
-}
-
-// Get all users with live updates
-final liveCollection = userRepo.getUsers().getLiveCollection();
-liveCollection.getStreamController().stream.listen((userList) {
-  for (final user in userList) {
-    print('User: ${user.displayName}, ID: ${user.userId}');
-  }
-});
 ```
 </CodeGroup>
 
-## Related Topics
+## Query users
+
+Use `getUsers()` when you need a sorted, paginated user list for browse flows such as user directories, member pickers, or moderation tools. On TypeScript, the live collection callback also exposes `hasNextPage` and `onNextPage` when more results are available.
+
+### Inputs
+
+| Platform | Method | Required inputs | Optional inputs | Result shape |
+| --- | --- | --- | --- | --- |
+| TypeScript | `UserRepository.getUsers(params, callback)` | callback | `sortBy`, `limit` | Starts a live collection observer and returns an unsubscriber. |
+| iOS | `userRepository.getUsers(sortBy)` | sort option | None in this call shape | Returns a live collection observed with an `AmityNotificationToken`. |
+| Android | `userRepository.getUsers().build().query()` | None | `sortBy(...)` | Returns `Flowable<PagingData<AmityUser>>`. |
+| Flutter | `AmityCoreClient.newUserRepository().getUsers()` | None | `sortBy(...)`, paging token, limit | Returns paging data through the query builder. |
+
+<CodeGroup>
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+let loadMoreUsers: (() => void) | undefined;
+
+const unsubscribe = UserRepository.getUsers(
+  { sortBy: 'lastCreated' },
+  ({ data: users, loading, error, hasNextPage, onNextPage }) => {
+    if (loading) return;
+
+    if (error) {
+      console.error('Failed to query users', error);
+      return;
+    }
+
+    console.log(`Loaded ${users.length} users`);
+    console.log(`More pages available: ${hasNextPage}`);
+    loadMoreUsers = onNextPage;
+  },
+);
+
+// Call loadMoreUsers?.() from your load-more action.
+// Call unsubscribe() when the screen no longer needs user list updates.
+```
+
+```swift iOS
+var token: AmityNotificationToken?
+
+func queryUsersExample() {
+    let liveCollection = userRepository.getUsers(.displayName)
+    token = liveCollection.observe { collection, error in
+        let users = collection.snapshots
+        print("Loaded \(users.count) users")
+    }
+}
+```
+
+```kotlin Android
+fun queryUsers(userRepository: AmityUserRepository) {
+    userRepository.getUsers()
+        .sortBy(sortOption = AmityUserSortOption.DISPLAYNAME) // optional
+        .build()
+        .query()
+        .doOnNext { users: PagingData<AmityUser> ->
+            // PagingData<AmityUser>
+        }
+        .doOnError {
+            // Exception
+        }
+        .subscribe()
+}
+```
+
+```dart Flutter
+final _amityUsers = <AmityUser>[];
+late PagingController<AmityUser> _amityUsersController;
+
+void getUsers(AmityUserSortOption amityUserSortOption) {
+  _amityUsersController = PagingController(
+    pageFuture: (token) => AmityCoreClient.newUserRepository()
+        .getUsers()
+        .sortBy(amityUserSortOption)
+        .getPagingData(token: token, limit: 20),
+    pageSize: 20,
+  )..addListener(
+      () {
+        if (_amityUsersController.error == null) {
+          _amityUsers.clear();
+          _amityUsers.addAll(_amityUsersController.loadedItems);
+        }
+      },
+    );
+}
+```
+</CodeGroup>
+
+## Platform notes
+
+- `getUserByIds(userIds)` is public on TypeScript and Android, but not on iOS or Flutter.
+- TypeScript `getUser(...)` and `getUsers(...)` start live observers and return unsubscriber functions when your screen no longer needs updates.
+- Android uses `Flowable<AmityUser>` for single-user observation and `Flowable<List<AmityUser>>` for batch lookup.
+- Flutter `getUser(userId)` is a one-time `Future<AmityUser>`. If you need stream-based observation there, use `AmityCoreClient.newUserRepository().live.getUser(userId)`.
+
+## Related topics
 
 <CardGroup cols={2}>
   <Card title="Search and Query Users" href="./search-and-query-users" icon="user-magnifying-glass">

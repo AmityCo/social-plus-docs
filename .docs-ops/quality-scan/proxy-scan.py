@@ -19,6 +19,7 @@ Usage:
   python3 .docs-ops/quality-scan/proxy-scan.py [--root social-plus-sdk] [--json-out out.json] [--md-out report.md]
 """
 import argparse
+import datetime
 import json
 import pathlib
 import re
@@ -36,14 +37,21 @@ PLATFORMS = ["iOS", "Android", "TypeScript", "Flutter"]
 
 FENCE_RE = re.compile(r"^\s*```([A-Za-z0-9]+)\b", re.MULTILINE)
 
-# Param-table proxy: a markdown table whose header names parameters or has a Type column.
+# Param-table proxy: a markdown table whose header names parameters, inputs, or has a Type column.
+# Operation pages may use per-method "Required inputs" / "Optional inputs" tables
+# instead of a generic "Parameter" header.
 PARAM_TABLE_RE = re.compile(
-    r"\|[^\n]*\b(Parameter|Param|Argument|Field|Property|Name)\b[^\n]*\|[^\n]*\n\s*\|[\s:\-|]+\|",
+    r"\|[^\n]*\b(Parameter|Param|Argument|Input|Inputs|Field|Property|Name)\b[^\n]*\|[^\n]*\n\s*\|[\s:\-|]+\|",
     re.IGNORECASE,
 )
 TYPE_TABLE_RE = re.compile(
     r"\|[^\n]*\bType\b[^\n]*\|[^\n]*\n\s*\|[\s:\-|]+\|", re.IGNORECASE,
 )
+PARAMETERS_SECTION_RE = re.compile(
+    r"^##\s+Parameters\s*\n(?P<body>.*?)(?=^##\s+|\Z)",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
+TABLE_RE = re.compile(r"\|[^\n]*\|[^\n]*\n\s*\|[\s:\-|]+\|")
 
 # Clarity proxy: marketing adjectives/verbs that signal non-functional prose.
 MARKETING = [
@@ -62,6 +70,14 @@ CODE_BLOCK_RE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 # Zero-arg calls foo() / property access don't qualify (nothing to tabulate).
 PARAM_CALL_RE = re.compile(
     r"[A-Za-z_]\w*\s*\(\s*(\{|[A-Za-z_'\"][^)]*,|[\r\n])",
+)
+UNAVAILABLE_TERMS = (
+    "not available",
+    "not applicable",
+    "not supported",
+    "no current public",
+    "no public",
+    "does not expose",
 )
 
 
@@ -101,10 +117,36 @@ def first_prose(text):
     return "", bool(opened_with_component)
 
 
+def has_parameters_section_table(text):
+    """Return True when a page has any markdown table inside `## Parameters`.
+
+    Some operation pages use domain-specific table headers such as `Setting` or
+    `Concept` instead of a literal `Parameter` column. The heading is the
+    stronger signal for this proxy.
+    """
+    match = PARAMETERS_SECTION_RE.search(text)
+    return bool(match and TABLE_RE.search(match.group("body")))
+
+
+def explicitly_unavailable_platforms(text):
+    """Return platforms the page explicitly marks unavailable or not applicable."""
+    unavailable = set()
+    visible = strip_frontmatter(text)
+    for line in visible.splitlines():
+        lower = line.lower()
+        if not any(term in lower for term in UNAVAILABLE_TERMS):
+            continue
+        for platform in PLATFORMS:
+            if platform.lower() in lower:
+                unavailable.add(platform)
+    return unavailable
+
+
 def scan_page(path, root):
     text = path.read_text(encoding="utf-8", errors="replace")
     rel = str(path.relative_to(root.parent))
     section = path.relative_to(root).parts[0] if len(path.relative_to(root).parts) > 1 else "(root)"
+    is_changelog = section == "changelogs"
 
     # --- platform code-block counts ---
     counts = defaultdict(int)
@@ -114,6 +156,7 @@ def scan_page(path, root):
             counts[p] += 1
     total_code = sum(counts.values())
     present = [p for p in PLATFORMS if counts[p] > 0]
+    unavailable = explicitly_unavailable_platforms(text)
     # A <CodeGroup> means the page is EXPLICITLY laying platforms out side-by-side,
     # so a missing platform there is a defect by the page's own design intent.
     # Scattered code (no CodeGroup) isn't claiming parity — lower confidence.
@@ -122,7 +165,9 @@ def scan_page(path, root):
     # --- parity proxy ---
     parity = None
     if len(present) >= 1 and total_code >= 1:
-        missing = [p for p in PLATFORMS if counts[p] == 0]
+        raw_missing = [p for p in PLATFORMS if counts[p] == 0]
+        missing = [p for p in raw_missing if p not in unavailable]
+        not_applicable = [p for p in raw_missing if p in unavailable]
         # only meaningful when the page clearly documents code for several platforms
         if len(present) >= 2:
             mx = max(counts[p] for p in present)
@@ -132,6 +177,7 @@ def scan_page(path, root):
                 parity = {
                     "counts": {p: counts[p] for p in PLATFORMS},
                     "missing": missing,
+                    "not_applicable": not_applicable,
                     "disparity": disparity,
                     "flutter_gap": ("Flutter" in missing) or (counts["Flutter"] * 2 < mx if present else False),
                     "intent": "codegroup" if has_codegroup else "scattered",
@@ -139,19 +185,23 @@ def scan_page(path, root):
                 }
 
     # --- completeness proxy ---
-    has_param_table = bool(PARAM_TABLE_RE.search(text) or TYPE_TABLE_RE.search(text))
+    has_param_table = bool(
+        PARAM_TABLE_RE.search(text)
+        or TYPE_TABLE_RE.search(text)
+        or has_parameters_section_table(text)
+    )
     # Refined: only a real gap if the page shows a parameter-bearing call (there
     # ARE params to document) but ships no table. Excludes conceptual/setup pages
     # whose code is zero-arg calls or initialization — content-based, not slug-based.
     code_body = "\n".join(CODE_BLOCK_RE.findall(text))
     has_param_call = bool(PARAM_CALL_RE.search(code_body))
     completeness_raw = (total_code >= 1) and (not has_param_table)          # old, over-counting
-    completeness_flag = has_param_call and (not has_param_table)            # refined, actionable
+    completeness_flag = (not is_changelog) and has_param_call and (not has_param_table)  # refined, actionable
 
     # --- clarity proxy ---
     opener, opened_with_component = first_prose(text)
     marketing_hits = MARKETING_RE.findall(opener)
-    clarity_flag = bool(marketing_hits) or opened_with_component
+    clarity_flag = (not is_changelog) and (bool(marketing_hits) or opened_with_component)
 
     return {
         "page": rel,
@@ -267,7 +317,23 @@ def main(argv=None):
     for sec, p, cp, par, cla, cmp in sorted(rows, key=lambda x: -(x[3] + x[5])):
         print(f"{sec:<40} {p:>5} {cp:>5} {par:>5.0f} {cla:>5.0f} {cmp:>5.0f}")
 
-    out = {"summary": summary, "pages": results}
+    flagged = {
+        "parity": parity_flagged,
+        "flutter_gaps": flutter_gap,
+        "flutter_gaps_high_confidence": flutter_gap_high,
+        "flutter_gaps_needs_review": flutter_gap_review,
+        "clarity": clarity_flagged,
+        "marketing_openers": marketing_flagged,
+        "component_first": component_first,
+        "completeness": completeness_flagged,
+    }
+
+    out = {
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "summary": summary,
+        "flagged": flagged,
+        "pages": results,
+    }
     if args.json_out:
         pathlib.Path(args.json_out).write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
         print(f"\nJSON written: {args.json_out}")
@@ -280,13 +346,13 @@ def main(argv=None):
 def write_md(out, path):
     s = out["summary"]
     L = []
-    L.append("# Docs Quality — Full-Corpus Proxy Scan\n")
+    L.append("# Docs Quality - Proxy Scan\n")
     L.append(f"_LLM-free structural proxies for the 3 weak rubric dimensions. Scanned {s['total_pages']} pages "
              f"under `{pathlib.Path(s['root']).name}` ({s['code_pages']} with code blocks)._\n")
     L.append("## Headline\n")
     L.append(f"- **Parity:** {s['parity']['flagged']} pages flagged ({s['parity']['pct_of_code_pages']}% of code pages); "
              f"**{s['parity']['flutter_gap']} are Flutter coverage gaps**.")
-    L.append(f"- **Clarity:** {s['clarity']['flagged']} pages ({s['clarity']['pct']}%) — "
+    L.append(f"- **Clarity:** {s['clarity']['flagged']} pages ({s['clarity']['pct']}%) - "
              f"{s['clarity']['marketing_openers']} marketing-register openers, {s['clarity']['component_first']} open with a component before any sentence.")
     L.append(f"- **Completeness:** {s['completeness']['actionable_param_call_no_table']} pages show a parameter-bearing call "
              f"but ship **no parameter table** ({s['completeness']['pct_of_param_call_pages']}% of "
@@ -296,16 +362,34 @@ def write_md(out, path):
     L.append("|---|---|---|---|---|---|")
     for sec, v in s["by_section"].items():
         L.append(f"| `{sec}` | {v['pages']} | {v['code_pages']} | {v['parity']} | {v['clarity']} | {v['completeness_of_code']} |")
+    flagged = out.get("flagged", {})
+
     # worst offenders
     L.append("\n## Flutter coverage gaps (top 25)\n")
-    fg = [r for r in out["pages"] if r["parity"] and r["parity"]["flutter_gap"]]
+    fg = list(flagged.get("flutter_gaps") or [r for r in out["pages"] if r["parity"] and r["parity"]["flutter_gap"]])
     fg.sort(key=lambda r: r["platform_counts"]["Flutter"] - max(r["platform_counts"].values()))
     for r in fg[:25]:
         c = r["platform_counts"]
-        L.append(f"- `{r['page']}` — iOS {c['iOS']}, Android {c['Android']}, TS {c['TypeScript']}, **Flutter {c['Flutter']}**")
+        L.append(f"- `{r['page']}` - iOS {c['iOS']}, Android {c['Android']}, TS {c['TypeScript']}, **Flutter {c['Flutter']}**")
+    L.append("\n## Parameter table gaps\n")
+    missing_params = list(flagged.get("completeness") or [r for r in out["pages"] if r["completeness_flag"]])
+    missing_params.sort(key=lambda r: (r["section"], r["page"]))
+    if missing_params:
+        for r in missing_params:
+            L.append(f"- `{r['page']}` - opener: \"{r['opener'][:90]}...\"")
+    else:
+        L.append("- None.")
     L.append("\n## Marketing-register openers (top 25)\n")
-    for r in [r for r in out["pages"] if r["marketing_hits"]][:25]:
-        L.append(f"- `{r['page']}` — {', '.join(r['marketing_hits'])} — \"{r['opener'][:90]}…\"")
+    for r in list(flagged.get("marketing_openers") or [r for r in out["pages"] if r["marketing_hits"]])[:25]:
+        L.append(f"- `{r['page']}` - {', '.join(r['marketing_hits'])} - \"{r['opener'][:90]}...\"")
+    L.append("\n## Component-first openers\n")
+    component_first = list(flagged.get("component_first") or [r for r in out["pages"] if r["opened_with_component"]])
+    component_first.sort(key=lambda r: (r["section"], r["page"]))
+    if component_first:
+        for r in component_first[:25]:
+            L.append(f"- `{r['page']}`")
+    else:
+        L.append("- None.")
     pathlib.Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
 
 
