@@ -1,0 +1,333 @@
+---
+title: "Users Who Blocked You"
+description: "Query the users who have blocked the current user — the reverse direction of the blocked-user list."
+---
+
+Blocking is bi-directional: the current user can see the accounts they have blocked, and — separately — the accounts that have blocked them. Use the blocking-user APIs to read the reverse direction: the users who have blocked the current user.
+
+<Info>
+This is the directional inverse of [Manage Blocked Users](./manage-blocked-users). "Blocked users" are accounts the current user blocked; "blocking users" are accounts that blocked the current user.
+</Info>
+
+There are two read patterns:
+
+| API | Best for | Returns |
+| --- | --- | --- |
+| `getBlockingUsers()` | A live, self-updating list | Live collection of `Amity.User` |
+| `getAllBlockingUsers()` | A one-shot list for local decisions | `Amity.User[]` |
+
+<Note>
+The blocking-user APIs are available on TypeScript, iOS, and Android. They are not available in the current Flutter SDK.
+</Note>
+
+## Get Blocking Users
+
+Observe the users who have blocked the current user as a live collection. Unlike `getBlockedUsers()`, this observer takes **only a callback** — there are no query parameters. Page through results with the `onNextPage` / `hasNextPage` values from the callback.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+let loadMoreBlockingUsers: (() => void) | undefined;
+
+const unsubscribe = UserRepository.getBlockingUsers(
+  ({ data: users, onNextPage, hasNextPage, loading, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    if (!loading && users) {
+      renderResults(users);
+    }
+
+    loadMoreBlockingUsers = hasNextPage ? onNextPage : undefined;
+  },
+);
+
+// Stop observing when the screen is destroyed.
+unsubscribe();
+```
+
+```swift iOS
+let repository = AmityUserRepository()
+let blockingUsers = repository.getBlockingUsers()
+
+_ = blockingUsers.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    let users = collection.snapshots
+    _ = users.first?.userId
+}
+
+blockingUsers.nextPage()
+```
+
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .getBlockingUsers()
+    .subscribe(
+        { pagingData: PagingData<AmityUser> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+</CodeGroup>
+
+## Get All Blocking Users
+
+Use `getAllBlockingUsers()` when your app needs a one-shot list instead of a live collection — for example, to filter content or hide interactions locally. It returns up to 100 users and uses a short SDK-side cache. Call it again when you need a fresh snapshot.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const blockingUsers = await UserRepository.getAllBlockingUsers();
+const blockingUserIds = new Set(blockingUsers.map((user) => user.userId));
+```
+
+```swift iOS
+let repository = AmityUserRepository()
+let blockingUsers = try await repository.getAllBlockingUsers()
+let blockingUserIds = Set(blockingUsers.map { $0.userId })
+```
+
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .getAllBlockingUsers()
+    .subscribe(
+        { users: List<AmityUser> ->
+            val blockingUserIds = users.map { it.getUserId() }.toSet()
+            showSuccessMessage(blockingUserIds)
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+</CodeGroup>
+
+<Tip>
+The SDK already filters content in both block directions. Use these lists for product surfaces — such as hiding a "message" or "follow" action — rather than to re-implement content filtering the SDK performs for you.
+</Tip>
+
+## Hide Blocked Users from Feeds
+
+Turn on `excludeBlockUserPosts` in a post query to drop any post **authored by or mentioning** a user in either block direction — people the current user blocked, and people who blocked them. Mentions are included because a blocked user can appear in a post only as a tagged participant. The SDK applies the filter on-device after fetching and re-applies it automatically whenever the block list changes.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = PostRepository.getPosts(
+  {
+    targetId: 'community-123',
+    targetType: 'community',
+    sortBy: 'lastCreated',
+    excludeBlockUserPosts: true,
+  },
+  ({ data: posts }) => {
+    // posts are already filtered for you
+  },
+);
+```
+
+```swift iOS
+let options = AmityPostQueryOptions(
+    targetType: .community,
+    targetId: "community-123",
+    sortBy: .lastCreated,
+    includeDeleted: false,
+    feedType: .published,
+    excludeBlockUserPosts: true
+)
+let collection = postRepository.getPosts(options)
+```
+
+```kotlin Android
+val query = postRepository
+    .getPosts()
+    .targetCommunity(communityId = "community-123")
+    .sortBy(AmityCommunityFeedSortOption.LAST_CREATED)
+    .includeDeleted(false)
+    .excludeBlockUserPosts(true)
+    .build()
+    .query()
+```
+
+</CodeGroup>
+
+<Warning>
+Because filtering happens on-device after fetching, a page can return fewer items than the page size (a 20-item page that drops 3 matches shows 17). There is no automatic top-up — keep paging if you need to fill the screen.
+</Warning>
+
+## Hide Blocked Users from Comments
+
+`excludeBlockUserComments` does the same for comment threads: comments authored by a user in either block direction are dropped before you see them. Because each device filters against its own block list, a user's comments disappear for the people who blocked them — and vice versa — with no coordination needed.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = CommentRepository.getComments(
+  {
+    referenceId: 'post-123',
+    referenceType: 'post',
+    sortBy: 'lastCreated',
+    excludeBlockUserComments: true,
+  },
+  ({ data: comments }) => {
+    // comments are already filtered for you
+  },
+);
+```
+
+```swift iOS
+let options = AmityCommentQueryOptions(
+    referenceId: "post-123",
+    referenceType: .post,
+    orderBy: .descending,
+    includeDeleted: false,
+    pageSize: 20,
+    excludeBlockUserComments: true
+)
+let collection = commentRepository.getComments(with: options)
+```
+
+```kotlin Android
+val comments = commentRepository
+    .getComments()
+    .post(postId = "post-123")
+    .sortBy(AmityCommentSortOption.LAST_CREATED)
+    .excludeBlockUserComments(true)
+    .build()
+    .query()
+```
+
+</CodeGroup>
+
+<Note>
+The same short-page behavior applies — filtered comment pages can also come back shorter than the requested page size.
+</Note>
+
+## Keep Block State Live
+
+Block and unblock events arrive in real time **by default** through the managed `BLOCK` auto-subscription. Every block-aware surface — `getBlockingUsers()`, `getBlockedUsers()`, and any feed or comment query using the exclude flags above — refreshes on its own when someone blocks or unblocks the current user. No polling, no manual reload.
+
+You only need to touch this if you want to turn it off — for example, to manage a tight budget of real-time subscriptions. A missed event never breaks anything: the next fetch reconciles with the server.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Client, AmityAutoSubscription } from '@amityco/ts-sdk';
+
+Client.disableAutoSubscriptions([AmityAutoSubscription.BLOCK]); // stop receiving
+Client.enableAutoSubscriptions([AmityAutoSubscription.BLOCK]);  // turn back on
+```
+
+```swift iOS
+client.disableAutoSubscriptions([.block])
+client.enableAutoSubscriptions([.block])
+```
+
+```kotlin Android
+AmityCoreClient.unsubscribeAuto(feature = AmityAutoSubscription.BLOCK).subscribe()
+AmityCoreClient.subscribeAuto(feature = AmityAutoSubscription.BLOCK).subscribe()
+```
+
+</CodeGroup>
+
+<Tip>
+Most apps leave this on and real-time "just works." Turning it off only makes sense if you are managing a limited number of real-time subscriptions.
+</Tip>
+
+## Recipe: Anonymize Blocked Users in a Reaction List
+
+Reactions are out of scope for the automatic block filters. To keep everyone in a reaction list but show people in a block relationship as **"Anonymous"**, combine both block lists client-side and relabel matching reactors. (To hide them instead, filter those reactions out rather than relabeling.)
+
+<CodeGroup>
+
+```typescript TypeScript
+import { ReactionRepository, UserRepository } from '@amityco/ts-sdk';
+
+const blockRel = [
+  ...(await UserRepository.getAllBlockedUsers()),
+  ...(await UserRepository.getAllBlockingUsers()),
+];
+
+ReactionRepository.getReactions(
+  { referenceType: 'post', referenceId: 'post-123' },
+  ({ data: reactors, loading }) => {
+    if (loading) return;
+    // Keep every row; relabel the ones in a block relationship.
+    render(
+      reactors.map((r) =>
+        blockRel.some((u) => u.userId === r.userId)
+          ? { ...r, displayName: 'Anonymous' }
+          : r,
+      ),
+    );
+  },
+);
+```
+
+```swift iOS
+let blocked = try await userRepository.getAllBlockedUsers()
+let blockers = try await userRepository.getAllBlockingUsers()
+let blockRel = blocked + blockers
+
+let collection = reactionRepository.getReactions("post-123", referenceType: .post, reactionName: nil)
+token = collection.observe { c, _, _ in
+    let rows = c.snapshots.map { r -> (reaction: AmityReaction, name: String) in
+        let anon = blockRel.contains { $0.userId == r.creator?.userId }
+        return (r, anon ? "Anonymous" : (r.creator?.displayName ?? ""))
+    }
+    render(rows)
+}
+```
+
+```kotlin Android
+Single.zip(
+    userRepo.getAllBlockedUsers(),
+    userRepo.getAllBlockingUsers(),
+) { blocked, blockers -> blocked + blockers }
+    .subscribe { blockRel ->
+        // The adapter renders "Anonymous" at bind time when a reactor's creator is in blockRel.
+        adapter.blockRel = blockRel
+        reactionRepo.getReactions(AmityReactionReference.POST("post-123"))
+            .build().query()
+            .subscribe { paging -> adapter.submitData(lifecycle, paging) }
+    }
+```
+
+</CodeGroup>
+
+<Note>
+This is a client-side pattern, not an SDK feature — it is built from `getAllBlockedUsers()` + `getAllBlockingUsers()` plus your existing reaction query.
+</Note>
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Manage Blocked Users" href="./manage-blocked-users" icon="list">
+    Query accounts the current user blocked.
+  </Card>
+  <Card title="Block & Unblock User" href="./block-unblock-user" icon="ban">
+    Change blocked status.
+  </Card>
+  <Card title="User Relationship" href="../overview" icon="users">
+    Follow, unfollow, and blocking overview.
+  </Card>
+</CardGroup>
