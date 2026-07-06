@@ -7100,6 +7100,7 @@ if (error is AmityException) {
 | Visitor usage limit exceeded | `Amity.ServerError.VISITOR_USAGE_LIMIT_EXCEEDED` | `.visitorUsageLimitExceeded` | `AmityError.VISITOR_USAGE_LIMIT_EXCEEDED` | Not exposed as a public Flutter SDK enum in the current source |
 | Visitor permission denied | `Amity.ServerError.VISITOR_PERMISSION_DENIED` | `.visitorPermissionDenied` | `AmityError.VISITOR_PERMISSION_DENIED` | Not exposed as a public Flutter SDK enum in the current source |
 | Bot permission denied | `Amity.ServerError.BOT_PERMISSION_DENIED` | `.botPermissionDenied` | `AmityError.BOT_PERMISSION_DENIED` | Not exposed as a public Flutter SDK enum in the current source |
+| Max blocked users reached | `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`) | `.maxBlockedUsersReached` | `AmityError.MAX_BLOCKED_USERS_REACHED` | Refer to platform SDK |
 | Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
 ## Production Checklist
@@ -15475,7 +15476,7 @@ Use the social.plus SDK Social Module to add posts, comments, communities, react
     - **Relationship Status**: Read connection state and request state where supported
 
     **Feeds, search, and browsing**
-    - **Feeds**: Query user, community, and global feeds
+    - **Feeds**: Query user, community, global, and For You (personalized) feeds
     - **Global Feed Ranking**: Use chronological ordering or configured custom post ranking where enabled
     - **Community Search**: Query communities by keyword, category, tags, membership filter, and sort order
     - **Enhanced Search**: Intelligent Search has separate setup and activation requirements in the Discovery & Engagement docs
@@ -15527,7 +15528,7 @@ Use the social.plus SDK Social Module to add posts, comments, communities, react
         - **Privacy Controls**: Manage visibility and interactions
 
         Feed and timeline query APIs
-        - **Feed Types**: Global, user, and community feeds
+        - **Feed Types**: Global, For You (personalized), user, and community feeds
         - **Ranking**: Chronological ordering and configured custom post ranking
         - **Content Filtering**: Hide unwanted content and filter by tags, and keywords
         - **Performance Optimization**: Efficient pagination and caching strategies
@@ -15553,7 +15554,7 @@ Use the social.plus SDK Social Module to add posts, comments, communities, react
     1. **Setup Content Creation**: Implement post creation with [Posts](/social-plus-sdk/social/content-management/posts/overview)
     2. **Enable Discussions**: Add comment functionality with [Comments](/social-plus-sdk/social/content-management/comments/overview)
     3. **Add Engagement**: Implement reactions with [Reactions](/social-plus-sdk/core-concepts/content-handling/reactions)
-    4. **Create Feeds**: Query user, community, and global feeds with [Feed](/social-plus-sdk/social/discovery-engagement/feed/overview)
+    4. **Create Feeds**: Query user, community, global, and For You (personalized) feeds with [Feed](/social-plus-sdk/social/discovery-engagement/feed/overview)
     5. **Enable Notifications**: Setup [Notification System](/social-plus-sdk/social/discovery-engagement/notifications/overview)
 
     **Optional Enhancements**: Stories, user following, and search
@@ -18500,7 +18501,7 @@ For an end-to-end product walkthrough, see [User Profiles & Social Graph](/use-c
 | System | What it manages | Main SDK surface |
 | --- | --- | --- |
 | Following | Follow requests, accepted follows, pending requests, follower/following lists, and follow counts | `UserRepository.Relationship` on TypeScript, `relationship()` on Android and Flutter, `AmityUserRelationship` on iOS |
-| Blocking | Block/unblock actions and the current user's blocked-user list | Relationship block APIs plus `getBlockedUsers()` on the user repository |
+| Blocking | Block/unblock actions, the current user's blocked-user list, and — in the reverse direction — the users who have blocked the current user | Relationship block APIs plus `getBlockedUsers()` / `getBlockingUsers()` on the user repository |
 
 Follow status values are platform-specific enum or string values, but the shared meanings are:
 
@@ -18525,6 +18526,7 @@ Whether a follow becomes `accepted` immediately or starts as `pending` is determ
 | Block and unblock users | Yes | Yes | Yes | Yes |
 | Query paginated blocked users | Yes | Yes | Yes | Yes |
 | Get all blocked users as a one-shot list | Yes | Yes | Yes | Not available in the Flutter public repository |
+| Query users who blocked the current user (reverse direction) | Yes | Yes | Yes | Not available in the current Flutter SDK |
 
 ## Use The Right Read API
 
@@ -18546,6 +18548,7 @@ Do not rely on this overview for feed visibility, search visibility, comment per
     Query paginated relationship lists.
     Block or unblock another user.
     Query the current user's blocked-user list.
+    Query the reverse direction — users who blocked you.
 
 ## Social — Content Management Overview
 
@@ -18675,6 +18678,53 @@ AmityCoreClient.getShareableLinkConfiguration()
 ```
 
 
+## Generate an Event Link
+
+Event links are the primary use case for shareable links: an app can copy or share a direct link to an event detail screen. Gate the share UI on `isEnabled` first, then generate the link — `generateLink` returns `null` when the event pattern is not configured.
+
+
+```typescript TypeScript
+import { AmitySharableContentType, Client } from "@amityco/ts-sdk";
+
+async function getEventShareLink(eventId: string) {
+  const config = await Client.getShareableLinkConfiguration();
+
+  // Feature gate — hide the share action when event links aren't configured
+  if (!config.isEnabled(AmitySharableContentType.EVENT)) return null;
+
+  return config.generateLink(AmitySharableContentType.EVENT, eventId);
+  // → "https://app.example.com/events/abc123" or null
+}
+```
+
+```swift iOS
+let eventId = "event-id"
+let config = try await client.getShareableLinkConfiguration()
+
+// Feature gate — hide the share action when event links aren't configured
+guard config.isEnabled(.event) else { return }
+
+if let link = config.generateLink(.event, referenceId: eventId) {
+    showInfo(link)
+}
+```
+
+```kotlin Android
+AmityCoreClient.getShareableLinkConfiguration()
+    .subscribe({ config ->
+        // Feature gate — hide the share action when event links aren't configured
+        if (config.isEnabled(AmitySharableContentType.EVENT)) {
+            val link = config.generateLink(AmitySharableContentType.EVENT, eventId)
+            // ... copy or share `link`
+        }
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+
+Shareable links are available on TypeScript, iOS, and Android. Flutter has no public shareable-link configuration API in the current SDK source.
+
 ## Best Practices
 
 - Treat missing patterns as a disabled share target for that content type.
@@ -18687,6 +18737,7 @@ AmityCoreClient.getShareableLinkConfiguration()
     Learn how posts are modeled and created.
     Share community destinations after configuring community URL patterns.
     Share user profile destinations after configuring user URL patterns.
+    Share event links after configuring the event URL pattern.
 
 ---
 
@@ -24274,7 +24325,7 @@ Future<void> queryStoryReachedUsers(String storyId) async {
 
 Discovery and engagement APIs help users find content, communities, and activity updates. Use this overview to choose between feed retrieval, intelligent search, and notification tray APIs.
 
-    Query global feeds, custom-ranking feeds, and community or user feeds.
+    Query global, custom-ranking, For You (personalized), community, and user feeds.
     Search posts and communities through SDK-supported semantic search surfaces.
     Retrieve tray items, item status, tray seen status, and notification event metadata.
     Add engagement affordances on posts, comments, stories, and other supported content.
@@ -24312,6 +24363,7 @@ Use `AmityFeedRepository` to read feed-style post collections. The SDK exposes u
 | --- | --- | --- | --- | --- |
 | Global feed | `FeedRepository.getGlobalFeed()` | `AmityFeedRepository().getGlobalFeed()` | `AmitySocialClient.newFeedRepository().getGlobalFeed()` | `AmitySocialClient.newFeedRepository().getGlobalFeed()` |
 | Custom-ranking global feed | `FeedRepository.getCustomRankingGlobalFeed()` | `AmityFeedRepository().getCustomRankingGlobalFeed()` | `AmitySocialClient.newFeedRepository().getCustomRankingGlobalFeed()` | `AmitySocialClient.newFeedRepository().getCustomRankingGlobalFeed()` |
+| For You feed | `FeedRepository.getForYouFeed()` | Supported | Supported | Not available |
 | User feed | `FeedRepository.getUserFeed()` | `AmityFeedRepository().getUserFeed()` | `AmitySocialClient.newFeedRepository().getUserFeed()` | `AmitySocialClient.newFeedRepository().getUserFeed()` |
 | Community feed | `FeedRepository.getCommunityFeed()` | `AmityFeedRepository().getCommunityFeed()` | `AmitySocialClient.newFeedRepository().getCommunityFeed()` | `AmitySocialClient.newFeedRepository().getCommunityFeed()` |
 
@@ -24326,6 +24378,7 @@ TypeScript still exports `queryGlobalFeed()`, but the SDK source marks it deprec
 | Query custom-ranking global feed | `includeMixedStructure` | No | Include mixed-structure posts in the backend-ranked global feed response. |
 | TypeScript pagination | `limit`, `onNextPage`, `hasNextPage` | No | Control page size and load additional pages from the live collection callback. |
 | Android refresh | `invalidateCache` | No | Skip cached paging data for deliberate refresh flows. |
+| Query For You feed | None | — | `getForYouFeed()` takes no query parameters. Pagination is handled through the live collection callback. |
 
 ## Query Global Feed
 
@@ -24473,6 +24526,135 @@ final page = await AmitySocialClient.newFeedRepository()
 
 final posts = page.data;
 showError(posts.length);
+```
+
+
+## Query For You Feed
+
+For You feed is a backend-personalized global feed for the current user. Ranking is owned by the backend; the SDK only requests the feed and returns the posts the backend provides. It is a network-level feature that must be enabled for your network before the feed returns content.
+
+For You feed is a network setting. Read `getForYouFeedSetting()` on the client and only render the surface when the feed is enabled. If the feed is not enabled, the collection reports a feed-disabled error rather than an empty list — `AmityForYouFeedDisabledError` on TypeScript and Android, or the `.forYouFeedDisabled` error code on iOS (see below).
+
+`getForYouFeed()` is a live collection that takes **no query parameters**. Page through results with the `onNextPage` / `hasNextPage` values from the callback; the default page size is 20 posts.
+
+
+```typescript TypeScript
+import { Client, FeedRepository } from '@amityco/ts-sdk';
+
+// 1. Gate the surface on the network setting.
+const { forYouFeed } = await Client.getForYouFeedSetting();
+if (!forYouFeed.enabled) {
+  hideForYouSurface();
+  return;
+}
+
+// 2. Observe the personalized feed.
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
+
+const unsubscribe = FeedRepository.getForYouFeed(
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      if (error instanceof FeedRepository.AmityForYouFeedDisabledError) {
+        // For You feed is not enabled for this network — hide the tab.
+        hideForYouSurface();
+        return;
+      }
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
+  },
+);
+
+function loadMoreForYouFeed() {
+  if (canLoadMore) {
+    loadNextPage?.();
+  }
+}
+
+unsubscribe();
+```
+
+```swift iOS
+let forYouFeed = feedRepository.getForYouFeed()
+
+token = forYouFeed.observe { collection, error in
+    if let error {
+        if error.isAmityErrorCode(.forYouFeedDisabled) {
+            // For You feed is not enabled for this network — hide the tab.
+            hideForYouSurface()
+            return
+        }
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+
+forYouFeed.nextPage()
+```
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getForYouFeed()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            if (error is AmityForYouFeedDisabledError) {
+                // For You feed is not enabled for this network — hide the tab.
+                hideForYouSurface()
+            } else {
+                handleGeneralError(error)
+            }
+        },
+    )
+```
+
+
+For You feed is available on TypeScript, iOS, and Android. It is not available in the current Flutter SDK.
+
+### Read the For You feed setting
+
+`getForYouFeedSetting()` is a method on the client that reports whether the network has For You feed enabled. Use it to decide whether to render a For You tab or entry point at all.
+
+
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const setting = await Client.getForYouFeedSetting();
+// setting: { forYouFeed: { enabled: boolean } }
+
+if (setting.forYouFeed.enabled) {
+  showForYouTab();
+}
+```
+
+```swift iOS
+let setting = try await client.getForYouFeedSetting()
+if setting.enabled {
+    showForYouTab()
+}
+```
+
+```kotlin Android
+AmityCoreClient.getForYouFeedSetting()
+    .doOnSuccess { setting: AmityForYouFeedSetting ->
+        if (setting.enabled) {
+            showForYouTab()
+        }
+    }
+    .doOnError { error ->
+        handleGeneralError(error)
+    }
+    .subscribe()
 ```
 
 
@@ -25267,6 +25449,7 @@ The SDK event surface is currently exposed in TypeScript, iOS, and Android. The 
 | Update event | `EventRepository.updateEvent(eventId, options)` | `AmityEventRepository().updateEvent(id:options:)` | `AmitySocialClient.newEventRepository().updateEvent(eventId)...build().apply()` | Not exposed |
 | Delete event | `EventRepository.deleteEvent(eventId)` | `AmityEventRepository().deleteEvent(id:)` | `AmitySocialClient.newEventRepository().deleteEvent(eventId)` | Not exposed |
 | RSVP | `event.createRSVP(...)`, `event.updateRSVP(...)`, `event.getMyRSVP()`, `event.getRSVPs(...)` | Same methods on `AmityEvent` | Same methods on `AmityEvent` | Not exposed |
+| Share event link | `Client.getShareableLinkConfiguration()` + `AmitySharableContentType.EVENT` | Supported | Supported | Not available |
 
 ## Event Fields
 
@@ -25308,6 +25491,7 @@ This page documents SDK method names and data surfaces only. Product policy such
     Create scheduled virtual or in-person events.
     Get, query, update, and delete event objects.
     Create, update, read, and query RSVP responses.
+    Generate a shareable deep link to an event.
 
 ---
 
@@ -26610,6 +26794,59 @@ await AmityCoreClient.newUserRepository()
 ```
 
 
+### Handle the blocked-user limit
+
+A network caps how many users one account can block. When the current user is already at that cap, the block call fails with a "maximum blocked users reached" error instead of succeeding. On TypeScript this surfaces as the server error code `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`). Catch it and prompt the user to unblock someone before blocking another account.
+
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+try {
+  await UserRepository.Relationship.blockUser(userId);
+} catch (error) {
+  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
+    showBlockedUserLimitReached();
+    return;
+  }
+  handleError(error);
+}
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+do {
+    try await relationship.blockUser(userId: "target-user-id")
+    showSuccessMessage()
+} catch {
+    if error.isAmityErrorCode(.maxBlockedUsersReached) {
+        // Already at the per-network block cap — prompt the user to unblock someone first.
+        showBlockedUserLimitReached()
+    } else {
+        handleError(error)
+    }
+}
+```
+
+```kotlin Android
+AmityCoreClient.newUserRepository()
+    .relationship()
+    .blockUser(userId = targetUserId)
+    .doOnComplete {
+        showSuccessMessage()
+    }
+    .doOnError { error ->
+        if (AmityError.from(error) == AmityError.MAX_BLOCKED_USERS_REACHED) {
+            // Already at the per-network block cap — prompt the user to unblock someone first.
+            showBlockedUserLimitReached()
+        } else {
+            handleGeneralError(error)
+        }
+    }
+    .subscribe()
+```
+
+
 ## Unblock User
 
 Unblock a user when the current user removes a previously created block.
@@ -26662,7 +26899,7 @@ After a successful block or unblock action:
 ## Related Topics
 
     Query the blocked-user list.
-    Read status and counters.
+    Query the reverse direction.
     Change follow relationships.
 
 ---
@@ -26680,7 +26917,7 @@ There are two read patterns:
 | `getBlockedUsers()` | A paginated management screen | TypeScript, iOS, Android, Flutter |
 | `getAllBlockedUsers()` | A one-shot list for local decisions | TypeScript, iOS, Android |
 
-You can query users blocked by the current user. These APIs do not reveal which users have blocked the current user.
+These APIs return users the current user has **blocked**. To read the reverse direction — users who have **blocked the current user** — see [Users Who Blocked You](./manage-blocking-users).
 
 ## Parameters
 
@@ -26794,8 +27031,8 @@ The one-shot API is not available in the Flutter public repository. For Flutter,
 
 ## Related Topics
 
+    Query the reverse direction.
     Change blocked status.
-    Read follow status.
     Query social graph lists.
 
 ## UIKit — Overview & Getting Started
@@ -29622,7 +29859,7 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
     - Message editing, deletion, and interaction controls
     - Network awareness and offline handling
 
-    **Platform Support:** Flutter only
+    **Platform Support:** iOS, Android, React, Flutter
 
       📱 Conversation Chat Guide
 
@@ -29635,7 +29872,7 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
     - Swipe-to-archive functionality
     - Create new conversations and access archived chats
 
-    **Platform Support:** Flutter only
+    **Platform Support:** iOS, Android, React, Flutter
 
       📋 Recent Chats Guide
 
@@ -29651,7 +29888,7 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
     - Group settings and profile customization
     - Message reporting and moderation tools
 
-    **Platform Support:** Flutter only
+    **Platform Support:** iOS, Android, React, Flutter
 
     **Components Included:**
     - AmityGroupChatPage - Main group interface
@@ -29748,9 +29985,9 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
 | Feature | Conversation Chat | Group Chat | Live Chat |
 |---------|------------------|------------|-----------|
 | **Flutter Support** | ✅ Full Support | ✅ Full Support | ❌ Not Available |
-| **iOS Support** | ❌ Not Available | ❌ Not Available | ✅ Full Support |
-| **Android Support** | ❌ Not Available | ❌ Not Available | ✅ Full Support |
-| **React Support** | ❌ Not Available | ❌ Not Available | ✅ Full Support |
+| **iOS Support** | ✅ Full Support | ✅ Full Support | ✅ Full Support |
+| **Android Support** | ✅ Full Support | ✅ Full Support | ✅ Full Support |
+| **React Support** | ✅ Full Support | ✅ Full Support | ✅ Full Support |
 | **React Native Support** | ❌ Not Available | ❌ Not Available | ❌ Not Available |
 | **Use Case** | 1-on-1 messaging | Multi-user collaboration | Live streaming events |
 | **Member Limit** | 2 users | Multiple users | High volume viewers |
@@ -29789,8 +30026,6 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
 
 > Complete guide to social.plus UIKit chat components for building messaging experiences
 
-# Chat Components
-
 social.plus UIKit provides a comprehensive set of chat components for building modern messaging experiences. These components are designed to work seamlessly across all platforms with consistent functionality and customizable styling.
 
     Powerful search across channels and messages
@@ -29801,21 +30036,19 @@ social.plus UIKit provides a comprehensive set of chat components for building m
 ## Key Features
 
     - Instant message delivery and receipt
-    - Typing indicators and read receipts
-    - Online presence and status
+    - Read and unread message state
     - Message synchronization across devices
 
     - Text messages with formatting
     - Image and video sharing
     - File attachments
-    - Voice messages
-    - Location sharing
 
     - Message reactions and replies
+    - Mentions in messages
     - Message editing and deletion
     - Message search and filtering
+    - Archive and unarchive chats
     - Push notifications
-    - Offline message caching
 
     - Message reporting
     - User blocking and muting
@@ -29871,16 +30104,22 @@ supportFragmentManager.beginTransaction()
     .commit()
 ```
 
-```javascript React
-import { AmityChatRoom } from '@amityco/ui-kit';
+```tsx React
+import { AmityUiKitProvider, AmityUiKitChatV4 } from '@amityco/ui-kit';
+import config from './uikit.config.json';
 
-function MyApp() {
+function MyChatApp() {
   return (
-    <AmityChatRoom
-      channelId="your_channel_id"
-      theme="light"
-      onMessageSent={(message) => console.log('Message sent:', message)}
-    />
+    <AmityUiKitProvider
+      configs={config}
+      apiKey="API_KEY"
+      apiRegion="API_REGION"
+      userId="userId"
+      displayName="displayName"
+      apiEndpoint="https://api.{API_REGION}.amity.co"
+    >
+      <AmityUiKitChatV4 />
+    </AmityUiKitProvider>
   );
 }
 ```
@@ -29934,49 +30173,31 @@ graph TD
 
 ## Customization Options
 
-### Theme Configuration
+Chat pages follow the UIKit page / component / element ID system. Set a network-wide theme in the top-level `theme`, then override a specific chat surface by its ID under `customizations` in your `uikit.config.json` — the same pattern used across every UIKit page.
 
-```json
+```json uikit.config.json
 {
-  "chat_theme": {
-    "light": {
-      "message_bubble_sent": "#007AFF",
-      "message_bubble_received": "#E5E5EA",
-      "text_color_sent": "#FFFFFF",
-      "text_color_received": "#000000",
-      "timestamp_color": "#8E8E93",
-      "background_color": "#FFFFFF"
+  "preferred_theme": "default",
+  "theme": {
+    "light": { "primary_color": "#1054DE", "background_color": "#FFFFFF" }
+  },
+  "excludes": [],
+  "customizations": {
+    "chat_home_page/*/*": {
+      "theme": {
+        "light": { "primary_color": "#1054DE" }
+      }
     },
-    "dark": {
-      "message_bubble_sent": "#0A84FF",
-      "message_bubble_received": "#38383A",
-      "text_color_sent": "#FFFFFF",
-      "text_color_received": "#FFFFFF",
-      "timestamp_color": "#8E8E93",
-      "background_color": "#000000"
+    "live_chat/*/*": {
+      "theme": {
+        "light": { "primary_color": "#1054DE" }
+      }
     }
   }
 }
 ```
 
-### Feature Configuration
-
-```json
-{
-  "chat_features": {
-    "message_reactions": true,
-    "message_replies": true,
-    "message_editing": true,
-    "message_deletion": true,
-    "file_sharing": true,
-    "image_sharing": true,
-    "voice_messages": true,
-    "typing_indicators": true,
-    "read_receipts": true,
-    "push_notifications": true
-  }
-}
-```
+Chat page IDs include `chat_home_page`, `chat_page`, `group_chat_page`, and `live_chat`. For the full theming and localization model, see [Component styling](/uikit/customization/component-styling) and [Localization](/uikit/customization/localization).
 
 ## Performance Considerations
 
@@ -30006,7 +30227,7 @@ graph TD
 
 All chat components include built-in security features to protect user communications and prevent abuse.
 
-    End-to-end encryption for secure messaging
+    Messages are encrypted in transit (TLS)
     AI-powered profanity and content filtering
     Block, mute, and report functionality
     Comprehensive moderation and management tools
@@ -30067,7 +30288,7 @@ The UIKit provides users with an overview of all their active chat channels. It 
     - Access archived chats
     - Network connectivity indicators
 
-**Platform Support**: Recent Chats components are currently supported on **Flutter only**. Additional platforms coming soon.
+**Platform Support**: Recent Chats components are available on **iOS, Android, React, and Flutter**. Refer to the platform UIKit for React Native availability.
 
 ## Implementation Guide
 
@@ -30225,7 +30446,7 @@ This UIKit is designed to seamlessly integrate messaging functionalities into yo
     - User action controls
     - Conversation management
 
-**Platform Support**: Conversation Chat components are currently supported on **Flutter only**. Additional platform implementations are in progress.
+**Platform Support**: Conversation Chat components are available on **iOS, Android, React, and Flutter**. Refer to the platform UIKit for React Native availability.
 
 ## Implementation Guide
 
@@ -30590,7 +30811,7 @@ The Group Chat UIKit is designed to provide a complete solution for multi-user c
     - Content moderation tools
     - Notification preferences
 
-**Platform Support**: Group Chat components are currently supported on **Flutter only**. Additional platforms coming soon.
+**Platform Support**: Group Chat components are available on **iOS, Android, React, and Flutter**. Refer to the platform UIKit for React Native availability.
 
 ## Implementation Guide
 
@@ -31406,7 +31627,7 @@ The Chat Search UIKit provides comprehensive search functionality that enables u
     - Access archived content
     - Seamless navigation
 
-**Platform Support**: Chat Search components are currently supported on **Flutter only**. Additional platforms coming soon.
+**Platform Support**: Chat Search is available on **Flutter** (standalone `AmitySearchChannelPage`) and **React Web** (reached from the chat home page — see the React note below). Refer to the platform UIKit for iOS and Android availability.
 
 ## Implementation Guide
 
@@ -31438,6 +31659,8 @@ Widget searchPage() {
 ```
 
     **Search Scope**: Chat Search mode searches across both active and archived channels, with clear indicators showing which channels are archived.
+
+    **React Web**: Search is not a standalone exported page on React Web. It is reached from `AmityChatHomePage` via the header search entry, which opens the search view with the Chat / Message tabs. The Chat tab is backed by the SDK's `ChannelRepository.searchChannels` (member channels of type `conversation` and `community`, sorted by last activity), and archived channels are indicated inline. No extra wiring is required — enable the chat home page and search is available.
 
     **Search within message content**
 
@@ -32333,6 +32556,52 @@ fun composeTrendingCommunitiesComponent() {
     | Categories | `social_home_page/community_categories/*` | Component | Customize component theme |
     | Recommended | `social_home_page/recommended_communities/*` | Component | Customize component theme |
     | Trending | `social_home_page/trending_communities/*` | Component | Customize component theme |
+
+## For You Feed
+
+For You is a backend-personalized feed that appears as a tab on the social home page. It is a **network-level setting** — the tab only shows when the network has For You feed enabled and the current user is not a visitor or bot. When the setting is off (or the feed reports that it is disabled), the UIKit hides the tab and falls back to the newsfeed automatically.
+
+**Platform Support**: For You feed is available on the **React Web, iOS, and Android** UIKit. It is not available on Flutter or React Native.
+
+### How the tab is gated
+
+The social home page reads the network setting and the feed collection, then derives whether to show the For You tab:
+
+1. `useForYouFeedSetting()` reads `forYouFeed.enabled` for the network (skipped for visitors/bots).
+2. `useForYouFeedCollection()` observes the personalized posts once the setting is enabled.
+3. The tab is shown only when the setting is enabled **and** the collection did not fail with a feed-disabled error. If the feed becomes unavailable while the tab is active, the page switches back to the newsfeed.
+
+### Rendering the feed
+
+`AmitySocialHomePage` wires the For You tab for you — enable For You feed on your network and it appears automatically. To embed the feed on its own, render the `ForYouFeed` component with a `pageId`:
+
+```tsx React
+import { ForYouFeed } from '@amityco/ui-kit';
+
+function ForYouTab() {
+  return <ForYouFeed pageId="social_home_page" />;
+}
+```
+
+```swift iOS
+AmityForYouFeedComponent()
+```
+
+```kotlin Android
+@Composable
+fun composeForYouFeedComponent() {
+    AmityForYouFeedComponent()
+}
+```
+
+### Hooks
+
+| Hook | Returns | Use for |
+| --- | --- | --- |
+| `useForYouFeedSetting({ shouldCall })` | `{ forYouFeedSetting, isPending, error }` | Decide whether to render a For You entry point. Pass `shouldCall: !isVisitorOrBot`. |
+| `useForYouFeedCollection({ shouldCall })` | `{ posts, isLoading, hasMore, loadMore, error, refresh, isLoadingFirstPage }` | Render the personalized post list and paginate it. Gate `shouldCall` on the enabled setting. |
+
+Both hooks and the `ForYouFeed` component are backed by the SDK's `FeedRepository.getForYouFeed()` and `Client.getForYouFeedSetting()`. See [Feeds & Timelines](/social-plus-sdk/social/discovery-engagement/feed/overview) for the SDK-level behavior.
 
 ## Component Management Strategies
 
@@ -41757,6 +42026,25 @@ const SampleEventDetailPage = ({ eventId }) => {
 ```
 
 
+    #### Share an event
+
+    The event detail page's 3-dot action menu can surface shareable-link actions that open the event directly:
+
+    | Action | Platforms | Behavior |
+    | --- | --- | --- |
+    | **Copy event link** | iOS, Android, React | Copies the event URL to the clipboard and shows a "Link copied." toast |
+    | **Share to** | iOS, Android | Opens the native OS share sheet with the event URL (not rendered on Web) |
+
+    These actions are backed by the SDK's `Client.getShareableLinkConfiguration()` and appear only when **all** of the following are true:
+
+    - Event shareable links are configured for the network — `config.isEnabled(AmitySharableContentType.EVENT)` is `true` (deep link toggle on and an event URL pattern is set in Console).
+    - The event's origin community is **public**.
+    - The event is not cancelled and not in a draft/unpublished state.
+
+    If any condition fails, the Copy / Share actions are hidden. See [Content Sharing](/social-plus-sdk/social/content-management/content-sharing) for the SDK link-generation API.
+
+    Event shareable links are available on iOS, Android, and React (Web). "Share to" (native share sheet) is mobile-only. Refer to the platform UIKit for Flutter and React Native availability.
+
     ### Event Attendees Page
 
     Use **AmityEventAttendeesPage** to browse attendees and navigate to a user profile.
@@ -42414,7 +42702,7 @@ class AmityMyCommunitiesComponentBehavior {
 
 ## Feature Overview
 
-The Sharing UIKit components provide comprehensive tools for enabling content sharing throughout your application. Users can share posts, profiles, communities, and live streams through two primary methods: copying shareable links or using native platform share sheets. These components integrate seamlessly across multiple pages and content types.
+The Sharing UIKit components provide comprehensive tools for enabling content sharing throughout your application. Users can share posts, profiles, communities, live streams, and events through two primary methods: copying shareable links or using native platform share sheets. These components integrate seamlessly across multiple pages and content types.
 
 ### Key Features
 
@@ -42443,6 +42731,7 @@ The sharing functionality is available across these key areas of your applicatio
 | **Live Stream Player Page** | Live stream links | Share active live streams                        |
 | **Create Live Stream Page** | Live stream links | Share live stream setup and promotion            |
 | **Clip Feed Page**          | Clip links        | Share video clips from feed views                |
+| **Event Detail Page**       | Event links       | Share events from the event detail page's 3-dot menu |
 
 ## Customization
 
@@ -42498,6 +42787,19 @@ The sharing functionality is available across these key areas of your applicatio
     | `create_livestream_page/*/copy_link` | Element | Customize copy button for stream creation |
     | `clip_feed_page/*/share_link` | Element | Customize share button for clip feeds |
     | `clip_feed_page/*/copy_link` | Element | Customize copy button for clip feeds |
+
+
+    Enable sharing for events
+
+    Event sharing adds **Copy event link** (all platforms) and **Share to** (mobile only) to the event detail page's 3-dot action menu. Visibility follows the network shareable-link configuration and the event's community type — see [Event → Share an event](/uikit/components/social/event#share-an-event).
+
+    #### Customization Options
+
+    | Config ID | Type | Description |
+    |-----------|------|-------------|
+    | `event_detail_page/*/*` | Page | Customize the event detail page theme |
+
+    The Copy / Share actions are menu items rather than standalone elements — customize their labels through [localization](/uikit/customization/localization) (`amity_social_button_copy_event_link`, `amity_social_button_share_to`).
 
 
 ## Best Practices
@@ -42602,6 +42904,11 @@ if UIActivityViewController.canPerform(activity: .postToFacebook) {
     icon="newspaper"
   >
     Understand feed components and inline sharing
+    title="Events"
+    href="/uikit/components/social/event"
+    icon="calendar"
+  >
+    Explore event components and event link sharing
     title="SDK Content Sharing"
     href="/social-plus-sdk/social/content-management/content-sharing"
     icon="code"
@@ -46425,9 +46732,11 @@ graph TD
     B -->|Home timeline| C[User Feed]
     B -->|Inside a community| D[Community Feed]
     B -->|Explore page| E[Global Feed]
+    B -->|Personalized| FY[For You Feed]
     C --> F[Live Collection]
     D --> F
     E --> F
+    FY --> F
     F --> G[Posts render in-app]
     G --> H{Post flagged?}
     H -->|Yes| I[Hidden from feed]
@@ -46492,6 +46801,23 @@ const unsubscribe = FeedRepository.getGlobalFeed(
 ```
 
     Full reference → [Query Global Feed](/social-plus-sdk/social/discovery-engagement/feed/overview)
+    For You is a backend-personalized global feed. It is a network-level feature — gate the surface on `Client.getForYouFeedSetting()` and handle `AmityForYouFeedDisabledError` for networks where it is not enabled. `getForYouFeed()` takes no query parameters; page through the callback.
+
+```typescript TypeScript
+import { Client, FeedRepository } from '@amityco/ts-sdk';
+
+const { forYouFeed } = await Client.getForYouFeedSetting();
+if (!forYouFeed.enabled) return; // hide the For You surface
+
+const unsubscribe = FeedRepository.getForYouFeed(
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (error instanceof FeedRepository.AmityForYouFeedDisabledError) return;
+    if (posts) { /* render For You feed */ }
+  },
+);
+```
+
+    Full reference → [Query For You Feed](/social-plus-sdk/social/discovery-engagement/feed/overview)
     Live Collections auto-update from **local cache** changes (e.g., the current user creates a post). To also receive **server-side** updates (new posts from other users, moderator deletions), you must explicitly subscribe to the relevant topic.
 
 ```typescript TypeScript
@@ -47456,15 +47782,28 @@ const unsubscriber = UserRepository.Relationship.getFollowers(
 ```
 
     Full reference → [Get Follower / Following List](/social-plus-sdk/social/user-relationship/following/get-follower-following-list)
-    Blocking is bidirectional — neither user can see the other's content or interact with them.
+    Blocking is bidirectional — neither user can see the other's content or interact with them. You can also read both directions: the users you blocked, and the users who blocked you.
 
 ```typescript
 import { UserRepository } from '@amityco/ts-sdk';
 
-await UserRepository.Relationship.blockUser('userId');
+// Block — handle the per-network block limit
+try {
+  await UserRepository.Relationship.blockUser('userId');
+} catch (error) {
+  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
+    showBlockedUserLimitReached();
+  }
+}
+
+// Users the current user blocked
+const blocked = await UserRepository.getAllBlockedUsers();
+
+// Users who blocked the current user (reverse direction)
+const blocking = await UserRepository.getAllBlockingUsers();
 ```
 
-    Full reference → [Block / Unblock User](/social-plus-sdk/social/user-relationship/blocking/block-unblock-user)
+    Full reference → [Block / Unblock User](/social-plus-sdk/social/user-relationship/blocking/block-unblock-user), [Manage Blocked Users](/social-plus-sdk/social/user-relationship/blocking/manage-blocked-users), [Users Who Blocked You](/social-plus-sdk/social/user-relationship/blocking/manage-blocking-users)
 
 ---
 
@@ -62180,7 +62519,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | TS | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | Following (Global) Feeds | Available | ✅ | ✅ | ✅ | ✅ |
-| For You Feeds | Planned | ✅ | ✅ | ✅ | — |
+| For You Feeds | Available | ✅ | ✅ | ✅ | — |
 | Community Feeds | Available | ✅ | ✅ | ✅ | ✅ |
 | User Feeds | Available | ✅ | ✅ | ✅ | ✅ |
 | Story Feeds | Available | ✅ | ✅ | ✅ | ✅ |
@@ -62192,7 +62531,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | Web | RN | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | Following (Global) Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
-| For You Feeds | Planned | ✅ | ✅ | ✅ | — | — |
+| For You Feeds | Available | ✅ | ✅ | ✅ | — | — |
 | Community Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
 | User Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Story Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -62709,7 +63048,7 @@ curl --location --globoff 'https://api.sg.amity.co/api/v4/posts?targetId=COMMUNI
     Not supported. Ship with bundled Realm version aligned to SDK. See iOS SDK & UIKit changelogs for compatibility matrix.
     Upload APNs (.p12 or key) selecting "Apple Push Notification service SSL (Sandbox & Production)" so a single cert covers both.
     Not recommended / unsupported. Use a package manager (npm, Yarn, pnpm) for versioned SDK distribution.
-    Use blocked users list query. Docs: /social/block-and-unblock-user#blocked-users-list.
+    Query the users you blocked with `getBlockedUsers()` / `getAllBlockedUsers()`. To read the reverse direction — users who blocked you — use `getBlockingUsers()` / `getAllBlockingUsers()`. Docs: [Manage Blocked Users](/social-plus-sdk/social/user-relationship/blocking/manage-blocked-users) and [Users Who Blocked You](/social-plus-sdk/social/user-relationship/blocking/manage-blocking-users).
     Call SDK mark-read API or start/stop reading subchannel utilities (unread-count docs). Ensures backend updates unread counters.
     Poll post type not yet supported in current Flutter SDK (only video/image/file). Track changelog for availability.
     The SDK provides two methods:<br/>
@@ -64195,6 +64534,67 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   ## 🚀 New Features
 
+  #### For You Feed
+
+  Added the personalized **For You** feed. Query it with `AmitySocialClient.newFeedRepository().getForYouFeed()` (a live collection), and the network setting via `AmityCoreClient.getForYouFeedSetting()`. When the feature is not enabled for the network, the collection surfaces the typed `AmityForYouFeedDisabledError`.
+
+  #### Bidirectional Block Visibility
+
+  Added the reverse direction of the blocking model: `getBlockingUsers()` (live collection) and `getAllBlockingUsers()` (one-shot list) return the users who have blocked the current user. Blocking a user when already at the per-network cap now returns the typed `MAX_BLOCKED_USERS_REACHED` error.
+
+  #### Chat Search
+
+  Added `searchChannels` and `searchMessages` to `AmityChannelRepository` for searching across channels and messages.
+
+  #### Channel Archiving
+
+  Added `archiveChannel`, `unarchiveChannel`, and `getArchivedChannelIds` to `AmityChannelRepository`, backed by a new local table for reactive archive/unarchive updates.
+
+  #### Typed Shareable Links
+
+  Added a typed shareable-link API using `AmitySharableContentType`, so links can be generated for a content type without relying on raw pattern keys.
+
+  #### Channel Notification Mode
+
+  Added `notificationMode` support to the channel update API.
+
+  ## ✨ Improvements
+
+  - Improved chat message loading and reload performance.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed community member permissions not updating.
+  - Fixed group member additions not reflecting in the member list.
+  - Fixed nested room moderation not being parsed or persisted from the room payload.
+  - Fixed queued message jobs never failing while offline — they now fail immediately.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 23 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Android Paging Data Library | 3.4.2 |
+      | Firebase IID | 21.1.0 |
+      | Firebase Messaging | 23.0.0 |
+      | Gradle Plugin | 8.6.1 |
+      | Gson | 2.9.0 |
+      | HiveMQ MQTT Client | 1.3.1-beta01 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.9.2 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+      | SQLCipher | 4.9.0 |
+
+
+  ## 🚀 New Features
+
   #### `invalidateCache` for Feed Queries
 
   Added `invalidateCache(true)` option to `AmityFeedRepository.getCommunityFeed()` and `AmityPostRepository.getPosts()` queries. When set, the cache is cleared **before** the first page fetch so the live collection starts from fresh server data.
@@ -65326,6 +65726,41 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
 
   See the [iOS SDK v8 Migration Guide](/social-plus-sdk/changelogs/ios-sdk-v8-migration-guide) for full upgrade instructions.
 
+  ## 🚀 New Features
+
+  #### For You Feed
+
+  Added the personalized **For You** feed. Query it with `getForYouFeed()` and gate the surface on the network setting so the feed only renders when For You is enabled for the network.
+
+  #### Bidirectional Block Visibility
+
+  Added the reverse direction of the blocking model — the ability to read the users who have blocked the current user, alongside the existing blocked-user list.
+
+  #### Shareable Link Configuration API
+
+  Updated the shareable-link configuration API with a typed `AmitySharableContentType`, so links can be generated per content type (post, community, user, livestream, event) via `isEnabled(_:)` and `generateLink(_:referenceId:)`.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed a message reaction bug.
+  - Fixed event community being lost when the payload omits it.
+  - Fixed a notification-tray item "seen" state issue.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
+
   ## 🐞 Bug Fixes
 
   - Fixed a SIGSEGV crash in `PostCommentCountEngine`.
@@ -66366,6 +66801,39 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   ## 🚀 New Features
 
+  #### For You Feed
+
+  Added a personalized **For You** feed. New APIs let you fetch the recommended feed and read its network-level setting, and the feed reports a "caught up" state once the user has seen all available recommendations.
+
+  #### Notification Settings
+
+  Added APIs to read and update user notification settings.
+
+  #### Chat Settings API
+
+  Added a chat settings API for configuring channel and messaging behavior.
+
+  #### Channel Search Live Collection
+
+  Added a live collection for searching channels, so search results stay in sync as data changes.
+
+  #### Enhanced User Blocking
+
+  A new API to list all users blocking the current user, a public auto-subscription enum, and a dedicated error code emitted when the maximum number of blocked users is reached.
+
+  #### Shareable Link Configuration
+
+  Updated the `getShareableLinkConfiguration` schema.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>=v12 |
+      | NPM | \>=v6 |
+
+  ## 🚀 New Features
+
   #### Visitor Daily Usage Limit
 
   Added detection for the visitor daily read quota (100 req/day, error code `400323` — `ServerError.VISITOR_USAGE_LIMIT_EXCEEDED`). The SDK detects this error in the Axios response interceptor and emits an  `visitorUsageLimitReached` event. Subscribe via `onVisitorUsageLimitReached(callback)`.
@@ -66604,6 +67072,59 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
 ## 🚀 New Features
+
+  #### For You Feed
+
+  Added the personalized **For You** feed surface, backed by the SDK's For You feed APIs.
+  #### Chat Search
+
+  Added chat search UI, showing channel and message results.
+
+  #### Live Chat Entry Point
+
+  Added an entry point for the Live Chat module.
+
+
+  ## ✨ Improvements
+
+  - Read-only livestreams now show a read-only message to visitors and non-members.
+  - Post link previews now use server-provided metadata instead of client-side HTML scraping.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the comment compose bar save button color.
+  - Fixed the product tag badge color.
+  - Fixed co-host name display and the co-host actions sheet on name tap.
+  - Fixed the community profile flashing during state changes (such as accepting an invitation).
+  - Fixed the clip bottom sheet background and clip caption placeholder.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.23.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🚀 New Features
 
   #### Custom Avatar URL Support
 
@@ -67282,7 +67803,23 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## 🚀 New Features
+## ✨ Improvements
+
+  - Switched chat media selection to the native Android Photo Picker and removed the `wechat_assets_picker` dependency.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the 1:1 chat header not resolving from cache (now retries).
+  - Fixed the first message not appearing in a brand-new direct chat.
+  - Fixed the chat loading toast leaking across screens.
+  - Fixed member lookup and message-listener attachment during chat initialization.
+
+      | Config         | Version |
+      | :------------- | :------ |
+      | Flutter        | 3.35.7  |
+
+
+  ## 🚀 New Features
 
   #### Chat Media Picker Improvements
   Replaced the previous media picker with `AssetPicker` for a more reliable experience, added `mediaAttachmentLimit` parameter to `AmityMessageComposer`, and improved picker theming with UIKit primary color support.
@@ -67466,6 +68003,43 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
   The Xcode 26 compatibility issue caused by **RealmSwift** binaries has been fully resolved in **UIKit 4.19.0**. The UIKit now integrates with **AmitySDK v8.0.0**, which has migrated its cache layer from Realm to Core Data. Realm and RealmSwift are no longer required, and Xcode forward compatibility is fully restored. We recommend upgrading to 4.19.0 or later to remove any Xcode version constraints from your project.
 
   See the [iOS SDK v8 Migration Guide](/social-plus-sdk/changelogs/ios-sdk-v8-migration-guide) for installation changes, including UIKit-specific steps.
+
+  ## 🚀 New Features
+
+  #### For You Feed
+
+  Added the personalized **For You** feed, gated by the network's For You feed configuration.
+
+  #### Chat
+
+  Added chat experience, including a compose bar that adapts for visitors, non-members, and read-only channels.
+
+  #### Event Shareable Links
+
+  Added shareable event links to the event detail experience.
+
+  ## 🚨 Compatibility Changes
+
+  - Removed the deprecated v3 modules.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed clickable links not working on posts.
+  - Fixed read-only livestreams for guests and non-members.
+  - Fixed the toast type and icon.
+  - Fixed a moderator being unable to delete an event.
+  - Fixed co-host name display and layout.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.3.0 |
 
   ## 🚀 New Features
   - Support avatar rendering from custom avatar URL(`avatarCustomUrl`)
@@ -68021,7 +68595,48 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## 🐞 Bug Fixes
+## 🚀 New Features
+
+  #### Visitor Mode
+
+  Added visitor mode with enhanced daily usage-limit handling, including a `VisitorUsageLimit` page exported from the public API. Non-members now see an engagement bar with gated like and comment actions that prompt a sign-in toast.
+
+  #### Login Configuration
+
+  Added support for applying login behavior from configuration.
+
+  ## ✨ Improvements
+
+  - Upgraded the Social Plus SDK dependency (`@amityco/ts-sdk-react-native`) to 7.23.0.
+
+  ## 🐞 Bug Fixes
+  - Show action controls on story comments.
+  - Fixed the tab navigation and divider showing when Explore is the only tab.
+  - Fixed long user profile descriptions overflowing on iOS.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | React | 19 |
+      | React Native | 0.82.1 |
+      | Node.js | ≥ 20 |
+      | NPM | ≥ 6 |
+      | Yarn | ≥ 1.22.15 |
+      | JDK | ≥ 17.0.10 |
+      | Kotlin | 2.0.21 |
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 15.1 |
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSdkVersion | 24 |
+      | compileSdkVersion | 35 |
+      | buildToolsVersion | 35.0.0 |
+
+  ## 🐞 Bug Fixes
 
   - Fixed image upload failing in the post composer.
 
@@ -68624,33 +69239,44 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## 🐞 Bug Fixes
+## 🚀 New Features
+
+  #### Chat
+
+  Introduced the chat experience, bringing the refreshed component architecture to messaging.
+
+  #### For You Feed
+
+  Added the personalized **For You** feed, gated by network-level configuration, with the option to default the social home to the For You feed.
+
+  #### Shareable Event Links
+
+  Added the ability to share event links, including a copy-link action in the event share menu.
+
+  #### Color Token
+  Upgraded color token placements to better fit dark theming colors
+
+  ## 🐞 Bug Fixes
+  - Fixed non-members receiving incorrect toast when reporting a post.
+  - Fixed the clip comment list showing all comments instead of the relevant thread.
+  - Fixed pending posts not being shown.
+  - Fixed assorted icon and color issues, including the create-community camera icon, disabled vote button opacity, and empty-feed text.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>= v16 |
+      | PNPM | \>= v8 |
+      | React | \>= v18 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | @amityco/ts-sdk | 7.23.0 |
+
+  ## 🐞 Bug Fixes
 
   - Fixed embedded UIKit components (such as the comment tray) scrolling the host page to the top on mount. The popup scroll lock is now only applied and restored around an actual open → close cycle.
-
-  ## 🧩 Compatibility
-
-      | Config | Version |
-      | :-- | :-- |
-      | NodeJS | \>= v16 |
-      | PNPM | \>= v8 |
-      | React | \>= v18 |
-
-  ## 🐞 Bug Fixes
-
-  - Fixed broadcaster portrait livestream not displaying in the correct orientation.
-
-  ## 🧩 Compatibility
-
-      | Config | Version |
-      | :-- | :-- |
-      | NodeJS | \>= v16 |
-      | PNPM | \>= v8 |
-      | React | \>= v18 |
-
-  ## 🐞 Bug Fixes
-
-  - Fixed input focus being lost while typing in form fields.
 
   ## 🧩 Compatibility
 
