@@ -90,7 +90,10 @@ def pass1_dartdoc(index_path: Path) -> tuple[dict, list, list, str]:
             by_parent[parent].append(e)
 
     lib_entries = [e for e in index if e.get("kind") == KIND_LIB]
-    lib_name = lib_entries[0]["name"] if lib_entries else "amity_sdk"
+    lib_names = [e["name"] for e in lib_entries]
+    # Prefer the package library (matches pubspec `name: amity_sdk`) over incidental
+    # part-libraries (e.g. `access_token_renewal`) that can sort first in the index.
+    lib_name = "amity_sdk" if "amity_sdk" in lib_names else (lib_names[0] if lib_names else "amity_sdk")
 
     types: dict[str, dict] = {}
     extensions: list[dict] = []
