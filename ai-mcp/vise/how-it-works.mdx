@@ -1,31 +1,31 @@
 ---
 title: "How Vise works"
-description: "The governed loop, what Vise checks, and how to read a compliance result."
+description: "The loop the skill drives your agent through, what gets checked, and what 'done' means."
 ---
 
-Vise turns an SDK request into a grounded plan, records a local contract, and keeps checking the generated code until the integration is finished — where "finished" means green, attested with evidence, intentionally scoped, or explicitly blocked on your input, not just "the agent stopped."
+Vise turns your feature request into a grounded plan, records what "done" means for it, and keeps checking the generated code until the integration is finished — where finished means verified, explained with evidence, intentionally scoped out, or explicitly waiting on your decision. Never just "the agent stopped."
 
-## The governed loop
+## The loop your agent follows
 
-The bundled [skill](/ai-mcp/vise/overview#install-the-ai-skill) drives your AI agent through the same loop on every integration:
+The [skill](/ai-mcp/vise/overview#get-started) drives your agent through the same loop on every integration:
 
 ```mermaid
 flowchart LR
-  A[inspect] --> B[plan]
-  B --> C[init contract]
+  A[understand your app] --> B[plan from the docs]
+  B --> C[record the contract]
   C --> D[implement]
   D --> E[check]
-  E -->|not green| D
-  E -->|green| F[run-sensors]
+  E -->|not done| D
+  E -->|passes| F[run your project's checks]
   F --> G[done: evidence recorded]
 ```
 
-- **inspect** — detect the platform, monorepo surfaces, design signals, and available sensors. Inspection includes bounded scan receipts; if a large repository cannot be scanned completely, select the concrete app surface before continuing.
-- **plan** — produce a grounded plan with docs citations and the project-specific questions the agent must not guess.
-- **init** — write the local compliance contract under `sp-vise/` once blocking questions are answered.
-- **implement** — the agent edits your app, grounded in real SDK APIs.
-- **check** — re-validate the code against the recorded contract.
-- **run-sensors** — run your project's own build, lint, typecheck, and SDK smoke checks.
+- **Understand your app** — detect the platform, the app surfaces in a monorepo, design signals, and which of your project's own checks are available. In a very large repository, the agent confirms which concrete app it's working in before continuing.
+- **Plan from the docs** — produce a plan with social.plus docs citations, plus the questions the agent must ask you rather than guess.
+- **Record the contract** — once you've answered, the expectations for this feature are written down (see below).
+- **Implement** — the agent edits your app, held to real SDK APIs.
+- **Check** — the code is validated against the recorded contract; the agent iterates until it passes.
+- **Run your project's checks** — your repository's own build, lint, typecheck, and SDK smoke checks.
 
 ## What Vise checks
 
@@ -39,84 +39,59 @@ Vise focuses on the mistakes that pass a demo and break in production:
 
 Deterministic SDK correctness and explicit completeness decisions are the checks that block. Design and experience guidance stays advisory.
 
-## The `sp-vise/` contract
+## The `sp-vise/` folder
 
-`vise init` writes a local contract directory, `sp-vise/`, that records what the integration is expected to satisfy for the detected platform and requested outcome. Subsequent `vise check` runs validate the current code against it. Commit `sp-vise/` with your app so the same expectations run in review and in CI.
+The recorded contract, its check results, and all supporting evidence live in a small `sp-vise/` folder in your repo. Commit it with your app: it's what lets a reviewer see *why* the integration is trustworthy — and what lets CI keep verifying the work after the chat transcript is long gone.
 
-## Reading a check result
+## What your agent will report
 
-`vise check` reports one of the following states:
+Every check ends in one of these states. Your agent will name them when it reports back, so here's what each one means for you:
 
-| Result | Meaning | What to do |
+| State | Meaning | What you do |
 | --- | --- | --- |
 | `green` | Every applicable check passes | Accept the integration |
-| `needs-attestation` | A rule passed through architecture the deterministic check can't see | Record an attestation with evidence (see below) |
-| `deterministic-failures` | A rule failed deterministically in the code | Fix the code and re-check |
-| `completeness-gap` | The requested outcome isn't fully covered yet | Implement the missing surface or capability |
-| `selected-capability-failures` | An optional capability you chose to include isn't satisfied | Complete or intentionally drop that capability |
-| `blocked` | A decision only your team can make is missing | Answer the intake or confirm the plan |
-| `contract-drift` | The code no longer matches the recorded contract | Re-plan or re-initialize the contract |
-| `runtime-proof-waived` | On-device runtime proof was honestly waived | Accept with `--allow-proof-waiver` if appropriate |
+| `needs-attestation` | A rule is satisfied through architecture the automatic check can't see | Let the agent record evidence and a rationale, then review it |
+| `deterministic-failures` | A rule failed in the code | Nothing — the agent fixes and re-checks |
+| `completeness-gap` | The feature you asked for isn't fully built yet | Nothing — the agent keeps going, or asks you to drop scope explicitly |
+| `selected-capability-failures` | An optional capability you chose isn't satisfied | Decide: finish it, or intentionally drop it |
+| `blocked` | A decision only your team can make is missing | Answer the question |
+| `contract-drift` | The code no longer matches what was recorded | Decide with the agent: re-plan, or restore the code |
+| `runtime-proof-waived` | On-device runtime proof was honestly waived | Accept the recorded waiver, or ask for a real run |
 | `no-platform` | No supported platform was detected | Nothing to validate here |
-| `engagement-drift` | Your current work is green, but a previously finished surface no longer holds (`--ci` or `--all-engagements`, exit `11`) | Re-open the drifted surface or re-attest what changed |
+| `engagement-drift` | Current work is fine, but a previously finished feature no longer holds | Re-open the drifted feature or accept the documented change |
 
-Add `--ci` for a read-only release gate. It checks the active contract and automatically re-verdicts every recorded engagement, exiting non-zero unless all governed work remains green.
+## Evidence instead of "trust me"
 
-## Attestation and evidence
+Three kinds of proof accumulate in `sp-vise/` as the agent works:
 
-Some correct integrations pass through indirection the static check can't follow — a helper module, a wrapper, or a pattern unique to your codebase. When that happens, the result is `needs-attestation`: you record that the rule is satisfied, with evidence and a rationale, instead of the check silently failing.
+- **Attestations.** Some correct code passes through indirection a static check can't follow — a helper module, a wrapper, a pattern unique to your codebase. Instead of failing silently or passing blindly, the agent records *why* the rule is satisfied, with evidence and a rationale you can audit.
+- **Runtime proof.** For user-visible surfaces, Vise can assess a captured app-launch log into a pass/fail verdict — did the screen mount, authenticate, and load data? When no device or emulator is available, an explicit waiver is recorded instead of a silent pass.
+- **Deterministic passes.** After a green check, the passing evidence itself is persisted, so review doesn't depend on re-running anything.
 
-```sh
-vise explain <ruleId>          # rule rationale, evidence needed, remediation
-vise attest . --rule <ruleId> --signer host-agent --confidence high \
-  --evidence-file evidence.json --rationale "why this is satisfied"
-vise sync .                    # persist deterministic-pass evidence after a green check
-```
+Reviewers can inspect all of it with a few read-only commands — see the [reference](/ai-mcp/vise/cli-reference).
 
-Attestations and evidence live under `sp-vise/`, so a reviewer can see *why* something is green — not just that a prompt finished.
+## Adding features later
 
-## Runtime proof and waivers
+The second feature is governed as carefully as the first, whether the existing integration was built by hand or through Vise — and earlier finished features stay recorded and re-verifiable. See [Adding to an existing app](/ai-mcp/vise/brownfield-day2).
 
-For surfaces that should be proven at runtime, Vise can assess a captured mount-smoke log into a pass/fail verdict. When a device or emulator isn't available, or you decline runtime proof, record an auditable waiver instead of a silent pass:
+## Vise in CI
 
-```sh
-vise smoke . --log run.log                          # assess a captured smoke log
-vise smoke waive . --reason "no emulator in CI" --mode deviceless
-```
-
-## Adding features to an app that already uses social.plus
-
-The second feature is governed as carefully as the first. Two situations:
-
-**The existing integration was built by hand.** Run `vise init` for the new request as normal. If the repo carries pre-existing findings, the init result includes a `brownfield` hint: record `vise baseline .` **before writing any code**, then gate your work with `vise check --new-only`. The baseline excludes legacy rule findings only — the feature you asked for still has to be built, and its completeness checklist still gates.
-
-**The existing features were built through Vise.** The sidecar governs one engagement at a time, but switching is recorded, not destructive: initializing a new outcome writes the previous engagement's final state to `sp-vise/engagements/` and discloses the switch in the result; replacing a **green** engagement additionally asks for `--supersede-engagement`. Finished surfaces stay visible in `vise status` under `previousEngagements`, and stay verifiable:
+After the first successful integration, commit `sp-vise/` and add one read-only command to your pipeline:
 
 ```sh
-vise check --engagement <outcome>   # re-verify one finished surface (exit 11 on drift)
-vise check --all-engagements        # current work + every finished surface, in one run
+vise check --ci
 ```
 
-## Add Vise to CI
-
-After the first successful integration, commit `sp-vise/` and run Vise in CI:
-
-```sh
-vise check --ci   # read-only; active contract + every recorded engagement
-```
-
-Use `--all-engagements` when you want the same combined re-verdict outside CI. It is not an additional command that CI needs to run after `--ci`.
-
-When adopting Vise on an existing codebase, use `vise baseline` to snapshot pre-existing rule findings, then `vise check --new-only` to gate only on findings introduced since. The requested outcome's completeness is never baselined — a baselined repo can't go green without the feature actually being built.
+It verifies the active contract *and* re-verdicts every previously finished feature, failing the build unless all governed work still holds. Baseline behavior for pre-existing codebases and per-feature re-verification are covered in the [reference](/ai-mcp/vise/cli-reference).
 
 ## Related
 
 <CardGroup cols={2}>
   <Card title="Vise overview" icon="shield-check" href="/ai-mcp/vise/overview">
-    Install Vise and run your first integration.
+    Install Vise and ask for your first feature.
   </Card>
-  <Card title="CLI reference" icon="terminal" href="/ai-mcp/vise/cli-reference">
-    The commands behind each step of the loop.
+  <Card title="For reviewers and CI" icon="terminal" href="/ai-mcp/vise/cli-reference">
+    The commands for verifying recorded evidence and gating releases.
   </Card>
   <Card title="Live Objects and Collections" icon="radio" href="/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview">
     Build realtime SDK features with the correct lifecycle.
