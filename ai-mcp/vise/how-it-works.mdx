@@ -1,115 +1,67 @@
 ---
 title: "How Vise works"
-description: "The loop the skill drives your agent through, what gets checked, and what 'done' means."
+description: "How a feature request becomes a grounded plan, checked code, reviewable evidence, and a clear next action."
 ---
 
-Vise turns your feature request into a grounded plan, records what "done" means for it, and keeps checking the generated code until the integration is finished — where finished means verified, explained with evidence, intentionally scoped out, or explicitly waiting on your decision. Never just "the agent stopped."
+Vise gives an AI coding agent a repeatable social.plus integration loop. You describe the outcome, answer the product decisions only your team can make, and review the result.
 
-## The loop your agent follows
-
-The [skill](/ai-mcp/vise/overview#get-started) drives your agent through the same loop on every integration:
+## From request to evidence
 
 ```mermaid
 flowchart LR
-  A[understand your app] --> B[plan from the docs]
-  B --> C[record the contract]
-  C --> D[implement]
-  D --> E[check]
-  E -->|not done| D
-  E -->|passes| F[run your project's checks]
-  F --> G[done: evidence recorded]
+  A[Ask for an outcome] --> B[Inspect and plan]
+  B --> C[Confirm decisions]
+  C --> D[Implement and check]
+  D -->|Needs work| D
+  D --> E[Run project checks]
+  E --> F[Record evidence]
+  F --> G[Human review]
 ```
 
-- **Understand your app** — detect the platform, the app surfaces in a monorepo, design signals, and which of your project's own checks are available. In a very large repository, the agent confirms which concrete app it's working in before continuing.
-- **Plan from the docs** — produce a plan with social.plus docs citations, plus the questions the agent must ask you rather than guess. A multi-surface journey also records how its surfaces relate — for example, that a community-detail feed reads and writes the selected community, or that comments belong to the selected post.
-- **Record the contract** — once you've answered, the expectations for this feature, its placement, and its target are written down (see below).
-- **Implement** — the agent edits your app, held to real SDK APIs.
-- **Check** — the code is validated against the recorded contract; the agent iterates until it passes.
-- **Run your project's checks** — your repository's own build, lint, typecheck, and SDK smoke checks.
+1. **Inspect and plan.** The agent identifies the app surface, reads social.plus documentation and SDK facts, and asks instead of guessing.
+2. **Confirm decisions.** Vise records the feature, placement, data target, selected capabilities, and definition of done.
+3. **Implement and check.** The agent validates real SDK usage, platform lifecycle, and feature completeness while it works.
+4. **Run project checks.** The app's build, lint, typecheck, tests, and SDK smoke checks run when available.
+5. **Record evidence.** The result explains what passed, what still needs work, and whether the intended surface worked at runtime.
 
-## What Vise checks
+## Read the result
 
-Vise focuses on the mistakes that pass a demo and break in production:
+Ask your agent to separate the outcome into what passed, what it will fix, and what needs your decision.
 
-- **SDK grounding** — the agent is held to real, source-anchored SDK facts (actual types and field names), so it won't invent a symbol the SDK doesn't expose.
-- **Platform correctness** — 400+ platform-specific checks: SDK setup and region, session renewal and login lifecycle, secret handling and committed environment files, Live Object and Live Collection usage, and feed, comment, chat, notification, community, follow, story, and moderation patterns.
-- **Feature completeness** — the whole outcome, including pagination, empty and error states, and the optional capabilities you asked for — not just the happy path.
-- **Design and experience** — generated UI reviewed against your design system. This layer is **advisory**; brand fit still needs human judgment.
-- **Project sensors** — your repository's own build, lint, typecheck, and SDK import smoke checks.
+| Result | What happens next |
+| --- | --- |
+| `green` | Review the feature through your normal product process |
+| `deterministic-failures` or `completeness-gap` | The agent fixes the code or finishes the agreed scope |
+| `selected-capability-failures` | Finish the selected capability or explicitly remove it from scope |
+| `blocked` | Answer the named product or project question |
+| `needs-attestation` | Review evidence for correct architecture the automatic check cannot see |
+| `contract-drift` | Confirm the changed intent or restore the implementation |
+| `runtime-proof-waived` | Accept the explicit waiver or request a real launch |
+| `engagement-drift` | Reopen the earlier feature or explicitly accept the change |
 
-Deterministic SDK correctness and explicit completeness decisions are the checks that block. Design and experience guidance stays advisory.
+`no-platform` means Vise did not find a supported app surface. Confirm that the agent is working in the correct package before concluding that there is nothing to validate.
 
-## The `sp-vise/` folder
+## What the evidence means
 
-The recorded contract, its check results, and all supporting evidence live in a small `sp-vise/` folder in your repo. Commit it with your app: it's what lets a reviewer see *why* the integration is trustworthy — and what lets CI keep verifying the work after the chat transcript is long gone.
+The contract, check results, attestations, and runtime receipts live in `sp-vise/`. Commit that folder with the application so review and CI do not depend on an agent transcript.
 
-## What your agent will report
+Evidence can prove an automatic check passed, explain architecture a static rule cannot follow, or show that a specific surface mounted and loaded data at its recorded route and target.
 
-Every check ends in one of these states. Your agent will name them when it reports back, so here's what each one means for you:
-
-| State | Meaning | What you do |
-| --- | --- | --- |
-| `green` | Every applicable check passes | Accept the integration |
-| `needs-attestation` | A rule is satisfied through architecture the automatic check can't see | Let the agent record evidence and a rationale, then review it |
-| `deterministic-failures` | A rule failed in the code | Nothing — the agent fixes and re-checks |
-| `completeness-gap` | The feature you asked for isn't fully built yet | Nothing — the agent keeps going, or asks you to drop scope explicitly |
-| `selected-capability-failures` | An optional capability you chose isn't satisfied | Decide: finish it, or intentionally drop it |
-| `blocked` | A decision only your team can make is missing | Answer the question |
-| `contract-drift` | The code no longer matches what was recorded | Decide with the agent: re-plan, or restore the code |
-| `runtime-proof-waived` | On-device runtime proof was honestly waived | Accept the recorded waiver, or ask for a real run |
-| `no-platform` | No supported platform was detected | Nothing to validate here |
-| `engagement-drift` | Current work is fine, but a previously finished feature no longer holds | Re-open the drifted feature or accept the documented change |
-
-## Evidence instead of "trust me"
-
-Three kinds of proof accumulate in `sp-vise/` as the agent works:
-
-- **Attestations.** Some correct code passes through indirection a static check can't follow — a helper module, a wrapper, a pattern unique to your codebase. Instead of failing silently or passing blindly, the agent records *why* the rule is satisfied, with evidence and a rationale you can audit.
-- **Runtime proof.** For user-visible surfaces, Vise assesses normalized launch markers into independent per-surface receipts — did the intended screen mount, authenticate, and load data at the declared route and target? A comments run cannot overwrite valid community-feed proof, and changed placement cannot inherit an older receipt. When no device or emulator is available, an explicit waiver is recorded instead of a silent pass.
-- **Deterministic passes.** After a green check, the passing evidence itself is persisted, so review doesn't depend on re-running anything.
-
-Reviewers can inspect all of it with a few read-only commands — see the [reference](/ai-mcp/vise/cli-reference).
-
-## Adding features later
-
-The second feature is governed as carefully as the first, whether the existing integration was built by hand or through Vise — and earlier finished features stay recorded and re-verifiable. See [Adding to an existing app](/ai-mcp/vise/brownfield-day2).
-
-## Vise in CI
-
-After the first successful integration, commit `sp-vise/` and add one read-only command to your pipeline:
-
-```sh
-vise check --ci
-```
-
-It verifies the active contract *and* re-verdicts every previously finished feature, failing the build unless all governed work still holds. Baseline behavior for pre-existing codebases and per-feature re-verification are covered in the [reference](/ai-mcp/vise/cli-reference).
-
-For a release candidate, CI can also compare an approved Integration Passport with the candidate:
-
-```sh
-vise check . --ci \
-  --from-passport <approved-passport.json> \
-  --to-passport <candidate-passport.json>
-```
-
-This adds the same Governed Release Review returned by `vise passport compare`. A `ready` result means the automated evidence supports human review; it never means Vise approved the release. Otherwise-green compliance exits `12` when the release review is `review-required` or `blocked`. See [Reviewing and releasing an integration](/ai-mcp/vise/release-assurance).
+It does not replace product QA, security review, or human release approval. User-visible work still needs a real launch or an honest recorded waiver.
 
 ## Related
 
 <CardGroup cols={2}>
-  <Card title="Vise overview" icon="shield-check" href="/ai-mcp/vise/overview">
-    Install Vise and ask for your first feature.
+  <Card title="Maintain an existing integration" icon="screwdriver-wrench" href="/ai-mcp/vise/brownfield-day2">
+    Add, diagnose, or upgrade without losing earlier evidence.
   </Card>
-  <Card title="For reviewers and CI" icon="terminal" href="/ai-mcp/vise/cli-reference">
-    The commands for verifying recorded evidence and gating releases.
+  <Card title="Keep integrations verified in CI" icon="code-branch" href="/ai-mcp/vise/ci-verification">
+    Carry the same contract and evidence into the pipeline.
   </Card>
-  <Card title="Review and release" icon="clipboard-check" href="/ai-mcp/vise/release-assurance">
-    SDK assurance, Integration Passports, and governed release review.
+  <Card title="Command reference" icon="terminal" href="/ai-mcp/vise/cli-reference">
+    Look up the full command surface when operating Vise directly.
   </Card>
-  <Card title="Live Objects and Collections" icon="radio" href="/social-plus-sdk/core-concepts/realtime-communication/live-objects-collections/overview">
-    Build realtime SDK features with the correct lifecycle.
-  </Card>
-  <Card title="Authentication" icon="key" href="/social-plus-sdk/getting-started/authentication">
-    User login, session renewal, and regional configuration.
+  <Card title="Run Vise as an MCP server" icon="plug" href="/ai-mcp/vise/mcp-server">
+    Expose Vise's local tools to an MCP-capable coding host.
   </Card>
 </CardGroup>
