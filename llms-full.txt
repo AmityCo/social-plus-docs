@@ -45707,17 +45707,7 @@ if (liveCollection.hasPrevPage) {
     → [Query Messages](/social-plus-sdk/chat/messaging-features/messages/query-and-filter-messages)
     The Live Collection already handles real-time updates — new messages, edits, and deletions all trigger `dataUpdated`. No extra setup required.
 
-    For advanced use cases (e.g., detecting when other users are typing), subscribe to the raw event stream:
-
-```typescript
-import { ChannelRepository } from '@amityco/ts-sdk';
-
-// Subscribe to the channel for typing indicators / presence
-// channel subscription: use live collection or channel.subscribe() pattern in v6
-
-// Dispose when component unmounts
-return () => sub.dispose();
-```
+    Channel and message subscriptions keep documented SDK data current, but they do not expose typing-indicator state. Do not infer “typing” from user presence, a channel subscription, or message-collection activity.
 
     → [Real-time Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events)
 ```typescript
@@ -50080,7 +50070,7 @@ async function logout() {
     - Use a green dot for "online", grey dot for "offline", and show "Last seen X min ago" for recently active users
     - Don't show exact "last seen" timestamps for privacy — round to "a few minutes ago", "an hour ago", etc.
     - Let users opt out of showing their online status in profile settings
-    - Combine presence with typing indicators in chat for a "User is typing..." experience
+    - Use presence for supported online/offline availability in chat; do not label presence or channel-subscription state as "typing"
     - Respect the 20-user sync limit — sync only users currently visible on screen
     - Unsync users/channels as they scroll off screen; re-sync when they scroll back
     - Use `getUserPresence()` for one-time queries (member lists); use `syncUserPresence()` only for screens that need live updates
@@ -69667,7 +69657,7 @@ The public docs MCP server is best for:
 
 It is not a replacement for your app's local validation, build, test, or security review process.
 
-When an agent is **editing your app**, use [Vise](/ai-mcp/vise/overview): install it, add its skill to your agent, and it guides the coding loop and checks the generated integration before you call it done. It can also run as a [local MCP server](/ai-mcp/vise/mcp-server).
+When an agent is **editing your app**, use [Vise](/ai-mcp/vise/overview): install it, add its skill to your agent, and it guides the coding loop and checks the generated integration before you call it done. For handoff and release review, it can also compare SDK assurance and verifiable Integration Passports without claiming human approval. Vise can run as a [local MCP server](/ai-mcp/vise/mcp-server).
 
 ## Related docs
 
@@ -69753,6 +69743,7 @@ Vise can also expose its tools [over MCP](/ai-mcp/vise/mcp-server) if your agent
 
     Watch your agent plan a real integration — no credentials, no code changes.
     What the skill drives, what gets checked, and what "done" means.
+    SDK assurance, verifiable Passports, policy, trust, and release review.
     Optional: expose Vise's tools to MCP-capable hosts.
     The commands for reviewing recorded evidence and gating releases.
 
@@ -69903,6 +69894,26 @@ We already use social.plus for the feed — add comments to it.
 
 Vise handles both histories your app might have.
 
+## Start with a read-only impact assessment
+
+Before the agent edits an existing integration, it runs:
+
+```sh
+vise impact . --format human
+```
+
+The Day-2 Change Planner compares the current project with the recorded contract, dependency snapshot, engagement history, design contract, attestations, and runtime evidence. It classifies evidence as preserved, stale, missing, or unknown, then returns the smallest safe sequence of existing commands. It does not edit code or sidecars, switch engagements, accept policy changes, run sensors, or record attestations.
+
+If the change starts with a reported product symptom, include it:
+
+```sh
+vise impact . \
+  --symptom "Feed is missing from the selected Community detail page" \
+  --format human
+```
+
+For a recorded cross-surface journey, Vise can correlate that symptom with the signed placement and target relationship and the current source. It distinguishes an implementation gap from code that has been repaired but still needs fresh static and runtime proof.
+
 ## The existing integration was built by hand
 
 If your app adopted social.plus before Vise, the codebase may carry findings Vise would flag today. The agent snapshots those as a **baseline** before writing any code, so your new feature is judged on its own merits — not blocked by legacy code you didn't touch.
@@ -69924,6 +69935,8 @@ Check whether the features we built earlier with Vise still hold.
 
 If a later change broke a previously finished surface, you'll be told exactly which one drifted — even while the current work passes.
 
+When the dependency declaration or lockfile changed, `vise sdk-release . --format human` separately explains whether the installed SDK still matches an exact extraction-grounded snapshot. It reports the assurance boundary without changing the dependency or treating semver as proof of compatibility.
+
 ## Keep everything verified in CI
 
 One read-only command in your pipeline holds the current work *and* every previously finished feature green:
@@ -69938,10 +69951,92 @@ It fails with a distinct exit code when a finished feature drifts, even if the a
 
 - Was a baseline used, and when was it recorded?
 - Do earlier features still hold, or did the agent disclose drift?
-- Is there runtime proof for the new surface — or an explicit, recorded waiver?
+- Is there route- and target-matched runtime proof for each changed surface — or an explicit, recorded waiver?
 - Are remaining advisory findings and open non-blocking decisions listed?
 
-  Contracts, evidence, and what your agent's reports mean.
+    Contracts, evidence, and what your agent's reports mean.
+    Compare verifiable handoffs without confusing readiness with approval.
+
+---
+
+### [Reviewing and releasing an integration](https://learn.social.plus/ai-mcp/vise/release-assurance)
+
+> Turn Vise's recorded contract and evidence into a verifiable release handoff without confusing automated readiness with human approval.
+
+A green integration is ready to be reviewed, but a release decision also needs to answer what changed, whether the SDK boundary is understood, and whether the evidence still belongs to the candidate being shipped. Vise keeps those questions reproducible with SDK Release Intelligence, Integration Passports, and Governed Release Review.
+
+  These commands are read-only unless you explicitly add `--write` or use `vise trust sign`. Vise can say that automated evidence is ready for review; it never records or impersonates human release approval.
+
+## The release-review flow
+
+    Run:
+
+```sh
+vise sdk-release . --format human
+```
+
+    Vise compares the detected dependency declaration and supported lockfile resolution with the exact SDK snapshots it has verified. It reports whether the project is exact-snapshot verified, range-only, older, newer, or unversioned. It does not fetch a registry, edit dependencies, or infer semantic compatibility from semver alone.
+    Run:
+
+```sh
+vise passport . --write
+vise passport verify . --format human
+```
+
+    An Integration Passport binds the accepted intent, lifecycle state, SDK assurance, evidence hashes, runtime proof or waiver, residual risks, and replay commands into digest-bound claims. Verification recomputes those claims and local evidence states; it does not rerun or repair the project.
+    Run:
+
+```sh
+vise passport compare . \
+  --from <approved-passport.json> \
+  --to <candidate-passport.json> \
+  --format human
+```
+
+    The comparison discloses regressions and reviewable lifecycle movement, then composes a Governed Release Review decision.
+    Run:
+
+```sh
+vise check . --ci \
+  --from-passport <approved-passport.json> \
+  --to-passport <candidate-passport.json>
+```
+
+    Existing compliance failures keep their normal exit codes. If compliance is otherwise green but release evidence is `review-required` or `blocked`, the command exits `12`.
+
+## Reading the release decision
+
+| Decision | Meaning | Human action |
+| --- | --- | --- |
+| `ready` | Automated evidence supports release review and no blocking regression was found | Complete your normal product, security, and release approval |
+| `review-required` | Evidence is internally valid, but lifecycle, SDK, policy, or provenance movement needs a person to review it | Review the disclosed changes and owners before approving |
+| `blocked` | A required claim, evidence class, policy requirement, or trusted provenance condition is not satisfied | Resolve the named blockers and regenerate the candidate Passport |
+
+`ready` never means “approved.” The release review records `humanApprovalAsserted: false` in every state.
+
+## Organization policy and trusted handoffs
+
+An optional **Policy Pack** lets your organization declare approved SDK ranges, required evidence classes and capabilities, runtime-waiver constraints, release severities, and responsible owners. It is accepted only through an explicit `vise init --policy-pack <path>`; later Day-2, SDK-release, and Passport operations reuse and re-check that recorded selection.
+
+For handoffs that cross repositories, teams, or CI systems, a **Portable Trust Envelope** can authenticate a reviewed Passport or Policy Pack. Signing is an explicit CLI-only operation using a caller-supplied Ed25519 private key that Vise does not retain. Verification checks the envelope against a local trust policy:
+
+```sh
+vise trust verify . \
+  --envelope <artifact.envelope.json> \
+  --trust-policy <trust-policy.json>
+```
+
+A valid signature proves authorized provenance, not that the enclosed integration is correct. Passport and Policy Pack validation still applies.
+
+## What to keep with the release
+
+- the candidate Integration Passport and its comparison result
+- the exact Policy Pack and trust policy used, when applicable
+- the `sp-vise/` contract, engagement history, and evidence referenced by the Passport
+- the CI output and the human approval recorded by your own release process
+
+    Assess changes and preserve earlier social.plus features.
+    See the complete reviewer and CI command surface.
 
 ---
 
@@ -69967,8 +70062,8 @@ flowchart LR
 ```
 
 - **Understand your app** — detect the platform, the app surfaces in a monorepo, design signals, and which of your project's own checks are available. In a very large repository, the agent confirms which concrete app it's working in before continuing.
-- **Plan from the docs** — produce a plan with social.plus docs citations, plus the questions the agent must ask you rather than guess.
-- **Record the contract** — once you've answered, the expectations for this feature are written down (see below).
+- **Plan from the docs** — produce a plan with social.plus docs citations, plus the questions the agent must ask you rather than guess. A multi-surface journey also records how its surfaces relate — for example, that a community-detail feed reads and writes the selected community, or that comments belong to the selected post.
+- **Record the contract** — once you've answered, the expectations for this feature, its placement, and its target are written down (see below).
 - **Implement** — the agent edits your app, held to real SDK APIs.
 - **Check** — the code is validated against the recorded contract; the agent iterates until it passes.
 - **Run your project's checks** — your repository's own build, lint, typecheck, and SDK smoke checks.
@@ -70011,7 +70106,7 @@ Every check ends in one of these states. Your agent will name them when it repor
 Three kinds of proof accumulate in `sp-vise/` as the agent works:
 
 - **Attestations.** Some correct code passes through indirection a static check can't follow — a helper module, a wrapper, a pattern unique to your codebase. Instead of failing silently or passing blindly, the agent records *why* the rule is satisfied, with evidence and a rationale you can audit.
-- **Runtime proof.** For user-visible surfaces, Vise can assess a captured app-launch log into a pass/fail verdict — did the screen mount, authenticate, and load data? When no device or emulator is available, an explicit waiver is recorded instead of a silent pass.
+- **Runtime proof.** For user-visible surfaces, Vise assesses normalized launch markers into independent per-surface receipts — did the intended screen mount, authenticate, and load data at the declared route and target? A comments run cannot overwrite valid community-feed proof, and changed placement cannot inherit an older receipt. When no device or emulator is available, an explicit waiver is recorded instead of a silent pass.
 - **Deterministic passes.** After a green check, the passing evidence itself is persisted, so review doesn't depend on re-running anything.
 
 Reviewers can inspect all of it with a few read-only commands — see the [reference](/ai-mcp/vise/cli-reference).
@@ -70030,10 +70125,21 @@ vise check --ci
 
 It verifies the active contract *and* re-verdicts every previously finished feature, failing the build unless all governed work still holds. Baseline behavior for pre-existing codebases and per-feature re-verification are covered in the [reference](/ai-mcp/vise/cli-reference).
 
+For a release candidate, CI can also compare an approved Integration Passport with the candidate:
+
+```sh
+vise check . --ci \
+  --from-passport <approved-passport.json> \
+  --to-passport <candidate-passport.json>
+```
+
+This adds the same Governed Release Review returned by `vise passport compare`. A `ready` result means the automated evidence supports human review; it never means Vise approved the release. Otherwise-green compliance exits `12` when the release review is `review-required` or `blocked`. See [Reviewing and releasing an integration](/ai-mcp/vise/release-assurance).
+
 ## Related
 
     Install Vise and ask for your first feature.
     The commands for verifying recorded evidence and gating releases.
+    SDK assurance, Integration Passports, and governed release review.
     Build realtime SDK features with the correct lifecycle.
     User login, session renewal, and regional configuration.
 
@@ -70043,7 +70149,7 @@ It verifies the active contract *and* re-verdicts every previously finished feat
 
 > Expose Vise's local tools to Claude Code, Cursor, Codex, and VS Code over MCP.
 
-Vise ships an MCP adapter, so any MCP-capable host can call Vise's tools — inspect, plan, check, sensors, docs lookup, and more — directly during the coding loop. Start it with:
+Vise ships an MCP adapter, so any MCP-capable host can call Vise's tools — inspect, plan, assess Day-2 impact, check SDK release boundaries, compose Passports, validate, run sensors, and look up docs — directly during the coding loop. Start it with:
 
 ```sh
 vise mcp
@@ -70119,14 +70225,23 @@ The Vise MCP tools mirror the [CLI commands](/ai-mcp/vise/cli-reference), named 
 | Tool | Mirrors | Purpose |
 | --- | --- | --- |
 | `inspect_project` | `vise inspect` | Detect platform, surfaces, sensors, and complete-scan coverage |
+| `impact_project` | `vise impact` | Explain Day-2 change impact, evidence freshness, reported cross-surface symptoms, and the smallest safe next actions without editing |
+| `analyze_sdk_release` | `vise sdk-release` | Explain exact-snapshot SDK assurance or diff two extracted SDK surface snapshots |
 | `plan_integration` | `vise plan` | Grounded plan with docs citations and intake |
 | `init_compliance` | `vise init` | Write the `sp-vise/` contract |
 | `check_compliance` | `vise check` | Validate the code against the contract |
+| `generate_integration_passport` | `vise passport` | Compose a digest-bound, sanitized integration handoff; read-only unless writing is explicit |
+| `verify_integration_passport` | `vise passport verify` | Recompute Passport claims and local evidence hashes without repairing the project |
+| `compare_integration_passports` | `vise passport compare` | Compare handoffs and compose the Governed Release Review decision |
+| `verify_trust_envelope` | `vise trust verify` | Authenticate a Passport or Policy Pack envelope against an explicit local trust policy |
 | `run_sensors` | `vise run-sensors` | Run detected build, lint, typecheck, and smoke checks; explicitly included sensor names must match |
 | `get_sdk_facts` | `vise sdk-facts` | Read grounded SDK surface facts |
 | `search_docs` / `get_doc_page` | `vise search-docs` / `vise get-doc-page` | Find and read social.plus docs |
 | `debug_issue` | `vise debug` | Diagnose an SDK-specific runtime failure |
 | `attest_rule` / `explain_rule` | `vise attest` / `vise explain` | Record evidence and read rule guidance |
+| `record_learning` / `show_learning` | `vise learning record` / `vise learning show` | Record and read local-only, advisory learning and Outcome Evidence |
+
+Signing trust envelopes and installing Managed Placements are intentionally CLI-only. An MCP host can verify an envelope, but Vise does not expose private-key signing through MCP.
 
 ## Skill or MCP?
 
@@ -70150,9 +70265,9 @@ For MCP-capable hosts, install the skill **and** register the MCP server. On hos
 
 > For reviewers and CI — the commands behind the skill, and the ones you run to verify recorded evidence.
 
-Day to day, you don't need this page: your agent runs these commands through the [skill](/ai-mcp/vise/overview#get-started). It exists for the moments a human drives Vise directly — reviewing recorded evidence, gating a release in CI, or peeking under the hood. For the complete list and every flag, run `vise --help` or `vise <command> --help`. Each command has an [MCP tool equivalent](/ai-mcp/vise/mcp-server#what-it-exposes) in snake_case.
+Day to day, you don't need this page: your agent runs these commands through the [skill](/ai-mcp/vise/overview#get-started). It exists for the moments a human drives Vise directly — reviewing recorded evidence, gating a release in CI, or peeking under the hood. For the complete list and every flag, run `vise --help` or `vise <command> --help`. Most agent-facing commands have an [MCP tool equivalent](/ai-mcp/vise/mcp-server#what-it-exposes) in snake_case; trust signing and Managed Placement installation are intentionally CLI-only.
 
-  Most commands take a project path (default: the current directory) and read or write state under `sp-vise/`. The ones reviewers reach for most: `vise status`, `vise check --ci`, and `vise explain`.
+  Most commands take a project path (default: the current directory) and read or write state under `sp-vise/`. The ones reviewers reach for most: `vise impact`, `vise status`, `vise check --ci`, and `vise passport`.
 
 ## Explore and plan
 
@@ -70161,7 +70276,7 @@ Day to day, you don't need this page: your agent runs these commands through the
 | `vise explore "<request>"` | Map a request to what social.plus offers — no project or API key needed |
 | `vise inspect [path]` | Detect platform, monorepo surfaces, design signals, available sensors, and bounded scan coverage. An incomplete scan cannot initialize or produce a green check; select the concrete app surface in a large monorepo |
 | `vise plan [path] --request "..."` | Grounded implementation plan with intake questions and docs citations (`--summary` for a compact view) |
-| `vise init [path] --request "..." --answer key=value` | Write the `sp-vise/` compliance contract once blocking intake is answered. Initializing a different outcome records the previous engagement to `sp-vise/engagements/` first; replacing a **green** engagement asks for `--supersede-engagement` |
+| `vise init [path] --request "..." --answer key=value` | Write the `sp-vise/` compliance contract once blocking intake is answered. Reviewed organization policy, signed-policy trust, and aggregate measurement intent can be accepted with `--policy-pack`, `--trust-policy`, and `--measurement-plan`. Initializing a different outcome records the previous engagement to `sp-vise/engagements/` first; replacing a **green** engagement asks for `--supersede-engagement` |
 
 For broad requests that span several surfaces (feed + chat + profile), Vise sequences them:
 
@@ -70170,6 +70285,22 @@ For broad requests that span several surfaces (feed + chat + profile), Vise sequ
 | `vise workplan next [path] --request "..."` | Print the next uncompleted surface and its focused commands |
 | `vise workplan status [path] --request "..."` | Show the sequence and which surfaces are done |
 | `vise workplan complete [path] --request "..." --surface <id>` | Record a green-checked surface with snapshot evidence |
+| `vise workplan trim [path] --request "..." --surface <id> --reason "..."` | Deliberately omit a companion surface and re-arm blueprint confirmation so the changed journey is reviewed |
+
+## Day-2 and release assurance
+
+| Command | Purpose |
+| --- | --- |
+| `vise impact [path] [--symptom "..."]` | Read-only Day-2 planner. Compare the project with recorded intent, lifecycle state, SDK declarations, policy, and evidence; classify evidence as preserved, stale, missing, or unknown; and return the smallest safe recovery sequence. A symptom can authorize a bounded repair when recorded cross-surface intent and current source confirm the gap |
+| `vise sdk-release [path]` | Explain whether detected SDK declarations and supported lockfile resolutions match Vise's exact extraction-grounded snapshots. It does not fetch registries, edit dependencies, or infer semantic compatibility from semver |
+| `vise sdk-release --from-surface-dir <before> --to-surface-dir <after>` | Diff two SDK surface snapshots for symbol, model-field, capability, and affected-rule changes |
+| `vise passport [path] [--write]` | Compose sanitized accepted intent, lifecycle, SDK assurance, evidence hashes, runtime state, residual risk, and replay commands into digest-bound claims. Read-only unless `--write` is explicit |
+| `vise passport verify [path] [--passport <path>]` | Recompute Passport claims and local evidence states without rerunning or repairing the project |
+| `vise passport compare [path] --from <before> --to <after>` | Compare two valid Passports and compose a Governed Release Review result: `ready`, `review-required`, or `blocked` |
+| `vise trust sign [path] ...` | CLI-only explicit write: wrap a reviewed Passport or Policy Pack in an Ed25519 envelope using an external private key that Vise does not retain |
+| `vise trust verify [path] --envelope <path> --trust-policy <path>` | Authenticate envelope integrity, issuer/key authorization, artifact type, audience, and validity. Signature validity does not replace Passport or Policy Pack semantic validation |
+
+See [Reviewing and releasing an integration](/ai-mcp/vise/release-assurance) for the recommended handoff flow.
 
 ## Validate and verify
 
@@ -70177,6 +70308,7 @@ For broad requests that span several surfaces (feed + chat + profile), Vise sequ
 | --- | --- |
 | `vise check [path]` | Validate the code against the recorded contract |
 | `vise check [path] --ci` | Read-only release gate for the active contract and every recorded engagement; exits `11` when active work is green but completed work drifted |
+| `vise check [path] --ci --from-passport <before> --to-passport <after>` | Add Governed Release Review to an otherwise unchanged compliance gate. Existing compliance codes take precedence; otherwise-green compliance exits `12` when release evidence is `review-required` or `blocked`. Add `--trust-policy` when both inputs are signed envelopes |
 | `vise check [path] --new-only` | Gate only on *rule findings* introduced since the baseline — the outcome's completeness checklist and selected capabilities always gate (they are the engagement's deliverables) |
 | `vise check [path] --allow-proof-waiver` | Accept an honest `runtime-proof-waived` result as passing |
 | `vise check [path] --engagement <outcome>` | Re-verify one previously completed engagement against the current rules and code (exit `11` on drift, `0` when it still holds) |
@@ -70194,8 +70326,16 @@ See [What your agent will report](/ai-mcp/vise/how-it-works#what-your-agent-will
 | `vise baseline [path]` | Snapshot pre-existing rule findings so `--new-only` can exclude them. Record it right after `vise init`, before writing code; the feature you asked for is never baselined — it still has to be built |
 | `vise attest [path] --rule <id> --signer host-agent --confidence high --evidence-file evidence.json --rationale "..."` | Record that a rule is satisfied through architecture the check can't see |
 | `vise sync [path]` | Persist deterministic-pass evidence after a green check |
-| `vise smoke [path] --log <file>` | Assess a captured mount-smoke log into a pass/fail verdict |
+| `vise smoke declare [path] --surface <id> [--route <route>] [--target-type <type>]` | Declare the exact runtime collection surface and, when applicable, its route and SDK target |
+| `vise smoke [path] --log <file> [--surface <id> ...]` | Assess normalized runtime markers and write independent per-surface receipts. Marker surface, route, and target must match the declaration; repeat `--surface` to assess selected surfaces |
 | `vise smoke waive [path] --reason "..." --mode declined\|deviceless` | Record an auditable runtime-proof waiver |
+
+## Engagement history
+
+| Command | Purpose |
+| --- | --- |
+| `vise engagement init [path] --tier <tier> --customer-id <id> --scope <outcome,...>` | Record the contractual broad-social engagement scope, with optional target date, reviewer, and evidence-upload consent |
+| `vise engagement show [path]` | Read the recorded engagement-scope artifact |
 
 ## Project sensors
 
@@ -70211,6 +70351,24 @@ See [What your agent will report](/ai-mcp/vise/how-it-works#what-your-agent-will
 | `vise get-doc-page <path>` | Fetch a specific doc page by path |
 | `vise sdk-facts --platform <platform>` | Read bundled SDK surface facts (`--capability`, `--format json`) |
 | `vise debug [path] --error "..."` | Diagnose an SDK-specific runtime failure |
+| `vise placements plan [path] --placement <id> --package-source <local-path>` | Plan explicitly selected Managed Placement host and slot governance without writing |
+| `vise placements add [path] --placement <id> --package-source <local-path> [--dry-run\|--apply]` | Preview by default, or explicitly install the pre-launch private host from a local/file source. Vise never guesses a slot coordinate |
+| `vise placements validate [path] [--placement <id>]` | Validate one host initialization, explicit slot/context evidence, secret hygiene, and sidecar drift |
+
+## Experience planning and outcome evidence (advisory)
+
+| Command | Purpose |
+| --- | --- |
+| `vise creative [path] --request "..."` | Produce an Engagement Intelligence brief with candidate experiences, rationale, tradeoffs, and review gaps |
+| `vise creative accept [path] --variant <id\|none> ...` | Record an explicit, reasoned selection or catalog gap |
+| `vise ux-harness [path]` | Generate advisory UX expectations from the selected variant |
+| `vise experience compile [path]` | Compile the selected variant into implementation artifacts |
+| `vise experience sensors [path]` | Write the advisory experience sensor framework |
+| `vise experience-report [path]` | Write a dimensioned advisory experience review |
+| `vise learning record [path]` | Record a local-only learning event or reviewed aggregate Outcome Evidence |
+| `vise learning show [path]` | Read the local learning summary and non-causal advisory deltas |
+
+These commands do not upload customer data, assign a calibrated score, change recommendations automatically, or affect `vise check` exit codes.
 
 ## Design (advisory)
 

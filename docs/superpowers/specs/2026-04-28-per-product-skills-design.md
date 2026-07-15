@@ -41,8 +41,8 @@ Each `SKILL.md` follows this template:
 ### Chat (`chat/SKILL.md`)
 - Channel types: community channel, live channel, conversation (DM/group)
 - Messaging: text, image, file, custom message types, mentions
-- Real-time: Live Collections for message lists, typing indicators
-- Unread counts and read receipt management
+- Real-time: Live Collections for message lists and channel lists
+- Unread counts and supported mark-read behavior
 - Channel membership: join, leave, invite, ban, mute
 - Moderation: flag messages, mute users, ban users
 - Push notification integration for chat events
