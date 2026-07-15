@@ -40,8 +40,8 @@ metadata:
 Reach for this skill when implementing:
 - Channel creation (community channels, live channels, direct/group conversations)
 - Sending, editing, deleting, or reacting to messages
-- Real-time message lists and typing indicators
-- Unread count management and read receipt marking
+- Real-time message and channel lists
+- Unread count management and supported mark-read behavior
 - Channel membership (join, leave, ban, mute users)
 - Push notifications for chat events
 
@@ -70,8 +70,7 @@ Use the `search_social_plus` MCP tool with these queries for detailed API docs a
 | Send a message | `"send message createMessage"` |
 | Real-time message list | `"message collection live object"` |
 | Unread counts | `"unread count channel"` |
-| Read receipts | `"mark messages as read"` |
-| Typing indicators | `"typing indicator"` |
+| Mark read state | `"mark messages as read"` |
 | Ban or mute a user | `"ban user channel"` or `"mute member"` |
 | Push notifications | `"push notification chat channel"` |
 | Custom message types | `"custom message type"` |
