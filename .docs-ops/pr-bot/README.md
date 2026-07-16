@@ -55,10 +55,10 @@ Create the PAT under the bot account or a service account. Set it in **Settings 
 
 ## Manually triggering
 
-Go to **Actions → SDK Drift Watcher → Run workflow** in the GitHub UI. You can optionally pick a single platform from the dropdown (leave blank for all 4), or use:
+Go to **Actions → SDK Drift Watcher → Run workflow** in the GitHub UI. Choose **all** or a single platform from the dropdown, or use:
 
 ```sh
-gh workflow run sdk-drift-watcher.yml                       # all 4 platforms
+gh workflow run sdk-drift-watcher.yml -f platform=all       # all 4 platforms
 gh workflow run sdk-drift-watcher.yml -f platform=ios       # one platform
 ```
 

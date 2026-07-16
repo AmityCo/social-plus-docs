@@ -6,47 +6,43 @@ on:
   workflow_dispatch:        # also manually triggerable
     inputs:
       platform:
-        description: 'Platform to check (leave blank for all)'
+        description: 'Platform to check'
         required: false
-        default: ''
+        default: all
         type: choice
         options:
-          - ''
+          - all
           - typescript
           - ios
           - android
           - flutter
 
-concurrency:
-  group: sdk-drift-watcher-${{ matrix.platform }}
-  cancel-in-progress: false  # don't stomp on a running bot
-
 jobs:
   watch:
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'schedule' ||
-      github.event.inputs.platform == '' ||
-      github.event.inputs.platform == matrix.platform
     strategy:
       fail-fast: false   # one platform's failure doesn't kill the others
       matrix:
         include:
           - platform: typescript
             sdk_repo: AmityCo/AmityTypescriptSDK
-            checkout_path: ../AmityTypescriptSDK
+            checkout_path: .sdk-sources/AmityTypescriptSDK
 
           - platform: ios
             sdk_repo: AmityCo/AmitySDKIOS
-            checkout_path: ../AmitySDKIOS
+            checkout_path: .sdk-sources/AmitySDKIOS
 
           - platform: android
             sdk_repo: AmityCo/Amity-Social-Cloud-SDK-Android
-            checkout_path: ../Amity-Social-Cloud-SDK-Android
+            checkout_path: .sdk-sources/Amity-Social-Cloud-SDK-Android
 
           - platform: flutter
             sdk_repo: AmityCo/Amity-Social-Cloud-SDK-Flutter-Internal
-            checkout_path: ../Amity-Social-Cloud-SDK-Flutter-Internal
+            checkout_path: .sdk-sources/Amity-Social-Cloud-SDK-Flutter-Internal
+
+    concurrency:
+      group: sdk-drift-watcher-${{ matrix.platform }}
+      cancel-in-progress: false  # don't stomp on a running bot
 
     permissions:
       contents: write
@@ -54,11 +50,23 @@ jobs:
 
     steps:
       - name: Checkout docs repo
+        if: github.event_name == 'schedule' || inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Require private SDK read token
+        if: github.event_name == 'schedule' || inputs.platform == 'all' || inputs.platform == matrix.platform
+        env:
+          SDK_READONLY_PAT: ${{ secrets.SDK_READONLY_PAT }}
+        run: |
+          if [ -z "$SDK_READONLY_PAT" ]; then
+            echo "::error title=Missing SDK_READONLY_PAT::Configure the repository or organization Actions secret with read access to all four private SDK repositories."
+            exit 1
+          fi
+
       - name: Checkout ${{ matrix.sdk_repo }}
+        if: github.event_name == 'schedule' || inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.sdk_repo }}
@@ -66,12 +74,14 @@ jobs:
           token: ${{ secrets.SDK_READONLY_PAT }}   # needs read access to all 4 SDK repos
 
       - uses: actions/setup-python@v5
+        if: github.event_name == 'schedule' || inputs.platform == 'all' || inputs.platform == matrix.platform
         with:
           python-version: '3.12'
 
       - name: Run PR-bot (${{ matrix.platform }})
+        if: github.event_name == 'schedule' || inputs.platform == 'all' || inputs.platform == matrix.platform
         env:
           # Points extractors at the checked-out SDK siblings
-          SP_SDKS_ROOT: ${{ github.workspace }}/..
+          SP_SDKS_ROOT: ${{ github.workspace }}/.sdk-sources
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .docs-ops/pr-bot/auto-update-from-sdk.py --platform ${{ matrix.platform }}
