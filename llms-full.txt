@@ -3641,17 +3641,25 @@ void getUsers(AmityUserSortOption sortOption) {
 
 Use user flagging when a member reports another user for moderator review. Flagging does not block, ban, or delete the user; it records reporting state that moderation workflows can review.
 
-Flutter exposes flag and unflag actions from an `AmityUser` object. TypeScript, iOS, and Android expose repository methods that take a `userId`.
+You can send a simple flag (just the `userId`) or an optional **structured report** that describes _what_ is being reported and _why_ — see [Add a report type, reason, and comment](#add-a-report-type-reason-and-comment-optional).
+
+  Flutter exposes flag and unflag actions from an `AmityUser` object.
+  TypeScript, iOS, and Android expose repository methods that take a `userId`.
+
+  The structured report fields (`reportType`, `reason`, `comment`) are
+  **optional** and **backward compatible**. A flag call with no report fields
+  behaves exactly as before. These fields are recorded for moderators and are
+  **not** returned in the API response.
 
 ## Parameters
 
-| Operation | Required inputs | Platforms | Result shape |
-| --- | --- | --- | --- |
-| Flag user | `userId` | TypeScript, iOS, Android | TypeScript returns `Promise<boolean>`; iOS async call throws on failure; Android returns `Completable`. |
-| Flag user | `AmityUser` object | Flutter | Returns `Future<AmityUser>`. |
-| Unflag user | `userId` | TypeScript, iOS, Android | TypeScript returns `Promise<boolean>`; iOS async call throws on failure; Android returns `Completable`. |
-| Unflag user | `AmityUser` object | Flutter | Returns `Future<AmityUser>`. |
-| Check flag status | `userId` or `AmityUser` object | TypeScript, iOS, Android, Flutter | Boolean flag state where the platform exposes it. |
+| Operation         | Required inputs                                        | Platforms                         | Result shape                                                                                               |
+| ----------------- | ------------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Flag user         | `userId` (optional: `reportType`, `reason`, `comment`) | TypeScript, iOS, Android          | TypeScript returns `Promise<Amity.User>`; iOS async call throws on failure; Android returns `Completable`. |
+| Flag user         | `AmityUser` object                                     | Flutter                           | Returns `Future<AmityUser>`.                                                                               |
+| Unflag user       | `userId`                                               | TypeScript, iOS, Android          | TypeScript returns `Promise<boolean>`; iOS async call throws on failure; Android returns `Completable`.    |
+| Unflag user       | `AmityUser` object                                     | Flutter                           | Returns `Future<AmityUser>`.                                                                               |
+| Check flag status | `userId` or `AmityUser` object                         | TypeScript, iOS, Android, Flutter | Boolean flag state where the platform exposes it.                                                          |
 
 ## Flag a user
 
@@ -3659,20 +3667,21 @@ Call the flag API when the current user reports another user.
 
 ### Inputs
 
-| Platform | Method | Required inputs | Result shape |
-| --- | --- | --- | --- |
-| TypeScript | `UserRepository.flagUser(userId)` | `userId` | Returns `Promise<boolean>`. |
-| iOS | `userRepository.flagUser(withId:)` | `userId` | Async call that throws on failure. |
-| Android | `userRepository.flagUser(userId)` | `userId` | Returns `Completable`. |
-| Flutter | `user.report().flag()` | `AmityUser` object | Returns `Future<AmityUser>`. |
+| Platform   | Method                                                            | Required inputs                                       | Result shape                                      |
+| ---------- | ----------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| TypeScript | `UserRepository.flagUser(userId, options?)`                       | `userId` (optional `reportType`, `reason`, `comment`) | Returns `Promise<Amity.User>` — the flagged user. |
+| iOS        | `userRepository.flagUser(withId:reportType:reason:comment:)`      | `userId` (optional `reportType`, `reason`, `comment`) | Async call that throws on failure.                |
+| Android    | `userRepository.flagUser(userId, reportType?, reason?, comment?)` | `userId` (optional `reportType`, `reason`, `comment`) | Returns `Completable`.                            |
+| Flutter    | `user.report().flag()`                                            | `AmityUser` object                                    | Returns `Future<AmityUser>`.                      |
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
 async function flagUser(userId: string) {
-  const flagged = await UserRepository.flagUser(userId);
-  console.log('Flagged:', flagged);
+const flagged = await UserRepository.flagUser(userId);
+console.log('Flagged:', flagged);
 }
+
 ```
 
 ```swift iOS
@@ -3710,26 +3719,112 @@ Future<void> flagUser(AmityUser user) async {
 }
 ```
 
+
+## Add a report type, reason, and comment (optional)
+
+When you want moderators to know _what_ part of a profile is being reported and _why_, attach one or more optional fields to the flag call.
+
+| Field        | Answers    | Description                                                                                                                                            |
+| ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reportType` | **What**   | The aspect of the profile being reported. One of `displayName`, `description`, `avatarFileId`, or `behavior`. Omit it for a generic (typeless) report. |
+| `reason`     | **Why**    | A predefined reason for a `behavior` report. **Required** when `reportType` is `behavior`, and not allowed with any other type.                        |
+| `comment`    | **Detail** | Free-text context from the reporter (max 300 characters). Allowed with any report type, including a typeless report.                                   |
+
+### Report types
+
+`reportType` uses fixed values; your app decides the label to show the member.
+
+| Value          | Suggested label | Reports the user's…           |
+| -------------- | --------------- | ----------------------------- |
+| `displayName`  | Username        | display name                  |
+| `description`  | Bio             | bio / description             |
+| `avatarFileId` | Avatar          | profile image                 |
+| `behavior`     | Behavior        | conduct (requires a `reason`) |
+
+### Reasons
+
+For a `behavior` report, pass a `reason` from the shared content report-reason list (the same values used when flagging posts, comments, and messages): `communityGuidelines`, `harassmentOrBullying`, `selfHarmOrSuicide`, `violenceOrThreateningContent`, `sellingRestrictedItems`, `sexualContentOrNudity`, `spamOrScams`, `falseInformation`, or `others` with a custom string.
+
+### Rules
+
+  - `reason` is **required** when `reportType` is `behavior`, and **rejected** for every other type (and for typeless reports).
+  - `reason` and `comment` are each capped at **300 characters**.
+  - A member holds **one report per report type** on a target (up to four typed reports plus one typeless). Reporting the **same** type again updates that report; reporting a **different** type adds a new one.
+  - Unflagging removes **all** of your reports on that user at once — there is no per-type unflag.
+  - Breaking a rule returns a validation error (HTTP `422`) from the server.
+
+### Examples
+
+Pass the optional fields alongside the `userId`. Send `reason` only with a `behavior` report, and add a `comment` on any report type when the reporter provides extra detail.
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, UserReportTypeEnum, UserRepository } from '@amityco/ts-sdk';
+
+// Report a user's behavior, with a reason and comment
+await UserRepository.flagUser(userId, {
+  reportType: UserReportTypeEnum.BEHAVIOR,
+  reason: ContentFlagReasonEnum.SpamOrScams,
+  comment: 'Repeatedly posting promo links',
+});
+
+// Report a profile field (no reason)
+await UserRepository.flagUser(userId, { reportType: UserReportTypeEnum.AVATAR });
+```
+
+```swift iOS
+// Report a user's behavior, with a reason and comment
+try await userRepository.flagUser(
+    withId: "<user-id>",
+    reportType: .behavior,
+    reason: .spamOrScams,
+    comment: "Repeatedly posting promo links"
+)
+
+// Report a profile field (no reason)
+try await userRepository.flagUser(withId: "<user-id>", reportType: .avatarFileId)
+```
+
+```kotlin Android
+// Report a user's behavior, with a reason and comment
+userRepository.flagUser(
+    userId = userId,
+    reportType = AmityUserReportType.BEHAVIOR,
+    reason = AmityContentFlagReason.SpamOrScams,
+    comment = "Repeatedly posting promo links"
+).subscribe()
+
+// Report a profile field (no reason)
+userRepository.flagUser(
+    userId = userId,
+    reportType = AmityUserReportType.AVATAR
+).subscribe()
+```
+
+  To report more than one aspect of the same profile (for example the avatar
+  **and** the behavior), send a separate flag call for each `reportType`. They
+  are stored as distinct reports.
+
 ## Unflag a user
 
 Call the unflag API when the current user removes their report from another user.
 
 ### Inputs
 
-| Platform | Method | Required inputs | Result shape |
-| --- | --- | --- | --- |
-| TypeScript | `UserRepository.unflagUser(userId)` | `userId` | Returns `Promise<boolean>`. |
-| iOS | `userRepository.unflagUser(withId:)` | `userId` | Async call that throws on failure. |
-| Android | `userRepository.unflagUser(userId)` | `userId` | Returns `Completable`. |
-| Flutter | `user.report().unflag()` | `AmityUser` object | Returns `Future<AmityUser>`. |
+| Platform   | Method                               | Required inputs    | Result shape                       |
+| ---------- | ------------------------------------ | ------------------ | ---------------------------------- |
+| TypeScript | `UserRepository.unflagUser(userId)`  | `userId`           | Returns `Promise<boolean>`.        |
+| iOS        | `userRepository.unflagUser(withId:)` | `userId`           | Async call that throws on failure. |
+| Android    | `userRepository.unflagUser(userId)`  | `userId`           | Returns `Completable`.             |
+| Flutter    | `user.report().unflag()`             | `AmityUser` object | Returns `Future<AmityUser>`.       |
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
 async function unflagUser(userId: string) {
-  const unflagged = await UserRepository.unflagUser(userId);
-  console.log('Unflagged:', unflagged);
+const unflagged = await UserRepository.unflagUser(userId);
+console.log('Unflagged:', unflagged);
 }
+
 ```
 
 ```swift iOS
@@ -3767,26 +3862,28 @@ Future<void> unflagUser(AmityUser user) async {
 }
 ```
 
+
 ## Check whether the current user flagged a user
 
 Use the flag-state API or property to decide whether to show a flag or unflag action.
 
 ### Inputs
 
-| Platform | Method | Required inputs | Result shape |
-| --- | --- | --- | --- |
-| TypeScript | `UserRepository.isUserFlaggedByMe(userId)` | `userId` | Returns `Promise<boolean>`. |
-| iOS | `userRepository.isUserFlaggedByMe(withId:)` | `userId` | Returns `Bool` from an async call. |
-| Android | `user.isFlaggedByMe()` | `AmityUser` object | Returns `Boolean` from the loaded user model. |
-| Flutter | `user.isFlaggedByMe` | `AmityUser` object | Returns `bool` from the loaded user model. |
+| Platform   | Method                                      | Required inputs    | Result shape                                  |
+| ---------- | ------------------------------------------- | ------------------ | --------------------------------------------- |
+| TypeScript | `UserRepository.isUserFlaggedByMe(userId)`  | `userId`           | Returns `Promise<boolean>`.                   |
+| iOS        | `userRepository.isUserFlaggedByMe(withId:)` | `userId`           | Returns `Bool` from an async call.            |
+| Android    | `user.isFlaggedByMe()`                      | `AmityUser` object | Returns `Boolean` from the loaded user model. |
+| Flutter    | `user.isFlaggedByMe`                        | `AmityUser` object | Returns `bool` from the loaded user model.    |
 
 ```typescript TypeScript
 import { UserRepository } from '@amityco/ts-sdk';
 
 async function checkFlagState(userId: string) {
-  const isFlagged = await UserRepository.isUserFlaggedByMe(userId);
-  console.log('Flagged by me:', isFlagged);
+const isFlagged = await UserRepository.isUserFlaggedByMe(userId);
+console.log('Flagged by me:', isFlagged);
 }
+
 ```
 
 ```swift iOS
@@ -3814,6 +3911,7 @@ void checkFlagState(AmityUser user) {
   print('Flagged by me: $isFlaggedByMe');
 }
 ```
+
 
 ## Platform notes
 
@@ -19015,6 +19113,7 @@ Posts are the primary content objects in Social+. A post belongs to a target, su
 | Audio | Supported by TypeScript, iOS, and Android after audio upload. A Flutter audio post creator was not found in the current source. |
 | Clip | Supported by TypeScript, iOS, and Android after clip upload. A Flutter clip post creator was not found in the current source. |
 | Mixed media | TypeScript, iOS, and Android expose mixed attachment/media flows. A Flutter mixed-media post creator was not found in the current source. |
+| Event | Supported by TypeScript, iOS, and Android. References an existing event via `data.eventId`. Reads must go through `GET /api/v5/posts` — event posts are excluded from unfiltered `v3` and `v4` results. See [Event Posts](./creation/event-post). |
 | Custom | Supported by TypeScript, iOS, Android, and Flutter for app-specific data. |
 
 ## Parameters
@@ -19084,9 +19183,9 @@ Common post fields include:
 
 | Platform | Current behavior |
 | --- | --- |
-| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, and `mixed`. |
+| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, `event`, and `mixed`. |
 | iOS | Exposes `structureType` as a string on `AmityPost`. |
-| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `MIXED`, and `UNKNOWN`. |
+| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `EVENT`, `MIXED`, and `UNKNOWN`. |
 | Flutter | No public `structureType` field was found in the current public `AmityPost` model. |
 
 Use `includeMixedStructure` when querying a single media type and you also want posts whose `structureType` is `mixed`.
@@ -19135,6 +19234,7 @@ const postCommentTopic = getPostTopic(post, SubscriptionLevels.COMMENT);
 ## Related Topics
 
     Start with the simplest post creation path.
+    Publish an event as a post so it renders as a card in feeds.
     Load feeds and filter by type, target, review status, or mixed structure.
     Track post views and meaningful views where supported.
 
@@ -20385,6 +20485,240 @@ func createRoomPost(roomId: String, communityId: String) async throws -> AmityPo
 
 ---
 
+### [Event Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/creation/event-post)
+
+> Publish a scheduled event as a post so it renders as an event card in feeds and community timelines.
+
+An event post attaches an existing event to a post. The post carries the author's text; the event supplies the card that renders inside the feed. Tapping the card opens the event detail page instead of the post detail page, so the event stays the primary surface.
+
+Create the event first with the Event Repository. See [Create Event](/social-plus-sdk/social/events/create-event). The event post references the returned `eventId`.
+
+    An event post points to an `eventId` returned by event creation. The reference is immutable — a post can never be repointed at a different event.
+    Publish to a user feed or a community feed. Private-community events are locked to their own community server-side.
+
+## Data Type
+
+Event posts use a dedicated content type:
+
+| Field | Value |
+| --- | --- |
+| `dataType` | `"event"` |
+| `structureType` | `"event"` |
+| `data.eventId` | Required — the event this post is about |
+| `data.title` | Optional — prefilled from the event's `title`, editable |
+| `data.text` | Optional — prefilled from the event's `description`, editable |
+
+Publishing an event post with both `title` and `text` blank is valid — the event card is the payload.
+
+## Parameters
+
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `eventId` | Yes | All | ID of an existing event. The post cannot be created without it. |
+| `title` | No | All | Post title. Prefilled from `event.title` in composer, but any string (including empty) is accepted. Android: `String?`, dropped from the payload when blank. |
+| `text` | No | All | Post body. Prefilled from `event.description` in composer, but any string (including empty) is accepted. Android: `String`, defaults to `""`. |
+| `targetType` | Yes | All | Feed target, `community` or `user`. Constrained by the event's origin — see [Target Rules](#target-rules). |
+| `targetId` | Yes | All | Community ID or user ID for the target feed. |
+| `metadata` | No | All | Custom metadata stored with the post where supported. |
+| `mentionees` | No | iOS, TypeScript | User mention payload where supported by the platform builder. |
+| `mentionUserIds` | No | Android | `Set<String>` of user IDs to mention. |
+| `hashtags` | No | Android | Hashtags stored with the post. |
+| `tags` | No | Android | Post tags. |
+
+## Create an Event Post
+
+Creating an event post publishes the post and returns the created post once the server has accepted it. `eventId` is required; `title` and `text` are the author's own copy and may both be empty.
+
+
+```swift iOS
+let postRepository = AmityPostRepository()
+let builder = AmityEventPostBuilder()
+builder.setEventId(eventId)
+builder.setText("Come say hi")
+builder.setTitle("Summer Meetup")
+
+let post = try await postRepository.createEventPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil
+)
+```
+
+```kotlin Android
+postRepository.createEventPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    eventId = eventId,
+    title = "Summer Meetup",
+    text = "Come say hi"
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  dataType: "event",
+  data: {
+    eventId,
+    title: "Summer Meetup",
+    text: "Come say hi",
+  },
+});
+```
+
+
+## Target Rules
+
+The target is constrained by the event's origin:
+
+| Event origin | Allowed targets | Enforcement |
+| --- | --- | --- |
+| Public community | The event's own community, any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+| Private community | The event's own community only | Server-enforced — a `400` is returned for any other target |
+| User-hosted (`originType: "user"`) | Any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+
+The private-community lock is a **server-side** rule. If your app builds a custom target picker, honour the same rule client-side to avoid surprising `400` errors after the user has already drafted a post.
+
+## Rejected Combinations
+
+The backend rejects the following with `400`:
+
+| Case | Reason |
+| --- | --- |
+| Missing `data.eventId` | Required for `dataType: "event"`. |
+| Disallowed target | Private-community event posted anywhere other than that community. |
+| Media attachment | Image, video, file, audio, or clip children are not permitted — the event card is the visual. |
+| Product tags | `productTags` or `attachmentProductTags` are not permitted on event posts. |
+| Changing `data.eventId` | The event reference is immutable. Delete the post and create a new one to point at a different event. |
+
+## Editing an Event Post
+
+Editing updates `data.title` and `data.text` only. The event itself is never changed by a post edit, and sibling posts referencing the same event are unaffected.
+
+
+```swift iOS
+try await postRepository.editPost(
+    withId: postId,
+    builder: AmityEventPostBuilder()
+        .setTitle("Updated title")
+        .setText("Updated body")
+)
+```
+
+```kotlin Android
+postRepository.editPost(postId)
+    .title("Updated title")
+    .text("Updated body")
+    .build()
+    .apply()
+    .subscribe()
+```
+
+```typescript TypeScript
+await PostRepository.editPost(postId, {
+  data: { title: "Updated title", text: "Updated body" },
+});
+```
+
+
+Do not send `data.eventId` on edit. It is immutable — any request that changes it is rejected with `400`.
+
+## Resolve the Event from a Post
+
+There are two complementary accessors: a **snapshot** for first paint, and a **live observer** to keep the card in sync.
+
+| Accessor | Role | Availability |
+| --- | --- | --- |
+| `post.getEventInfo()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | 🚧 Planned — not yet implemented on any platform. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
+| `EventRepository.getEvent(eventId)` | Live observer. Subscribe while the card is on screen; unsubscribe on scroll-off or unmount. | ✅ Shipped on iOS, TypeScript, and Android. |
+
+Until the snapshot accessor lands, resolve the event through the repository alone. Read the `eventId` from the **child** post — on Android the parent post's data is `TEXT` and the `EVENT` data sits on the child.
+
+
+```swift iOS
+if let event = post.getEventInfo() {
+    render(event)
+}
+```
+
+```kotlin Android
+// The event reference lives on the child post, not the parent.
+val eventData = post.getChildren()
+    .firstOrNull { it.getData() is AmityPost.Data.EVENT }
+    ?.getData() as? AmityPost.Data.EVENT
+
+eventData?.let { data ->
+    AmitySocialClient.newEventRepository()
+        .getEvent(data.getEventId())
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { event -> render(event) },
+            { /* event deleted or unavailable — render the unavailable card */ }
+        )
+}
+```
+
+```typescript TypeScript
+const event = post.getEventInfo();
+if (event) {
+  render(event);
+}
+```
+
+
+Once shipped, `getEventInfo()` will return `nil` / `undefined` when the post is not an event post or when the event entry is not in the payload (for example, the event was deleted).
+
+On Android, `getEvent(eventId)` is a live stream that emits again whenever the event changes. A deleted or unavailable event surfaces as an **error on the `Flowable`**, not a null emission — handle it in the error callback. A **cancelled** event still resolves normally and must be treated as deleted by the consumer; the SDK does not normalise it.
+
+## Query Event Posts
+
+Event posts are **excluded from the default results** of `v3` and `v4` post queries so that older clients never receive a `dataType` they cannot render. Reads for event-aware clients must use **`GET /api/v5/posts`**.
+
+| Platform | Reading event posts |
+| --- | --- |
+| Android | `getPosts()` already targets `GET /api/v5/posts`, so event posts are returned without any extra filter. There is no `dataTypes` parameter to set. |
+| TypeScript | Pass `dataTypes: ["event"]` when reading through a `v3` / `v4` path. |
+
+To include event posts on any version, filter explicitly:
+
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const stopObserving = PostRepository.getPosts(
+  {
+    targetType: "community",
+    targetId: communityId,
+    dataTypes: ["event"],
+  },
+  ({ data }) => {
+    renderResults(data);
+  }
+);
+```
+
+
+An unfiltered `v4` feed query will not return an event post you just created — the exclusion gate hides it. Either upgrade the read to `v5` or add `dataTypes=event` to the query.
+
+## Related Topics
+
+    Create the event that an event post will reference.
+    Event model, statuses, and RSVP APIs.
+    Post targets, structure types, and platform APIs.
+
+---
+
 ### [Get Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/retrieval/get-post)
 
 > Retrieve one post as a live object, or fetch a known set of post IDs where the SDK supports batch lookup.
@@ -21097,13 +21431,13 @@ Use pinned-post queries to display posts that were already pinned outside the cl
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Community pinned posts | `communityId` | Yes | Community whose pinned posts should be retrieved. |
-| Community pinned posts | `placement` | No | Placement such as default or announcement. |
-| Community pinned posts | `sortBy` | No | Sort order where exposed by the target SDK. |
-| Community pinned posts | `includeMixedStructure` | No | Include mixed-structure posts where supported. |
-| Global pinned posts | `includeMixedStructure` | No | Include mixed-structure posts in global pinned results where supported. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Community pinned posts | `communityId` | Yes | All | Community whose pinned posts should be retrieved. |
+| Community pinned posts | `placement` | No | All | Placement such as default or announcement. |
+| Community pinned posts | `sortBy` | No | TypeScript, iOS | Sort order. Not accepted by the current Android call. Flutter exposes `sortByOptions`, but the request builder does not forward it — do not depend on it. |
+| Community pinned posts | `includeMixedStructure` | No | TypeScript, iOS, Android | Include mixed-structure posts. Not exposed on the current Flutter public method. |
+| Global pinned posts | `includeMixedStructure` | No | TypeScript, iOS, Android | Include mixed-structure posts in global pinned results. Not exposed on the current Flutter public method. |
 
 ## Community Pinned Posts
 
@@ -21233,6 +21567,14 @@ await globalPinnedPosts.loadNext();
 - Use global pinned posts for app-wide featured content.
 - TypeScript, iOS, and Android expose `includeMixedStructure`; the current Flutter public pinned-post methods do not expose that option.
 - Flutter exposes a `sortByOptions` parameter on `getPinnedPosts`, but the current public request builder does not pass it into the request. Do not depend on custom sorting there.
+
+## Pin / Feature Controls
+
+Pinning, unpinning, featuring, and unfeaturing are performed from the **Social+ Console**, not from the client SDK. The client SDKs surface pinned and featured state as read-only.
+
+- **Event posts** in the UIKit follow the same rule and go a step further — the pinned / featured badge renders but there is no in-app pin control in any role, including hosts and moderators. See [Event Posts](../creation/event-post) and the [Event UIKit doc](/uikit/components/social/event) for how the badge renders.
+- **User-feed posts** can never be pinned regardless of role or Console state.
+- **Global featuring** requires a public community — a post in a private community cannot be featured globally.
 
 ## Related Topics
 
@@ -25397,6 +25739,7 @@ The TypeScript SDK type surface defines these action values. iOS and Android exp
 | `reply` | Reply-related notification |
 | `join_request` | Join-request-related notification |
 | `user` | User-related notification |
+| `event` | Event-related notification (routes to the event detail page) |
 
 ## Tray Item Categories
 
@@ -25424,6 +25767,7 @@ The TypeScript SDK type surface defines these category values. iOS and Android e
 - Use `targetType` and `targetId` for the primary destination.
 - Use `referenceType` and `referenceId` when your UI needs to highlight a related post, comment, event, or other referenced object.
 - Use `rootId` and `latestCommentId` when they are present and your comment UI needs to open a thread context.
+- For `actionType == "event"` items, resolve the event id from `actionReferenceId` and route to the event detail page. When `trayItemCategory == "event_created"`, the hydrated `event` object (including `event.targetCommunity`) is available on the item for rendering the community avatar, event-type chip (`In-person` / `Virtual` from `event.type`), and event start date/time (from `event.startTime`).
 - Prefer the returned `text` or `templatedText` for display copy instead of rebuilding notification copy in the client.
 
 ## Related Documentation
@@ -25466,6 +25810,7 @@ Core fields returned by the SDK include:
 | `status` | TypeScript and iOS expose `scheduled`, `live`, `ended`, and `cancelled`. Android also exposes `DRAFT` and `UNKNOWN` enum values for server compatibility. |
 | `startTime`, `endTime` | Required when creating events. TypeScript accepts ISO strings; iOS uses `Date`; Android uses Joda `DateTime`. |
 | `originType`, `originId` | The event origin: `community` or `user`, plus the corresponding ID. |
+| `isOriginPublic` | Whether the origin community is public. Combined with `originType`, this is the signal that determines where the event may be published as a post — see [Target Rules](../content-management/posts/creation/event-post#target-rules). Android exposes it as `isOriginPublic()`. |
 | `location`, `externalUrl`, `coverImageFileId` | Optional display and media fields. |
 | `tags`, `metadata` | Optional structured fields. Timezone can be stored in `metadata.timezone` on TypeScript/iOS and via `timezone(...)` on Android. |
 | `rsvpCount`, `interestedCount` | Count fields returned with the event. |
@@ -25494,6 +25839,7 @@ This page documents SDK method names and data surfaces only. Product policy such
     Create scheduled virtual or in-person events.
     Get, query, update, and delete event objects.
     Create, update, read, and query RSVP responses.
+    Attach an event to a post so it renders as an event card in feeds.
     Generate a shareable deep link to an event.
 
 ---
@@ -25623,6 +25969,7 @@ Flutter does not currently expose public scheduled-event management APIs in the 
 | `status` | Query | TypeScript, iOS, Android | Filter by scheduled, live, ended, or cancelled status. |
 | `type` | Query | TypeScript, iOS, Android | Filter by virtual or in-person event type. |
 | `sortBy`, `orderBy` | Query | TypeScript, iOS, Android | Sort event lists by start time or creation time. |
+| `excludeOwnEvents` | Query | TypeScript, Android | Exclude events created by the current user — useful for discovery feeds. Defaults to `false`. |
 | Event fields | Update | TypeScript, iOS, Android | Mutable fields such as title, external URL, description, location, tags, and metadata. |
 
 ## Get an Event
@@ -25674,7 +26021,7 @@ AmitySocialClient.newEventRepository()
 
 ## Query Events
 
-Use event queries to build calendar lists, community event lists, and upcoming-event surfaces. Pass origin, status, type, sort, and order filters that match the list your UI needs.
+Use event queries to build calendar lists, community event lists, and upcoming-event surfaces. Pass origin, status, type, sort, and order filters that match the list your UI needs. For discovery surfaces such as an **Explore** or **Happening now** feed, set `excludeOwnEvents: true` (TypeScript) or `.excludeOwnEvents(true)` (Android) to omit events created by the current user; it is a no-op when no authenticated user is resolved.
 
 ```typescript TypeScript
 import {
@@ -25692,6 +26039,7 @@ const unsubscribe = EventRepository.getEvents(
     status: AmityEventStatus.Scheduled,
     sortBy: AmityEventSortOption.StartTime,
     orderBy: AmityEventOrderOption.Ascending,
+    excludeOwnEvents: true, // For exclude showing user own event on explore happening event and recommended event
   },
   ({ data: events, loading, error, hasNextPage, onNextPage }) => {
     if (loading) return;
@@ -25739,6 +26087,7 @@ AmitySocialClient.newEventRepository()
     .status(AmityEventStatus.SCHEDULED)
     .sortBy(AmityEventSortOption.START_TIME)
     .orderBy(AmityEventOrderOption.ASCENDING)
+    .excludeOwnEvents(true) // For showing on happening event and recommended event
     .build()
     .query()
     .subscribe(
@@ -25877,6 +26226,7 @@ AmitySocialClient.newEventRepository()
 | Type | `AmityEventType.Virtual`, `InPerson` | `.virtual`, `.inPerson` | `AmityEventType.VIRTUAL`, `IN_PERSON` |
 | Sort | `AmityEventSortOption.StartTime`, `CreatedAt` | `.startTime`, `.createdAt` | `AmityEventSortOption.START_TIME`, `CREATED_AT` |
 | Order | `AmityEventOrderOption.Ascending`, `Descending` | `.ascending`, `.descending` | `AmityEventOrderOption.ASCENDING`, `DESCENDING` |
+| Exclude own events | `excludeOwnEvents` | — | `.excludeOwnEvents(...)` |
 
 TypeScript `deleteEvent` returns `void`. Android returns a `Completable`; iOS returns from an async throwing function when deletion completes.
 
@@ -29827,10 +30177,12 @@ Keep feedback flowing: note gaps or advanced scenarios and feed them back before
 
 social.plus Chat UIKit provides a complete suite of messaging components designed to handle every aspect of modern chat applications. From intimate one-on-one conversations to high-volume live streaming chats, our components are built to scale with your needs while maintaining exceptional user experience.
 
+**Light & dark themes.** Chat components support both light and dark themes. Dark mode is currently verified for **chat** components; other UIKit features adopt the expanded color set in a later release — see [Component styling](/uikit/customization/component-styling).
+
     **Complete Messaging Foundation**
     - One-on-one and group conversations
     - Real-time message delivery and sync
-    - Rich media support (images, videos, files)
+    - Rich media support (images and videos)
     - Message editing, deletion, and reactions
     **High-Volume Live Events**
     - Live chat for streaming platforms
@@ -29857,8 +30209,8 @@ social.plus Chat UIKit provides a complete suite of messaging components designe
     Complete messaging interface for one-on-one and basic group conversations.
 
     **Key Features:**
-    - Real-time messaging with text, media, and file support
-    - Message reactions, threading, and rich content
+    - Real-time messaging with text and media support
+    - Message reactions, replies, and rich content
     - Message editing, deletion, and interaction controls
     - Network awareness and offline handling
 
@@ -30044,7 +30396,6 @@ social.plus UIKit provides a comprehensive set of chat components for building m
 
     - Text messages with formatting
     - Image and video sharing
-    - File attachments
 
     - Message reactions and replies
     - Mentions in messages
@@ -30068,10 +30419,8 @@ All chat components are available across platforms with platform-specific optimi
     - Keyboard handling and input optimization
     - Push notification integration
     **React Web & React Native**
-    - Progressive Web App support
+    - Embeds as React components via `AmityUiKitProvider`
     - Responsive design for all screen sizes
-    - WebRTC integration for voice/video
-    - Service worker for offline support
 
 ## Getting Started
 
@@ -30085,26 +30434,22 @@ All chat components are available across platforms with platform-specific optimi
 ### Quick Start Example
 
 ```swift iOS
-import AmityUIKit
+import AmityUIKit4
 
-// Initialize chat view controller
-let chatVC = AmityChatViewController()
-chatVC.channelId = "your_channel_id"
+// AmityChatPage is a SwiftUI view. Wrap it to present it from a UIKit stack.
+let chatPage = AmityChatPage(channelId: "your_channel_id")
+let hostingController = AmitySwiftUIHostingController(rootView: chatPage)
 
-// Present chat interface
-navigationController?.pushViewController(chatVC, animated: true)
+navigationController?.pushViewController(hostingController, animated: true)
 ```
 
 ```kotlin Android
-import com.amity.socialcloud.uikit.chat.AmityChatFragment
+import com.amity.socialcloud.uikit.chat.compose.conversation.AmityChatPageActivity
 
-// Create chat fragment
-val chatFragment = AmityChatFragment.newInstance("your_channel_id")
-
-// Add to container
-supportFragmentManager.beginTransaction()
-    .replace(R.id.container, chatFragment)
-    .commit()
+// The chat page is an Activity. Launch it with its Intent factory.
+startActivity(
+    AmityChatPageActivity.newIntent(context, channelId = "your_channel_id")
+)
 ```
 
 ```tsx React
@@ -30177,6 +30522,8 @@ graph TD
 ## Customization Options
 
 Chat pages follow the UIKit page / component / element ID system. Set a network-wide theme in the top-level `theme`, then override a specific chat surface by its ID under `customizations` in your `uikit.config.json` — the same pattern used across every UIKit page.
+
+**Light & dark themes.** Chat components support both light and dark themes. Dark mode is currently verified for **chat** components; other UIKit features adopt the expanded color set in a later release — see [Component styling](/uikit/customization/component-styling).
 
 ```json uikit.config.json
 {
@@ -30258,7 +30605,7 @@ For live streaming or event chat:
 For customer service integration:
 
 1. **Conversation Chat** - Agent-customer messaging
-2. **File sharing** - Document and image support
+2. **Media sharing** - Image and video support
 3. **Admin features** - Supervisor tools and analytics
 
 ## Next Steps
@@ -30432,7 +30779,7 @@ Widget createConversationPage() {
 
 > Complete messaging interface for one-on-one and group conversations with rich media support and real-time interactions
 
-**Key Benefit**: Seamlessly integrate complete chat functionality into your application with pre-built components that handle messaging, media sharing, reactions, and threading out of the box.
+**Key Benefit**: Seamlessly integrate complete chat functionality into your application with pre-built components that handle messaging, media sharing, reactions, and replies out of the box.
 
 ## Feature Overview
 
@@ -30440,12 +30787,12 @@ This UIKit is designed to seamlessly integrate messaging functionalities into yo
 
     **Complete Chat Experience**
     - Send and receive text messages
-    - Rich media support (images, videos, etc.)
+    - Rich media support (images and videos)
     - Message editing and deletion
     - Real-time message delivery
     **Enhanced Engagement**
     - Message reactions with emojis
-    - Message threading and replies
+    - Message replies and quoted context
     - User action controls
     - Conversation management
 
@@ -30515,7 +30862,7 @@ class CustomChatPageBehavior extends AmityChatPageBehavior {
 
     ### Message Bubble Rendering
 
-    The AmityMessageBubbleView renders individual chat messages as bubbles in the conversation view.
+    The AmityMessageBubble renders individual chat messages as bubbles in the conversation view.
 
     ### Features
 
@@ -30542,7 +30889,7 @@ class CustomChatPageBehavior extends AmityChatPageBehavior {
 
 ```dart Flutter - Message Bubble
 Widget messageBubbleView(AmityMessage message) {
-  return MessageBubbleView(
+  return AmityMessageBubble(
     message: message,
   );
 }
@@ -30745,7 +31092,7 @@ Widget conversationChatUserActionComponent() {
 
     **Integrating chat components into your app**
 
-    The UIKit components are designed to work seamlessly together. Use AmityChatPage as your main interface, and leverage individual components like MessageBubbleView and MessageComposer when you need granular control over specific parts of the chat experience.
+    The UIKit components are designed to work seamlessly together. Use AmityChatPage as your main interface, and leverage individual components like AmityMessageBubble and MessageComposer when you need granular control over specific parts of the chat experience.
 
     **Tailoring the chat interface**
 
@@ -30778,7 +31125,7 @@ Widget conversationChatUserActionComponent() {
     **Streaming Chat**
     High-volume events
 
-**Implementation Strategy**: Start with the AmityChatPage component for a complete chat experience, then customize individual components like MessageBubbleView and MessageComposer as needed for your specific use case.
+**Implementation Strategy**: Start with the AmityChatPage component for a complete chat experience, then customize individual components like AmityMessageBubble and MessageComposer as needed for your specific use case.
 
 ---
 
@@ -30804,8 +31151,8 @@ The Group Chat UIKit is designed to provide a complete solution for multi-user c
     - Member action controls
 
     **Interactive Communication**
-    - Text, images, videos, and files
-    - Message reactions and threading
+    - Text, images, and videos
+    - Message reactions and replies
     - Edit and delete capabilities
     - Real-time message delivery
     **Safety & Control**
@@ -30837,7 +31184,7 @@ The Group Chat UIKit is designed to provide a complete solution for multi-user c
     | Feature                | Description                                    |
     | ---------------------- | ---------------------------------------------- |
     | Real-time Display      | Live message updates and conversation flow     |
-    | Message Composition    | Text, images, videos, and file attachments    |
+    | Message Composition    | Text, images, and videos                       |
     | Message Actions        | Reply, edit, delete, and reaction capabilities |
     | Member Interaction     | User profiles and member-specific actions     |
     | Link Preview           | Automatic rich preview for shared URLs        |
@@ -31111,7 +31458,7 @@ Widget messageReportComponent() {
 
     ### Message Bubble Rendering
 
-    The AmityMessageBubbleView renders individual chat messages as bubbles in the conversation view.
+    The AmityMessageBubble renders individual chat messages as bubbles in the conversation view.
 
     ### Features
 
@@ -31138,7 +31485,7 @@ Widget messageReportComponent() {
 
 ```dart Flutter - Message Bubble
 Widget messageBubbleView(AmityMessage message) {
-  return MessageBubbleView(
+  return AmityMessageBubble(
     message: message,
   );
 }
@@ -31611,7 +31958,7 @@ The Chat Search UIKit provides comprehensive search functionality that enables u
     **Find Conversations Fast**
     - Search by channel name and participants
     - Real-time result updates
-    - Filter by channel type
+    - Covers both conversation and community channels
     - Archive status visibility
     **Locate Specific Content**
     - Full-text search across messages
@@ -37984,6 +38331,10 @@ Widget communitiesByCategoryPage(AmityCommunityCategory category) {
 
     The Notification Tray automatically creates and groups notification records for each user, ensuring they stay informed about relevant activities within their communities and encouraging deeper platform engagement.
 
+    #### Event Creation Item
+
+    When an event is created in a community, its members receive a notification tray item. The audience depends on the community type — events in **public** communities notify the whole network, while events in **private** communities notify community members only. Tapping the item opens the event detail page.
+
     ### Code Examples
 
 ```swift iOS
@@ -38034,10 +38385,12 @@ const SampleAmityNotificationTrayPage = () => {
     | `notification_tray_page/*/title` | Element | You can customize text |
     | `notification_tray_page/*/empty_notification` | Element | You can customize image and text |
     | `notification_tray_page/*/no_internet_connection` | Element | You can customize image and text |
+    | `notification_tray_page/*/event_notification_item` | ListItem | Customize the Event Creation tray item |
+    | `notification_tray_page/*/event_type_badge` | Element | Customize the event-type chip (`In-person` / `Virtual`) |
 
     ### Navigation Behavior
 
-    The behavior can be customized to handle navigation to post detail and community profile pages differently.
+    The behavior can be customized to handle navigation to post detail, community profile, user profile, and event detail pages differently.
 
 ```swift iOS
 // Default Behavior
@@ -38052,6 +38405,10 @@ class CustomBehaviour: AmityNotificationTrayPageBehavior {
 
     override func goToCommunityProfilePage(context: AmityNotificationTrayPageBehavior.Context) {
         // Custom implementation
+    }
+
+    override func goToEventDetailPage(context: AmityNotificationTrayPageBehavior.Context) {
+        // Custom implementation — invoked when the user taps an Event Creation item
     }
 }
 
@@ -38077,6 +38434,13 @@ class CustomNotificationTrayPageBehavior : AmityNotificationTrayPageBehavior() {
         communityId: String,
     ) {
         super.goToCommunityProfilePage(context, communityId)
+    }
+
+    override fun goToEventDetailPage(
+        context: Context,
+        eventId: String,
+    ) {
+        super.goToEventDetailPage(context, eventId)
     }
 
 }
@@ -38110,6 +38474,9 @@ const SampleAmityNotificationTrayPage = () => {
           },
           goToUserProfilePage: ({ userId }) => {
             console.log('goToUserProfilePage', userId);
+          },
+          goToEventDetailPage: ({ eventId }) => {
+            console.log('goToEventDetailPage', eventId);
           },
         },
       }}
@@ -40808,14 +41175,16 @@ fun setCustomBehavior() {
 
 > Live video broadcasting, viewing, and stream management components
 
-**UIKit Component**: Livestream components are built on top of the social.plus SDK, providing ready-to-use live video broadcasting and viewing UI with full data management handled automatically.
+**UIKit Component**: Livestream components are built on top of the social.plus
+  SDK, providing ready-to-use live video broadcasting and viewing UI with full
+  data management handled automatically.
 
   <img
     src="/images/Livestream(4).png"
     alt="Livestream(4)"
     title="Livestream(4)"
     className="mx-auto"
-    style={{ width:"37%" }}
+    style={{ width: "37%" }}
   />
 
 ## Feature Overview
@@ -40831,6 +41200,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Real-time broadcasting controls
     - Camera switching and stream management
 
+
     **Multi-broadcaster collaboration**\
     **(community only)**
 
@@ -40839,6 +41209,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Real-time multi-broadcaster stage
     - Audio/video controls for each broadcaster
     - AI-powered content moderation
+
 
     **Live and recorded stream playback**
 
@@ -40849,6 +41220,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Stream status and engagement features
     - Live Chat (community only)
 
+
     **Broadcast control and administration**
 
     - Stream termination handling
@@ -40856,11 +41228,13 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Stream status management
     - Co-host permission management
 
+
     **Flexible content distribution**
 
     - Community-specific broadcasting
     - Personal timeline streaming
     - Audience selection workflows
+
 
     **Multi-host broadcasting**
 
@@ -40869,6 +41243,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Co-host permission controls
     - Collaborative stream management
 
+
     **Real-time audience visibility**
 
     - Real-time viewer count display
@@ -40876,15 +41251,28 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Live audience engagement tracking
     - Viewer presence monitoring
 
+
     **Automatic watch time tracking**
 
     - Watch minutes collection for viewers
     - Pause/resume aware tracking
     - No additional implementation required
 
+
+    **Tap-to-reveal player controls**
+
+    - Tap-to-reveal controls overlay on mobile
+    - Pause a live stream and resume at the live edge
+    - Chat keeps updating while video is paused
+    - 10-second skip on video posts and recorded livestreams
+
+
 ### Livestream Analytics
 
-  **Zero Implementation Required**: Livestream analytics is automatically built into UIKit's livestream viewing components. When users watch live or recorded streams through the Room Player Page, watch minutes are automatically tracked and synced to the backend—no additional code needed.
+  **Zero Implementation Required**: Livestream analytics is automatically built
+  into UIKit's livestream viewing components. When users watch live or recorded
+  streams through the Room Player Page, watch minutes are automatically tracked
+  and synced to the backend—no additional code needed.
 
 UIKit automatically handles all analytics tracking including:
 
@@ -40897,16 +41285,18 @@ For developers who want to understand the underlying analytics capabilities or i
 
 ### Platform Support
 
-| Feature | iOS | Android | Web | Flutter | React Native |
-| --- | --- | --- | --- | --- | --- |
-| Create Live Stream Post | ✅ | ✅ | ✅(desktop) | - | ✅ |
-| Stream Viewing | ✅ | ✅ | ✅ | - | ✅ |
-| Co-Streaming<br />(Community) | ✅ | ✅ | ✅ | - | - |
-| Live Stream Chat & Moderation<br />(Community) | ✅ | ✅ | ✅ | - | - |
-| Watching Now Viewer Count<br /> | ✅ | ✅ | ✅ | - | - |
-| Livestream Analytics<br />(Watch Minutes) | ✅ | ✅ | ✅ | - | - |
+| Feature                                                      | iOS | Android | Web         | Flutter | React Native |
+| ------------------------------------------------------------ | --- | ------- | ----------- | ------- | ------------ |
+| Create Live Stream Post                                      | ✅  | ✅      | ✅(desktop) | -       | ✅           |
+| Stream Viewing                                               | ✅  | ✅      | ✅          | -       | ✅           |
+| Co-Streaming<br />(Community)                                | ✅  | ✅      | ✅          | -       | -            |
+| Live Stream Chat & Moderation<br />(Community)               | ✅  | ✅      | ✅          | -       | -            |
+| Watching Now Viewer Count<br />                              | ✅  | ✅      | ✅          | -       | -            |
+| Livestream Analytics<br />(Watch Minutes)                    | ✅  | ✅      | ✅          | -       | -            |
+| Playback Controls<br />(tap-to-reveal, pause live, 10s skip) | ✅  | ✅      | ✅          | 🚧      | 🚧           |
 
-  Livestream creation and co-host streaming on web is supported only on desktop view. On mobile web, only viewing livestreams is supported.
+  Livestream creation and co-host streaming on web is supported only on desktop
+  view. On mobile web, only viewing livestreams is supported.
 
 ## Implementation Guide
 
@@ -41144,6 +41534,7 @@ fun setCustomLivestreamBehavior() {
     // Custom behavior override for livestream post target selection is not currently supported in React. This functionality will be available in a future release.
 ```
 
+
     **Multi-broadcaster collaboration with co-hosting**
 
     Co-streaming components enable hosts to invite other users to join their livestream as co-hosts, creating collaborative broadcasting experiences with multiple broadcasters on a shared stage.
@@ -41339,6 +41730,7 @@ graph TD
     - Host only: Full moderation controls
     - Co-hosts: Cannot access moderation menu
     - Viewers: Can report stream
+
     **Live stream viewing and playback interfaces**
 
     Stream Viewing components provide comprehensive interfaces for watching live broadcasts and playing back recorded streams with interactive features and controls.
@@ -41358,6 +41750,10 @@ graph TD
     | Co-host Display | View active co-hosts in the live stream |
     | Viewer Count | Real-time display of total number of users currently watching the stream |
     | Who's Watching List | View the list of users currently watching the live stream |
+    | Tap-to-Reveal Controls (mobile) | Tap the player to reveal controls; only the central button toggles playback |
+    | Pause Live Stream (mobile) | Pause playback locally while the broadcast continues; resume jumps to the live edge |
+    | Live Chat During Pause | Chat keeps receiving messages in real time while the video is paused |
+    | 10-Second Skip (recorded playback) | ±10s skip buttons on recorded livestreams; hidden on live |
 
     **Automatic Thumbnail**: The backend automatically generates a live thumbnail for the room session once the stream goes live (available via `liveThumbnailUrl` on the room model). After the stream ends and recording is processed, a recorded thumbnail is also auto-generated. UIKit uses these thumbnails automatically when displaying livestream posts in feeds -- no additional configuration is needed. If the creator uploaded a custom cover image, it takes priority over the auto-generated thumbnails.
 
@@ -41504,6 +41900,7 @@ const handleLivestreamPlayerNavigation = {
     }
 };
 ```
+
 
     **Stream termination, moderation, and administrative controls**
 
@@ -41691,17 +42088,18 @@ Product tagging in livestreams allows hosts and authorized co-hosts to showcase 
     style={{ maxWidth: "40%", margin: "0 auto", display: "block" }}
   />
 
-  Product tagging requires the Product Catalog to be configured and enabled for your network in the console. Available on iOS, Android, and Web only.
+  Product tagging requires the Product Catalog to be configured and enabled for
+  your network in the console. Available on iOS, Android, and Web only.
 
 ### Tagging Phases
 
 Product tagging is available across all livestream phases, with different access levels at each stage:
 
-| Phase | Who can tag | Who can pin |
-| --- | --- | --- |
-| **Pre-live** (backstage) | Host only | Host only |
-| **During livestream** | Host \+ co-host (if permission granted) | Host \+ co-host (if permission granted) |
-| **Post-live** (host management) | Host only | — |
+| Phase                           | Who can tag                             | Who can pin                             |
+| ------------------------------- | --------------------------------------- | --------------------------------------- |
+| **Pre-live** (backstage)        | Host only                               | Host only                               |
+| **During livestream**           | Host \+ co-host (if permission granted) | Host \+ co-host (if permission granted) |
+| **Post-live** (host management) | Host only                               | —                                       |
 
 Viewers can browse and open tagged products during all phases, including replay.
 
@@ -41731,35 +42129,145 @@ The host controls whether a co-host can manage products. This permission can be 
 
 ### Limits & Constraints
 
-| Limit | Value |
-| --- | --- |
-| Max products per livestream | 20 |
-| Simultaneous pinned products | 1 |
+| Limit                        | Value |
+| ---------------------------- | ----- |
+| Max products per livestream  | 20    |
+| Simultaneous pinned products | 1     |
 
 ### Components Used in Livestreams
 
 Product tagging in livestreams uses two shared UIKit components. See [Product Tagging Components](/uikit/components/social/product-tagging) for full parameter reference and code examples.
 
-| Component | Used for |
-| --- | --- |
-| `ProductTagSelectionComponent` | Searching and selecting products to tag (via `livestream` mode) |
+| Component                       | Used for                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ProductTagSelectionComponent`  | Searching and selecting products to tag (via `livestream` mode)                                                                                  |
 | `ManageProductTagListComponent` | Managing tagged products with pin/unpin and remove controls (host/co-host view); browsing products in read-only overlay (viewer and replay view) |
 
 The `ProductTagSelectionComponent` in `livestream` mode has a higher product limit (up to 20 total) and a different header label ("Add products") compared to post mode. The `ManageProductTagListComponent` in `playback` render mode disables pin controls for the post-live replay experience.
+
+## Playback Controls
+
+Playback Controls standardize the tap and pause behavior of the video player across the UIKit — for both video posts and livestreams. On mobile, tapping the player reveals a controls overlay (instead of toggling playback), pausing a live stream is a real state with a visible pause indicator, and recorded content offers ±10s skip.
+
+  Playback Controls apply to the livestream viewer and the shared video player
+  used by video posts, media gallery, community video feeds, and recorded
+  livestream playback. Live streams do not show skip controls.
+
+### Tap-to-Reveal Controls (Mobile)
+
+On mobile clients, tapping the player surface reveals a controls overlay — it no longer toggles pause/play directly. Only the central pause/play button changes playback state.
+
+| Behavior                      | Detail                                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Tap surface while playing     | Reveals the controls overlay; playback continues                                                          |
+| Auto-dismiss while playing    | Overlay hides after ~1 second of inactivity                                                               |
+| Tap central pause/play button | Toggles playback (the only affordance for pause/play on mobile)                                           |
+| Tap outside while paused      | Dismisses the overlay; the video stays paused. Tap the surface again to re-reveal the central play button |
+| Auto-dismiss while paused     | Disabled — the overlay only dismisses on an explicit tap-outside                                          |
+
+  **Desktop web player:** One-step click-to-toggle is retained. Clicking the
+  video pauses or resumes it directly; the central play icon persists while
+  paused, the central pause icon appears briefly when resuming. Hover-to-reveal,
+  mute, and fullscreen behavior are unchanged.
+
+### Pause a Live Stream
+
+Viewers can pause a live stream locally. The broadcast continues on the sender's side; only the viewer's playback is frozen. On mobile, pause/resume goes through the central button in the tap-to-reveal overlay. On desktop, a single click on the video surface toggles play/pause directly.
+
+| Behavior                 | Detail                                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How to pause / resume    | **Mobile:** tap the surface to reveal the overlay, then tap the central pause/play button. **Desktop:** single-click anywhere on the video surface to toggle play/pause                        |
+| Pause indicator          | The central `play` icon shown while paused communicates the paused state — no separate badge is added                                                                                          |
+| Resume behavior          | On resume, playback **jumps to the current live edge** — the viewer catches up to live rather than replaying from the paused position                                                          |
+| Chat during pause        | Chat continues to receive and render new messages in real time; **no messages are missed or replayed** on resume                                                                               |
+| `LIVE` badge             | Not repurposed — the badge continues to reflect broadcast status, not viewer playback state                                                                                                    |
+| Stream ends while paused | If the room transitions to `ended` or `recorded` while the viewer is paused, that state **takes priority** — the pause indicator dismisses and the player moves to the ended or recorded state |
+
+  **Live edge resolution:** On resume, the player seeks to the HLS live-sync
+  position when available, or to the end of the seekable range otherwise. No
+  paused offset is tracked or restored.
+
+### 10-Second Skip (Video Posts & Recorded Livestreams)
+
+Viewers can jump backward or forward 10 seconds while watching a video post or a recorded livestream. On mobile, skip buttons appear in the controls overlay next to the central pause/play button. On desktop, they sit in the existing web-player control bar.
+
+| Behavior                   | Detail                                                                                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Availability               | Video posts and recorded livestreams (VOD-of-live), on **mobile and desktop**. **Hidden on live streams.**                                                                                   |
+| −10s at start              | Seeking below `0:00` clamps to `0:00`; the current play state is preserved (playing stays playing, paused stays paused)                                                                      |
+| +10s near end              | Clamps to the final frame **and pauses (end state)** — it does not loop or error                                                                                                            |
+| Rapid repeated taps        | Each tap adds or subtracts 10 seconds to the target position (e.g. three quick `+10s` taps at `1:00` seek to `1:30`). The icon always shows `+10` / `−10` — it does not accumulate on-screen |
+| Boundary during rapid taps | Boundary clamps apply mid-burst — back clamps to `0:00` (keeps the current play state), forward clamps to the final frame (pauses)                                                           |
+| Desktop                    | The existing skip controls now use `−10s` / `+10s` (previously 15s). No other desktop behavior changes                                                                                       |
+
+### Flow — Pause and Resume to Live (Mobile)
+
+```mermaid
+flowchart TD
+    A[Live stream playing at live edge] --> B[User taps player surface]
+    B --> C[Controls overlay revealed]
+    C --> D[User taps central pause button]
+    D --> E[Playback pauses; central icon flips to play]
+    E --> F{User action}
+    F -->|Tap outside| G[Overlay dismisses; video stays paused]
+    G --> H[User taps surface again → play button re-revealed]
+    F -->|Tap play button| I[Player seeks to live edge]
+    I --> J[Playback resumes live; overlay auto-dismisses in 1s]
+    E --> K{Room ends or transitions to recorded?}
+    K -->|Yes| L[Pause indicator dismissed; player switches to ended/recorded state]
+```
+
+### Platform Support
+
+| Feature                                        | iOS | Android | Web (mobile) | Web (desktop) | Flutter | React Native |
+| ---------------------------------------------- | --- | ------- | ------------ | ------------- | ------- | ------------ |
+| Tap-to-reveal controls overlay                 | ✅  | ✅      | ✅           | —             | 🚧      | 🚧           |
+| 1s auto-dismiss while playing                  | ✅  | ✅      | ✅           | —             | 🚧      | 🚧           |
+| Pause live stream + resume-to-live             | ✅  | ✅      | ✅           | ✅            | 🚧      | 🚧           |
+| Chat continues during pause                    | ✅  | ✅      | ✅           | ✅            | 🚧      | 🚧           |
+| Ended-while-paused hand-off                    | ✅  | ✅      | ✅           | ✅            | 🚧      | 🚧           |
+| ±10s skip (video posts + recorded livestreams) | ✅  | ✅      | ✅           | ✅            | 🚧      | 🚧           |
+| ±10s skip hidden on live                       | ✅  | ✅      | ✅           | ✅            | 🚧      | 🚧           |
+
+**Legend:** ✅ Supported | 🚧 Planned | — Not applicable
+
+  On desktop web, playback controls are a **UI refresh only** — icons are
+  updated and the skip amount changes from 15s to 10s. Click-to-toggle,
+  hover-to-reveal, mute, and fullscreen behavior are unchanged.
 
 ## Related Components
 
     **Post Components** Post creation and media management for livestream posts
 
-    **Feed Components** Livestream post display and interaction in social feeds
+  title="Social Feeds"
+  icon="newspaper"
+  href="/uikit/components/social/feeds"
+>
+  **Feed Components** Livestream post display and interaction in social feeds
 
-    **Community Features** Community-based livestream broadcasting and management
+  title="Communities"
+  icon="building"
+  href="/uikit/components/social/communities"
+>
+  **Community Features** Community-based livestream broadcasting and management
 
-    **User Management** User profile integration with livestream content
+  title="Users & Profiles"
+  icon="user"
+  href="/uikit/components/social/users"
+>
+  **User Management** User profile integration with livestream content
 
-    **Interaction Components** Real-time engagement during live streams
+  title="Comments & Reactions"
+  icon="heart"
+  href="/uikit/components/social/comments-reactions"
+>
+  **Interaction Components** Real-time engagement during live streams
 
-    **Moderation Tools** Livestream content moderation and safety controls
+  title="Content Moderation"
+  icon="shield"
+  href="/uikit/components/social/moderation"
+>
+  **Moderation Tools** Livestream content moderation and safety controls
 
     **Commerce Integration** Shared UIKit components for product tagging and management
 
@@ -41806,6 +42314,14 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
     - Attendees list
     - Reminder Notifications
 
+    **Publish an event to a feed**
+
+    - Create-post entry point on the event
+    - Target selection with private-community lock
+    - Event-post composer with prefilled fields
+    - Event card in feeds, tap opens event detail
+    - Read-only pinned / featured badges
+
 
 ### Platform Support
 
@@ -41815,6 +42331,7 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
 | Event Detail & Attendees   | ✅  | ✅      | ✅  | -       | -            |
 | Event discovery            | ✅  | ✅      | ✅  | -       | -            |
 | Event in community profile | ✅  | ✅      | ✅  | -       | -            |
+| Event as Post              | ✅  | ✅      | ✅  | -       | -            |
 
 ## Permission Handling
 
@@ -42029,6 +42546,23 @@ const SampleEventDetailPage = ({ eventId }) => {
 ```
 
 
+    #### Post the event to a feed
+
+    The event detail page's 3-dot action menu exposes **Post event to feed**, which starts the event-post creation flow. It appears for Host, Moderator, and Member roles of the event's origin community and is hidden for non-members and visitors.
+
+    For a **user-hosted** event there is no origin community, so the member rule has no referent. Who may create a post for a user-hosted event is not yet specified — do not assume the community matrix applies.
+
+    | Config ID | Type | Description |
+    | --- | --- | --- |
+    | `event_detail_page/*/create_event_post_button` | Element | Customize the "Post event to feed" action label and icon |
+
+    Tapping the action routes to one of two places depending on the event's origin:
+
+    - **Public-community or user-hosted event** → `AmityEventPostTargetSelectionPage` with an open picker, defaulted to the event's own community.
+    - **Private-community event** → `AmityPostComposerPage` in event-post mode, target locked to the event's own community.
+
+    Both destinations are overridable through `AmityEventDetailPageBehavior` — see [Behavior Customization](#behavior-customization).
+
     #### Share an event
 
     The event detail page's 3-dot action menu can surface shareable-link actions that open the event directly:
@@ -42232,6 +42766,8 @@ const SampleAmityPastEventsPageActivityPage = () => {
     - **AmityEventDiscussionFeedComponent**
 
     These components are typically used inside existing UIKit pages (e.g., Social Home and Community Profile). If you’re using the standard Social Home experience, you get these feeds automatically.
+
+      The **Explore** and **Happening now** discovery feeds exclude events created by the current user, so people only see events from others when browsing. This is handled automatically by the UIKit — no configuration required.
 
 
     #### Code Examples
@@ -42457,6 +42993,231 @@ const SampleAmityEventDiscussionFeedComponent = ({ event }) => {
 
       If you need to hook navigation (e.g., “View all upcoming”), use the corresponding Behavior class documented in the next tab.
 
+    Any event can be published as a post so it renders as an **event card** inside a feed. The post carries the author's text and the event supplies the card; tapping the card opens the event detail page rather than a generic post detail view. The SDK contract is documented in [Event Posts](/social-plus-sdk/social/content-management/posts/creation/event-post).
+
+    ### Flow
+
+    1. Host / Moderator / Member taps **Post event to feed** in the event detail 3-dot menu.
+    2. The user picks a target on `AmityEventPostTargetSelectionPage` — unless the event was created in a private community, in which case the target is locked to that community.
+    3. `AmityPostComposerPage` opens in event-post mode with the title and body prefilled from the event.
+    4. The user optionally edits the text, then publishes. The post appears in the target feed as an event card.
+
+    #### Post-creation prompt
+
+    There is a second entry point into the same flow. Immediately after a host creates an event, a modal bottom sheet prompts them to publish it — "Your event was created successfully" / "Post it to a feed so more people can find and join", with **Post to feed** and **Maybe later** actions. **Post to feed** enters the flow at step 2.
+
+    This sheet **replaces** the usual "event created" toast for the host, so it changes the existing create-event flow, not just the event-post flow. It is shown once per creation.
+
+    ### AmityEventPostTargetSelectionPage
+
+    Use **AmityEventPostTargetSelectionPage** to pick where the event post is published. It has two variants driven by the event's origin:
+
+    - **Full variant** (public-community or user-hosted event) — the "My Timeline" row plus the paginated list of communities the user can post in. The event's own community is preselected.
+    - **Restricted variant** (private-community event) — a banner explains the lock and a single row shows the event's origin community with a `Private` badge. The user cannot pick any other target.
+
+    **Public API:**
+
+```swift
+AmityEventPostTargetSelectionPage(event: AmityEvent)
+```
+
+    #### Customization Options
+
+    | Config ID | Type | Description |
+    | --- | --- | --- |
+    | `event_post_target_selection_page/*/*` | Page | Customize page theme |
+    | `event_post_target_selection_page/*/title` | Element | Customize page title |
+    | `event_post_target_selection_page/*/close_button` | Element | Customize close button image |
+
+    #### Code Examples
+
+
+```swift iOS
+let page = AmityEventPostTargetSelectionPage(event: event)
+let viewController = AmitySwiftUIHostingController(rootView: page)
+navigationController?.pushViewController(viewController, animated: true)
+```
+
+```kotlin Android
+@Composable
+fun composeEventPostTargetSelectionPage(event: AmityEvent) {
+    AmityEventPostTargetSelectionPage(event = event)
+}
+
+// Or launch the activity directly:
+val intent = AmityEventPostTargetSelectionPageActivity.newIntent(
+    context = context,
+    event = event,
+)
+context.startActivity(intent)
+```
+
+```typescript React
+import { AmityUiKitProvider, AmityEventPostTargetSelectionPage } from '@amityco/ui-kit';
+
+const SampleAmityEventPostTargetSelectionPage = ({ event }) => {
+  return (
+    <AmityUiKitProvider
+      apiKey="API_KEY"
+      apiRegion="API_REGION"
+      userId="userId"
+      displayName="displayName"
+      configs={{}}
+    >
+      <AmityEventPostTargetSelectionPage event={event} />
+    </AmityUiKitProvider>
+  );
+};
+```
+
+
+    ### Composer in Event-Post Mode
+
+    `AmityPostComposerPage` accepts an event-post mode that prefills fields from the event and disables inputs that the backend rejects for event posts.
+
+    **Prefill (one-time copy, editable):**
+
+    | Composer field | Source |
+    | --- | --- |
+    | Title | `event.title` |
+    | Body | `event.description` |
+
+    Clearing both fields still publishes — the event card is the payload.
+
+    **Unavailable in event-post mode:**
+
+    - Media attachments (image / video / file / audio / clip)
+    - Product tags
+    - URL link-preview card (URLs still autolink inside the body)
+    - Detach or swap event — the event reference is immutable
+
+    **Public API:**
+
+    iOS and Web add a dedicated composer mode:
+
+```swift
+enum AmityPostComposerMode {
+  case create(targetId, targetType, community?)
+  case edit(post)
+  case createEventPost(event, targetId, targetType, isTargetLocked)
+}
+
+AmityPostComposerPage(mode: AmityPostComposerMode)
+```
+
+    Android has no separate mode. The existing create options carry optional event parameters, and the composer switches into event-post mode when `attachedEventId` is set. Note that it takes an **event ID**, not an `AmityEvent`, and has no `isTargetLocked` — on Android the lock is applied upstream on the target-selection page.
+
+```kotlin
+AmityPostComposerOptions.AmityPostComposerCreateOptions(
+    targetId: String?,
+    targetType: AmityPostTargetType,
+    community: AmityCommunity?,
+    attachedEventId: String?,
+    prefilledTitle: String?,
+    prefilledBody: String?,
+)
+
+AmityPostComposerPage(options: AmityPostComposerOptions)
+```
+
+    #### Code Examples
+
+
+```swift iOS
+let page = AmityPostComposerPage(
+    mode: .createEventPost(
+        event: event,
+        targetId: targetId,
+        targetType: .community,
+        isTargetLocked: isTargetLocked
+    )
+)
+let viewController = AmitySwiftUIHostingController(rootView: page)
+navigationController?.pushViewController(viewController, animated: true)
+```
+
+```kotlin Android
+@Composable
+fun composeCreateEventPost(
+    event: AmityEvent,
+    targetId: String,
+    targetType: AmityPostTargetType,
+    community: AmityCommunity?,
+) {
+    AmityPostComposerPage(
+        options = AmityPostComposerOptions.AmityPostComposerCreateOptions(
+            targetId = targetId,
+            targetType = targetType,
+            community = community,
+            attachedEventId = event.getEventId(),
+            prefilledTitle = event.getTitle(),
+            prefilledBody = event.getDescription(),
+        )
+    )
+}
+```
+
+```typescript React
+import { AmityUiKitProvider, AmityPostComposerPage } from '@amityco/ui-kit';
+
+const SampleCreateEventPost = ({ event, targetId, targetType, isTargetLocked }) => {
+  return (
+    <AmityUiKitProvider
+      apiKey="API_KEY"
+      apiRegion="API_REGION"
+      userId="userId"
+      displayName="displayName"
+      configs={{}}
+    >
+      <AmityPostComposerPage
+        mode="createEventPost"
+        event={event}
+        targetId={targetId}
+        targetType={targetType}
+        isTargetLocked={isTargetLocked}
+      />
+    </AmityUiKitProvider>
+  );
+};
+```
+
+
+    ### Editing an Event Post
+
+    Editing an event post uses `AmityPostComposerPage` in `edit` mode. Only `data.title` and `data.text` are editable — the event reference is immutable, and the event itself is never modified from the post.
+
+    If the referenced event has been deleted, the composer still opens and text edits still save; the embedded event card renders its deleted state. A **cancelled** event is treated identically to a deleted one.
+
+    ### Event Post in Feeds
+
+    `AmityPostContentComponent` renders an event card whenever a post's `dataType` is `event`. The event card reuses the existing `EventCard` component — no new element is introduced.
+
+    **Card states:**
+
+    | State | Behavior |
+    | --- | --- |
+    | Resolved | Cover image, start–end time, title, "By {host}". Tapping the card navigates to the event detail page. |
+    | Loading | Skeleton while the event resolves; not tappable. |
+    | Deleted | Shows "This event is no longer available." The card is non-interactive; only the resolved card navigates. Comments and reactions on the post survive. |
+
+    A **cancelled** event and an event missing from the payload both normalise into the deleted state — there is no separate cancelled treatment.
+
+    **Tap-through:**
+
+    The tap-through behavior differs from other post types:
+
+    | Region tapped | Destination |
+    | --- | --- |
+    | Event card | Event detail page, via `AmityPostContentComponentBehavior.goToEventDetailPage` |
+    | Header / author avatar | Author profile (default) |
+    | Caption text | Post detail (default) |
+    | Engagement bar | Post detail with comments (default) |
+    | 3-dot menu | Action sheet (default) |
+
+    **Pinned / featured badges are read-only in UIKit.** The badge renders whenever a post is pinned or featured, but there is no in-app control to change that state — the control lives in the Console. See the [Console note on pin/feature](/social-plus-sdk/social/content-management/posts/moderation/pin-post) for details.
+
+      A post published to a user's own feed can never be pinned. Global featuring requires a public community.
+
 
 ## Customization
 
@@ -42525,7 +43286,20 @@ UIKit provides these customization keys for event entry points and pages.
 
   "upcoming_events_page/*/*": {},
 
-  "past_events_page/*/*": {}
+  "past_events_page/*/*": {},
+
+  "event_detail_page/*/create_event_post_button": {
+    "text": "Post event to feed",
+    "image": ""
+  },
+
+  "event_post_target_selection_page/*/*": {},
+  "event_post_target_selection_page/*/title": {
+    "text": "Post to"
+  },
+  "event_post_target_selection_page/*/close_button": {
+    "image": ""
+  }
 }
 ```
 
@@ -42571,11 +43345,15 @@ class AmityEventDetailPageBehavior {
     }
 
     goToPostComposerPage(context): void {
-      // navigation logic
+      // navigation logic — used for private-community events (target locked)
     }
 
     goToPollPostComposerPage(context): void {
       // navigation logic
+    }
+
+    goToEventPostTargetSelectionPage(context): void {
+      // navigation logic — used for public-community / user-hosted events
     }
 
     goToCommunityProfilePage(context): void {
@@ -42584,6 +43362,16 @@ class AmityEventDetailPageBehavior {
 
     goToEventAttendeesPage(context): void {
       // navigation logic
+    }
+
+}
+```
+
+```swift
+class AmityEventPostTargetSelectionPageBehavior {
+
+    goToPostComposerPage(context): void {
+      // navigation logic — opens composer in event-post mode with the resolved target
     }
 
 }
@@ -42657,6 +43445,18 @@ class AmityCreatePostMenuComponentBehavior {
 
     goToSelectEventTargetPage(): void {
       // navigation logic
+    }
+
+}
+```
+
+```swift
+class AmityPostContentComponentBehavior {
+
+    // ... existing behaviors
+
+    goToEventDetailPage(context): void {
+      // navigation logic — invoked when the event card region of an event post is tapped
     }
 
 }
@@ -43524,19 +44324,211 @@ Specific beats generic: Element overrides > Component overrides > Page overrides
 
 ### Supported Theme Tokens
 
-| Token | Purpose | Notes |
-|-------|---------|-------|
-| primary_color | Actions / highlights | High contrast vs background |
-| secondary_color | Secondary actions / borders | Complementary to primary |
-| base_color | Primary text color | Body & headings |
-| base_shade1_color | Secondary text | Subtitles / meta |
-| base_shade2_color | Tertiary text / hints | Placeholders, inactive |
-| base_shade3_color | Disabled text | Low emphasis |
-| base_shade4_color | Optional faint text / separators | Lowest emphasis |
-| alert_color | Errors / destructive | Distinct from brand palette |
-| background_color | Surface background | Page / component surface |
+Every key below may be set under `theme.light` and `theme.dark`. Any key you omit falls back to the
+default shown. Defaults are identical across platforms — they ship in the same config template.
+
+**Where each token applies.** Thirteen tokens resolve across **every** UIKit feature:
+`primary_color`, `secondary_color`, `base_color`, `base_shade1_color` through `base_shade4_color`,
+`base_inverse_color`, `alert_color`, `background_color`, `background_shade1_color`,
+`highlight_color`, and `toast_background_color`.
+
+The rest belong to a revised color set that currently drives **chat** components only. Setting them
+has no effect on other features yet — those continue to resolve through the thirteen above, and
+adopt the expanded set in a later release.
+
+#### Core
+
+| Token | Purpose | Default (light) | Default (dark) |
+|-------|---------|-----------------|----------------|
+| primary_color | Actions / highlights | `#1054DE` | `#1054DE` |
+| secondary_color | Secondary actions / borders | `#292B32` | `#EBECEF` |
+| base_color | Primary text color | `#292B32` | `#EBECEF` |
+| base_shade1_color | Secondary text — subtitles, meta | `#636878` | `#A5A9B5` |
+| base_shade2_color | Tertiary text / hints — placeholders, inactive | `#898E9E` | `#6E7487` |
+| base_shade3_color | Disabled text | `#A5A9B5` | `#40434E` |
+| base_shade4_color | Faint text / separators | `#EBECEF` | `#292B32` |
+| base_inverse_color | Text on inverted surfaces | `#000000` | `#FFFFFF` |
+| alert_color | Errors / destructive | `#FA4D30` | `#FA4D30` |
+| background_color | Page and component surface | `#FFFFFF` | `#191919` |
+| background_shade1_color | Secondary surface — grouped rows, wells | `#F6F7F8` | `#40434E` |
+
+#### Brand shades
+
+Variants of `primary_color` and `secondary_color` used for hover, pressed, disabled and emphasis states.
+
+| Token | Default (light) | Default (dark) |
+|-------|-----------------|----------------|
+| primary_shade1_color | `#4A82F2` | `#4A82F2` |
+| primary_shade2_color | `#A9C4F9` | `#A9C4F9` |
+| primary_shade3_color | `#D9E5FC` | `#D9E5FC` |
+| primary_shade4_color | `#1A4499` | `#1A4499` |
+| secondary_shade1_color | `#636878` | `#A5A9B5` |
+| secondary_shade2_color | `#898E9E` | `#898E9E` |
+| secondary_shade3_color | `#A5A9B5` | `#40434E` |
+| secondary_shade4_color | `#EBECEF` | `#292B32` |
+
+#### Neutral greys
+
+A light-to-dark ramp used for borders, dividers, skeletons and muted text. These are mode-independent
+by default — set them per mode if your dark theme needs a different ramp.
+
+| Token | Default | | Token | Default |
+|-------|---------|-|-------|---------|
+| neutral_grey_shade1_color | `#EBECEF` | | neutral_grey_shade4_color | `#636878` |
+| neutral_grey_shade2_color | `#A5A9B5` | | neutral_grey_shade5_color | `#40434E` |
+| neutral_grey_shade3_color | `#898E9E` | | neutral_grey_shade6_color | `#292B32` |
+
+#### Destructive
+
+Escalating scale for destructive actions and error states.
+
+| Token | Default | | Token | Default |
+|-------|---------|-|-------|---------|
+| destructive_shade1_color | `#F38F96` | | destructive_shade4_color | `#E50B1B` |
+| destructive_shade2_color | `#EE5C66` | | destructive_shade5_color | `#A30813` |
+| destructive_shade3_color | `#EA3C49` | | alert_shade1_color | `#FB7159` |
+
+#### Overlays
+
+Semi-transparent fills for scrims, media overlays and pressed states. Values carry an alpha channel
+(`#RRGGBBAA`).
+
+| Token | Default | | Token | Default |
+|-------|---------|-|-------|---------|
+| transparent_black_shade1_color | `#0000004D` | | transparent_white_shade1_color | `#FFFFFF1A` |
+| transparent_black_shade2_color | `#0000004D` | | transparent_white_shade2_color | `#FFFFFF1A` |
+| transparent_black_shade3_color | `#00000080` | | transparent_white_shade3_color | `#FFFFFF33` |
+| transparent_black_shade4_color | `#00000099` | | transparent_white_shade4_color | `#FFFFFF4D` |
+| transparent_black_shade5_color | `#000000CC` | | transparent_white_shade5_color | `#FFFFFF4D` |
+| transparent_red_shade1_color | `#FF305A4D` | | transparent_white_shade6_color | `#FFFFFF4D` |
+| | | | transparent_white_shade7_color | `#FFFFFF4D` |
+
+#### Fixed and feature colors
+
+| Token | Purpose | Default (light) | Default (dark) |
+|-------|---------|-----------------|----------------|
+| white_color | Fixed white — surfaces that stay light in both modes | `#FFFFFF` | `#FFFFFF` |
+| black_color | Fixed black — surfaces that stay dark in both modes | `#000000` | `#000000` |
+| highlight_color | Search and selection highlight | `#1054DE` | `#4A82F2` |
+| live_color | Live / streaming indicator | `#FF305A` | `#FF305A` |
+| toast_background_color | Toast surface | `#292B32` | `#40434E` |
+| event_host_bg_color | Event host badge background | `#EAE2FF` | `#EAE2FF` |
+| event_host_fg_color | Event host badge text | `#4B1BD0` | `#4B1BD0` |
 
 ### Minimal Config Skeleton
+
+```json Full theme
+{
+  "theme": {
+    "light": {
+      "primary_color": "#1054DE",
+      "secondary_color": "#292B32",
+      "base_color": "#292B32",
+      "base_shade1_color": "#636878",
+      "base_shade2_color": "#898E9E",
+      "base_shade3_color": "#A5A9B5",
+      "base_shade4_color": "#EBECEF",
+      "base_inverse_color": "#000000",
+      "alert_color": "#FA4D30",
+      "background_color": "#FFFFFF",
+      "background_shade1_color": "#F6F7F8",
+      "primary_shade1_color": "#4A82F2",
+      "primary_shade2_color": "#A9C4F9",
+      "primary_shade3_color": "#D9E5FC",
+      "primary_shade4_color": "#1A4499",
+      "secondary_shade1_color": "#636878",
+      "secondary_shade2_color": "#898E9E",
+      "secondary_shade3_color": "#A5A9B5",
+      "secondary_shade4_color": "#EBECEF",
+      "neutral_grey_shade1_color": "#EBECEF",
+      "neutral_grey_shade2_color": "#A5A9B5",
+      "neutral_grey_shade3_color": "#898E9E",
+      "neutral_grey_shade4_color": "#636878",
+      "neutral_grey_shade5_color": "#40434E",
+      "neutral_grey_shade6_color": "#292B32",
+      "destructive_shade1_color": "#F38F96",
+      "destructive_shade2_color": "#EE5C66",
+      "destructive_shade3_color": "#EA3C49",
+      "destructive_shade4_color": "#E50B1B",
+      "destructive_shade5_color": "#A30813",
+      "alert_shade1_color": "#FB7159",
+      "transparent_black_shade1_color": "#0000004D",
+      "transparent_black_shade2_color": "#0000004D",
+      "transparent_black_shade3_color": "#00000080",
+      "transparent_black_shade4_color": "#00000099",
+      "transparent_black_shade5_color": "#000000CC",
+      "transparent_red_shade1_color": "#FF305A4D",
+      "transparent_white_shade1_color": "#FFFFFF1A",
+      "transparent_white_shade2_color": "#FFFFFF1A",
+      "transparent_white_shade3_color": "#FFFFFF33",
+      "transparent_white_shade4_color": "#FFFFFF4D",
+      "transparent_white_shade5_color": "#FFFFFF4D",
+      "transparent_white_shade6_color": "#FFFFFF4D",
+      "transparent_white_shade7_color": "#FFFFFF4D",
+      "white_color": "#FFFFFF",
+      "black_color": "#000000",
+      "highlight_color": "#1054DE",
+      "live_color": "#FF305A",
+      "toast_background_color": "#292B32",
+      "event_host_bg_color": "#EAE2FF",
+      "event_host_fg_color": "#4B1BD0"
+    },
+    "dark": {
+      "primary_color": "#1054DE",
+      "secondary_color": "#EBECEF",
+      "base_color": "#EBECEF",
+      "base_shade1_color": "#A5A9B5",
+      "base_shade2_color": "#6E7487",
+      "base_shade3_color": "#40434E",
+      "base_shade4_color": "#292B32",
+      "base_inverse_color": "#FFFFFF",
+      "alert_color": "#FA4D30",
+      "background_color": "#191919",
+      "background_shade1_color": "#40434E",
+      "primary_shade1_color": "#4A82F2",
+      "primary_shade2_color": "#A9C4F9",
+      "primary_shade3_color": "#D9E5FC",
+      "primary_shade4_color": "#1A4499",
+      "secondary_shade1_color": "#A5A9B5",
+      "secondary_shade2_color": "#898E9E",
+      "secondary_shade3_color": "#40434E",
+      "secondary_shade4_color": "#292B32",
+      "neutral_grey_shade1_color": "#EBECEF",
+      "neutral_grey_shade2_color": "#A5A9B5",
+      "neutral_grey_shade3_color": "#898E9E",
+      "neutral_grey_shade4_color": "#636878",
+      "neutral_grey_shade5_color": "#40434E",
+      "neutral_grey_shade6_color": "#292B32",
+      "destructive_shade1_color": "#F38F96",
+      "destructive_shade2_color": "#EE5C66",
+      "destructive_shade3_color": "#EA3C49",
+      "destructive_shade4_color": "#E50B1B",
+      "destructive_shade5_color": "#A30813",
+      "alert_shade1_color": "#FB7159",
+      "transparent_black_shade1_color": "#0000004D",
+      "transparent_black_shade2_color": "#0000004D",
+      "transparent_black_shade3_color": "#00000080",
+      "transparent_black_shade4_color": "#00000099",
+      "transparent_black_shade5_color": "#000000CC",
+      "transparent_red_shade1_color": "#FF305A4D",
+      "transparent_white_shade1_color": "#FFFFFF1A",
+      "transparent_white_shade2_color": "#FFFFFF1A",
+      "transparent_white_shade3_color": "#FFFFFF33",
+      "transparent_white_shade4_color": "#FFFFFF4D",
+      "transparent_white_shade5_color": "#FFFFFF4D",
+      "transparent_white_shade6_color": "#FFFFFF4D",
+      "transparent_white_shade7_color": "#FFFFFF4D",
+      "white_color": "#FFFFFF",
+      "black_color": "#000000",
+      "highlight_color": "#4A82F2",
+      "live_color": "#FF305A",
+      "toast_background_color": "#40434E",
+      "event_host_bg_color": "#EAE2FF",
+      "event_host_fg_color": "#4B1BD0"
+    }
+  }
+}
+```
 
 ```json Minimal
 {
@@ -62512,7 +63504,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | TS | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | Following (Global) Feeds | Available | ✅ | ✅ | ✅ | ✅ |
-| For You Feeds | Planned | ✅ | ✅ | ✅ | — |
+| For You Feeds | Available | ✅ | ✅ | ✅ | — |
 | Community Feeds | Available | ✅ | ✅ | ✅ | ✅ |
 | User Feeds | Available | ✅ | ✅ | ✅ | ✅ |
 | Story Feeds | Available | ✅ | ✅ | ✅ | ✅ |
@@ -62524,7 +63516,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | Web | RN | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | Following (Global) Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
-| For You Feeds | Planned | ✅ | ✅ | ✅ | — | — |
+| For You Feeds | Available | ✅ | ✅ | ✅ | — | — |
 | Community Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
 | User Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Story Feeds | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -64527,6 +65519,49 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   ## 🚀 New Features
 
+  #### Report User with Reason
+
+  Added the ability to report a user with a report type, behavior reason, and comment, plus report/unflag actions on the user list.
+
+  #### Exclude Own Events
+
+  Added an `excludeOwnEvents` parameter to event queries so the current user's own events can be filtered out.
+
+  #### Event Target Community Avatar
+
+  Added the community avatar to an event's target community.
+
+  ## ✨ Improvements
+
+  - Migrated the MQTT client from protocol v3 to v5.
+  - Removed the transitive `AD_ID` permission from the FCM push module.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 23 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Android Paging Data Library | 3.4.2 |
+      | Firebase IID | 21.1.0 |
+      | Firebase Messaging | 23.0.0 |
+      | Gradle Plugin | 8.6.1 |
+      | Gson | 2.9.0 |
+      | HiveMQ MQTT Client | 1.3.1-beta01 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.9.2 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+      | SQLCipher | 4.9.0 |
+
+
+  ## 🚀 New Features
+
   #### For You Feed
 
   Added the personalized **For You** feed. Query it with `AmitySocialClient.newFeedRepository().getForYouFeed()` (a live collection), and the network setting via `AmityCoreClient.getForYouFeedSetting()`. When the feature is not enabled for the network, the collection surfaces the typed `AmityForYouFeedDisabledError`.
@@ -65721,6 +66756,55 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
 
   ## 🚀 New Features
 
+  #### Report User
+
+  Updated the report-user API to report a user profile with a reason.
+
+  ## ✨ Improvements
+
+  - Dropped the MQTT will message as part of the MQTT protocol alignment.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed `getArchivedChannels()` to fetch and persist the channel list.
+  - Fixed the sort order of the archived chats list.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
+
+  ## 🐞 Bug Fixes
+
+  - Fixed issues with channel archiving.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
+
+  ## 🚀 New Features
+
   #### For You Feed
 
   Added the personalized **For You** feed. Query it with `getForYouFeed()` and gate the surface on the network setting so the feed only renders when For You is enabled for the network.
@@ -66794,6 +67878,41 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   ## 🚀 New Features
 
+  #### Report User with Reason
+
+  Added the ability to report a user with a reason.
+
+  ## ✨ Improvements
+
+  - Upgraded the MQTT client to protocol v5.
+
+  ## 🐞 Bug Fixes
+
+  - Added an `excludeOwnEvents` query parameter to event queries.
+  - Fixed the message preview not updating in real time on edit.
+  - Added `actorUserId` to co-host data.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>=v12 |
+      | NPM | \>=v6 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the `liveChatEnabled` field type on the room (live) object.
+  - Fixed the community avatar not resolving for stories.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>=v12 |
+      | NPM | \>=v6 |
+
+  ## 🚀 New Features
+
   #### For You Feed
 
   Added a personalized **For You** feed. New APIs let you fetch the recommended feed and read its network-level setting, and the feed reports a "caught up" state once the user has seen all available recommendations.
@@ -67065,6 +68184,139 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
 ## 🚀 New Features
+
+  #### Chat Design Refresh
+
+  Rolled out the new chat design system across chat atoms, pages, and elements, with updated colors and components.
+
+  #### Group Message Moderation
+
+  Group moderators can now delete other members' messages.
+
+  #### Exclude Own Events
+
+  The Events explore feed now excludes the current user's own events.
+
+  ## ✨ Improvements
+
+  - Upgraded the Social Plus SDK dependency to 7.24.0.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the timestamp display in 24-hour format.
+  - Fixed the chat home back-button position, moderator badge background, and missing avatars on the chat list.
+  - Fixed the back button on the social home page.
+  - Fixed the chat video player UI.
+  - Fixed the chat list shimmer and shimmer color on the archive page.
+  - Disabled tapping a null avatar and showed the sender name on deleted message bubbles.
+  - Prevented the media viewer from opening when a scroll starts on an image or video message.
+  - Fixed the rejected-send toast copy and icon.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.24.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🚀 New Features
+
+  #### Live Player Controls
+
+  Added tap-to-reveal player controls, a live pause state.
+
+
+  ## 🐞 Bug Fixes
+
+  - Fixed co-host rejoin connection and stale LiveKit state on reconnect.
+  - Fixed the default reaction and a crash on livestream events.
+  - Fixed product-tagging UI issues and showed staged products on the create-room page opened from an event.
+  - Fixed the live player recovering from a black screen after returning from the background.
+  - Fixed the default avatar preview for users with no avatar.
+  - Fixed incorrect fallback display name appearing on group chats.
+  - Fixed an "unarchived" error toast shown on a successful unarchive.
+  - Added an optional back slot to the chat home header, removed the community ranking number, and aligned the search back icon.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.23.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed users being unable to post a video.
+  - Fixed community moderator status not updating after promote/demote.
+  - Fixed the edit-profile save button being overlapped by the system navigation bar.
+  - Fixed the draft clip page being overlapped by the status bar.
+  - Fixed the wrong image count on the image viewer.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.23.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🚀 New Features
 
   #### For You Feed
 
@@ -67989,6 +69241,59 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
   The Xcode 26 compatibility issue caused by **RealmSwift** binaries has been fully resolved in **UIKit 4.19.0**. The UIKit now integrates with **AmitySDK v8.0.0**, which has migrated its cache layer from Realm to Core Data. Realm and RealmSwift are no longer required, and Xcode forward compatibility is fully restored. We recommend upgrading to 4.19.0 or later to remove any Xcode version constraints from your project.
 
   See the [iOS SDK v8 Migration Guide](/social-plus-sdk/changelogs/ios-sdk-v8-migration-guide) for installation changes, including UIKit-specific steps.
+
+  ## 🚀 New Features
+
+  #### Chat Design Refresh
+
+  Migrated the Chat UIKit to the new design system.
+
+  #### Event Created Notification
+
+  Added a "created event" item to the notification tray.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed large image preview decoding.
+  - Fixed avatar rendering on profiles.
+  - Fixed tapping a comment on a clip not navigating to the post detail.
+  - Fixed several chat regressions.
+  - Increased the touch area of the chat back button and added a navigation handler.
+  - Fixed push notification registration.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.5.0 |
+
+  ## 🚀 New Features
+
+  #### Live Player Controls
+
+  Added tap-to-reveal player controls, a live pause state.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the chat back button not working when there was no navigation stack, and added an optional back button to the chat list.
+  - Fixed a discussion livestream being published as an event's recorded stream.
+  - Fixed the livestream not keeping its current state when switching between background and foreground.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.4.0 |
 
   ## 🚀 New Features
 
@@ -69223,6 +70528,66 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 ## 🚀 New Features
 
+  #### Group Message Moderation
+
+  Moderators can now delete other members' messages.
+
+  #### Exclude Own Events
+
+  The Explore and "Happening Now" event surfaces now exclude the current user's own events.
+
+  ## ✨ Improvements
+
+  - Upgraded `@amityco/ts-sdk` to 7.25.0.
+  - Added an archived-chat loading skeleton.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the co-host badge persisting on leave and missing after rejoin.
+  - Fixed the report reason not supporting multiline input and the unreport (flag-slash) icon.
+  - Fixed a muted co-host not being unmuted on accept.
+  - Fixed the inline error shown for oversize uploads.
+  - Fixed the fullscreen video player and the message menu position.
+  - Hid the 1:1 notification setting.
+  - Fixed the "see more" page title, toast copy, and RSVP reset.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>= v16 |
+      | PNPM | \>= v8 |
+      | React | \>= v18 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | @amityco/ts-sdk | 7.25.0 |
+
+  ## 🚀 New Features
+
+  #### Live Player Controls
+
+  Added tap-to-reveal player controls, a live pause state.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed read-only streamer behavior on livestreams.
+  - Fixed the story default avatar not resolving.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>= v16 |
+      | PNPM | \>= v8 |
+      | React | \>= v18 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | @amityco/ts-sdk | 7.24.0 |
+
+  ## 🚀 New Features
+
   #### For You Feed
 
   Added the personalized **For You** feed, gated by network-level configuration, with the option to default the social home to the For You feed.
@@ -69232,9 +70597,11 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
   Added the ability to share event links, including a copy-link action in the event share menu.
 
   #### Color Token
+
   Upgraded color token placements to better fit dark theming colors
 
   ## 🐞 Bug Fixes
+
   - Fixed non-members receiving incorrect toast when reporting a post.
   - Fixed the clip comment list showing all comments instead of the relevant thread.
   - Fixed pending posts not being shown.
