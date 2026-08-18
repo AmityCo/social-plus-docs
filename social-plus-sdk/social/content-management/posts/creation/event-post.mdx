@@ -34,17 +34,22 @@ Publishing an event post with both `title` and `text` blank is valid — the eve
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `eventId` | Yes | ID of an existing event. The post cannot be created without it. |
-| `title` | No | Post title. Prefilled from `event.title` in composer, but any string (including empty) is accepted. |
-| `text` | No | Post body. Prefilled from `event.description` in composer, but any string (including empty) is accepted. |
-| `targetType` | Yes | Feed target, `community` or `user`. Constrained by the event's origin — see [Target Rules](#target-rules). |
-| `targetId` | Yes | Community ID or user ID for the target feed. |
-| `metadata` | No | Custom metadata stored with the post where supported. |
-| `mentionees` | No | User mention payload where supported by the platform builder. |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `eventId` | Yes | All | ID of an existing event. The post cannot be created without it. |
+| `title` | No | All | Post title. Prefilled from `event.title` in composer, but any string (including empty) is accepted. Android: `String?`, dropped from the payload when blank. |
+| `text` | No | All | Post body. Prefilled from `event.description` in composer, but any string (including empty) is accepted. Android: `String`, defaults to `""`. |
+| `targetType` | Yes | All | Feed target, `community` or `user`. Constrained by the event's origin — see [Target Rules](#target-rules). |
+| `targetId` | Yes | All | Community ID or user ID for the target feed. |
+| `metadata` | No | All | Custom metadata stored with the post where supported. |
+| `mentionees` | No | iOS, TypeScript | User mention payload where supported by the platform builder. |
+| `mentionUserIds` | No | Android | `Set<String>` of user IDs to mention. |
+| `hashtags` | No | Android | Hashtags stored with the post. |
+| `tags` | No | Android | Post tags. |
 
 ## Create an Event Post
+
+Creating an event post publishes the post and returns the created post once the server has accepted it. `eventId` is required; `title` and `text` are the author's own copy and may both be empty.
 
 <CodeGroup>
 
@@ -160,7 +165,14 @@ Do not send `data.eventId` on edit. It is immutable — any request that changes
 
 ## Resolve the Event from a Post
 
-Every post exposes an accessor that returns the referenced event snapshot without a network call. The event resolves from the sibling `events[]` collection cached with the post response, so it is safe to call inside feed rows.
+There are two complementary accessors: a **snapshot** for first paint, and a **live observer** to keep the card in sync.
+
+| Accessor | Role | Availability |
+| --- | --- | --- |
+| `post.getEventInfo()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | 🚧 Planned — not yet implemented on any platform. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
+| `EventRepository.getEvent(eventId)` | Live observer. Subscribe while the card is on screen; unsubscribe on scroll-off or unmount. | ✅ Shipped on iOS, TypeScript, and Android. |
+
+Until the snapshot accessor lands, resolve the event through the repository alone. Read the `eventId` from the **child** post — on Android the parent post's data is `TEXT` and the `EVENT` data sits on the child.
 
 <CodeGroup>
 
@@ -171,9 +183,20 @@ if let event = post.getEventInfo() {
 ```
 
 ```kotlin Android
-val data = post.getData()
-if (data is AmityPost.Data.EVENT) {
-    data.getEvent()?.let { render(it) }
+// The event reference lives on the child post, not the parent.
+val eventData = post.getChildren()
+    .firstOrNull { it.getData() is AmityPost.Data.EVENT }
+    ?.getData() as? AmityPost.Data.EVENT
+
+eventData?.let { data ->
+    AmitySocialClient.newEventRepository()
+        .getEvent(data.getEventId())
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { event -> render(event) },
+            { /* event deleted or unavailable — render the unavailable card */ }
+        )
 }
 ```
 
@@ -186,11 +209,18 @@ if (event) {
 
 </CodeGroup>
 
-`getEventInfo()` returns `undefined` / `nil` / `null` when the post is not an event post or when the event entry is not in the payload (for example, the event was deleted). It is a snapshot, not a live observable — subscribe to the event through the Event Repository if the detail surface needs live updates.
+Once shipped, `getEventInfo()` will return `nil` / `undefined` when the post is not an event post or when the event entry is not in the payload (for example, the event was deleted).
+
+On Android, `getEvent(eventId)` is a live stream that emits again whenever the event changes. A deleted or unavailable event surfaces as an **error on the `Flowable`**, not a null emission — handle it in the error callback. A **cancelled** event still resolves normally and must be treated as deleted by the consumer; the SDK does not normalise it.
 
 ## Query Event Posts
 
 Event posts are **excluded from the default results** of `v3` and `v4` post queries so that older clients never receive a `dataType` they cannot render. Reads for event-aware clients must use **`GET /api/v5/posts`**.
+
+| Platform | Reading event posts |
+| --- | --- |
+| Android | `getPosts()` already targets `GET /api/v5/posts`, so event posts are returned without any extra filter. There is no `dataTypes` parameter to set. |
+| TypeScript | Pass `dataTypes: ["event"]` when reading through a `v3` / `v4` path. |
 
 To include event posts on any version, filter explicitly:
 
