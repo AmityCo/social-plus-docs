@@ -57,6 +57,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Interactive viewer interface
     - Stream status and engagement features
     - Live Chat (community only)
+    - Picture-in-Picture on leaving the player (iOS & Android)
 
   </Card>
 
@@ -148,6 +149,7 @@ For developers who want to understand the underlying analytics capabilities or i
 | Watching Now Viewer Count<br />                              | ✅  | ✅      | ✅          | -       | -            |
 | Livestream Analytics<br />(Watch Minutes)                    | ✅  | ✅      | ✅          | -       | -            |
 | Playback Controls<br />(tap-to-reveal, pause live, 10s skip) | ✅  | ✅      | ✅          | 🚧      | 🚧           |
+| Picture-in-Picture<br />(floating window on leaving the player)| ✅  | ✅      | -           | 🚧      | 🚧           |
 
 <Note>
   Livestream creation and co-host streaming on web is supported only on desktop
@@ -1136,6 +1138,135 @@ flowchart TD
   On desktop web, playback controls are a **UI refresh only** — icons are
   updated and the skip amount changes from 15s to 10s. Click-to-toggle,
   hover-to-reveal, mute, and fullscreen behavior are unchanged.
+</Note>
+
+## Picture-in-Picture
+
+Picture-in-Picture (PiP) keeps a livestream playing in a small floating window when the viewer leaves the player — either by backgrounding the app or by moving to another page inside it. Playback is never interrupted: the same player continues, so position, play state and audio carry across the transition and back again.
+
+<Info>
+  PiP uses each platform's **native system Picture-in-Picture window**, not a custom player. The window's size, position, styling and gestures come from the OS, and the viewer's device-level PiP setting governs it. **Android and iOS only** — no configuration is required to enable it.
+</Info>
+
+### When the Window Opens
+
+| Trigger                              | Behavior                                                                                                                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viewer backgrounds the app           | The stream continues in the floating window — video and audio uninterrupted                                                                   |
+| Viewer opens a product page          | Tapping a tagged or pinned product opens the product page and floats the stream over it                                                       |
+| Viewer navigates elsewhere in-app    | Any navigation that opens another page floats the stream, including a destination your app supplies through the product-tag behavior override |
+| Applies to live **and** recorded     | Both a live room and a recorded livestream can float                                                                                          |
+
+### When It Doesn't
+
+| Condition                          | Behavior                                                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Deliberate exit                    | Closing the player or pressing back stops playback — no window opens                                          |
+| Host, co-host, or backstage        | Broadcasters never float; they stay in the app to keep streaming                                              |
+| Nothing playable yet               | A live stream with no playback URL, or a recording still processing, opens no window                          |
+| Content outside livestreams        | Video posts, clips, stories and the legacy stream-based player never float                                    |
+| Below the minimum OS version       | Playback stops as it did before PiP                                                                           |
+| PiP disabled in device settings    | No window opens and **no error is shown** — playback simply stops. See [The Device PiP Setting](#the-device-pip-setting) |
+
+### Window Controls
+
+Controls inside the window are drawn by the operating system. UIKit supplies which actions appear on Android; iOS renders its own set and accepts none.
+
+| Control            | Android live   | Android recorded | iOS live               | iOS recorded |
+| ------------------ | -------------- | ---------------- | ---------------------- | ------------ |
+| Play / pause       | ✅             | ✅               | ⚠️ shown but inert     | ✅           |
+| Skip ±10s          | — not offered  | ✅               | ⚠️ shown but disabled  | ✅           |
+| Expand to full     | ✅             | ✅               | ✅                     | ✅           |
+| Close              | ✅             | ✅               | ✅                     | ✅           |
+| Mute / unmute      | — not offered  | — not offered    | — not offered          | — not offered |
+
+<Note>
+  **Why some iOS controls look inert.** iOS renders the same control set for every kind of content and cannot hide any of it. On a **live** stream the skip buttons appear but are disabled — there is nothing ahead of the live edge — and a pause does not hold: the live seek window is only a few seconds, so the paused position expires and playback resumes on its own. Android chooses its own actions, so live shows play/pause alone.
+
+  **Mute is not offered on either platform.** The floating window cannot display mute state, so a mute toggle would be one the viewer could not read. The device volume keys serve that purpose.
+</Note>
+
+### Returning to the Full Player
+
+| Behavior                             | Detail                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Expanding the window                 | Returns to the full player with playback continuing — the stream is not restarted and a recording keeps its position     |
+| Live streams on resume               | Return to the **live edge** rather than replaying from the buffered position                                            |
+| Tapping the same livestream again    | Expands the window that is already open instead of starting a second playback session                                   |
+| Chat on return                       | Chat reloads at the latest messages — it is not replayed from where the viewer left                                     |
+| Stream ends while floating           | Playback stops in the window straight away; the ended, terminated or unavailable screen appears when the viewer expands  |
+| Closing the window                   | Ends the session — the same as closing the player                                                                       |
+
+### The Device PiP Setting
+
+Both platforms let the viewer turn PiP off in device settings, and the two settings do **not** behave the same way.
+
+| Platform    | Where                                                    | What it blocks                                                                       |
+| ----------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Android** | Settings → Apps → *your app* → Picture-in-picture (per app) | **Every trigger**, including navigation inside the app. Turning it off mid-stream closes an open window immediately |
+| **iOS**     | Settings → General → Picture in Picture (global)          | **Only automatic entry** when the app is backgrounded. In-app navigation still floats, and an open window keeps playing |
+
+<Warning>
+  Neither platform exposes an API to read this setting, so the app cannot detect it in advance or warn the viewer. Both handle it reactively — when PiP is off, playback stops and the viewer continues to their destination with no error and no interruption to navigation.
+
+  The practical difference: on **Android**, with the setting off, opening a product page stops playback. On **iOS** it keeps playing.
+</Warning>
+
+### Setup
+
+| Platform    | Required setup                                                                                                     |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Android** | None. UIKit declares Picture-in-Picture support in its own manifest, which merges into your app automatically       |
+| **iOS**     | Enable the **Background Modes** capability with *Audio, AirPlay, and Picture in Picture*. Without it PiP never starts |
+
+<Note>
+  If PiP is enabled but the iOS capability is missing, the player behaves exactly as it did before PiP — it does not crash — and a warning is logged for your developers.
+</Note>
+
+#### Minimum OS Support
+
+| Platform | Full support         | Best effort                                                    | Below minimum      |
+| -------- | -------------------- | -------------------------------------------------------------- | ------------------ |
+| Android  | API 31+ (Android 12) | API 26–30 — device-dependent, may not trigger from Home/Recents | < API 26 — no PiP  |
+| iOS      | iOS 14.2+            | iOS 14.0–14.1 — manual start only                              | < iOS 14 — no PiP  |
+
+### Flow — Leaving and Returning
+
+```mermaid
+flowchart TD
+    A[Viewer watching a live or recorded stream] --> B{Viewer leaves the player}
+    B -->|Backgrounds the app| C{Eligible for PiP?}
+    B -->|Opens a product page or another in-app page| C
+    B -->|Closes the player or presses back| D[Playback stops — no window]
+    C -->|Broadcaster, no playable media, or unsupported content| D
+    C -->|PiP off in device settings| E[Playback stops — no error; navigation continues]
+    C -->|Yes| F[Stream continues in the floating window]
+    F --> G{Viewer action}
+    G -->|Expands the window| H[Full player resumes — live seeks to the live edge, chat reloads]
+    G -->|Closes the window| I[Session ends]
+    G -->|Taps the same livestream again| H
+    F --> J{Stream ends or is removed?}
+    J -->|Yes| K[Playback stops in the window; the reason is shown on expand]
+```
+
+### Platform Support
+
+| Feature                                     | iOS | Android | Web (mobile) | Web (desktop) | Flutter | React Native |
+| ------------------------------------------- | --- | ------- | ------------ | ------------- | ------- | ------------ |
+| Float on backgrounding the app              | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Float on in-app navigation                  | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Live and recorded playback                  | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Play / pause in the window                  | ⚠️  | ✅      | —            | —             | 🚧      | 🚧           |
+| Skip ±10s in the window (recorded)          | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Expand back to the full player              | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Chat reloads on return                      | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Window reflects the stream's real status    | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+| Broadcasters excluded                       | ✅  | ✅      | —            | —             | 🚧      | 🚧           |
+
+**Legend:** ✅ Supported | ⚠️ Partial — see Window Controls | 🚧 Planned | — Not applicable
+
+<Note>
+  The floating window cannot be branded or restyled. It is rendered by the operating system, so colors, placement, corner radius and gestures are outside UIKit's control.
 </Note>
 
 ## Related Components
