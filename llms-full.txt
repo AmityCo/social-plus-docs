@@ -20532,9 +20532,8 @@ Creating an event post publishes the post and returns the created post once the 
 
 ```swift iOS
 let postRepository = AmityPostRepository()
-let builder = AmityEventPostBuilder()
-builder.setEventId(eventId)
-builder.setText("Come say hi")
+// `eventId` (required, immutable) and `text` are init parameters; only `title` has a setter.
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Come say hi")
 builder.setTitle("Summer Meetup")
 
 let post = try await postRepository.createEventPost(
@@ -20607,12 +20606,11 @@ Editing updates `data.title` and `data.text` only. The event itself is never cha
 
 
 ```swift iOS
-try await postRepository.editPost(
-    withId: postId,
-    builder: AmityEventPostBuilder()
-        .setTitle("Updated title")
-        .setText("Updated body")
-)
+// `eventId` is required by the builder's init but is never sent on update (immutable).
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Updated body")
+builder.setTitle("Updated title")
+
+try await postRepository.editPost(withId: postId, builder: builder)
 ```
 
 ```kotlin Android
@@ -20635,18 +20633,21 @@ Do not send `data.eventId` on edit. It is immutable — any request that changes
 
 ## Resolve the Event from a Post
 
-There are two complementary accessors: a **snapshot** for first paint, and a **live observer** to keep the card in sync.
+There are two ways to resolve the event — pick one: a **snapshot** (`post.getEvent()`) that returns the event cached with the post, or a **live observer** (`EventRepository.getEvent`) that keeps the card in sync with changes.
 
 | Accessor | Role | Availability |
 | --- | --- | --- |
-| `post.getEventInfo()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | 🚧 Planned — not yet implemented on any platform. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
+| `post.getEvent()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | ✅ **Shipped on iOS.** 🚧 Planned on other platforms. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
 | `EventRepository.getEvent(eventId)` | Live observer. Subscribe while the card is on screen; unsubscribe on scroll-off or unmount. | ✅ Shipped on iOS, TypeScript, and Android. |
 
-Until the snapshot accessor lands, resolve the event through the repository alone. Read the `eventId` from the **child** post — on Android the parent post's data is `TEXT` and the `EVENT` data sits on the child.
+On **iOS**, `post.getEvent()` is the recommended path — it's shipped, and the SDK links the event to the post during serialization, so it returns the event directly, with no repository call and without inspecting child posts yourself (this is what AmityUIKit does).
+
+On **Android**, resolve the event through the repository instead: read the `eventId` from the **child** post — the parent post's data is `TEXT` and the `EVENT` data sits on the child — then observe it with `EventRepository.getEvent(eventId)`.
 
 
 ```swift iOS
-if let event = post.getEventInfo() {
+// Shipped on iOS — the event is linked to the post during serialization.
+if let event = post.getEvent() {
     render(event)
 }
 ```
@@ -20677,7 +20678,7 @@ if (event) {
 ```
 
 
-Once shipped, `getEventInfo()` will return `nil` / `undefined` when the post is not an event post or when the event entry is not in the payload (for example, the event was deleted).
+On iOS, `post.getEvent()` returns `nil` when the post is not an event post, or when the event entry is not in the payload (for example, the event was deleted).
 
 On Android, `getEvent(eventId)` is a live stream that emits again whenever the event changes. A deleted or unavailable event surfaces as an **error on the `Flowable`**, not a null emission — handle it in the error callback. A **cancelled** event still resolves normally and must be treated as deleted by the consumer; the SDK does not normalise it.
 
@@ -43133,14 +43134,16 @@ const SampleAmityEventPostTargetSelectionPage = ({ event }) => {
     iOS and Web add a dedicated composer mode:
 
 ```swift
-enum AmityPostComposerMode {
-  case create(targetId, targetType, community?)
-  case edit(post)
-  case createEventPost(event, targetId, targetType, isTargetLocked)
+public enum AmityPostComposerOptions {
+  case createOptions(mode, targetId, targetType, community?, event?)
+  case editOptions(mode, post)
+  case createEventPostOptions(event, targetId, targetType)
 }
 
-AmityPostComposerPage(mode: AmityPostComposerMode)
+AmityPostComposerPage(options: AmityPostComposerOptions)
 ```
+
+    On iOS the private-community target lock is applied upstream on `AmityEventPostTargetSelectionPage` (which decides `targetId` before the composer opens), so `createEventPostOptions` has no `isTargetLocked` parameter.
 
     Android has no separate mode. The existing create options carry optional event parameters, and the composer switches into event-post mode when `attachedEventId` is set. Note that it takes an **event ID**, not an `AmityEvent`, and has no `isTargetLocked` — on Android the lock is applied upstream on the target-selection page.
 
@@ -43161,14 +43164,12 @@ AmityPostComposerPage(options: AmityPostComposerOptions)
 
 
 ```swift iOS
-let page = AmityPostComposerPage(
-    mode: .createEventPost(
-        event: event,
-        targetId: targetId,
-        targetType: .community,
-        isTargetLocked: isTargetLocked
-    )
+let options = AmityPostComposerOptions.createEventPostOptions(
+    event: event,
+    targetId: targetId,
+    targetType: .community
 )
+let page = AmityPostComposerPage(options: options)
 let viewController = AmitySwiftUIHostingController(rootView: page)
 navigationController?.pushViewController(viewController, animated: true)
 ```
