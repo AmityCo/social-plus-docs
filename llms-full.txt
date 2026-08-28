@@ -51212,7 +51212,7 @@ await UserRepository.unflagUser('user-456');
 
     Avatars are scanned for: nudity, suggestive imagery, violence, hate symbols, and substance-related content.
 
-    **External avatar URL gap**: Avatars set via `avatarCustomUrl` bypass the upload pipeline — no pre-moderation image scan runs. Only post-moderation scanning applies.
+    **External avatar URLs**: Avatars set with `avatarCustomUrl` are not moderated. Only uploaded avatars (`avatarFileId`) are scanned, flagged, and reset.
     Flagged profiles appear in **Admin Console → Moderation → Moderation Feed → Users** tab.
 
     Each flagged profile shows:
@@ -51333,7 +51333,7 @@ app.post('/webhook', (req, res) => {
 
 **Relying only on AI scanning without a blocklist** — AI moderation catches broad categories but may miss brand-specific terms, competitor names, or community-specific slurs. Always pair AI scanning with a curated blocklist for display names.
 
-**Not handling `avatarCustomUrl` profiles** — Avatars set via external URLs bypass the upload pipeline and skip pre-moderation. Ensure post-moderation is enabled to catch these, and consider restricting `avatarCustomUrl` in sensitive communities.
+**Assuming `avatarCustomUrl` avatars are moderated** — Only uploaded avatars (`avatarFileId`) are scanned. If avatars need to be moderated, set them with `avatarFileId`.
 
 **Auto-banning on first flag** — A single AI flag or user report may be a false positive. Use the reset action for first offenses and escalate to bans for repeat violations. Check user history for patterns before banning.
 
@@ -56390,31 +56390,48 @@ Advanced visual content analysis covers extensive categories:
 
 ### Understanding Confidence Scores
 
-    **Flag Confidence** (Default: 40)
+
+    **Flag Confidence-Media** (Default: 40)
     - Content scoring above this level gets flagged for review
     - Lower values = more content flagged (higher sensitivity)
     - Recommended range: 30-60 depending on community standards
 
-    **Block Confidence** (Default: 80)
+    **Block Confidence-Media** (Default: 80)
     - Content scoring above this level gets automatically removed
     - Higher values = fewer false positives
     - Recommended range: 70-90 for balanced protection
 
+    **Flag Confidence-Text** (Default: 3)
+    - Content scoring above this level gets flagged for review
+    - Lower values = more content flagged (higher sensitivity)
+    - Recommended range: 3-4 depending on community standards
+
+    **Block Confidence-Text** (Default: 4)
+    - Content scoring above this level gets automatically removed
+    - Higher values = fewer false positives
+    - Recommended range: 4-5 for balanced protection
+
+    **Media Moderation (From 0 to 100 Scale)**
     - **0-39**: Content passes moderation (approved)
     - **40-79**: Content flagged for human review
     - **80-100**: Content automatically blocked/removed
 
-    *Note: These ranges use default thresholds and can be customized*
+    **Text Moderation (From 0 to 7 Scale)**
+    - **0-2**: Content passes moderation (approved)
+    - **3-4**: Content flagged for human review
+    - **5-7**: Content automatically blocked/removed
 
-**Default Configuration**: All categories start with `flagConfidence: 40` and `blockConfidence: 80`. Monitor your community's content patterns and adjust these values to optimize for your specific needs.
+    *Note: These ranges use default thresholds and can be customized. For text moderation,thresholds should be integers from 0 to 7. Because         the classifier produces integer severity levels, a fractional threshold is effectively rounded up to the next integer—for example, 4.5          behaves as 5. There is no finer-grained score between integer levels. *
+
+**Default Configuration**: All categories start with `flagConfidence: 40` and `blockConfidence: 80` for Media and `flagConfidence: 3` and `blockConfidence: 4` for Text. Monitor your community's content patterns and adjust these values to optimize for your specific needs.
 
 ### Configuration Parameters
 
     | Parameter | Type | Description |
     |-----------|------|-------------|
     | `category` | String | Name of the moderation category |
-    | `flagConfidence` | Number | Threshold for flagging content (0-100) |
-    | `blockConfidence` | Number | Threshold for blocking content (0-100) |
+    | `flagConfidence` | Number | Threshold for flagging content (0-100 for Media and 0-7 for Text) |
+    | `blockConfidence` | Number | Threshold for blocking content (0-100 for Media and 0-7 for Text) |
     | `moderationType` | String | Type of content: "text" or "media" |
 
 ### API Configuration
@@ -56423,13 +56440,16 @@ Advanced visual content analysis covers extensive categories:
 
     | Region | API Endpoint |
     |--------|-------------|
-    | **Europe** | `https://api-eu.social.plus/` |
-    | **Singapore** | `https://api-sg.social.plus/` |
-    | **United States** | `https://api-us.social.plus/` |
+    | **Europe** | `https://api.eu.social.plus/` |
+    | **Singapore** | `https://api.sg.social.plus/` |
+    | **United States** | `https://api.us.social.plus/` |
+
+    *Note: The settings API is designed with eventual consistency, so a subsequent GET may temporarily return the previous configuration. The        successful PUT response is the authoritative acknowledgement of the accepted update and can be used for programmatic verification.*
+
 
 ```json Retrieve confidence level
 
-GET /v1/content-moderation/confidences
+GET /v3/network-settings/enhance-moderation
 
 Response:
 {
@@ -56439,19 +56459,32 @@ Response:
       "flagConfidence": 40,
       "blockConfidence": 80,
       "moderationType": "media"
+    },
+    {
+      "category": "SelfHarm",
+      "flagConfidence": 3,
+      "blockConfidence": 5,
+      "moderationType": "text"
     }
   ]
 }
 ```
 
 ```json Update Moderation Confidence
-PUT /v1/content-moderation/confidences
+PUT /v3/network-settings/enhance-moderation
 
 Request:
 {
   "category": "explicit_content",
   "flagConfidence": 50,
-  "blockConfidence": 85
+  "blockConfidence": 85,
+  "moderationType": "media"
+},
+{
+  "category": "SelfHarm",
+  "flagConfidence": 4,
+  "blockConfidence": 6,
+  "moderationType": "text"
 }
 ```
 
@@ -56521,7 +56554,7 @@ AI moderation scans three profile fields after each update:
 
 **Avatar Pre-Moderation**: Uploaded avatar images are already scanned at upload time via. Post-moderation provides a second layer of review after the profile is saved.
 
-**`avatarCustomUrl` Gap**: Avatars set via external URL (`avatarCustomUrl`) bypass the upload pipeline entirely — no pre-moderation image scan runs on these images. Only post-moderation scanning applies.
+**External avatar URLs**: Avatars set with `avatarCustomUrl` are not moderated. Only uploaded avatars (`avatarFileId`) are scanned, flagged, and reset.
 
 ## Detection Categories
 
@@ -56650,7 +56683,7 @@ Profile moderation events are recorded in the user's activity history, accessibl
 ## Limitations
 
 - **Flag-only**: AI cannot auto-delete user profile content — all flagged profiles require admin review
-- **`avatarCustomUrl` bypasses pre-moderation**: External avatar URLs are not scanned at upload time
+- **External avatar URLs**: Avatars set with `avatarCustomUrl` are not moderated — use `avatarFileId` for avatars that need moderation
 - **Shared confidence thresholds**: Profile and content moderation share the same flag thresholds; separate configuration is not yet available
 - **Original avatar not recoverable**: Once an avatar is reset, the original file is permanently deleted from storage
 
