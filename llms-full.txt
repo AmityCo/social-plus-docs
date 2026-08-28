@@ -43,6 +43,7 @@ let client = try! AmityClient(apiKey: "your-api-key", region: .SG)
 ```
 
 
+
 ```kotlin Android
 class ChatApp : Application() {
     override fun onCreate() {
@@ -19113,6 +19114,7 @@ Posts are the primary content objects in Social+. A post belongs to a target, su
 | Audio | Supported by TypeScript, iOS, and Android after audio upload. A Flutter audio post creator was not found in the current source. |
 | Clip | Supported by TypeScript, iOS, and Android after clip upload. A Flutter clip post creator was not found in the current source. |
 | Mixed media | TypeScript, iOS, and Android expose mixed attachment/media flows. A Flutter mixed-media post creator was not found in the current source. |
+| Event | Supported by TypeScript, iOS, and Android. References an existing event via `data.eventId`. Reads must go through `GET /api/v5/posts` — event posts are excluded from unfiltered `v3` and `v4` results. See [Event Posts](./creation/event-post). |
 | Custom | Supported by TypeScript, iOS, Android, and Flutter for app-specific data. |
 
 ## Parameters
@@ -19182,9 +19184,9 @@ Common post fields include:
 
 | Platform | Current behavior |
 | --- | --- |
-| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, and `mixed`. |
+| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, `event`, and `mixed`. |
 | iOS | Exposes `structureType` as a string on `AmityPost`. |
-| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `MIXED`, and `UNKNOWN`. |
+| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `EVENT`, `MIXED`, and `UNKNOWN`. |
 | Flutter | No public `structureType` field was found in the current public `AmityPost` model. |
 
 Use `includeMixedStructure` when querying a single media type and you also want posts whose `structureType` is `mixed`.
@@ -19233,6 +19235,7 @@ const postCommentTopic = getPostTopic(post, SubscriptionLevels.COMMENT);
 ## Related Topics
 
     Start with the simplest post creation path.
+    Publish an event as a post so it renders as a card in feeds.
     Load feeds and filter by type, target, review status, or mixed structure.
     Track post views and meaningful views where supported.
 
@@ -20483,6 +20486,248 @@ func createRoomPost(roomId: String, communityId: String) async throws -> AmityPo
 
 ---
 
+### [Event Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/creation/event-post)
+
+> Publish a scheduled event as a post so it renders as an event card in feeds and community timelines.
+
+An event post attaches an existing event to a post. The post carries the author's text; the event supplies the card that renders inside the feed. Tapping the card opens the event detail page instead of the post detail page, so the event stays the primary surface.
+
+Create the event first with the Event Repository. See [Create Event](/social-plus-sdk/social/events/create-event). The event post references the returned `eventId`.
+
+    An event post points to an `eventId` returned by event creation. The reference is immutable — a post can never be repointed at a different event.
+    Publish to a user feed or a community feed. Private-community events are locked to their own community server-side.
+
+## Data Type
+
+Event posts use a dedicated content type:
+
+| Field | Value |
+| --- | --- |
+| `dataType` | `"event"` |
+| `structureType` | `"event"` |
+| `data.eventId` | Required — the event this post is about |
+| `data.title` | Optional — prefilled from the event's `title`, editable |
+| `data.text` | Optional — prefilled from the event's `description`, editable |
+
+Publishing an event post with both `title` and `text` blank is valid — the event card is the payload.
+
+## Parameters
+
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `eventId` | Yes | TypeScript, iOS, Android | ID of an existing event. The post cannot be created without it. |
+| `title` | No | TypeScript, iOS, Android | Post title. Prefilled from `event.title` in composer, but any string (including empty) is accepted. Android: `String?`, dropped from the payload when blank. |
+| `text` | No | TypeScript, iOS, Android | Post body. Prefilled from `event.description` in composer, but any string (including empty) is accepted. Android: `String`, defaults to `""`. |
+| `targetType` | Yes | TypeScript, iOS, Android | Feed target, `community` or `user`. Constrained by the event's origin — see [Target Rules](#target-rules). |
+| `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed. |
+| `metadata` | No | TypeScript, iOS, Android | Custom metadata stored with the post where supported. |
+| `mentionees` | No | iOS, TypeScript | User mention payload where supported by the platform builder. |
+| `mentionUserIds` | No | Android | `Set<String>` of user IDs to mention. |
+| `hashtags` | No | Android | Hashtags stored with the post. |
+| `tags` | No | Android | Post tags. |
+
+The event-post SDK surface is available in TypeScript, iOS, and Android. Flutter and React Native do not expose these event-post APIs.
+
+## Create an Event Post
+
+Creating an event post publishes the post and returns the created post once the server has accepted it. `eventId` is required; `title` and `text` are the author's own copy and may both be empty.
+
+
+```swift iOS
+let postRepository = AmityPostRepository()
+// `eventId` (required, immutable) and `text` are init parameters; only `title` has a setter.
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Come say hi")
+builder.setTitle("Summer Meetup")
+
+let post = try await postRepository.createEventPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil
+)
+```
+
+```kotlin Android
+postRepository.createEventPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    eventId = eventId,
+    title = "Summer Meetup",
+    text = "Come say hi"
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  dataType: "event",
+  data: {
+    eventId,
+    title: "Summer Meetup",
+    text: "Come say hi",
+  },
+});
+```
+
+
+## Target Rules
+
+The target is constrained by the event's origin:
+
+| Event origin | Allowed targets | Enforcement |
+| --- | --- | --- |
+| Public community | The event's own community, any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+| Private community | The event's own community only | Server-enforced — a `400` is returned for any other target |
+| User-hosted (`originType: "user"`) | Any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+
+The private-community lock is a **server-side** rule. If your app builds a custom target picker, honour the same rule client-side to avoid surprising `400` errors after the user has already drafted a post.
+
+## Rejected Combinations
+
+The backend rejects the following with `400`:
+
+| Case | Reason |
+| --- | --- |
+| Missing `data.eventId` | Required for `dataType: "event"`. |
+| Disallowed target | Private-community event posted anywhere other than that community. |
+| Media attachment | Image, video, file, audio, or clip children are not permitted — the event card is the visual. |
+| Product tags | `productTags` or `attachmentProductTags` are not permitted on event posts. |
+| Changing `data.eventId` | The event reference is immutable. Delete the post and create a new one to point at a different event. |
+
+## Editing an Event Post
+
+Editing updates `data.title` and `data.text` only. The event itself is never changed by a post edit, and sibling posts referencing the same event are unaffected.
+
+
+```swift iOS
+// `eventId` is required by the builder's init but is never sent on update (immutable).
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Updated body")
+builder.setTitle("Updated title")
+
+try await postRepository.editPost(withId: postId, builder: builder)
+```
+
+```kotlin Android
+postRepository.editPost(postId)
+    .title("Updated title")
+    .text("Updated body")
+    .build()
+    .apply()
+    .subscribe()
+```
+
+```typescript TypeScript
+await PostRepository.editPost(postId, {
+  data: { title: "Updated title", text: "Updated body" },
+});
+```
+
+
+Do not send `data.eventId` on edit. It is immutable — any request that changes it is rejected with `400`.
+
+## Resolve the Event from a Post
+
+There are two ways to resolve the event — pick one: a **snapshot** (`post.getEvent()`) that returns the event cached with the post, or a **live observer** (`EventRepository.getEvent`) that keeps the card in sync with changes.
+
+| Accessor | Role | Availability |
+| --- | --- | --- |
+| `post.getEvent()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | ✅ **Shipped on iOS.** 🚧 Planned on other platforms. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
+| `EventRepository.getEvent(eventId)` | Live observer. Subscribe while the card is on screen; unsubscribe on scroll-off or unmount. | ✅ Shipped on iOS, TypeScript, and Android. |
+
+On **iOS**, `post.getEvent()` is the recommended path — it's shipped, and the SDK links the event to the post during serialization, so it returns the event directly, with no repository call and without inspecting child posts yourself (this is what AmityUIKit does).
+
+On **Android**, resolve the event through the repository instead: read the `eventId` from the **child** post — the parent post's data is `TEXT` and the `EVENT` data sits on the child — then observe it with `EventRepository.getEvent(eventId)`.
+
+
+```swift iOS
+// Shipped on iOS — the event is linked to the post during serialization.
+if let event = post.getEvent() {
+    render(event)
+}
+```
+
+```kotlin Android
+// The event reference lives on the child post, not the parent.
+val eventData = post.getChildren()
+    .firstOrNull { it.getData() is AmityPost.Data.EVENT }
+    ?.getData() as? AmityPost.Data.EVENT
+
+eventData?.let { data ->
+    AmitySocialClient.newEventRepository()
+        .getEvent(data.getEventId())
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { event -> render(event) },
+            { /* event deleted or unavailable — render the unavailable card */ }
+        )
+}
+```
+
+```typescript TypeScript
+import { EventRepository } from "@amityco/ts-sdk";
+
+if (post.eventId) {
+  const stopObserving = EventRepository.getEvent(post.eventId, ({ data: event }) => {
+    if (event) render(event);
+  });
+
+  // Call stopObserving when the event card leaves the screen.
+}
+```
+
+
+On iOS, `post.getEvent()` returns `nil` when the post is not an event post, or when the event entry is not in the payload (for example, the event was deleted).
+
+On Android, `getEvent(eventId)` is a live stream that emits again whenever the event changes. A deleted or unavailable event surfaces as an **error on the `Flowable`**, not a null emission — handle it in the error callback. A **cancelled** event still resolves normally and must be treated as deleted by the consumer; the SDK does not normalise it.
+
+## Query Event Posts
+
+Event posts are **excluded from the default results** of `v3` and `v4` post queries so that older clients never receive a `dataType` they cannot render. Reads for event-aware clients must use **`GET /api/v5/posts`**.
+
+| Platform | Reading event posts |
+| --- | --- |
+| Android | `getPosts()` already targets `GET /api/v5/posts`, so event posts are returned without any extra filter. There is no `dataTypes` parameter to set. |
+| TypeScript | Pass `dataTypes: ["event"]` when reading through a `v3` / `v4` path. |
+
+To include event posts on any version, filter explicitly:
+
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const stopObserving = PostRepository.getPosts(
+  {
+    targetType: "community",
+    targetId: communityId,
+    dataTypes: ["event"],
+  },
+  ({ data }) => {
+    renderResults(data);
+  }
+);
+```
+
+
+An unfiltered `v4` feed query will not return an event post you just created — the exclusion gate hides it. Either upgrade the read to `v5` or add `dataTypes=event` to the query.
+
+## Related Topics
+
+    Create the event that an event post will reference.
+    Event model, statuses, and RSVP APIs.
+    Post targets, structure types, and platform APIs.
+
+---
+
 ### [Get Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/retrieval/get-post)
 
 > Retrieve one post as a live object, or fetch a known set of post IDs where the SDK supports batch lookup.
@@ -21195,13 +21440,13 @@ Use pinned-post queries to display posts that were already pinned outside the cl
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Community pinned posts | `communityId` | Yes | Community whose pinned posts should be retrieved. |
-| Community pinned posts | `placement` | No | Placement such as default or announcement. |
-| Community pinned posts | `sortBy` | No | Sort order where exposed by the target SDK. |
-| Community pinned posts | `includeMixedStructure` | No | Include mixed-structure posts where supported. |
-| Global pinned posts | `includeMixedStructure` | No | Include mixed-structure posts in global pinned results where supported. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Community pinned posts | `communityId` | Yes | All | Community whose pinned posts should be retrieved. |
+| Community pinned posts | `placement` | No | All | Placement such as default or announcement. |
+| Community pinned posts | `sortBy` | No | TypeScript, iOS | Sort order. Not accepted by the current Android call. Flutter exposes `sortByOptions`, but the request builder does not forward it — do not depend on it. |
+| Community pinned posts | `includeMixedStructure` | No | TypeScript, iOS, Android | Include mixed-structure posts. Not exposed on the current Flutter public method. |
+| Global pinned posts | `includeMixedStructure` | No | TypeScript, iOS, Android | Include mixed-structure posts in global pinned results. Not exposed on the current Flutter public method. |
 
 ## Community Pinned Posts
 
@@ -21331,6 +21576,14 @@ await globalPinnedPosts.loadNext();
 - Use global pinned posts for app-wide featured content.
 - TypeScript, iOS, and Android expose `includeMixedStructure`; the current Flutter public pinned-post methods do not expose that option.
 - Flutter exposes a `sortByOptions` parameter on `getPinnedPosts`, but the current public request builder does not pass it into the request. Do not depend on custom sorting there.
+
+## Pin / Feature Controls
+
+Pinning, unpinning, featuring, and unfeaturing are performed from the **Social+ Console**, not from the client SDK. The client SDKs surface pinned and featured state as read-only.
+
+- **Event posts** in the UIKit follow the same rule and go a step further — the pinned / featured badge renders but there is no in-app pin control in any role, including hosts and moderators. See [Event Posts](../creation/event-post) and the [Event UIKit doc](/uikit/components/social/event) for how the badge renders.
+- **User-feed posts** can never be pinned regardless of role or Console state.
+- **Global featuring** requires a public community — a post in a private community cannot be featured globally.
 
 ## Related Topics
 
@@ -25572,6 +25825,7 @@ Core fields returned by the SDK include:
 | `status` | TypeScript and iOS expose `scheduled`, `live`, `ended`, and `cancelled`. Android also exposes `DRAFT` and `UNKNOWN` enum values for server compatibility. |
 | `startTime`, `endTime` | Required when creating events. TypeScript accepts ISO strings; iOS uses `Date`; Android uses Joda `DateTime`. |
 | `originType`, `originId` | The event origin: `community` or `user`, plus the corresponding ID. |
+| `isOriginPublic` | For a community-origin event, whether the origin community is public. User-origin events have no origin community; use `originType` when applying the event-post target rules — see [Target Rules](../content-management/posts/creation/event-post#target-rules). Android exposes it as `isOriginPublic()`. |
 | `location`, `externalUrl`, `coverImageFileId` | Optional display and media fields. |
 | `tags`, `metadata` | Optional structured fields. Timezone can be stored in `metadata.timezone` on TypeScript/iOS and via `timezone(...)` on Android. |
 | `rsvpCount`, `interestedCount` | Count fields returned with the event. |
@@ -25600,6 +25854,7 @@ This page documents SDK method names and data surfaces only. Product policy such
     Create scheduled virtual or in-person events.
     Get, query, update, and delete event objects.
     Create, update, read, and query RSVP responses.
+    Attach an event to a post so it renders as an event card in feeds.
     Generate a shareable deep link to an event.
 
 ---
@@ -42105,6 +42360,14 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
     - Attendees list
     - Reminder Notifications
 
+    **Publish an event to a feed**
+
+    - Create-post entry point on the event
+    - Target selection with private-community lock
+    - Event-post composer with prefilled fields
+    - Event card in feeds, tap opens event detail
+    - Read-only pinned / featured badges
+
 
 ### Platform Support
 
@@ -42114,6 +42377,7 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
 | Event Detail & Attendees   | ✅  | ✅      | ✅  | -       | -            |
 | Event discovery            | ✅  | ✅      | ✅  | -       | -            |
 | Event in community profile | ✅  | ✅      | ✅  | -       | -            |
+| Event as Post              | ✅  | ✅      | ✅  | -       | -            |
 
 ## Permission Handling
 
@@ -42327,6 +42591,23 @@ const SampleEventDetailPage = ({ eventId }) => {
 };
 ```
 
+
+    #### Post the event to a feed
+
+    The event detail page's 3-dot action menu exposes **Post event to feed**, which starts the event-post creation flow. It appears for Host, Moderator, and Member roles of the event's origin community and is hidden for non-members and visitors.
+
+    A **user-hosted** event has no origin community. The full target picker is still available, and it offers the user's own feed plus communities where the user can post. The entry point is shown only when the current user is eligible to publish the event.
+
+    | Config ID | Type | Description |
+    | --- | --- | --- |
+    | `event_detail_page/*/create_event_post_button` | Element | Customize the "Post event to feed" action label and icon |
+
+    Tapping the action always opens `AmityEventPostTargetSelectionPage`. The page chooses its variant from the event's origin:
+
+    - **Public-community or user-hosted event** → an open picker with My Timeline and eligible communities. No target is selected automatically.
+    - **Private-community event** → the same page in its restricted variant, showing only the event's origin community as the valid target.
+
+    Both destinations are overridable through `AmityEventDetailPageBehavior` — see [Behavior Customization](#behavior-customization).
 
     #### Share an event
 
@@ -42758,6 +43039,236 @@ const SampleAmityEventDiscussionFeedComponent = ({ event }) => {
 
       If you need to hook navigation (e.g., “View all upcoming”), use the corresponding Behavior class documented in the next tab.
 
+    Any event can be published as a post so it renders as an **event card** inside a feed. The post carries the author's text and the event supplies the card; tapping the card opens the event detail page rather than a generic post detail view. The SDK contract is documented in [Event Posts](/social-plus-sdk/social/content-management/posts/creation/event-post).
+
+    ### Flow
+
+    1. Host / Moderator / Member taps **Post event to feed** in the event detail 3-dot menu.
+    2. `AmityEventPostTargetSelectionPage` shows the target choices. For a private-community event, it shows only the origin community; for other events, it shows My Timeline and eligible communities.
+    3. `AmityPostComposerPage` opens in event-post mode with the title and body prefilled from the event.
+    4. The user optionally edits the text, then publishes. The post appears in the target feed as an event card.
+
+    #### Post-creation prompt
+
+    There is a second entry point into the same flow. Immediately after a host creates an event, a modal bottom sheet prompts them to publish it — "Your event was created successfully" / "Post it to a feed so more people can find and join", with **Post to feed** and **Maybe later** actions. **Post to feed** enters the flow at step 2.
+
+    This sheet **replaces** the usual "event created" toast for the host, so it changes the existing create-event flow, not just the event-post flow. It is shown once per creation.
+
+    ### AmityEventPostTargetSelectionPage
+
+    Use **AmityEventPostTargetSelectionPage** to pick where the event post is published. It has two variants driven by the event's origin:
+
+    - **Full variant** (public-community or user-hosted event) — the "My Timeline" row plus the paginated list of communities the user can post in. No target is preselected; the user chooses one.
+    - **Restricted variant** (private-community event) — a banner explains the lock and a single row shows the event's origin community with a `Private` badge. The user cannot pick any other target.
+
+    **Public API:**
+
+```swift
+AmityEventPostTargetSelectionPage(event: AmityEvent)
+```
+
+    #### Customization Options
+
+    Android and Web use event-specific configuration keys. iOS uses the shared post-target-selection page identifier because the event-post page reuses the normal post-target-selection configuration.
+
+    | Config ID | Platforms | Type | Description |
+    | --- | --- | --- | --- |
+    | `event_post_target_selection_page/*/*` | Android, Web | Page | Customize page theme |
+    | `event_post_target_selection_page/*/title` | Android, Web | Element | Customize page title |
+    | `event_post_target_selection_page/*/close_button` | Android, Web | Element | Customize close button image |
+    | `select_post_target_page/*/*` | iOS | Page | Customize page theme |
+    | `select_post_target_page/*/title` | iOS | Element | Customize page title |
+    | `select_post_target_page/*/close_button` | iOS | Element | Customize close button image |
+
+    #### Code Examples
+
+
+```swift iOS
+let page = AmityEventPostTargetSelectionPage(event: event)
+let viewController = AmitySwiftUIHostingController(rootView: page)
+navigationController?.pushViewController(viewController, animated: true)
+```
+
+```kotlin Android
+@Composable
+fun composeEventPostTargetSelectionPage(event: AmityEvent) {
+    AmityEventPostTargetSelectionPage(event = event)
+}
+
+// Or launch the activity directly:
+val intent = AmityEventPostTargetSelectionPageActivity.newIntent(
+    context = context,
+    event = event,
+)
+context.startActivity(intent)
+```
+
+```typescript React
+import { AmityUiKitProvider, AmityEventPostTargetSelectionPage } from '@amityco/ui-kit';
+
+const SampleAmityEventPostTargetSelectionPage = ({ event }) => {
+  return (
+    <AmityUiKitProvider
+      apiKey="API_KEY"
+      apiRegion="API_REGION"
+      userId="userId"
+      displayName="displayName"
+      configs={{}}
+    >
+      <AmityEventPostTargetSelectionPage event={event} />
+    </AmityUiKitProvider>
+  );
+};
+```
+
+
+    ### Composer in Event-Post Mode
+
+    `AmityPostComposerPage` accepts an event-post mode that prefills fields from the event and disables inputs that the backend rejects for event posts.
+
+    **Prefill (one-time copy, editable):**
+
+    | Composer field | Source |
+    | --- | --- |
+    | Title | `event.title` |
+    | Body | `event.description` |
+
+    Clearing both fields still publishes — the event card is the payload.
+
+    **Unavailable in event-post mode:**
+
+    - Media attachments (image / video / file / audio / clip)
+    - Product tags
+    - URL link-preview card (URLs still autolink inside the body)
+    - Detach or swap event — the event reference is immutable
+
+    **Public API:**
+
+    iOS and Web add a dedicated composer mode:
+
+```swift
+public enum AmityPostComposerOptions {
+  case createOptions(mode, targetId, targetType, community?, event?)
+  case editOptions(mode, post)
+  case createEventPostOptions(event, targetId, targetType)
+}
+
+AmityPostComposerPage(options: AmityPostComposerOptions)
+```
+
+    On iOS the private-community target lock is applied upstream on `AmityEventPostTargetSelectionPage` (which decides `targetId` before the composer opens), so `createEventPostOptions` has no `isTargetLocked` parameter.
+
+    Android has no separate mode. The existing create options carry optional event parameters, and the composer switches into event-post mode when `attachedEventId` is set. Note that it takes an **event ID**, not an `AmityEvent`, and has no `isTargetLocked` — on Android the lock is applied upstream on the target-selection page.
+
+```kotlin
+AmityPostComposerOptions.AmityPostComposerCreateOptions(
+    targetId: String?,
+    targetType: AmityPostTargetType,
+    community: AmityCommunity?,
+    attachedEventId: String?,
+    prefilledTitle: String?,
+    prefilledBody: String?,
+)
+
+AmityPostComposerPage(options: AmityPostComposerOptions)
+```
+
+    #### Code Examples
+
+
+```swift iOS
+let options = AmityPostComposerOptions.createEventPostOptions(
+    event: event,
+    targetId: targetId,
+    targetType: .community
+)
+let page = AmityPostComposerPage(options: options)
+let viewController = AmitySwiftUIHostingController(rootView: page)
+navigationController?.pushViewController(viewController, animated: true)
+```
+
+```kotlin Android
+@Composable
+fun composeCreateEventPost(
+    event: AmityEvent,
+    targetId: String,
+    targetType: AmityPostTargetType,
+    community: AmityCommunity?,
+) {
+    AmityPostComposerPage(
+        options = AmityPostComposerOptions.AmityPostComposerCreateOptions(
+            targetId = targetId,
+            targetType = targetType,
+            community = community,
+            attachedEventId = event.getEventId(),
+            prefilledTitle = event.getTitle(),
+            prefilledBody = event.getDescription(),
+        )
+    )
+}
+```
+
+```typescript React
+import { AmityUiKitProvider, AmityPostComposerPage } from '@amityco/ui-kit';
+
+const SampleCreateEventPost = ({ event, targetId, targetType, isTargetLocked }) => {
+  return (
+    <AmityUiKitProvider
+      apiKey="API_KEY"
+      apiRegion="API_REGION"
+      userId="userId"
+      displayName="displayName"
+      configs={{}}
+    >
+      <AmityPostComposerPage
+        mode="createEventPost"
+        event={event}
+        targetId={targetId}
+        targetType={targetType}
+        isTargetLocked={isTargetLocked}
+      />
+    </AmityUiKitProvider>
+  );
+};
+```
+
+
+    ### Editing an Event Post
+
+    Editing an event post uses `AmityPostComposerPage` in `edit` mode. Only `data.title` and `data.text` are editable — the event reference is immutable, and the event itself is never modified from the post.
+
+    If the referenced event has been deleted, the composer still opens and text edits still save; the embedded event card renders its deleted state. A **cancelled** event is treated identically to a deleted one.
+
+    ### Event Post in Feeds
+
+    `AmityPostContentComponent` renders an event card whenever a post's `dataType` is `event`. The event card reuses the existing `EventCard` component — no new element is introduced.
+
+    **Card states:**
+
+    | State | Behavior |
+    | --- | --- |
+    | Resolved | Cover image, start–end time, title, "By {host}". Tapping the card navigates to the event detail page. |
+    | Loading | Skeleton while the event resolves; not tappable. |
+    | Deleted | Shows "This event is no longer available." The card is non-interactive; only the resolved card navigates. Comments and reactions on the post survive. |
+
+    A **cancelled** event and an event missing from the payload both normalise into the deleted state — there is no separate cancelled treatment.
+
+    **Tap-through:**
+
+    The tap-through behavior differs from other post types:
+
+    | Region tapped | Destination |
+    | --- | --- |
+    | Event card | Event detail page, via `AmityPostContentComponentBehavior.goToEventDetailPage` |
+    | Header / author avatar | Author profile (default) |
+    | Caption text | Post detail (default) |
+    | Engagement bar | Post detail with comments (default) |
+    | 3-dot menu | Action sheet (default) |
+
+    **Pinned / featured badges are read-only in UIKit.** The badge renders whenever a post is pinned or featured, but there is no in-app control to change that state — the control lives in the Console. See the [Console note on pin/feature](/social-plus-sdk/social/content-management/posts/moderation/pin-post) for details.
+
+      A post published to a user's own feed can never be pinned. Global featuring requires a public community.
+
 
 ## Customization
 
@@ -42826,7 +43337,28 @@ UIKit provides these customization keys for event entry points and pages.
 
   "upcoming_events_page/*/*": {},
 
-  "past_events_page/*/*": {}
+  "past_events_page/*/*": {},
+
+  "event_detail_page/*/create_event_post_button": {
+    "text": "Post event to feed",
+    "image": ""
+  },
+
+  "event_post_target_selection_page/*/*": {},
+  "event_post_target_selection_page/*/title": {
+    "text": "Post to"
+  },
+  "event_post_target_selection_page/*/close_button": {
+    "image": ""
+  },
+
+  "select_post_target_page/*/*": {},
+  "select_post_target_page/*/title": {
+    "text": "Post to"
+  },
+  "select_post_target_page/*/close_button": {
+    "image": ""
+  }
 }
 ```
 
@@ -42872,11 +43404,15 @@ class AmityEventDetailPageBehavior {
     }
 
     goToPostComposerPage(context): void {
-      // navigation logic
+      // navigation logic — used for private-community events (target locked)
     }
 
     goToPollPostComposerPage(context): void {
       // navigation logic
+    }
+
+    goToEventPostTargetSelectionPage(context): void {
+      // navigation logic — used for public-community / user-hosted events
     }
 
     goToCommunityProfilePage(context): void {
@@ -42885,6 +43421,16 @@ class AmityEventDetailPageBehavior {
 
     goToEventAttendeesPage(context): void {
       // navigation logic
+    }
+
+}
+```
+
+```swift
+class AmityEventPostTargetSelectionPageBehavior {
+
+    goToPostComposerPage(context): void {
+      // navigation logic — opens composer in event-post mode with the resolved target
     }
 
 }
@@ -42958,6 +43504,18 @@ class AmityCreatePostMenuComponentBehavior {
 
     goToSelectEventTargetPage(): void {
       // navigation logic
+    }
+
+}
+```
+
+```swift
+class AmityPostContentComponentBehavior {
+
+    // ... existing behaviors
+
+    goToEventDetailPage(context): void {
+      // navigation logic — invoked when the event card region of an event post is tapped
     }
 
 }
@@ -43666,6 +44224,8 @@ Our design team is available to help you create the perfect look for your app. [
 > Level 1: Minimal customization with real-time updates using configuration files
 
 <strong>Key Benefit:</strong> Ship brand updates instantly. Dynamic UI lets non-engineering teams update theme tokens (colors today; typography & spacing roadmap) without app rebuilds.
+
+<strong>Flutter:</strong> to switch the theme (light / dark / system) from your own code at runtime — e.g. an in-app appearance toggle — use <a href="/uikit/customization/set-preferred-theme">Set Preferred Theme</a>.
 
 ## Feature Overview
 
@@ -56388,31 +56948,48 @@ Advanced visual content analysis covers extensive categories:
 
 ### Understanding Confidence Scores
 
-    **Flag Confidence** (Default: 40)
+
+    **Flag Confidence-Media** (Default: 40)
     - Content scoring above this level gets flagged for review
     - Lower values = more content flagged (higher sensitivity)
     - Recommended range: 30-60 depending on community standards
 
-    **Block Confidence** (Default: 80)
+    **Block Confidence-Media** (Default: 80)
     - Content scoring above this level gets automatically removed
     - Higher values = fewer false positives
     - Recommended range: 70-90 for balanced protection
 
+    **Flag Confidence-Text** (Default: 3)
+    - Content scoring above this level gets flagged for review
+    - Lower values = more content flagged (higher sensitivity)
+    - Recommended range: 3-4 depending on community standards
+
+    **Block Confidence-Text** (Default: 4)
+    - Content scoring above this level gets automatically removed
+    - Higher values = fewer false positives
+    - Recommended range: 4-5 for balanced protection
+
+    **Media Moderation (From 0 to 100 Scale)**
     - **0-39**: Content passes moderation (approved)
     - **40-79**: Content flagged for human review
     - **80-100**: Content automatically blocked/removed
 
-    *Note: These ranges use default thresholds and can be customized*
+    **Text Moderation (From 0 to 7 Scale)**
+    - **0-2**: Content passes moderation (approved)
+    - **3-4**: Content flagged for human review
+    - **5-7**: Content automatically blocked/removed
 
-**Default Configuration**: All categories start with `flagConfidence: 40` and `blockConfidence: 80`. Monitor your community's content patterns and adjust these values to optimize for your specific needs.
+    *Note: These ranges use default thresholds and can be customized. For text moderation,thresholds should be integers from 0 to 7. Because         the classifier produces integer severity levels, a fractional threshold is effectively rounded up to the next integer—for example, 4.5          behaves as 5. There is no finer-grained score between integer levels. *
+
+**Default Configuration**: All categories start with `flagConfidence: 40` and `blockConfidence: 80` for Media and `flagConfidence: 3` and `blockConfidence: 4` for Text. Monitor your community's content patterns and adjust these values to optimize for your specific needs.
 
 ### Configuration Parameters
 
     | Parameter | Type | Description |
     |-----------|------|-------------|
     | `category` | String | Name of the moderation category |
-    | `flagConfidence` | Number | Threshold for flagging content (0-100) |
-    | `blockConfidence` | Number | Threshold for blocking content (0-100) |
+    | `flagConfidence` | Number | Threshold for flagging content (0-100 for Media and 0-7 for Text) |
+    | `blockConfidence` | Number | Threshold for blocking content (0-100 for Media and 0-7 for Text) |
     | `moderationType` | String | Type of content: "text" or "media" |
 
 ### API Configuration
@@ -56421,13 +56998,16 @@ Advanced visual content analysis covers extensive categories:
 
     | Region | API Endpoint |
     |--------|-------------|
-    | **Europe** | `https://api-eu.social.plus/` |
-    | **Singapore** | `https://api-sg.social.plus/` |
-    | **United States** | `https://api-us.social.plus/` |
+    | **Europe** | `https://api.eu.social.plus/` |
+    | **Singapore** | `https://api.sg.social.plus/` |
+    | **United States** | `https://api.us.social.plus/` |
+
+    *Note: The settings API is designed with eventual consistency, so a subsequent GET may temporarily return the previous configuration. The        successful PUT response is the authoritative acknowledgement of the accepted update and can be used for programmatic verification.*
+
 
 ```json Retrieve confidence level
 
-GET /v1/content-moderation/confidences
+GET /v3/network-settings/enhance-moderation
 
 Response:
 {
@@ -56437,19 +57017,32 @@ Response:
       "flagConfidence": 40,
       "blockConfidence": 80,
       "moderationType": "media"
+    },
+    {
+      "category": "SelfHarm",
+      "flagConfidence": 3,
+      "blockConfidence": 5,
+      "moderationType": "text"
     }
   ]
 }
 ```
 
 ```json Update Moderation Confidence
-PUT /v1/content-moderation/confidences
+PUT /v3/network-settings/enhance-moderation
 
 Request:
 {
   "category": "explicit_content",
   "flagConfidence": 50,
-  "blockConfidence": 85
+  "blockConfidence": 85,
+  "moderationType": "media"
+},
+{
+  "category": "SelfHarm",
+  "flagConfidence": 4,
+  "blockConfidence": 6,
+  "moderationType": "text"
 }
 ```
 
@@ -61467,7 +62060,7 @@ Sponsored Content is **not available** on Flutter and React Native platforms.
 
   Use Sponsored Content to monetize responsibly: configure frequency logic, placements, scoring, and exposure controls while maintaining user experience quality.
 
-**Sponsored Content** is a feature designed to enhance your social network by allowing personalized ad placements. Whether you're promoting personal products or monetizing your platform, Sponsored Content offers versatile tools for various advertising needs. It seamlessly integrates third-party advertisers, establishes profitable partnerships, and displays ads across your network. For more details, please reach out to our support team.
+**Sponsored Content** is a feature designed to enhance your social network by allowing personalized ad placements. Whether you're promoting personal products or monetizing your platform, Sponsored Content offers versatile tools for various advertising needs. It establishes profitable partnerships and displays ads across your network. For more details, please reach out to our support team.
 
 ## Access & Navigation
 
@@ -65255,6 +65848,67 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   ## 🐞 Bug Fixes
 
+  - Fixed locally-created chat messages being assigned the wrong segment and missing their channel id.
+  - Fixed a failed send incorrectly determining the next message segment.
+  - Fixed the sender's own message not being marked read on some paths.
+  - Removed unused RTMP dependencies that broke 16 KB page-size alignment.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 23 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Android Paging Data Library | 3.4.2 |
+      | Firebase IID | 21.1.0 |
+      | Firebase Messaging | 23.0.0 |
+      | Gradle Plugin | 8.6.1 |
+      | Gson | 2.9.0 |
+      | HiveMQ MQTT Client | 1.3.1-beta01 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.9.2 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+      | SQLCipher | 4.9.0 |
+
+
+  ## 🐞 Bug Fixes
+
+  - Improved real-time (MQTT) connection resilience: a transient failure on the first connect no longer stops real-time, and logout / token expiry now stops a client still retrying its first connect.
+  - Fixed session handling so a failed token renewal is recoverable and the session stays alive through renewal.
+  - Fixed chat-list message previews: previews now persist in step with their channel rows and fall back to the channel's current row when a snapshot is missing.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 23 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Android Paging Data Library | 3.4.2 |
+      | Firebase IID | 21.1.0 |
+      | Firebase Messaging | 23.0.0 |
+      | Gradle Plugin | 8.6.1 |
+      | Gson | 2.9.0 |
+      | HiveMQ MQTT Client | 1.3.1-beta01 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.9.2 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+      | SQLCipher | 4.9.0 |
+
+
+  ## 🐞 Bug Fixes
+
   - Fixed channel unread tracking to mark read against the channel id rather than the sub-channel id.
   - Fixed the local read position being lost when `membership.readToSegment` is stale.
   - Excluded left and deleted channels from the channel unread total.
@@ -66519,6 +67173,44 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
   The Xcode 26 compatibility issue caused by **RealmSwift** binaries has been fully resolved in **SDK 8.0.0**. The cache layer has been migrated from Realm to **Core Data**, eliminating the Realm dependency entirely and restoring forward compatibility across Xcode versions. We recommend upgrading to 8.0.0 or later to remove any Xcode version constraints from your project.
 
   See the [iOS SDK v8 Migration Guide](/social-plus-sdk/changelogs/ios-sdk-v8-migration-guide) for full upgrade instructions.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed permission values to match the backend.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the query stream retaining objects that have left their context.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
 
   ## 🐞 Bug Fixes
 
@@ -67987,7 +68679,114 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## 🚀 New Features
+## ✨ Improvements
+
+  - The SDK version, UIKit version, and commit hash are now logged on `setup()` for easier diagnostics.
+
+  ## 🐞 Bug Fixes
+
+  - Group (channel) member actions are now each gated on their own permission instead of a single shared moderator check.
+  - Changed the add-member permission to `ADD_CHANNEL_USER`.
+  - Fixed tapping Explore to scroll to the Communities section.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.24.4 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the livestream reaction bar translucency not painting.
+  - Show the full bio in the About field, matching iOS.
+  - Fixed the story order on the community profile page.
+  - Fixed spacing and icon color on the clip and story comment sheets.
+  - Titled the upcoming events page "Upcoming events".
+  - Fixed the clip like count being read from the wrong post.
+  - Leave the community profile automatically when its community is closed.
+  - Keep cached messages on a refresh error, matching iOS.
+  - Fixed the official badge on the livestream and story view pages.
+  - Gave each feed's pull-to-refresh indicator its own state.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.24.4 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed poll votes not registering when made from the radio button or checkbox.
+  - Standardized disabled action buttons to use the primary color at 30% opacity.
+  - Adjusted the unread notification row to the primary color at 20% opacity.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.24.3 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🚀 New Features
 
   #### Post Composer Placeholder & Reaction Styling
 
@@ -68929,7 +69728,18 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## ✨ Improvements
+## 🚀 New Features
+
+  #### Runtime Theme Switching
+
+  Added `setPreferredTheme`, a public API to switch the UIKit theme (light / dark / system default) at runtime. See [Set Preferred Theme](/uikit/customization/set-preferred-theme).
+
+      | Config         | Version |
+      | :------------- | :------ |
+      | Flutter        | 3.35.7  |
+
+
+  ## ✨ Improvements
 
   - Switched chat media selection to the native Android Photo Picker and removed the `wechat_assets_picker` dependency.
 
@@ -69129,6 +69939,57 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
   The Xcode 26 compatibility issue caused by **RealmSwift** binaries has been fully resolved in **UIKit 4.19.0**. The UIKit now integrates with **AmitySDK v8.0.0**, which has migrated its cache layer from Realm to Core Data. Realm and RealmSwift are no longer required, and Xcode forward compatibility is fully restored. We recommend upgrading to 4.19.0 or later to remove any Xcode version constraints from your project.
 
   See the [iOS SDK v8 Migration Guide](/social-plus-sdk/changelogs/ios-sdk-v8-migration-guide) for installation changes, including UIKit-specific steps.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the Explore Community button to open the Communities / Explore tab.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.5.4 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed news-feed pull-to-refresh: no more empty-page/skeleton flash, the featured post no longer disappears mid-refresh, and live updates resume after a refresh error.
+  - Fixed tapping a user avatar opening a blank screen.
+  - Sorted the community list by display name.
+  - Fixed permissions on the About tab.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.5.4 |
+
+  ## 🐞 Bug Fixes
+
+  - Fixed avatars and images hosted on external (non-Amity) CDNs failing to load — the image loader now retries once without the `Authorization` header when the host rejects the bearer token.
+  - Fixed the selected tab color ignoring your configured primary color; tab bars now use the theme's primary color instead of the highlight color.
+  - Fixed the notification tray item color and the disabled-button color in the post and comment composers.
+  - Aligned assorted surfaces with the web UIKit for visual consistency.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 8.5.3 |
 
   ## 🐞 Bug Fixes
 
@@ -71889,4 +72750,3 @@ You can also edit `.cursor/mcp.json` directly in your project root:
   }
 }
 ```
-
