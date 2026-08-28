@@ -51,6 +51,16 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
     - Reminder Notifications
 
   </Card>
+  <Card title="Event as Post" icon="calendar-star">
+    **Publish an event to a feed**
+
+    - Create-post entry point on the event
+    - Target selection with private-community lock
+    - Event-post composer with prefilled fields
+    - Event card in feeds, tap opens event detail
+    - Read-only pinned / featured badges
+
+  </Card>
 </CardGroup>
 
 ### Platform Support
@@ -61,6 +71,7 @@ The **Event** feature in social.plus UIKit v4 enables users to create scheduled 
 | Event Detail & Attendees   | ✅  | ✅      | ✅  | -       | -            |
 | Event discovery            | ✅  | ✅      | ✅  | -       | -            |
 | Event in community profile | ✅  | ✅      | ✅  | -       | -            |
+| Event as Post              | ✅  | ✅      | ✅  | -       | -            |
 
 ## Permission Handling
 
@@ -291,6 +302,25 @@ Spec 6 defines the visibility rules for entry points that trigger event creation
 
     </CodeGroup>
 
+    #### Post the event to a feed
+
+    The event detail page's 3-dot action menu exposes **Post event to feed**, which starts the event-post creation flow. It appears for Host, Moderator, and Member roles of the event's origin community and is hidden for non-members and visitors.
+
+    <Note>
+    A **user-hosted** event has no origin community. The full target picker is still available, and it offers the user's own feed plus communities where the user can post. The entry point is shown only when the current user is eligible to publish the event.
+    </Note>
+
+    | Config ID | Type | Description |
+    | --- | --- | --- |
+    | `event_detail_page/*/create_event_post_button` | Element | Customize the "Post event to feed" action label and icon |
+
+    Tapping the action always opens `AmityEventPostTargetSelectionPage`. The page chooses its variant from the event's origin:
+
+    - **Public-community or user-hosted event** → an open picker with My Timeline and eligible communities. No target is selected automatically.
+    - **Private-community event** → the same page in its restricted variant, showing only the event's origin community as the valid target.
+
+    The destination is overridable through `AmityEventDetailPageBehavior` — see [Behavior Customization](#behavior-customization).
+
     #### Share an event
 
     The event detail page's 3-dot action menu can surface shareable-link actions that open the event directly:
@@ -470,7 +500,7 @@ Spec 6 defines the visibility rules for entry points that trigger event creation
         context.startActivity(intent)
     }
 
-    // Using Activity - My events only  
+    // Using Activity - My events only
     fun startPastEventsActivityMyEvents(context: Context) {
         val intent = AmityPastEventsPageActivity.newIntent(context)
         context.startActivity(intent)
@@ -749,6 +779,246 @@ Spec 6 defines the visibility rules for entry points that trigger event creation
     </Note>
 
   </Tab>
+  <Tab title="Event as Post">
+    Any event can be published as a post so it renders as an **event card** inside a feed. The post carries the author's text and the event supplies the card; tapping the card opens the event detail page rather than a generic post detail view. The SDK contract is documented in [Event Posts](/social-plus-sdk/social/content-management/posts/creation/event-post).
+
+    ### Flow
+
+    1. Host / Moderator / Member taps **Post event to feed** in the event detail 3-dot menu.
+    2. `AmityEventPostTargetSelectionPage` shows the target choices. For a private-community event, it shows only the origin community; for other events, it shows My Timeline and eligible communities.
+    3. `AmityPostComposerPage` opens in event-post mode with the title and body prefilled from the event.
+    4. The user optionally edits the text, then publishes. The post appears in the target feed as an event card.
+
+    #### Post-creation prompt
+
+    There is a second entry point into the same flow. Immediately after a host creates an event, a modal bottom sheet prompts them to publish it — "Your event was created successfully" / "Post it to a feed so more people can find and join", with **Post to feed** and **Maybe later** actions. **Post to feed** enters the flow at step 2.
+
+    <Warning>
+    This sheet **replaces** the usual "event created" toast for the host, so it changes the existing create-event flow, not just the event-post flow. It is shown once per creation.
+    </Warning>
+
+    ### AmityEventPostTargetSelectionPage
+
+    Use **AmityEventPostTargetSelectionPage** to pick where the event post is published. It has two variants driven by the event's origin:
+
+    - **Full variant** (public-community or user-hosted event) — the "My Timeline" row plus the paginated list of communities the user can post in. No target is preselected; the user chooses one.
+    - **Restricted variant** (private-community event) — a banner explains the lock and a single row shows the event's origin community with a `Private` badge. The user cannot pick any other target.
+
+    **Public API:**
+
+    ```swift
+    AmityEventPostTargetSelectionPage(event: AmityEvent)
+    ```
+
+    #### Customization Options
+
+    Android and Web use event-specific configuration keys. iOS uses the shared post-target-selection page identifier because the event-post page reuses the normal post-target-selection configuration.
+
+    | Config ID | Platforms | Type | Description |
+    | --- | --- | --- | --- |
+    | `event_post_target_selection_page/*/*` | Android, Web | Page | Customize page theme |
+    | `event_post_target_selection_page/*/title` | Android, Web | Element | Customize page title |
+    | `event_post_target_selection_page/*/close_button` | Android, Web | Element | Customize close button image |
+    | `select_post_target_page/*/*` | iOS | Page | Customize page theme |
+    | `select_post_target_page/*/title` | iOS | Element | Customize page title |
+    | `select_post_target_page/*/close_button` | iOS | Element | Customize close button image |
+
+    #### Code Examples
+
+    <CodeGroup>
+
+    ```swift iOS
+    let page = AmityEventPostTargetSelectionPage(event: event)
+    let viewController = AmitySwiftUIHostingController(rootView: page)
+    navigationController?.pushViewController(viewController, animated: true)
+    ```
+
+    ```kotlin Android
+    @Composable
+    fun composeEventPostTargetSelectionPage(event: AmityEvent) {
+        AmityEventPostTargetSelectionPage(event = event)
+    }
+
+    // Or launch the activity directly:
+    val intent = AmityEventPostTargetSelectionPageActivity.newIntent(
+        context = context,
+        event = event,
+    )
+    context.startActivity(intent)
+    ```
+
+    ```typescript React
+    import { AmityUiKitProvider, AmityEventPostTargetSelectionPage } from '@amityco/ui-kit';
+
+    const SampleAmityEventPostTargetSelectionPage = ({ event }) => {
+      return (
+        <AmityUiKitProvider
+          apiKey="API_KEY"
+          apiRegion="API_REGION"
+          userId="userId"
+          displayName="displayName"
+          configs={{}}
+        >
+          <AmityEventPostTargetSelectionPage event={event} />
+        </AmityUiKitProvider>
+      );
+    };
+    ```
+
+    </CodeGroup>
+
+    ### Composer in Event-Post Mode
+
+    `AmityPostComposerPage` accepts an event-post mode that prefills fields from the event and disables inputs that the backend rejects for event posts.
+
+    **Prefill (one-time copy, editable):**
+
+    | Composer field | Source |
+    | --- | --- |
+    | Title | `event.title` |
+    | Body | `event.description` |
+
+    Clearing both fields still publishes — the event card is the payload.
+
+    **Unavailable in event-post mode:**
+
+    - Media attachments (image / video / file / audio / clip)
+    - Product tags
+    - URL link-preview card (URLs still autolink inside the body)
+    - Detach or swap event — the event reference is immutable
+
+    **Public API:**
+
+    iOS and Web add a dedicated composer mode:
+
+    ```swift
+    public enum AmityPostComposerOptions {
+      case createOptions(mode, targetId, targetType, community?, event?)
+      case editOptions(mode, post)
+      case createEventPostOptions(event, targetId, targetType)
+    }
+
+    AmityPostComposerPage(options: AmityPostComposerOptions)
+    ```
+
+    On iOS the private-community target lock is applied upstream on `AmityEventPostTargetSelectionPage` (which decides `targetId` before the composer opens), so `createEventPostOptions` has no `isTargetLocked` parameter.
+
+    Android has no separate mode. The existing create options carry optional event parameters, and the composer switches into event-post mode when `attachedEventId` is set. Note that it takes an **event ID**, not an `AmityEvent`, and has no `isTargetLocked` — on Android the lock is applied upstream on the target-selection page.
+
+    ```kotlin
+    AmityPostComposerOptions.AmityPostComposerCreateOptions(
+        targetId: String?,
+        targetType: AmityPostTargetType,
+        community: AmityCommunity?,
+        attachedEventId: String?,
+        prefilledTitle: String?,
+        prefilledBody: String?,
+    )
+
+    AmityPostComposerPage(options: AmityPostComposerOptions)
+    ```
+
+    #### Code Examples
+
+    <CodeGroup>
+
+    ```swift iOS
+    let options = AmityPostComposerOptions.createEventPostOptions(
+        event: event,
+        targetId: targetId,
+        targetType: .community
+    )
+    let page = AmityPostComposerPage(options: options)
+    let viewController = AmitySwiftUIHostingController(rootView: page)
+    navigationController?.pushViewController(viewController, animated: true)
+    ```
+
+    ```kotlin Android
+    @Composable
+    fun composeCreateEventPost(
+        event: AmityEvent,
+        targetId: String,
+        targetType: AmityPostTargetType,
+        community: AmityCommunity?,
+    ) {
+        AmityPostComposerPage(
+            options = AmityPostComposerOptions.AmityPostComposerCreateOptions(
+                targetId = targetId,
+                targetType = targetType,
+                community = community,
+                attachedEventId = event.getEventId(),
+                prefilledTitle = event.getTitle(),
+                prefilledBody = event.getDescription(),
+            )
+        )
+    }
+    ```
+
+    ```typescript React
+    import { AmityUiKitProvider, AmityPostComposerPage } from '@amityco/ui-kit';
+
+    const SampleCreateEventPost = ({ event, targetId, targetType, isTargetLocked }) => {
+      return (
+        <AmityUiKitProvider
+          apiKey="API_KEY"
+          apiRegion="API_REGION"
+          userId="userId"
+          displayName="displayName"
+          configs={{}}
+        >
+          <AmityPostComposerPage
+            mode="createEventPost"
+            event={event}
+            targetId={targetId}
+            targetType={targetType}
+            isTargetLocked={isTargetLocked}
+          />
+        </AmityUiKitProvider>
+      );
+    };
+    ```
+
+    </CodeGroup>
+
+    ### Editing an Event Post
+
+    Editing an event post uses `AmityPostComposerPage` in `edit` mode. Only `data.title` and `data.text` are editable — the event reference is immutable, and the event itself is never modified from the post.
+
+    If the referenced event has been deleted, the composer still opens and text edits still save; the embedded event card renders its deleted state. A **cancelled** event is treated identically to a deleted one.
+
+    ### Event Post in Feeds
+
+    `AmityPostContentComponent` renders an event card whenever a post's `dataType` is `event`. The event card reuses the existing `EventCard` component — no new element is introduced.
+
+    **Card states:**
+
+    | State | Behavior |
+    | --- | --- |
+    | Resolved | Cover image, start–end time, title, "By {host}". Tapping the card navigates to the event detail page. |
+    | Loading | Skeleton while the event resolves; not tappable. |
+    | Deleted | Shows "This event is no longer available." The card is non-interactive; only the resolved card navigates. Comments and reactions on the post survive. |
+
+    A **cancelled** event and an event missing from the payload both normalise into the deleted state — there is no separate cancelled treatment.
+
+    **Tap-through:**
+
+    The tap-through behavior differs from other post types:
+
+    | Region tapped | Destination |
+    | --- | --- |
+    | Event card | Event detail page, via `AmityPostContentComponentBehavior.goToEventDetailPage` |
+    | Header / author avatar | Author profile (default) |
+    | Caption text | Post detail (default) |
+    | Engagement bar | Post detail with comments (default) |
+    | 3-dot menu | Action sheet (default) |
+
+    **Pinned / featured badges are read-only in UIKit.** The badge renders whenever a post is pinned or featured, but there is no in-app control to change that state — the control lives in the Console. See the [Console note on pin/feature](/social-plus-sdk/social/content-management/posts/moderation/pin-post) for details.
+
+    <Note>
+      A post published to a user's own feed can never be pinned. Global featuring requires a public community.
+    </Note>
+
+  </Tab>
 </Tabs>
 
 ## Customization
@@ -818,7 +1088,28 @@ UIKit provides these customization keys for event entry points and pages.
 
   "upcoming_events_page/*/*": {},
 
-  "past_events_page/*/*": {}
+  "past_events_page/*/*": {},
+
+  "event_detail_page/*/create_event_post_button": {
+    "text": "Post event to feed",
+    "image": ""
+  },
+
+  "event_post_target_selection_page/*/*": {},
+  "event_post_target_selection_page/*/title": {
+    "text": "Post to"
+  },
+  "event_post_target_selection_page/*/close_button": {
+    "image": ""
+  },
+
+  "select_post_target_page/*/*": {},
+  "select_post_target_page/*/title": {
+    "text": "Post to"
+  },
+  "select_post_target_page/*/close_button": {
+    "image": ""
+  }
 }
 ```
 
@@ -870,11 +1161,15 @@ UIKit provides behavior classes to customize navigation and actions for event-re
         }
 
         goToPostComposerPage(context): void {
-          // navigation logic
+          // navigation logic — used for private-community events (target locked)
         }
 
         goToPollPostComposerPage(context): void {
           // navigation logic
+        }
+
+        goToEventPostTargetSelectionPage(context): void {
+          // navigation logic — used for public-community / user-hosted events
         }
 
         goToCommunityProfilePage(context): void {
@@ -883,6 +1178,18 @@ UIKit provides behavior classes to customize navigation and actions for event-re
 
         goToEventAttendeesPage(context): void {
           // navigation logic
+        }
+
+    }
+    ```
+
+  </Tab>
+  <Tab title="Event Post Target Selection">
+    ```swift
+    class AmityEventPostTargetSelectionPageBehavior {
+
+        goToPostComposerPage(context): void {
+          // navigation logic — opens composer in event-post mode with the resolved target
         }
 
     }
@@ -970,6 +1277,20 @@ UIKit provides behavior classes to customize navigation and actions for event-re
 
         goToSelectEventTargetPage(): void {
           // navigation logic
+        }
+
+    }
+    ```
+
+  </Tab>
+  <Tab title="Post Content">
+    ```swift
+    class AmityPostContentComponentBehavior {
+
+        // ... existing behaviors
+
+        goToEventDetailPage(context): void {
+          // navigation logic — invoked when the event card region of an event post is tapped
         }
 
     }

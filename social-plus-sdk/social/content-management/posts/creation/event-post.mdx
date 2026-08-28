@@ -1,0 +1,272 @@
+---
+title: "Event Posts"
+description: "Publish a scheduled event as a post so it renders as an event card in feeds and community timelines."
+---
+
+An event post attaches an existing event to a post. The post carries the author's text; the event supplies the card that renders inside the feed. Tapping the card opens the event detail page instead of the post detail page, so the event stays the primary surface.
+
+<Warning>
+Create the event first with the Event Repository. See [Create Event](/social-plus-sdk/social/events/create-event). The event post references the returned `eventId`.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Event Reference" icon="calendar-star">
+    An event post points to an `eventId` returned by event creation. The reference is immutable — a post can never be repointed at a different event.
+  </Card>
+  <Card title="Feed Delivery" icon="rss">
+    Publish to a user feed or a community feed. Private-community events are locked to their own community server-side.
+  </Card>
+</CardGroup>
+
+## Data Type
+
+Event posts use a dedicated content type:
+
+| Field | Value |
+| --- | --- |
+| `dataType` | `"event"` |
+| `structureType` | `"event"` |
+| `data.eventId` | Required — the event this post is about |
+| `data.title` | Optional — prefilled from the event's `title`, editable |
+| `data.text` | Optional — prefilled from the event's `description`, editable |
+
+Publishing an event post with both `title` and `text` blank is valid — the event card is the payload.
+
+## Parameters
+
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `eventId` | Yes | TypeScript, iOS, Android | ID of an existing event. The post cannot be created without it. |
+| `title` | No | TypeScript, iOS, Android | Post title. Prefilled from `event.title` in composer, but any string (including empty) is accepted. Android: `String?`, dropped from the payload when blank. |
+| `text` | No | TypeScript, iOS, Android | Post body. Prefilled from `event.description` in composer, but any string (including empty) is accepted. Android: `String`, defaults to `""`. |
+| `targetType` | Yes | TypeScript, iOS, Android | Feed target, `community` or `user`. Constrained by the event's origin — see [Target Rules](#target-rules). |
+| `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed. |
+| `metadata` | No | TypeScript, iOS, Android | Custom metadata stored with the post where supported. |
+| `mentionees` | No | iOS, TypeScript | User mention payload where supported by the platform builder. |
+| `mentionUserIds` | No | Android | `Set<String>` of user IDs to mention. |
+| `hashtags` | No | Android | Hashtags stored with the post. |
+| `tags` | No | Android | Post tags. |
+
+<Note>
+The event-post SDK surface is available in TypeScript, iOS, and Android. Flutter and React Native do not expose these event-post APIs.
+</Note>
+
+## Create an Event Post
+
+Creating an event post publishes the post and returns the created post once the server has accepted it. `eventId` is required; `title` and `text` are the author's own copy and may both be empty.
+
+<CodeGroup>
+
+```swift iOS
+let postRepository = AmityPostRepository()
+// `eventId` (required, immutable) and `text` are init parameters; only `title` has a setter.
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Come say hi")
+builder.setTitle("Summer Meetup")
+
+let post = try await postRepository.createEventPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil
+)
+```
+
+```kotlin Android
+postRepository.createEventPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    eventId = eventId,
+    title = "Summer Meetup",
+    text = "Come say hi"
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  dataType: "event",
+  data: {
+    eventId,
+    title: "Summer Meetup",
+    text: "Come say hi",
+  },
+});
+```
+
+</CodeGroup>
+
+## Target Rules
+
+The target is constrained by the event's origin:
+
+| Event origin | Allowed targets | Enforcement |
+| --- | --- | --- |
+| Public community | The event's own community, any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+| Private community | The event's own community only | Server-enforced — a `400` is returned for any other target |
+| User-hosted (`originType: "user"`) | Any community the user can post in, or the user's own feed | Client picks; server accepts any valid target |
+
+<Note>
+The private-community lock is a **server-side** rule. If your app builds a custom target picker, honour the same rule client-side to avoid surprising `400` errors after the user has already drafted a post.
+</Note>
+
+## Rejected Combinations
+
+The backend rejects the following with `400`:
+
+| Case | Reason |
+| --- | --- |
+| Missing `data.eventId` | Required for `dataType: "event"`. |
+| Disallowed target | Private-community event posted anywhere other than that community. |
+| Media attachment | Image, video, file, audio, or clip children are not permitted — the event card is the visual. |
+| Product tags | `productTags` or `attachmentProductTags` are not permitted on event posts. |
+| Changing `data.eventId` | The event reference is immutable. Delete the post and create a new one to point at a different event. |
+
+## Editing an Event Post
+
+Editing updates `data.title` and `data.text` only. The event itself is never changed by a post edit, and sibling posts referencing the same event are unaffected.
+
+<CodeGroup>
+
+```swift iOS
+// `eventId` is required by the builder's init but is never sent on update (immutable).
+let builder = AmityEventPostBuilder(eventId: eventId, text: "Updated body")
+builder.setTitle("Updated title")
+
+try await postRepository.editPost(withId: postId, builder: builder)
+```
+
+```kotlin Android
+postRepository.editPost(postId)
+    .title("Updated title")
+    .text("Updated body")
+    .build()
+    .apply()
+    .subscribe()
+```
+
+```typescript TypeScript
+await PostRepository.editPost(postId, {
+  data: { title: "Updated title", text: "Updated body" },
+});
+```
+
+</CodeGroup>
+
+<Warning>
+Do not send `data.eventId` on edit. It is immutable — any request that changes it is rejected with `400`.
+</Warning>
+
+## Resolve the Event from a Post
+
+There are two ways to resolve the event — pick one: a **snapshot** (`post.getEvent()`) that returns the event cached with the post, or a **live observer** (`EventRepository.getEvent`) that keeps the card in sync with changes.
+
+| Accessor | Role | Availability |
+| --- | --- | --- |
+| `post.getEvent()` | Synchronous snapshot from the sibling `events[]` collection cached with the post response. No network call, no subscription. Not a live observable. | ✅ **Shipped on iOS.** 🚧 Planned on other platforms. Android will surface it via the sealed `AmityPost.Data.EVENT` variant rather than a top-level method. |
+| `EventRepository.getEvent(eventId)` | Live observer. Subscribe while the card is on screen; unsubscribe on scroll-off or unmount. | ✅ Shipped on iOS, TypeScript, and Android. |
+
+On **iOS**, `post.getEvent()` is the recommended path — it's shipped, and the SDK links the event to the post during serialization, so it returns the event directly, with no repository call and without inspecting child posts yourself (this is what AmityUIKit does).
+
+On **Android**, resolve the event through the repository instead: read the `eventId` from the **child** post — the parent post's data is `TEXT` and the `EVENT` data sits on the child — then observe it with `EventRepository.getEvent(eventId)`.
+
+<CodeGroup>
+
+```swift iOS
+// Shipped on iOS — the event is linked to the post during serialization.
+if let event = post.getEvent() {
+    render(event)
+}
+```
+
+```kotlin Android
+// The event reference lives on the child post, not the parent.
+val eventData = post.getChildren()
+    .firstOrNull { it.getData() is AmityPost.Data.EVENT }
+    ?.getData() as? AmityPost.Data.EVENT
+
+eventData?.let { data ->
+    AmitySocialClient.newEventRepository()
+        .getEvent(data.getEventId())
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe(
+            { event -> render(event) },
+            { /* event deleted or unavailable — render the unavailable card */ }
+        )
+}
+```
+
+```typescript TypeScript
+import { EventRepository } from "@amityco/ts-sdk";
+
+if (post.eventId) {
+  const stopObserving = EventRepository.getEvent(post.eventId, ({ data: event }) => {
+    if (event) render(event);
+  });
+
+  // Call stopObserving when the event card leaves the screen.
+}
+```
+
+</CodeGroup>
+
+On iOS, `post.getEvent()` returns `nil` when the post is not an event post, or when the event entry is not in the payload (for example, the event was deleted).
+
+On Android, `getEvent(eventId)` is a live stream that emits again whenever the event changes. A deleted or unavailable event surfaces as an **error on the `Flowable`**, not a null emission — handle it in the error callback. A **cancelled** event still resolves normally and must be treated as deleted by the consumer; the SDK does not normalise it.
+
+## Query Event Posts
+
+Event posts are **excluded from the default results** of `v3` and `v4` post queries so that older clients never receive a `dataType` they cannot render. Reads for event-aware clients must use **`GET /api/v5/posts`**.
+
+| Platform | Reading event posts |
+| --- | --- |
+| Android | `getPosts()` already targets `GET /api/v5/posts`, so event posts are returned without any extra filter. There is no `dataTypes` parameter to set. |
+| TypeScript | Pass `dataTypes: ["event"]` when reading through a `v3` / `v4` path. |
+
+To include event posts on any version, filter explicitly:
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const stopObserving = PostRepository.getPosts(
+  {
+    targetType: "community",
+    targetId: communityId,
+    dataTypes: ["event"],
+  },
+  ({ data }) => {
+    renderResults(data);
+  }
+);
+```
+
+</CodeGroup>
+
+<Warning>
+An unfiltered `v4` feed query will not return an event post you just created — the exclusion gate hides it. Either upgrade the read to `v5` or add `dataTypes=event` to the query.
+</Warning>
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Create Event" icon="calendar-plus" href="/social-plus-sdk/social/events/create-event">
+    Create the event that an event post will reference.
+  </Card>
+  <Card title="Events Overview" icon="calendar-star" href="/social-plus-sdk/social/events/overview">
+    Event model, statuses, and RSVP APIs.
+  </Card>
+  <Card title="Posts Overview" icon="newspaper" href="../overview">
+    Post targets, structure types, and platform APIs.
+  </Card>
+</CardGroup>
