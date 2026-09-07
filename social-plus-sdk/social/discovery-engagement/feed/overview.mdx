@@ -30,6 +30,23 @@ TypeScript still exports `queryGlobalFeed()`, but the SDK source marks it deprec
 | Android refresh | `invalidateCache` | No | Skip cached paging data for deliberate refresh flows. |
 | Query For You feed | None | — | `getForYouFeed()` takes no query parameters. Pagination is handled through the live collection callback. |
 
+## Choosing a global feed
+
+Global feed and custom-ranking global feed read the same content. They differ only in how the backend orders it:
+
+<CardGroup cols={2}>
+  <Card title="Global feed" icon="clock">
+    Chronological. The most recent posts come first. Use it for a real-time content stream.
+  </Card>
+  <Card title="Custom-ranking global feed" icon="star">
+    Score-sorted. Posts are ordered by engagement, recency, and updates rather than by time alone.
+  </Card>
+</CardGroup>
+
+<Info>
+Either way, the global feed shows at most the 20 most recent posts per user or community. Older posts from the same source are not included.
+</Info>
+
 ## Query Global Feed
 
 Global feed returns a paginated collection of posts for the current user's global feed surface. Use data type filters when your UI only needs a subset of post types, such as an image or video feed.
@@ -110,7 +127,7 @@ showError(posts.length);
 
 ## Query Custom-Ranking Global Feed
 
-Use custom-ranking global feed when your app has enabled the backend-ranked global feed experience. The SDK does not expose ranking weights or formulas; it only requests the custom-ranking feed and returns the posts provided by the backend.
+Use custom-ranking global feed when your app has enabled the backend-ranked global feed experience. Ranking runs on the backend — the SDK takes no weighting or sorting parameters, it only requests the custom-ranking feed and returns the posts the backend provides. See [How custom ranking orders posts](#how-custom-ranking-orders-posts) for what drives the order.
 
 <CodeGroup>
 
@@ -183,6 +200,27 @@ showError(posts.length);
 
 </CodeGroup>
 
+### How custom ranking orders posts
+
+Chronological ordering treats every post the same, whether or not anyone engaged with it. Custom ranking sorts on a score built from *meaningful interactions*, so a post people comment on and react to outranks a post that is merely newer.
+
+| Factor | Effect on the score |
+| --- | --- |
+| Comments | Raises the score, weighted twice as heavily as a reaction — commenting is deeper engagement |
+| Reactions | Raises the score |
+| Age (`createdAt`) | Decays the score over time, keeping the feed fresh |
+| Updates and edits (`updatedAt`, `editedAt`) | Temporarily boosts the score, keeping revised content visible longer |
+
+Scores are recalculated on every query, so pagination results can shift while users interact with the content.
+
+<Warning>
+Limitations of the custom-ranking global feed:
+
+- **Ranking delay** — a new post appears in the user feed immediately, but may take a moment to surface in the custom-ranking global feed while its score is calculated.
+- **SDK version** — only posts created with SDK version 5.10 or later are covered by custom ranking.
+- **Tuning** — the decay curve and boost windows are configured per network by the backend, not through the SDK. To tailor them, contact [social.plus Support](https://ekoapp.atlassian.net/servicedesk/customer/portal/3) with your ranking requirements.
+</Warning>
+
 ## Query For You Feed
 
 For You feed is a backend-personalized global feed for the current user. Ranking is owned by the backend; the SDK only requests the feed and returns the posts the backend provides. It is a network-level feature that must be enabled for your network before the feed returns content.
@@ -190,6 +228,23 @@ For You feed is a backend-personalized global feed for the current user. Ranking
 <Info>
 For You feed is a network setting. Read `getForYouFeedSetting()` on the client and only render the surface when the feed is enabled. If the feed is not enabled, the collection reports a feed-disabled error rather than an empty list — `AmityForYouFeedDisabledError` on TypeScript and Android, or the `.forYouFeedDisabled` error code on iOS (see below).
 </Info>
+
+### What the For You feed includes
+
+The backend assembles For You from these content sources, then ranks them for the current user:
+
+| Source | What it contributes |
+| --- | --- |
+| Joined communities | Posts from communities the user is a member of |
+| Public communities | Posts from public communities the user has **not** joined |
+| Followed users | Posts from the user feeds the user follows |
+| Public user feeds | Posts from user feeds that are public |
+| Exploration | A small amount of random posts, for controlled discovery |
+| Live streams | Ongoing livestreams, injected into the feed while they are live |
+
+The mix between these sources and the ranking applied to them are owned by the backend. The SDK exposes no parameters to weight, filter, or exclude them.
+
+### Paging the feed
 
 `getForYouFeed()` is a live collection that takes **no query parameters**. Page through results with the `onNextPage` / `hasNextPage` values from the callback; the default page size is 20 posts.
 
