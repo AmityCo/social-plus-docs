@@ -1,0 +1,233 @@
+---
+title: "User & Community Feed"
+description: "Query one user's timeline — including their public-community posts — or one community's feed, with privacy rules and time-bounded pagination."
+---
+
+`getUserFeed()` returns a user's own posts alongside posts they authored in public communities, giving a complete view of that user's activity. `getCommunityFeed()` returns the posts of a single community.
+
+## User feed
+
+### Feed sources
+
+`feedSources` decides which posts the collection contains. It defaults to `['user']`.
+
+| Source | What it returns | Visibility |
+| --- | --- | --- |
+| `'user'` | Posts made directly to the user's personal feed | Follows the user's privacy settings |
+| `'community'` | Posts the user authored in **public** communities | Public community posts only |
+| `['user', 'community']` | Both, merged in chronological order | Each post keeps its own visibility rule |
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `userId` | String | Required | Target user ID. |
+| `feedSources` | Array | `['user']` | `'user'`, `'community'`, or both. See the table above. |
+| `dataTypes` | Array | All types | Post content types to include: `text`, `image`, `video`, `file`, `audio`, `poll`, `liveStream`, `custom`. |
+| `sortBy` | String | `lastCreated` | `lastCreated` (newest first) or `firstCreated` (oldest first). |
+| `includeDeleted` | Boolean | `false` | Include soft-deleted posts. |
+| `includeMixedStructure` | Boolean | `false` | Include mixed-media posts when filtering by `dataTypes`. See [Mixed Media Filtering](/social-plus-sdk/social/content-management/posts/retrieval/query-posts#mixed-media-filtering). |
+| `matchingOnlyParentPost` | Boolean | `true` | Return only parent posts, excluding replies. |
+| `untilAt` | DateTime | None | Time boundary for pagination. See [Time-bounded pagination](#time-bounded-pagination). **iOS and Android only.** |
+| `excludeBlockUserPosts` | Boolean | — | Exclude posts by users the current user has blocked. **iOS only.** |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { FeedRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = FeedRepository.getUserFeed(
+  {
+    userId: 'user-123',
+    feedSources: ['user', 'community'],
+    sortBy: 'lastCreated',
+    limit: 20,
+  },
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+  },
+);
+
+unsubscribe();
+```
+
+```swift iOS
+token = feedRepository
+    .getUserFeed(
+        "user-123",
+        feedSources: ["user", "community"],
+        sortBy: .lastCreated,
+        includeDeleted: false,
+        matchingOnlyParentPost: true
+    )
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        showSuccessMessage(collection.snapshots.count)
+    }
+```
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getUserFeed(userId = "user-123")
+    .feedSources(listOf("user", "community"))
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+### Time-bounded pagination
+
+<Info>
+`untilAt` is available on **iOS and Android** only. TypeScript support is not yet available.
+</Info>
+
+`untilAt` constrains the feed to a time window. When provided, the SDK stops fetching and collecting posts beyond the given datetime — useful for "catch-up" feeds or historical profile views.
+
+| Behavior | Detail |
+| --- | --- |
+| Local-only filter | `untilAt` is never sent to the backend. |
+| Exclusive comparison | A post whose `createdAt` equals exactly `untilAt` is **not** included. |
+| Automatic pagination stop | Once the boundary is reached, no further pages are fetched. |
+| Real-time aware | Posts arriving via real-time events are also checked against the boundary. |
+
+| Sort direction | `untilAt` acts as | Excludes posts where |
+| --- | --- | --- |
+| `lastCreated` (newest first) | Lower bound | `createdAt < untilAt` |
+| `firstCreated` (oldest first) | Upper bound | `createdAt > untilAt` |
+
+<CodeGroup>
+
+```swift iOS
+// Show only posts from the last 30 days
+let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+
+token = feedRepository
+    .getUserFeed(
+        "user-123",
+        feedSources: ["user", "community"],
+        sortBy: .lastCreated,
+        untilAt: thirtyDaysAgo
+    )
+    .observe { collection, error in
+        // All posts have createdAt >= thirtyDaysAgo
+        showSuccessMessage(collection.snapshots.count)
+    }
+```
+
+```kotlin Android
+// Show only posts from the last 30 days
+val thirtyDaysAgo = Calendar.getInstance().apply {
+    add(Calendar.DAY_OF_YEAR, -30)
+}.time
+
+AmitySocialClient.newFeedRepository()
+    .getUserFeed(userId = "user-123")
+    .feedSources(listOf("user", "community"))
+    .untilAt(untilAt = thirtyDaysAgo)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+### Privacy and visibility rules
+
+The user feed applies these rules server-side. Your UI does not need to filter for them, but it does need to handle the resulting empty states.
+
+| Situation | What the feed returns |
+| --- | --- |
+| Post in a **private** community | Never included, even if the user authored it |
+| User left a community that is still public | Their posts remain visible |
+| Community became private after the post | Posts are removed from the user feed |
+| Community deleted | All its posts are removed from the user feed |
+| Viewing a **private** profile | Only followers see the combined feed |
+| Viewing a **public** profile | Anyone can view the community posts |
+| Viewer is blocked by the user | Empty state — filter controls should stay visible |
+
+<Note>
+Community privacy changes apply retroactively. A post that was visible yesterday can disappear from a user feed today if its community switched to private.
+</Note>
+
+## Community feed
+
+`getCommunityFeed()` returns the posts of a single community, with optional filtering by review state.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `communityId` | String | Required. Target community ID. |
+| `feedType` | String | `published`, `reviewing`, or `declined`. Use `reviewing` to build a moderation queue. |
+| `sortBy` | String | Sort order for results. |
+| `tags` | Array | Filter to posts carrying specific tags. |
+| `includeDeleted` | Boolean | Include soft-deleted posts. |
+| `includeMixedStructure` | Boolean | Include mixed-media posts when filtering by data type. |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { FeedRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = FeedRepository.getCommunityFeed(
+  {
+    communityId: 'community-123',
+    feedType: 'published',
+    includeDeleted: false,
+    limit: 20,
+  },
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+  },
+);
+
+unsubscribe();
+```
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getCommunityFeed(communityId = "community-123")
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Query Posts" icon="newspaper" href="/social-plus-sdk/social/content-management/posts/retrieval/query-posts">
+    Richer post filters — tags, review status, deletion state.
+  </Card>
+  <Card title="Feeds & Timelines" icon="rss" href="./overview">
+    Pick between the feed APIs and see platform support.
+  </Card>
+</CardGroup>
