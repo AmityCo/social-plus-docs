@@ -1,0 +1,174 @@
+---
+title: "For You Feed"
+description: "Backend-personalized feed for the current user: what it includes, how to enable it, and how to query it."
+---
+
+For You feed is a backend-personalized global feed for the current user. Ranking is owned by the backend; the SDK only requests the feed and returns the posts the backend provides. It is a network-level feature that must be enabled for your network before the feed returns content.
+
+<Info>
+For You feed is a network setting. Read `getForYouFeedSetting()` on the client and only render the surface when the feed is enabled. If the feed is not enabled, the collection reports a feed-disabled error rather than an empty list — `AmityForYouFeedDisabledError` on TypeScript and Android, or the `.forYouFeedDisabled` error code on iOS (see below).
+</Info>
+
+## What the For You feed includes
+
+The backend assembles For You from these content sources, then ranks them for the current user:
+
+| Source | What it contributes |
+| --- | --- |
+| Joined communities | Posts from communities the user is a member of |
+| Public communities | Posts from public communities the user has **not** joined |
+| Followed users | Posts from the user feeds the user follows |
+| Public user feeds | Posts from user feeds that are public |
+| Exploration | A small amount of random posts, for controlled discovery |
+| Live streams | Ongoing livestreams, injected into the feed while they are live |
+
+The mix between these sources and the ranking applied to them are owned by the backend. The SDK exposes no parameters to weight, filter, or exclude them.
+
+## Query the feed
+
+`getForYouFeed()` is a live collection that takes **no query parameters**. Page through results with the `onNextPage` / `hasNextPage` values from the callback; the default page size is 20 posts.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Client, FeedRepository } from '@amityco/ts-sdk';
+
+// 1. Gate the surface on the network setting.
+const { forYouFeed } = await Client.getForYouFeedSetting();
+if (!forYouFeed.enabled) {
+  hideForYouSurface();
+  return;
+}
+
+// 2. Observe the personalized feed.
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
+
+const unsubscribe = FeedRepository.getForYouFeed(
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      if (error instanceof FeedRepository.AmityForYouFeedDisabledError) {
+        // For You feed is not enabled for this network — hide the tab.
+        hideForYouSurface();
+        return;
+      }
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
+  },
+);
+
+function loadMoreForYouFeed() {
+  if (canLoadMore) {
+    loadNextPage?.();
+  }
+}
+
+unsubscribe();
+```
+
+```swift iOS
+let forYouFeed = feedRepository.getForYouFeed()
+
+token = forYouFeed.observe { collection, error in
+    if let error {
+        if error.isAmityErrorCode(.forYouFeedDisabled) {
+            // For You feed is not enabled for this network — hide the tab.
+            hideForYouSurface()
+            return
+        }
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+
+forYouFeed.nextPage()
+```
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getForYouFeed()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> ->
+            showSuccessMessage(pagingData)
+        },
+        { error ->
+            if (error is AmityForYouFeedDisabledError) {
+                // For You feed is not enabled for this network — hide the tab.
+                hideForYouSurface()
+            } else {
+                handleGeneralError(error)
+            }
+        },
+    )
+```
+
+</CodeGroup>
+
+<Note>
+For You feed is available on TypeScript, iOS, and Android. It is not available in the current Flutter SDK.
+</Note>
+
+## Parameters
+
+| Parameter | Platforms | Required | Description |
+| --- | --- | --- | --- |
+| None | All | — | `getForYouFeed()` takes no query parameters. The backend owns the ranking and the content mix. |
+| `limit`, `onNextPage`, `hasNextPage` | TypeScript | No | Control page size and load additional pages from the live collection callback. |
+
+## Read the feed setting
+
+`getForYouFeedSetting()` is a method on the client that reports whether the network has For You feed enabled. Use it to decide whether to render a For You tab or entry point at all.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const setting = await Client.getForYouFeedSetting();
+// setting: { forYouFeed: { enabled: boolean } }
+
+if (setting.forYouFeed.enabled) {
+  showForYouTab();
+}
+```
+
+```swift iOS
+let setting = try await client.getForYouFeedSetting()
+if setting.enabled {
+    showForYouTab()
+}
+```
+
+```kotlin Android
+AmityCoreClient.getForYouFeedSetting()
+    .doOnSuccess { setting: AmityForYouFeedSetting ->
+        if (setting.enabled) {
+            showForYouTab()
+        }
+    }
+    .doOnError { error ->
+        handleGeneralError(error)
+    }
+    .subscribe()
+```
+
+</CodeGroup>
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="For You Feed UIKit" icon="mobile" href="/uikit/components/social/feeds#for-you-feed">
+    Drop the personalized feed into your app with the prebuilt UIKit component.
+  </Card>
+  <Card title="Global Feed" icon="clock" href="/social-plus-sdk/social/discovery-engagement/feed/global-feed">
+    Chronological global feed, with no personalization.
+  </Card>
+</CardGroup>
