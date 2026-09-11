@@ -2905,7 +2905,7 @@ void checkChannelPermission(String channelId) {
 - iOS permission checks are async and return `Bool`.
 - Android permission checks return `Flowable<Boolean>`.
 - Flutter permission checks return `bool`.
-- Use the permission constant that matches the action and scope. Permission names differ by platform enum casing, but they map to server permission strings such as `DELETE_MESSAGE`, `EDIT_COMMUNITY_POST`, and `BAN_USER`.
+- Use the permission constant that matches the action and scope. Permission names differ by platform enum casing, but they map to server permission strings such as `DELETE_MESSAGE`, `PIN_MESSAGE`, `EDIT_COMMUNITY_POST`, and `BAN_USER`.
 
 ## Related topics
 
@@ -11285,6 +11285,7 @@ Use chat message APIs to build the message composer, message list, replies, reac
     Load channel messages, replies, filtered message lists, and paginated message collections.
     Edit supported message types, soft-delete messages, and clear failed local messages where supported.
     Let users report or unreport messages for moderation review.
+    Pin one message above a livestream chat and keep it in sync through the channel live object.
 
 ## Message Creation Coverage
 
@@ -14948,6 +14949,404 @@ final count = messagesAroundTarget.length;
     Create messages that appear in the queried subchannel.
     Retrieve or observe one message by ID.
     Update queried messages after creation.
+
+---
+
+### [Pin and Unpin Messages](https://learn.social.plus/social-plus-sdk/chat/messaging-features/messages/pin-message)
+
+> Pin one message in a livestream chat channel, unpin it, and keep the pinned message in sync through the channel live object and realtime events.
+
+Use pin APIs to surface one important message above a livestream chat so every viewer sees it, no matter how fast the feed scrolls. Pin state is owned by the server and exposed on the channel as `pinnedMessage`. A channel holds at most one pinned message at a time.
+
+  Pinning is available on `live` channels only, the channel type attached to a livestream room. The server rejects pin requests on conversation, community, broadcast, standard, and private channels.
+
+## Platform Surface
+
+| Operation | TypeScript | iOS | Android | Flutter |
+| --- | --- | --- | --- | --- |
+| Pin a message | `MessageRepository.pinMessage(messageId)` | `messageRepository.pinMessage(withId:)` | `messageRepository.pinMessage(messageId)` | Not supported |
+| Unpin a message | `MessageRepository.unpinMessage(messageId)` | `messageRepository.unpinMessage(withId:)` | `messageRepository.unpinMessage(messageId)` | Not supported |
+| Read the pinned message | `channel.pinnedMessage` | `channel.pinnedMessage` | `channel.getPinnedMessage()` | Not supported |
+| Pin realtime events | `ChannelRepository.onChannelMessagePinned(...)`, `ChannelRepository.onChannelMessageUnpinned(...)` | Delivered through the channel live object | Delivered through the channel live object | Not supported |
+| Permission constant | `'PIN_MESSAGE'` (`Amity.Permission.PinMessagePermission`) | `AmityPermission.pinMessage` | `AmityPermission.PIN_MESSAGE` | Not supported |
+
+## Parameters
+
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Pin | `messageId` | Yes | TypeScript, iOS, Android | ID of the message to pin. Use the same `messageId` you pass to other message repository functions. |
+| Unpin | `messageId` | Yes | TypeScript, iOS, Android | ID of the message that is currently pinned. Take it from `pinnedMessage.messageId`. The server rejects the call if this message is not the current pin. |
+| Permission check | `channelId` | Yes | TypeScript, iOS, Android | Channel to check the current user's `PIN_MESSAGE` permission in. |
+
+## Who Can Pin
+
+The server authorizes pin and unpin with the `PIN_MESSAGE` channel permission. Default moderator roles carry it, so channel moderators can pin. A livestream host and co-hosts receive the channel moderator role when the room is created or when a co-host joins, so they can pin as well. Network admins with the moderate-channel admin permission can pin from the Console.
+
+A message author cannot pin their own message by authorship alone. Only role holders can pin.
+
+Check the permission before you show a pin control:
+
+
+```typescript TypeScript
+import { Client } from '@amityco/ts-sdk';
+
+const client = Client.createClient('your-api-key', 'sg');
+
+const canPin = client.hasPermission('PIN_MESSAGE').channel(channelId);
+
+if (canPin) {
+  // Show the pin control in the message action menu.
+}
+```
+
+```swift iOS
+Task { @MainActor in
+    let canPin = await client.hasPermission(
+        .pinMessage,
+        forChannel: "channel-id"
+    )
+
+    if canPin {
+        // Show the pin control in the message action menu.
+    }
+}
+```
+
+```kotlin Android
+fun checkPinPermission(channelId: String) {
+    AmityCoreClient.hasPermission(AmityPermission.PIN_MESSAGE)
+        .atChannel(channelId)
+        .check()
+        .doOnNext { canPin: Boolean ->
+            if (canPin) {
+                // Show the pin control in the message action menu.
+            }
+        }
+        .subscribe()
+}
+```
+
+
+On Android the check is a `Flowable` and re-emits when the user's channel membership changes. On iOS the check is one-shot, so re-check it when the channel or room updates and after a `403` response.
+
+  Roles are seeded when a network is created. On a network created before pin support shipped, existing roles may not include `PIN_MESSAGE` until the role backfill has run for that network. Until then the permission check returns `false` and every pin request returns `403`. Contact support if pin controls never appear on an older network.
+
+## Pin A Message
+
+Pin a message in its livestream channel. If another message is already pinned, the new pin replaces it in one step. You do not need to unpin first.
+
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const channel = await MessageRepository.pinMessage(messageId);
+
+renderResults(channel.pinnedMessage);
+```
+
+```swift iOS
+do {
+    let channel = try await messageRepository.pinMessage(withId: "message-id")
+    showSuccessMessage(channel.pinnedMessage?.messageId)
+} catch {
+    handleError(error)
+}
+```
+
+```kotlin Android
+val disposable = messageRepository
+    .pinMessage(messageId = messageId)
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getPinnedMessage()?.getMessageId()) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+
+The call returns the updated channel with the pinned message set. The SDK writes the channel into its cache, so any active channel observer for that channel fires immediately, without waiting for the realtime event.
+
+Pinning the message that is already pinned returns a `400` error. Pinning a deleted message, or a message whose author is banned from the channel or globally banned, also returns `400`. Pin state is unchanged on any error.
+
+## Unpin A Message
+
+Remove the current pin. Pass the `messageId` of the message that is currently pinned.
+
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const channel = await MessageRepository.unpinMessage(messageId);
+
+renderResults(channel.pinnedMessage); // null
+```
+
+```swift iOS
+do {
+    let channel = try await messageRepository.unpinMessage(withId: "message-id")
+    showSuccessMessage(channel.pinnedMessage == nil)
+} catch {
+    handleError(error)
+}
+```
+
+```kotlin Android
+val disposable = messageRepository
+    .unpinMessage(messageId = messageId)
+    .subscribe(
+        { channel -> showSuccessMessage(channel.getPinnedMessage() == null) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+
+The server rejects an unpin with `400` when `messageId` is not the current pin. This is deliberate. A stale client cannot clear a pin that someone else has since replaced. When you receive that error, re-read the channel or rely on the next `channel.messagePinned` event to get the current pin.
+
+Unpin is allowed regardless of stream state, so a moderator can clean up after a stream ends.
+
+## Read The Pinned Message
+
+The pinned message lives on the channel, so observe the channel you already hold for the live chat. The field is `null` when nothing is pinned.
+
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = ChannelRepository.getChannel(
+  channelId,
+  ({ data: channel, loading, error }) => {
+    if (error) handleError(error);
+
+    if (!loading && channel) {
+      renderResults(channel.pinnedMessage ?? null);
+    }
+  },
+);
+
+unsubscribe();
+```
+
+```swift iOS
+let liveChannel = channelRepository.getChannel("channel-id")
+
+token = liveChannel.observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    guard let channel = liveObject.snapshot else { return }
+
+    if let pinned = channel.pinnedMessage {
+        showSuccessMessage(pinned.data?["text"] as? String)
+    } else {
+        // Nothing is pinned. Hide the banner.
+    }
+}
+```
+
+```kotlin Android
+val disposable = channelRepository
+    .getChannel(channelId = channelId)
+    .subscribe(
+        { channel ->
+            val pinned: AmityPinnedMessage? = channel.getPinnedMessage()
+            if (pinned != null) {
+                showSuccessMessage(pinned.getData())
+            } else {
+                // Nothing is pinned. Hide the banner.
+            }
+        },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+
+### Pinned message shape
+
+The pinned message carries a snapshot of the message body plus who pinned it and when. It is not a full message object, so use the fields below rather than message-repository helpers. Android exposes each field through a getter such as `getMessageId()` and `getPinnedAt()`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `messageId` | string | ID of the pinned message. Pass this to the unpin call. |
+| `parentId` | string \| null | Set only when the pinned message is a reply. |
+| `channelId` | string | Internal channel ID. |
+| `channelPublicId` | string | Public channel ID, the value you use with the channel repository. |
+| `messageFeedId` | string | Subchannel the message belongs to. |
+| `segment` | number | Message segment within the subchannel. |
+| `dataType` | string | Message data type. Livestream chat pins text messages. |
+| `data` | object | Message data. For text messages, `{ text }`. |
+| `creatorId` | string | Internal ID of the message author. |
+| `creatorPublicId` | string | Public user ID of the message author. Use it to load the author profile. |
+| `isDeleted` | boolean | Always `false` in practice. The server clears the pin when the message is deleted. |
+| `pinnedBy` | string | Internal ID of the user who pinned the message. |
+| `pinnedAt` | date-time | When the message was pinned. |
+| `createdAt`, `updatedAt` | date-time | Message timestamps. |
+
+The response and the pin event include the pinned message author in their `users` payload, so the author is usually already in the user cache when you render the banner.
+
+## Listen For Pin Changes
+
+Two realtime events arrive on the channel topic that live chat clients already subscribe to. You do not need an extra topic subscription.
+
+| Event | When it fires | Payload |
+| --- | --- | --- |
+| `channel.messagePinned` | A message is pinned, including when a new pin replaces the current one | Full snapshot: `channelId`, `pinnedMessage`, `users` |
+| `channel.messageUnpinned` | The pin is removed, either by a moderator or automatically | `channelId` only |
+
+On every platform the SDK handles both events internally: it updates the cached channel and the channel live object emits. The TypeScript SDK also exposes the two events as callbacks for cases where you need a hook separate from the channel observer. On iOS and Android there is no separate callback. Observe the channel and compare the pinned message ID between emissions to tell a pin from an unpin.
+
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+const unsubscribePinned = ChannelRepository.onChannelMessagePinned((channel) => {
+  renderResults(channel.pinnedMessage);
+});
+
+const unsubscribeUnpinned = ChannelRepository.onChannelMessageUnpinned((channel) => {
+  renderResults(channel.pinnedMessage); // null
+});
+
+unsubscribePinned();
+unsubscribeUnpinned();
+```
+
+```swift iOS
+var currentPinnedMessageId: String?
+
+let liveChannel = channelRepository.getChannel("channel-id")
+
+token = liveChannel.observe { liveObject, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    guard let channel = liveObject.snapshot else { return }
+    let pinned = channel.pinnedMessage
+
+    switch (currentPinnedMessageId, pinned?.messageId) {
+    case (nil, let newId?):
+        // channel.messagePinned: show the banner.
+        showSuccessMessage("Pinned \(newId)")
+    case (let oldId?, let newId?) where oldId != newId:
+        // channel.messagePinned with a replacement: re-render the banner collapsed.
+        showSuccessMessage("Replaced \(oldId) with \(newId)")
+    case (_?, nil):
+        // channel.messageUnpinned, or the pinned message was deleted: hide the banner.
+        showSuccessMessage("Unpinned")
+    default:
+        break
+    }
+
+    currentPinnedMessageId = pinned?.messageId
+}
+```
+
+```kotlin Android
+var currentPinnedMessageId: String? = null
+
+val disposable = channelRepository
+    .getChannel(channelId = channelId)
+    .subscribe(
+        { channel ->
+            val newId = channel.getPinnedMessage()?.getMessageId()
+            val oldId = currentPinnedMessageId
+
+            when {
+                oldId == null && newId != null -> {
+                    // channel.messagePinned: show the banner.
+                    showSuccessMessage("Pinned $newId")
+                }
+                oldId != null && newId != null && oldId != newId -> {
+                    // channel.messagePinned with a replacement: re-render the banner collapsed.
+                    showSuccessMessage("Replaced $oldId with $newId")
+                }
+                oldId != null && newId == null -> {
+                    // channel.messageUnpinned, or the pinned message was deleted: hide the banner.
+                    showSuccessMessage("Unpinned")
+                }
+            }
+
+            currentPinnedMessageId = newId
+        },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+
+Realtime delivery on iOS and Android requires the channel topic to be subscribed, which the live chat already does for the channel it renders. If you observe a channel outside a live chat screen, subscribe to its topic first as described in [Chat Realtime Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/chat-realtime-events).
+
+Treat every `messagePinned` payload as the full current state and apply the last one you receive. Do not treat it as an increment. Replacing a pin emits one `messagePinned` event with the new message, not an unpin followed by a pin.
+
+### Automatic unpin
+
+The server clears the pin and emits `channel.messageUnpinned` when:
+
+- The pinned message is deleted.
+- The pinned message author is banned from the channel or globally banned. The author's messages are deleted as part of the ban.
+
+A community ban does not affect the pin. The SDK also clears the cached pinned message when it receives a `message.deleted` event for the pinned message, so the channel stays correct even if the unpin event is missed.
+
+  Realtime events are not replayed after a reconnect. A client that was offline while the pin changed receives nothing on reconnect. Read the channel again after reconnecting and use the channel's pinned message as the source of truth.
+
+## Server Rules And Errors
+
+| Condition | Result |
+| --- | --- |
+| Caller lacks `PIN_MESSAGE` and is not an admin with the moderate-channel permission | `403` permission denied. The TypeScript SDK also refreshes the caller's channel permissions so the next permission check reflects a revoked role. |
+| Message or channel not found | `404` |
+| Message is deleted | `400` |
+| Message is already pinned (pin) | `400` |
+| Message is not the current pin (unpin) | `400` |
+| Message author is channel-banned or globally banned (pin) | `400` |
+| Channel type is not `live` (pin) | `400` |
+| Visitor or bot attempts to pin | Visitor or bot permission denied |
+
+Pin state is never changed by a failed request, so a client does not need to roll anything back. Re-read the channel, or wait for the next event, and render what it says.
+
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+try {
+  await MessageRepository.pinMessage(messageId);
+} catch (error) {
+  // The pin did not change. Hide the pin control after a 403,
+  // and let the channel observer keep the banner in sync.
+  handleError(error);
+}
+```
+
+```swift iOS
+do {
+    _ = try await messageRepository.pinMessage(withId: "message-id")
+} catch {
+    // The pin did not change. Re-check hasPermission(.pinMessage, forChannel:)
+    // after a 403, and let the channel observer keep the banner in sync.
+    handleError(error)
+}
+```
+
+```kotlin Android
+val disposable = messageRepository
+    .pinMessage(messageId = messageId)
+    .subscribe(
+        { /* Channel observer renders the new pin. */ },
+        { error ->
+            // The pin did not change. The permission Flowable re-emits after a 403,
+            // and the channel observer keeps the banner in sync.
+            handleGeneralError(error)
+        },
+    )
+```
+
+
+## Related Topics
+
+    Observe the channel live object that carries the pinned message.
+    Check `PIN_MESSAGE` and other channel permissions before showing controls.
+    Ready-made pin action and pinned message banner in the livestream chat.
 
 ## Chat — Engagement
 
@@ -41226,6 +41625,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Interactive viewer interface
     - Stream status and engagement features
     - Live Chat (community only)
+    - Pinned message in live chat (community only)
 
 
     **Broadcast control and administration**
@@ -41298,6 +41698,7 @@ For developers who want to understand the underlying analytics capabilities or i
 | Stream Viewing                                               | ✅  | ✅      | ✅          | -       | ✅           |
 | Co-Streaming<br />(Community)                                | ✅  | ✅      | ✅          | -       | -            |
 | Live Stream Chat & Moderation<br />(Community)               | ✅  | ✅      | ✅          | -       | -            |
+| Pin Message in Live Chat<br />(Community)                    | 🚧  | 🚧      | ✅          | -       | -            |
 | Watching Now Viewer Count<br />                              | ✅  | ✅      | ✅          | -       | -            |
 | Livestream Analytics<br />(Watch Minutes)                    | ✅  | ✅      | ✅          | -       | -            |
 | Playback Controls<br />(tap-to-reveal, pause live, 10s skip) | ✅  | ✅      | ✅          | 🚧      | 🚧           |
@@ -42191,6 +42592,186 @@ Product tagging in livestreams uses two shared UIKit components. See [Product Ta
 | `ManageProductTagListComponent` | Managing tagged products with pin/unpin and remove controls (host/co-host view); browsing products in read-only overlay (viewer and replay view) |
 
 The `ProductTagSelectionComponent` in `livestream` mode has a higher product limit (up to 20 total) and a different header label ("Add products") compared to post mode. The `ManageProductTagListComponent` in `playback` render mode disables pin controls for the post-live replay experience.
+
+## Pinned Messages
+
+A host, co-host, or moderator can pin one chat message during a livestream so it stays visible above the live chat for every viewer, no matter how fast the feed scrolls. Use it for rules, a promo code, a link, or an announcement.
+
+  <img
+    src="/images/livestream-pinned-message-collapsed.png"
+    alt="Livestream chat with a collapsed pinned message banner above the feed"
+    style={{ maxWidth: "36%", display: "inline-block", margin: "0 2%" }}
+  />
+  <img
+    src="/images/livestream-pinned-message-expanded.png"
+    alt="Livestream chat with the pinned message banner expanded to show the full text"
+    style={{ maxWidth: "36%", display: "inline-block", margin: "0 2%" }}
+  />
+
+### Who Can Pin
+
+| Role | Pin from the ⋮ menu | Unpin with the banner "X" | Sees the banner |
+| --- | --- | --- | --- |
+| Host | ✅ | ✅ | ✅ |
+| Co-host | ✅ | ✅ | ✅ |
+| Moderator or any role with `PIN_MESSAGE` | ✅ | ✅ | ✅ |
+| Viewer, including muted viewers | — | — | ✅ |
+
+The UIKit shows the pin controls when the current user is the host or a co-host, or holds `PIN_MESSAGE` in the live chat channel, and the room is live. The server enforces the permission on every request. If a user's role is revoked mid-stream, their next pin or unpin returns `403`, the UIKit refreshes their permissions, and the controls disappear without an error message.
+
+### Pinning Behavior
+
+- **Pin from the message menu.** "Pin message" appears at the top of a message's ⋮ menu, above "Report message" and "Delete message". It is hidden on deleted messages and on messages that failed to send. There is no confirmation dialog.
+- **One pin at a time.** Pinning another message replaces the current pin in one step. The previous message loses its banner and stays in the feed.
+- **The original message never moves.** Pinning only adds the banner. No pin indicator is drawn on the message inside the feed, and the feed is not reordered.
+- **Unpin from the banner.** The "X" on the banner is the only unpin control and is shown only to users who can pin. There is no "Unpin" item in the ⋮ menu.
+- **Live only.** The banner and the pin controls exist only while the room status is live. When the stream is idle, ended, or in recorded playback, the banner is not rendered even if the channel still has a pinned message.
+- **Automatic unpin.** When the pinned message is deleted, or its author is banned from the channel or globally banned, the server clears the pin. The banner disappears for everyone and the message shows the "This message was deleted." placeholder in the feed. A community ban does not affect the pin.
+- **Muted authors.** A muted user's message can be pinned and unpinned. The banner shows the muted indicator next to the author with the same visibility rules as message bubbles.
+
+### Pinned Message Banner
+
+The banner renders at the top of the chat column, above the feed and above the pinned product card. Messages scroll behind it.
+
+| Part | Description |
+| --- | --- |
+| Byline | Author display name with the brand, host, co-host, or moderator badge, and the muted indicator when the author is muted |
+| "Pinned" pill | Thumbtack icon with the "Pinned" label, right-aligned |
+| Text | Every new pin renders collapsed to one line with an ellipsis and a trailing "more" indicator. Text that fits on one line shows no indicator. |
+| "X" | Unpin control, shown only to users who can pin |
+
+**Tap the bubble to expand or collapse.** The whole bubble is the tap target. "more" and "less" are passive labels, not buttons. Tapping anywhere on a collapsed banner expands it to the full text with a trailing "less" indicator. Tapping again collapses it. A replacing pin always starts collapsed. On mobile the chat column grows upward as the banner expands, and taps on the banner do not toggle the video controls.
+
+### Customization Options
+
+The pin controls and the banner use the `livestream_chat_feed` component ID. Existing `livestream_chat` keys for the compose bar and theme keep working.
+
+| Config ID | Type | Description |
+| --- | --- | --- |
+| `livestream_chat_feed/*/pinned_message_banner` | Element | Customize or exclude the pinned message banner |
+| `livestream_chat_feed/*/pin_message_button` | Element | Customize or exclude the "Pin message" item in the message ⋮ menu |
+| `livestream_chat_feed/*/unpin_message_button` | Element | Customize or exclude the "X" unpin control on the banner |
+
+| Theme token | Default | Description |
+| --- | --- | --- |
+| `live_stream_chat_bubble_pinned_color` | `rgb(41 43 50 / 30%)` | Background of the pinned message banner |
+| `live_stream_chat_pinned_badge_color` | `rgb(99 104 120 / 50%)` | Background of the "Pinned" pill |
+
+| Localization key (Web) | Default |
+| --- | --- |
+| `amity_livechat_pinned_message_pin_button` | Pin message |
+| `amity_livechat_pinned_message_unpin_button` | Unpin message |
+| `amity_livechat_pinned_message_badge` | Pinned |
+| `amity_livechat_pinned_message_more` | more |
+| `amity_livechat_pinned_message_less` | less |
+
+### Code Examples
+
+The pin action and the banner are built into the livestream chat, so the pages you already use render them. The viewer sees them on the livestream player page and the streamer sees them on the broadcast view. There is nothing to mount separately. Use the config keys above to relabel or exclude the controls and to recolor the banner.
+
+
+```tsx React
+import React from 'react';
+import { AmityUiKitProvider, AmityLiveStreamPlayerPage } from '@amityco/ui-kit';
+
+// Pin controls appear automatically for hosts, co-hosts, and PIN_MESSAGE holders.
+const config = {
+  theme: {
+    light: {
+      live_stream_chat_bubble_pinned_color: 'rgb(41 43 50 / 30%)',
+      live_stream_chat_pinned_badge_color: 'rgb(99 104 120 / 50%)',
+    },
+    dark: {
+      live_stream_chat_bubble_pinned_color: 'rgb(41 43 50 / 30%)',
+      live_stream_chat_pinned_badge_color: 'rgb(99 104 120 / 50%)',
+    },
+  },
+  // Hide a control entirely by excluding its element key.
+  excludes: [],
+  customizations: {
+    'livestream_chat_feed/*/pin_message_button': { text: 'Pin message' },
+    'livestream_chat_feed/*/unpin_message_button': { text: 'Unpin message' },
+    'livestream_chat_feed/*/pinned_message_banner': {},
+  },
+};
+
+const LivestreamViewer = ({ post }) => (
+  <AmityUiKitProvider
+    apiKey="API_KEY"
+    apiRegion="API_REGION"
+    userId="userId"
+    displayName="displayName"
+    configs={config}
+  >
+    <AmityLiveStreamPlayerPage post={post} />
+  </AmityUiKitProvider>
+);
+
+export default LivestreamViewer;
+```
+
+```json iOS config.json
+{
+  "excludes": [],
+  "customizations": {
+    "livestream_chat_feed/*/pin_message_button": { "text": "Pin message" },
+    "livestream_chat_feed/*/pinned_message_banner": {},
+    "livestream_chat_feed/*/unpin_message_button": {}
+  }
+}
+```
+
+```swift iOS
+// The pinned message banner renders inside the livestream player page
+// and the broadcast view. No extra wiring is needed.
+let livestreamPlayer = AmityLivestreamPlayerPage(post: post)
+let viewController = AmitySwiftUIHostingController(rootView: livestreamPlayer)
+navigationController?.pushViewController(viewController, animated: true)
+```
+
+```json Android config.json
+{
+  "excludes": [],
+  "customizations": {
+    "*/livestream_chat_feed/pin_message_button": { "text": "Pin message" },
+    "*/livestream_chat_feed/pinned_message_banner": {},
+    "*/livestream_chat_feed/unpin_message_button": {}
+  }
+}
+```
+
+```kotlin Android
+// The pinned message banner renders inside the livestream player page
+// and the broadcast view. No extra wiring is needed.
+@Composable
+fun composeLivestreamPlayerPage(post: AmityPost) {
+    AmityLivestreamPlayerPage(
+        post = post,
+    )
+}
+```
+
+
+  Android writes the component ID in the middle slot of a config key (`*/livestream_chat_feed/pin_message_button`). iOS and Web write it first (`livestream_chat_feed/*/pin_message_button`). To remove a control, add its key to `excludes`. Excluding `unpin_message_button` keeps the banner visible but removes the "X" for everyone.
+
+### Error Handling
+
+Pin and unpin failures are silent by design. No toast or dialog is shown. The ⋮ menu closes, the pin state is unchanged, and the banner keeps following the channel.
+
+| Scenario | What the viewer sees |
+| --- | --- |
+| Network failure on pin or unpin | Nothing pin-specific. The existing "No internet connection." indicator applies when the device is offline. |
+| Pin a message that was deleted concurrently | No pin is applied. The message row becomes the "This message was deleted." placeholder. |
+| Pin or unpin after the user's role was revoked | Nothing. The pin controls are hidden from the next menu open onward. |
+| Unpin a message that is no longer the current pin | Nothing. The banner already shows the newer pin. |
+
+### Limits
+
+| Limit | Value |
+| --- | --- |
+| Pinned messages per channel | 1 |
+| Supported message type | Text |
+| Channel type | `live` channels only |
 
 ## Playback Controls
 
@@ -64754,6 +65335,7 @@ erDiagram
     | `messageAutoDeleteEnabled`     | boolean   | Whether auto-delete by flag threshold is enabled.                                  |
     | `autoDeleteMessageByFlagLimit` | number    | Flag count threshold for auto-deletion.                                            |
     | `messagePreviewId`             | string    | _(Computed)_ ID of the latest message preview.                                     |
+    | `pinnedMessage`                | object    | The channel's single pinned message (`live` channels only). `null` when nothing is pinned. Carries the message body plus `pinnedBy` and `pinnedAt`. |
     | `attachedTo`                   | object    | Linked resources: `{postId, videoStreamId, roomId}`.                               |
     | `isDeleted`                    | boolean   | Soft-delete flag.                                                                  |
     | `createdAt`                    | date-time | Creation timestamp.                                                                |
