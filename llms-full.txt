@@ -9591,18 +9591,18 @@ func playbackSource(for room: AmityRoom) -> String? {
 
 Three modes are available. They apply to viewers only — **hosts and co-hosts always see the actual count regardless of mode**.
 
-| Mode | Wire value | Threshold applied | Viewer behavior |
-| --- | --- | --- | --- |
-| `alwaysShow` | `"always"` | No | Count is always visible. Default for never-configured networks. Matches the previous behavior. |
-| `hideEntirely` | `"hidden"` | No | Viewers never see the count. Hosts and co-hosts still see it. |
-| `showAboveMinimum` | `"above-minimum"` | Yes (inclusive) | Viewers see the count only when `count >= threshold`. |
+| Mode | Threshold applied | Viewer behavior |
+| --- | --- | --- |
+| `alwaysShow` | No | Count is always visible. Default for never-configured networks. |
+| `hideEntirely` | No | Viewers never see the count. Hosts and co-hosts still see it. |
+| `showAboveMinimum` | Yes (inclusive) | Viewers see the count only when `count >= threshold`. |
 
 ## Config Model
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `mode` | `AmityLiveViewerCountMode` | Selected display mode. |
-| `threshold` | `Int` | Positive integer in `[1, 1000]`. **Always present**, default `50`. Applied only under `showAboveMinimum`; retained (but not applied) under `alwaysShow` / `hideEntirely` so admins can flip modes without losing the value. |
+| `threshold` | `Int` | Positive integer in `[1, 1000]`. **Always present**, default `50`. Applied only under `showAboveMinimum`. |
 
 ## Read the Config
 
@@ -9710,22 +9710,6 @@ Within a single mount, the visibility state still reacts to two things:
 - **Count ticks.** Under `showAboveMinimum`, if the viewer count crosses the threshold naturally, the count appears or disappears without a rejoin.
 - **Role changes.** A viewer promoted to co-host mid-stream immediately sees the actual count — no rejoin needed.
 
-```mermaid
-sequenceDiagram
-  participant Admin
-  participant BE as Backend
-  participant SDK as AmityClient
-  participant Viewer as Existing viewer
-  participant NewMount as Viewer on next mount
-  Admin->>BE: Update viewer count config
-  BE-->>Admin: OK
-  Note over Viewer: Keeps prior visibility state — no live update
-  NewMount->>SDK: getLiveViewerCountConfig()
-  SDK->>BE: GET network setting
-  BE-->>SDK: Latest config
-  SDK-->>NewMount: Applied for the life of this mount
-```
-
 ## Threshold Constraints
 
 | Constraint | Value |
@@ -9735,35 +9719,18 @@ sequenceDiagram
 | Default | `50` |
 | Maximum | `1000` |
 | Comparison | Inclusive (`count >= threshold`) |
-| Retention across mode changes | The threshold is retained under `alwaysShow` / `hideEntirely`. Admins can flip back to `showAboveMinimum` without re-entering the value. |
 
   The Console clamps admin-entered values on save: values above `1000` are clamped to `1000`; values below `1` (or empty) reset to `1`. Zero is explicitly rejected — use `alwaysShow` for "always visible" instead.
 
 ## Defaults
 
-- Never-configured networks read as `{ mode: alwaysShow, threshold: 50 }` — the backend merges defaults at read time.
-- Tenants previously hidden via a support ticket migrate to `hideEntirely`.
-- No client-side fallback is required for absent fields.
-
-## Caching
-
-No client-side cache is required. Writes evict the network-setting cache on the backend, so every read after a write returns the current value. The SDK may keep an in-memory session cache as a network-cost optimization, but every livestream mount must observe the value that was current at mount time.
+Never-configured networks read as `{ mode: alwaysShow, threshold: 50 }` — the backend merges defaults at read time, so no client-side fallback is required for absent fields. Every read after an admin change returns the current value; no client-side cache is required.
 
 ## Error Handling
 
-The element that consumes this API (the UIKit `LiveViewerCountElement`) fails open — on any error, it behaves as `alwaysShow` so today's behavior is never silently regressed.
-
-| Situation | SDK behavior | Effective config |
-| --- | --- | --- |
-| Network error on cold read | Rejects with the platform's standard network error | Fail open to `{ alwaysShow, 50 }` |
-| Server error (5xx) | Rejects with the platform's standard server error | Fail open to `{ alwaysShow, 50 }` |
-| Unknown mode | Falls back to `alwaysShow`; a valid threshold in `[1, 1000]` is retained | `{ alwaysShow, <threshold> }` |
-| Missing or out-of-range threshold, under any mode | Returns the default config and discards the selected mode | `{ alwaysShow, 50 }` |
-| Never-configured network | Returns `{ alwaysShow, 50 }` — defaults are backend-merged | `{ alwaysShow, 50 }` |
+On any read error or malformed config, **fail open** — behave as `alwaysShow` (the UIKit `LiveViewerCountElement` does this automatically), so today's behavior is never silently regressed.
 
   Never treat a config error as a reason to hide the count. If the admin never selected `hideEntirely`, viewers should still see it. Fail open, always.
-
-  Fail-open applies even when the mode itself parsed cleanly: a `hideEntirely` config carrying a missing or out-of-range threshold resolves to `{ alwaysShow, 50 }`, so viewers see a count on a network whose admin chose to hide it. Threshold validation runs before the mode is read.
 
 ## UIKit Integration
 
@@ -34217,15 +34184,7 @@ Posts with **two or more** images or videos are displayed as a horizontally **sw
 
 ### Frame Ratio
 
-The carousel picks **one** frame shape from the **first** attachment and locks it for every frame, so the post height never shifts as members move through the carousel. The shape is chosen from the source's width-to-height ratio, evaluated as **ordered bands** — not a simple "wider than tall" test, which would push near-square media to the wrong shape:
-
-| Source ratio (`width / height`) | Frame shape |
-| --- | --- |
-| `ratio ≥ 1.25` | **16:9** — landscape |
-| `0.80 < ratio < 1.25` | **1:1** — square |
-| `ratio ≤ 0.80` | **4:5** — portrait |
-
-Each frame is cropped to fill the locked shape; the full-screen viewer shows each item at its original aspect ratio. For **videos**, the file's rotation is applied to the stored dimensions before classifying, so a portrait clip is never locked into a landscape frame. In the composer, if the first attachment is removed, the shape re-derives from the new first attachment.
+The carousel picks **one** frame shape from the **first** attachment — landscape (16:9), square (1:1), or portrait (4:5) — and locks it for every frame, so the post height never shifts as members move through the carousel. Each frame is cropped to fill the locked shape, while the full-screen viewer shows each item at its original aspect ratio. Portrait videos keep their orientation. In the composer, if the first attachment is removed, the shape re-derives from the new first attachment.
 
 ### Composer Preview
 
@@ -41319,6 +41278,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Interactive viewer interface
     - Stream status and engagement features
     - Live Chat (community only)
+    - Picture-in-Picture on leaving the player (iOS & Android)
 
 
     **Broadcast control and administration**
@@ -41394,6 +41354,7 @@ For developers who want to understand the underlying analytics capabilities or i
 | Watching Now Viewer Count<br />                              | ✅  | ✅      | ✅          | -       | -            |
 | Livestream Analytics<br />(Watch Minutes)                    | ✅  | ✅      | ✅          | -       | -            |
 | Playback Controls<br />(tap-to-reveal, pause live, 10s skip) | ✅  | ✅      | ✅          | 🚧      | 🚧           |
+| Picture-in-Picture<br />(floating window on leaving the player)| ✅  | ✅      | -           | 🚧      | 🚧           |
 
   Livestream creation and co-host streaming on web is supported only on desktop
   view. On mobile web, only viewing livestreams is supported.
@@ -42374,6 +42335,57 @@ flowchart TD
   On desktop web, playback controls are a **UI refresh only** — icons are
   updated and the skip amount changes from 15s to 10s. Click-to-toggle,
   hover-to-reveal, mute, and fullscreen behavior are unchanged.
+
+## Picture-in-Picture
+
+Picture-in-Picture (PiP) keeps a livestream playing in a small floating window when the viewer leaves the player — by backgrounding the app or navigating to another page, such as opening a tagged product. Both live streams and recorded livestreams can float, and playback continues uninterrupted as the viewer moves away and back.
+
+  PiP uses each platform's **native system Picture-in-Picture window**, so its size, position, styling, and gestures come from the operating system. **iOS and Android only** — no configuration is required to turn it on. Broadcasters (host, co-host, and backstage) are excluded so they stay in the app to keep streaming.
+
+### Window controls
+
+Controls inside the floating window are drawn by the operating system. Android and iOS behave slightly differently:
+
+| Control        | Android              | iOS                                    |
+| -------------- | -------------------- | -------------------------------------- |
+| Play / pause   | ✅ (recorded & live) | ✅ recorded — on live, shown but inactive |
+| Skip ±10s      | ✅ recorded only     | ✅ recorded — on live, shown but disabled |
+| Expand / close | ✅                   | ✅                                     |
+
+On a live stream there is nothing to seek or hold past the live edge, so the skip and pause controls have no effect there. Mute is not available in the window on either platform — the device volume controls serve that purpose.
+
+### Returning to the full player
+
+- Expanding the window returns to the full player with playback continuing — the stream is not restarted, and a recording keeps its position.
+- Live streams resume at the **live edge** rather than replaying the buffered part.
+- Chat reloads at the latest messages on return.
+- If the stream ends or is removed while floating, playback stops in the window and the reason (ended, terminated, or restricted) is shown when the viewer expands it.
+- Closing the window stops playback.
+
+### Setup
+
+| Platform    | Required setup                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Android** | None. UIKit declares Picture-in-Picture support in its own manifest, which merges into your app automatically.       |
+| **iOS**     | Enable the **Background Modes** capability with *Audio, AirPlay, and Picture in Picture*. Without it, PiP never starts. |
+
+**Minimum OS:** Android 12 (API 31) or iOS 14.2 for full support. Below that, playback stops when the viewer leaves the player, as it did before PiP.
+
+  Viewers can turn Picture-in-Picture off in their device settings. When it is off, leaving the player simply stops playback with no error. The two platforms differ: the **Android** setting blocks every trigger including in-app navigation, while the **iOS** setting only blocks automatic entry on backgrounding. Neither platform exposes this setting to the app, so it cannot be detected in advance.
+
+### Platform Support
+
+| Feature                            | iOS | Android | Web | Flutter | React Native |
+| ---------------------------------- | --- | ------- | --- | ------- | ------------ |
+| Float on backgrounding             | ✅  | ✅      | —   | 🚧      | 🚧           |
+| Float on in-app navigation         | ✅  | ✅      | —   | 🚧      | 🚧           |
+| Live and recorded playback         | ✅  | ✅      | —   | 🚧      | 🚧           |
+| Expand back to the full player     | ✅  | ✅      | —   | 🚧      | 🚧           |
+| Broadcasters excluded              | ✅  | ✅      | —   | 🚧      | 🚧           |
+
+**Legend:** ✅ Supported | 🚧 Planned | — Not applicable
+
+  The floating window cannot be branded or restyled — it is rendered by the operating system, so its colors, placement, and gestures are outside UIKit's control.
 
 ## Related Components
 
@@ -66020,6 +66032,56 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   ## 🚀 New Features
 
+  #### Configurable Search Fields
+
+  Added an opt-in `searchBy` option to user search (and channel-member search) so you can restrict which fields the keyword is matched against.
+
+  - New enum `AmitySearchUserBy` (`DISPLAY_NAME`, `PROFILE_HANDLE`, `USER_ID`) in `com.amity.socialcloud.sdk.model.core.search`.
+  - New builder method `AmityUserSearch.Builder.searchBy(List<AmitySearchUserBy>)`.
+  - Omitting `searchBy` keeps the existing default matching, so existing integrations are unaffected.
+
+  #### Video Rotation & Dimensions
+
+  Video rotation and dimensions are now exposed, and `getVideoUrl` no longer hangs.
+
+  #### Live Viewer Count Configuration
+
+  Added `getLiveViewerCountConfig` to `AmityCoreClient`.
+
+  #### v4 Sessions
+
+  `loginWithAccessToken` now verifies the access token against v4 sessions and persists the caller's user type from the login response.
+
+  ## ✨ Improvements
+
+  - Capped the MQTT v5 session expiry at 1800s.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 23 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Android Paging Data Library | 3.4.2 |
+      | Firebase IID | 21.1.0 |
+      | Firebase Messaging | 23.0.0 |
+      | Gradle Plugin | 8.6.1 |
+      | Gson | 2.9.0 |
+      | HiveMQ MQTT Client | 1.3.1-beta01 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.9.2 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+      | SQLCipher | 4.9.0 |
+
+
+  ## 🚀 New Features
+
   #### Channel Moderation Permissions
 
   Added the `BAN_USER_FROM_CHANNEL` and `MUTE_USER_INSIDE_CHANNEL` permissions for per-channel moderation.
@@ -67402,6 +67464,39 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
 
   ## 🚀 New Features
 
+  #### Configurable Search Fields
+
+  Added a search user type and a `searchBy` option to control which fields user search matches.
+
+  #### Livestream Viewer Configuration
+
+  Added livestream viewer configuration.
+
+  #### v4 Sessions
+
+  Updated the `loginWithAccessToken` API endpoint to use v4 sessions.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the avatar relationship not clearing when `avatarFileId` is emptied.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Alamofire | 5.7.1 |
+      | CocoaAsyncSocket | 7.6.5 - Hash: 2129f84 |
+      | CocoaMQTT | 3.1.1 - Hash: 2731e27 |
+      | Starscream | 3.1.1 |
+
+
+  ## 🚀 New Features
+
   #### Event Posts
 
   Added event-post support: an event shared to a community feed is delivered as a post (post `dataType` `event`), resolves through the event repository, and renders alongside regular posts.
@@ -68624,6 +68719,29 @@ let options = AmityChannelQueryOptions(
 
 This page is checked against `@amityco/ts-sdk` package metadata and the TypeScript SDK source changelog in `AmityTypescriptSDK/CHANGELOG.md`.
 
+  ## 🚀 New Features
+
+  #### v4 Sessions
+
+  Migrated `loginWithAccessToken` to v4 sessions.
+
+  #### Skip Token Renewal for Banned Users
+
+  Token renewal is now skipped for globally banned users.
+
+  ## 🐞 Bug Fixes
+
+  - No longer builds a cache key from an id the payload left null.
+  - Capped the MQTT v5 session expiry at 1800s.
+  - Typed the video file metadata.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>=v12 |
+      | NPM | \>=v6 |
+
   ## ✨ Improvements
 
   - Maintenance release published as part of the 28 August coordinated release. No new functional changes since 7.25.0.
@@ -68942,7 +69060,100 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## ✨ Improvements
+## 🚀 New Features
+
+  #### Picture-in-Picture
+
+  Added Picture-in-Picture for live and recorded livestream playback, so the stream keeps playing in a floating window when the viewer backgrounds the app or navigates elsewhere.
+
+  #### Media Carousel
+
+  Posts with two or more images or videos now render as a swipeable media carousel, in both the feed and the composer preview.
+
+  #### Livestream Viewer Count
+
+  The livestream viewer count is now shown based on your network configuration.
+
+  #### Customizable Chat Taps
+
+  Chat mention taps and avatar taps are now reachable through behavior overrides, so you can route them to your own screens.
+
+  #### Pinned & Featured Post Badges
+
+  Pinned and featured posts now render a read-only badge in the feed. Pinning and featuring are managed in the Console; UIKit displays the state.
+
+  ## ✨ Improvements
+
+  - Adopted the SDK's new `searchBy` capability for more accurate user search — results now match display names, so user-ID-only matches no longer appear. The same applies to @mention search in chat, posts, and comments.
+  - Upgraded the Social Plus SDK dependency to 7.26.0.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the media carousel resetting to the first frame on a feed reload and keeping its state consistent.
+  - Refined the product tag badge (anchored it to the media, and fixed its glyph and empty variant).
+  - Retry a failed media upload on tap and on reconnect.
+  - Added playback time and a playable source to the composer video player.
+  - Restored the live chat height on the room host page.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.26.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## 🚀 New Features
+
+  #### Customizable Chat Taps
+
+  Chat mention taps and avatar taps are now reachable through behavior overrides, so you can route them to your own screens. Backported to the 4.25.x line.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSDKVersion | 24 |
+      | targetSDKVersion | 36 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | Amity-Social-Cloud-SDK | 7.25.0 |
+      | Android Paging Data Library | 3.4.2 |
+      | Camera2 | 1.5.1 |
+      | Coil | 3.0.0 |
+      | Compose BOM | 2025.11.01 |
+      | Compose Paging Data | 3.4.2 |
+      | Glide | 4.12.0 |
+      | Gson | 2.9.0 |
+      | HiveMQ mqtt client | 1.3.1 |
+      | Kotlin-coroutines | 1.7.0 |
+      | Kotlin-std-lib | 2.2.0 |
+      | Media 3 | 1.1.0 |
+      | OKHTTP3 | 4.11.0 |
+      | Retrofit2 | 2.9.0 |
+      | Room | 2.8.1 |
+      | RxJava3 | 3.1.5 |
+
+  ## ✨ Improvements
 
   - Upgraded the Social Plus SDK dependency to 7.25.0.
   - The community Notifications setting is now hidden when notifications aren't available for the community, matching iOS.
@@ -70271,6 +70482,46 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   ## 🚀 New Features
 
+  #### Picture-in-Picture
+
+  Added Picture-in-Picture for live and recorded livestream playback, so the stream keeps playing in a floating window when the viewer backgrounds the app or navigates elsewhere.
+
+  #### Media Carousel
+
+  Posts with two or more images or videos now render as a swipeable media carousel, in both the feed and the composer preview.
+
+  #### Livestream Viewer Count
+
+  The livestream viewer count is now shown based on your network configuration.
+
+  #### Customizable Chat Taps
+
+  Chat mention taps and avatar taps are now reachable through behavior overrides, so you can route them to your own screens.
+
+  ## ✨ Improvements
+
+  - Adopted the SDK's new `searchBy` capability for more accurate user search — results now match display names, so user-ID-only matches no longer appear. The same applies to @mention search in posts and comments.
+
+  ## 🐞 Bug Fixes
+
+  - Fixed the media carousel index not resetting after a feed refresh.
+  - Fixed channel avatar parsing on chat pages.
+  - Prevented Picture-in-Picture from activating on the report-reason screen and while a bottom sheet is open on a livestream.
+  - Chat links now follow the existing link-opening behavior.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 14.0 |
+      | Xcode | 26.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | AmitySDK | 8.7.0 |
+
+  ## 🚀 New Features
+
   #### Event Posts
 
   Added event posts — share an event to the community feed, where it renders as an event post card that opens the event on tap.
@@ -71021,6 +71272,52 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 ## 🚀 New Features
 
+  #### Media Carousel
+
+  Posts with two or more images or videos now render as a swipeable media carousel, in both the feed and the composer preview.
+
+  ## ✨ Improvements
+
+  - Upgraded the Social Plus SDK dependency (`@amityco/ts-sdk-react-native`) to 7.27.0.
+
+  ## 🐞 Bug Fixes
+
+  - Media carousel: reset to the first frame on a feed reload and when the feed regains focus, and keep the index in range when frames are removed.
+  - Post composer: fixed media upload failures, per-item gating and retry, stable media identity for de-duplication, and edit-mode media resolution.
+  - Media viewer: carry the sound setting across carousel frames, and inset the header by the top safe area.
+  - Stopped showing the default avatar as a video thumbnail.
+  - Fixed the carousel play icon and the video frame ratio.
+  - Gate pending-post accept/decline and the author banner on the community moderator role.
+  - Reject an offline upload up front instead of leaving it pending.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | React | 19 |
+      | React Native | 0.82.1 |
+      | Node.js | ≥ 20 |
+      | NPM | ≥ 6 |
+      | Yarn | ≥ 1.22.15 |
+      | JDK | ≥ 17.0.10 |
+      | Kotlin | 2.0.21 |
+
+      | Config | Version |
+      | :-- | :-- |
+      | Minimum Target | 15.1 |
+
+      | Config | Version |
+      | :-- | :-- |
+      | minSdkVersion | 24 |
+      | compileSdkVersion | 35 |
+      | buildToolsVersion | 35.0.0 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | @amityco/ts-sdk-react-native | 7.27.0 |
+
+  ## 🚀 New Features
+
   #### Visitor Mode
 
   Added visitor mode with enhanced daily usage-limit handling, including a `VisitorUsageLimit` page exported from the public API. Non-members now see an engagement bar with gated like and comment actions that prompt a sign-in toast.
@@ -71663,7 +71960,38 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
 > On this page, you will find an overview of all relevant changes to the Social Plus UIKit
 
-## 🐞 Bug Fixes
+## 🚀 New Features
+
+  #### Media Carousel
+
+  Posts with two or more images or videos now render as a swipeable media carousel, in both the feed and the composer preview.
+
+  ## ✨ Improvements
+
+  - Adopted the SDK's new `searchBy` capability for more accurate user search — results now match display names, so user-ID-only matches no longer appear.
+
+  ## 🐞 Bug Fixes
+
+  - Gate moderation actions by permission.
+  - Auto-retry a failed media upload.
+  - Show the terminated and ended-livestream screens instead of a broken player.
+  - Invite member: hide the default user list, and add a no-users-available state and a search placeholder.
+  - Fixed the blocked-user header padding and size, the single-line group name, the comment placeholder, and the camera video-capture option.
+  - Hide the product tag when product tags are disabled.
+
+  ## 🧩 Compatibility
+
+      | Config | Version |
+      | :-- | :-- |
+      | NodeJS | \>= v16 |
+      | PNPM | \>= v8 |
+      | React | \>= v18 |
+
+      | Library | Version |
+      | :-- | :-- |
+      | @amityco/ts-sdk | 7.27.0 |
+
+  ## 🐞 Bug Fixes
 
   - Fixed the post title not rendering on the post-review page.
   - Restored the invite-co-host button style, and fixed the livestream moderator badge updating on role change.
