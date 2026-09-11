@@ -1690,8 +1690,12 @@ if (userType === UserTypeEnum.VISITOR || userType === UserTypeEnum.BOT) {
 ```typescript
 // Visitors are automatically filtered from user queries
 // Your queries return only signed-in users
-const users = await UserRepository.searchUserByDisplayName({ displayName: 'John' });
-// Returns: only SIGNED_IN users, no VISITOR or BOT users
+const unsubscribe = UserRepository.searchUsers(
+  { displayName: 'John' },
+  ({ data: users }) => {
+    // users contains only SIGNED_IN users, no VISITOR or BOT users
+  },
+);
 ```
 
 
@@ -3428,14 +3432,33 @@ This page covers two user-list operations. Choose the operation first, then use 
 
 Use search when the user types a display-name keyword. Search keywords must be at least 3 characters long. When a keyword is provided, the server ranks matching results by search relevance; supported sort options can then control the returned order.
 
+### Selecting which fields to match (`searchBy`)
+
+By default the keyword is matched against **all** searchable user fields (display name, user id, and profile handle), so a keyword can surface users that match only by their user id. Provide `searchBy` to restrict which fields are matched — for example, display name only — so results exclude user-id-only matches.
+
+- Omitting `searchBy` (or passing an empty value) keeps the default behavior, so existing integrations are unaffected.
+- Supported field options: `displayName`, `userId`, `profileHandle`.
+
+| Field | Platforms | TypeScript | iOS | Android |
+| --- | --- | --- | --- | --- |
+| Display name | TypeScript, iOS, Android | `SearchUsersByEnum.DISPLAY_NAME` | `.displayName` | `AmitySearchUserBy.DISPLAY_NAME` |
+| User ID | TypeScript, iOS, Android | `SearchUsersByEnum.USER_ID` | `.userId` | `AmitySearchUserBy.USER_ID` |
+| Profile handle | TypeScript, iOS, Android | `SearchUsersByEnum.PROFILE_HANDLE` | `.profileHandle` | `AmitySearchUserBy.PROFILE_HANDLE` |
+
+TypeScript types `searchBy` as an array of `SearchUsersByEnum` values, exported from the package root. Plain string literals do not type-check.
+
+Platform support for `searchBy` differs. iOS, Android, and TypeScript expose it on user search; Flutter support is not yet available.
+
 ### Inputs
 
 | Platform | Method | Required inputs | Optional inputs | Result shape |
 | --- | --- | --- | --- | --- |
-| TypeScript | `UserRepository.searchUserByDisplayName(params, callback)` | `displayName`, callback | `limit`, `matchType`, `searchBy` | Starts a live collection observer and returns an unsubscriber. |
-| iOS | `userRepository.searchUsers(displayName, sortBy:, matchType:)` | `displayName`, `sortBy` | `matchType` | Returns a live collection observed with an `AmityNotificationToken`. |
-| Android | `userRepository.searchUsers(keyword).build().query()` | `keyword` | `sortBy(...)`, `matchType(...)` | Returns `Flowable<PagingData<AmityUser>>`. |
+| TypeScript | `UserRepository.searchUsers(params, callback)` | `displayName` (the keyword), callback | `searchBy`, `limit`, `matchType` | Starts a live collection observer and returns an unsubscriber. |
+| iOS | `userRepository.searchUsers(keyword, searchBy:, sortBy:, matchType:)` | `keyword`, `searchBy`, `sortBy` | `matchType` | Returns a live collection observed with an `AmityNotificationToken`. |
+| Android | `userRepository.searchUsers(keyword).build().query()` | `keyword` | `searchBy(...)`, `sortBy(...)`, `matchType(...)` | Returns `Flowable<PagingData<AmityUser>>`. |
 | Flutter | `AmityCoreClient.newUserRepository().searchUserByDisplayName(keyword)` | `keyword` | `sortBy(...)`, `matchType(...)`, paging token, limit | Returns paging data through the query builder. |
+
+TypeScript `UserRepository.searchUserByDisplayName(params, callback)` is deprecated in favour of `searchUsers(params, callback)`. Both accept the same parameters and return the same live collection, so switching is a rename. The deprecated method will be removed in a future major version.
 
 TypeScript search parameters intentionally do not include `sortBy`; use `getUsers(...)` when you need TypeScript user-list sorting.
 
@@ -3450,12 +3473,13 @@ When providing a search keyword, the API performs an exact-match lookup for spec
 Use the platform search method to retrieve users whose display name matches the search keyword.
 
 ```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
+import { SearchUsersByEnum, UserRepository } from '@amityco/ts-sdk';
 
 let loadMoreUsers: (() => void) | undefined;
 
-const unsubscribe = UserRepository.searchUserByDisplayName(
-  { displayName: 'Joe', limit: 20 },
+const unsubscribe = UserRepository.searchUsers(
+  // `searchBy` is optional; omit it to match all fields.
+  { displayName: 'Joe', limit: 20, searchBy: [SearchUsersByEnum.DISPLAY_NAME] },
   ({ data: users, loading, error, hasNextPage, onNextPage }) => {
     if (loading) return;
 
@@ -3478,8 +3502,12 @@ const unsubscribe = UserRepository.searchUserByDisplayName(
 var token: AmityNotificationToken?
 
 func searchUserExample() {
+    // `searchBy` selects which fields the keyword is matched against.
+    // Use [.displayName] to match display name only; pass [] to keep the
+    // default behavior (match all searchable fields).
     let liveCollection = userRepository.searchUsers(
-        "<display-name>",
+        "<keyword>",
+        searchBy: [.displayName],
         sortBy: .displayName,
         matchType: .default
     )
@@ -3493,6 +3521,7 @@ func searchUserExample() {
 ```kotlin Android
 fun searchUsers(userRepository: AmityUserRepository) {
     userRepository.searchUsers("Brian")
+        .searchBy(listOf(AmitySearchUserBy.DISPLAY_NAME)) // optional; omit to match all fields
         .sortBy(sortOption = AmityUserSortOption.DISPLAYNAME) // optional
         .build()
         .query()
@@ -3623,9 +3652,11 @@ void getUsers(AmityUserSortOption sortOption) {
 
 ## Platform notes
 
-- TypeScript `searchUserByDisplayName(...)` starts a live collection observer, but its search params do not expose `sortBy`.
+- `searchBy` (where supported) restricts which fields the keyword matches; omit it to keep the default behavior of matching all searchable fields (display name, user id, profile handle). Flutter does not yet expose `searchBy`.
+- TypeScript `searchUsers(...)` starts a live collection observer, but its search params do not expose `sortBy`. `searchUserByDisplayName(...)` is a deprecated alias with the same behaviour.
 - iOS search and query methods require an `AmityUserSortOption`.
 - Android and Flutter default user search/query sorting to display name when no explicit sort is provided.
+- Android takes `searchBy` as a list — `searchBy(listOf(AmitySearchUserBy.DISPLAY_NAME))`. Import the enum from `com.amity.socialcloud.sdk.model.core.search.AmitySearchUserBy`; it lives in a different package from `AmityUserSortOption` and `AmityUserSearchMatchType` (`com.amity.socialcloud.sdk.api.core.user.search`).
 - Use pagination controls from the callback, live collection, `PagingData`, or Flutter `PagingController` instead of loading all users at once.
 
 ## Related topics
@@ -4391,8 +4422,8 @@ async function getImage(imageFileId: string) {
   return {
     mediumUrl,
     altText: image.altText,
-    width: image.attributes.metadata.width,
-    height: image.attributes.metadata.height,
+    width: image.getWidth(),
+    height: image.getHeight(),
   };
 }
 ```
@@ -4401,8 +4432,8 @@ async function getImage(imageFileId: string) {
 let rawFile = try await fileRepository.getFile(fileId: imageFileId)
 
 if rawFile.type == .image, let imageData = rawFile.mapToImageData() {
-    let width = imageData.metadata["width"] as? Int
-    let height = imageData.metadata["height"] as? Int
+    let width = imageData.getWidth()
+    let height = imageData.getHeight()
 
     fileRepository.downloadImage(fromURL: imageData.fileURL, size: .medium) { localURL, error in
         print("Downloaded image: \(String(describing: localURL))")
@@ -4563,7 +4594,7 @@ AmityCoreClient.newFileRepository()
 
 ## Read Video Status And URLs
 
-Read video status and resolution URLs when your UI needs to render playback or processing state.
+Read video status and resolution URLs when your UI needs to render playback or processing state. The returned video file also exposes its frame dimensions through `getWidth()`, `getHeight()`, and `getRotation()`. Width and height are the **stored** (pre-rotation) values — apply the rotation to get the displayed orientation, swapping width and height when the rotation is ±90°.
 
 
 ```typescript TypeScript
@@ -4576,6 +4607,9 @@ async function getVideo(videoFileId: string) {
   return {
     playbackUrl,
     status: video.status,
+    width: video.getWidth(),
+    height: video.getHeight(),
+    rotation: video.getRotation(),
   };
 }
 ```
@@ -4587,6 +4621,9 @@ if rawFile.type == .video, let videoData = rawFile.mapToVideoData() {
     let status = videoData.status
     let resolutions = Array(videoData.videoUrls.keys).sorted()
     let playbackURL = videoData.getVideo(resolution: .res_720p)
+    let width = videoData.getWidth()
+    let height = videoData.getHeight()
+    let rotation = videoData.getRotation()
 }
 ```
 
@@ -4598,6 +4635,9 @@ AmityCoreClient.newFileRepository()
         val status = video?.getStatus()
         val resolutions = video?.getResolutions().orEmpty()
         val playbackUrl = video?.getVideoUrl(AmityVideoResolution.RES_720)
+        val width = video?.getWidth()
+        val height = video?.getHeight()
+        val rotation = video?.getRotation()
     }
     .subscribe()
 ```
@@ -30699,7 +30739,7 @@ Widget archivedChatListComponent() {
 
     | Feature                  | Description                                                             |
     | ------------------------ | ----------------------------------------------------------------------- |
-    | Search Users             | Allows users to search for other users by typing at least 3 characters |
+    | Search Users             | Allows users to search for other users by display name by typing at least 3 characters |
     | User List Display        | Displays a list of users matching the search query                     |
     | Real-Time Search Updates | Updates the user list dynamically as the search query changes          |
     | Start New Conversation   | Enables users to select a user and start a new chat conversation       |
@@ -31325,7 +31365,7 @@ Widget editGroupMemberPermissionsPage() {
     | ---------------------- | ----------------------------------------------- |
     | Member Directory       | List of all members and moderators            |
     | Member Actions         | Report, remove, ban, mute, and promote options |
-    | Add Members           | Search and add new users to the group         |
+    | Add Members           | Search users by display name and add them to the group |
     | Banned User Management | View and manage banned members                 |
     | Mute Members           | Moderators can mute members from posting      |
 
@@ -32998,6 +33038,7 @@ The Post Components UIKit provides a complete suite of tools for post creation, 
 | --- | --- | --- | --- | --- | --- |
 | Create Text, Image, Video Post | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Edit Text, Image, Video Post | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Media Carousel (multiple images/videos) | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Create Livestream Post | ✅ | ✅ | ❌ | ✅ | ❌ |
 | Community Livestream with chat and reaction | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Create Poll Post | ✅ | ✅ | ✅ | ❌ | ✅ |
@@ -33027,7 +33068,7 @@ The Post Components UIKit provides a complete suite of tools for post creation, 
     **Supported Content Types**
 
     - **Text Posts**: Rich text content with optional post titles and free-form hashtags for better discoverability
-    - **Rich Media Posts**: Images and videos with enhanced display, and alt text support
+    - **Rich Media Posts**: Images and videos with enhanced display, alt text support, and a swipeable carousel for posts with multiple attachments
     - **Livestream Posts**: Livestreaming with interactive chat and reactions
     - **Poll Posts**: Interactive polls with voting and real-time results
       - Text-only polls with multiple choice options
@@ -34151,6 +34192,56 @@ import config from '../../uikit.config.json';
 </AmityUiKitProvider>
 ```
 
+
+## Media Carousel
+
+Posts with **two or more** images or videos are displayed as a horizontally **swipeable carousel** — one full-width frame per attachment, shown in the order they were added. A post with a single attachment is shown as one full-width frame.
+
+  <img
+    src="/images/post-media-carousel.png"
+    alt="Media carousel — a post with multiple images shown as full-width swipeable frames with a pagination indicator and an n/total counter"
+    style={{ maxWidth: "40%", margin: "0 auto", display: "block" }}
+  />
+
+  Every attachment is reachable by swiping, so nothing is hidden or truncated. The media carousel is available on iOS, Android, React, and React Native.
+
+### How It Works
+
+    Each image or video gets its own full-width frame, with no wrap-around at the first or last frame. On mobile, members **swipe** one frame at a time. On desktop, swipe is disabled and members use the **arrow buttons** on the frame — the left arrow is hidden on the first frame and the right arrow on the last.
+
+    The frame shape is classified from the **first** attachment and locked for the whole carousel, so the post height never jumps between frames.
+
+    A pagination indicator and an `n/total` counter show the current frame and update as members move through the carousel. Desktop shows an indicator strip alongside the arrow buttons.
+
+    Tapping a frame opens the full-screen viewer at that frame in its original aspect ratio; closing returns to the same frame. In the viewer, videos autoplay and keep their mute state across swipes.
+
+### Frame Ratio
+
+The carousel picks **one** frame shape from the **first** attachment and locks it for every frame, so the post height never shifts as members move through the carousel. The shape is chosen from the source's width-to-height ratio, evaluated as **ordered bands** — not a simple "wider than tall" test, which would push near-square media to the wrong shape:
+
+| Source ratio (`width / height`) | Frame shape |
+| --- | --- |
+| `ratio ≥ 1.25` | **16:9** — landscape |
+| `0.80 < ratio < 1.25` | **1:1** — square |
+| `ratio ≤ 0.80` | **4:5** — portrait |
+
+Each frame is cropped to fill the locked shape; the full-screen viewer shows each item at its original aspect ratio. For **videos**, the file's rotation is applied to the stored dimensions before classifying, so a portrait clip is never locked into a landscape frame. In the composer, if the first attachment is removed, the shape re-derives from the new first attachment.
+
+### Composer Preview
+
+When creating or editing a post, the composer previews attachments in the same carousel format before publishing. Each frame carries its own controls:
+
+- **Remove** — delete that attachment from the post
+- **Alt text** — add descriptive text (images only)
+- **Product tag** — open the product picker for that frame
+
+### Limits & Constraints
+
+| Limit | Value |
+| --- | --- |
+| Attachments per post | 2–10 render as a carousel (a single attachment renders as one frame) |
+| Media types per post | Images **or** videos — a single post cannot mix images and videos |
+| Duplicate selection | Duplicate files are silently excluded before upload |
 
 ## Product Tagging
 
@@ -37554,9 +37645,11 @@ The Content Discovery & Search UIKit provides comprehensive components for build
 
     | Feature | Description |
     | --- | --- |
-    | Top Search Bar | Type search keyword and it will search across list of all communities and users |
+    | Top Search Bar | Type search keyword and it will search across list of all communities and users. User results match display name only |
     | Community search result | Displays filtered communities, and clicks to open Community Profile Page |
     | User search result | Displays filtered users, and clicks to open User Profile Page |
+
+    UIKit user search matches the keyword against display names only. User IDs and profile handles are not matched. If you need ID matching, call the SDK's user search directly with the `searchBy` option, as described in [Search and Query Users](/social-plus-sdk/core-concepts/user-management/user-operations/search-and-query-users).
 
     ### Customization Options
 
@@ -37888,7 +37981,7 @@ Widget communitySearchResultComponent({
 
     | Feature | Description |
     | --- | --- |
-    | Users list | A list of users matching to search keyword |
+    | Users list | A list of users whose display name matches the search keyword |
 
     ### Customization Options
 
@@ -48922,9 +49015,9 @@ Or explore related guides:
 > Search users by display name, browse user directories, and build people-discovery features like suggested follows and mutual connections.
 
 ```typescript
-// Search users by display name
-UserRepository.searchUserByDisplayName(
-  { keyword: 'jane', limit: 20 },
+// Search users by display name only
+UserRepository.searchUsers(
+  { displayName: 'jane', limit: 20, searchBy: [SearchUsersByEnum.DISPLAY_NAME] },
   ({ data }) => { renderUsers(data); }
 );
 
@@ -48941,7 +49034,7 @@ graph TD
     B -->|Search bar| C[Search by display name]
     B -->|Suggestions| D[People you may know]
     B -->|Browse| E[User directory]
-    C --> F[UserRepository.searchUserByDisplayName]
+    C --> F[UserRepository.searchUsers]
     D --> G[Mutual followers algorithm]
     E --> H[UserRepository.getUsers]
     F & G & H --> I[User cards with follow button]
@@ -48971,10 +49064,10 @@ graph TD
 ## Quick Start: Search Users by Name
 
 ```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
+import { SearchUsersByEnum, UserRepository } from '@amityco/ts-sdk';
 
-const unsub = UserRepository.searchUserByDisplayName(
-  { displayName: 'Joe' },
+const unsub = UserRepository.searchUsers(
+  { displayName: 'Joe', searchBy: [SearchUsersByEnum.DISPLAY_NAME] },
   ({ data: users }) => {
     console.log(users); // Array of matching users
   },
@@ -48987,13 +49080,13 @@ Full reference → [Search & Query Users](/social-plus-sdk/core-concepts/user-ma
 
 ## Step-by-Step Implementation
 
-    Use `searchUserByDisplayName()` to search as the user types. Results are returned as a live collection that updates in real-time.
+    Use `searchUsers()` to search as the user types. Results are returned as a live collection that updates in real-time. Pass `searchBy` to control which user fields the keyword is matched against; omit it to keep the server default, which matches all searchable fields. `searchUserByDisplayName()` still works but is deprecated.
 
 ```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
+import { SearchUsersByEnum, UserRepository } from '@amityco/ts-sdk';
 
-const unsub = UserRepository.searchUserByDisplayName(
-  { displayName: 'Joe' },
+const unsub = UserRepository.searchUsers(
+  { displayName: 'Joe', searchBy: [SearchUsersByEnum.DISPLAY_NAME] },
   ({ data: users, loading }) => {
     if (users) { /* render user result cards */ }
   },
@@ -49071,7 +49164,7 @@ const suggestions = members.filter(m => !followedUserIds.has(m.userId));
     Search results should include a "Report" action. Flagged users appear in the Admin Console moderation queue.
 
     → [Flag / Unflag User](/social-plus-sdk/core-concepts/user-management/user-operations/flag-unflag-user)
-    Visitor and bot users are automatically excluded from search results. Only authenticated (`SIGNED_IN`) users appear in `searchUserByDisplayName()` results.
+    Visitor and bot users are automatically excluded from search results. Only authenticated (`SIGNED_IN`) users appear in `searchUsers()` results.
 
 ---
 
