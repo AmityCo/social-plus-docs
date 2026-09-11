@@ -22,18 +22,18 @@ sdk_page_type: concept
 
 Three modes are available. They apply to viewers only — **hosts and co-hosts always see the actual count regardless of mode**.
 
-| Mode | Wire value | Threshold applied | Viewer behavior |
-| --- | --- | --- | --- |
-| `alwaysShow` | `"always"` | No | Count is always visible. Default for never-configured networks. Matches the previous behavior. |
-| `hideEntirely` | `"hidden"` | No | Viewers never see the count. Hosts and co-hosts still see it. |
-| `showAboveMinimum` | `"above-minimum"` | Yes (inclusive) | Viewers see the count only when `count >= threshold`. |
+| Mode | Threshold applied | Viewer behavior |
+| --- | --- | --- |
+| `alwaysShow` | No | Count is always visible. Default for never-configured networks. |
+| `hideEntirely` | No | Viewers never see the count. Hosts and co-hosts still see it. |
+| `showAboveMinimum` | Yes (inclusive) | Viewers see the count only when `count >= threshold`. |
 
 ## Config Model
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `mode` | `AmityLiveViewerCountMode` | Selected display mode. |
-| `threshold` | `Int` | Positive integer in `[1, 1000]`. **Always present**, default `50`. Applied only under `showAboveMinimum`; retained (but not applied) under `alwaysShow` / `hideEntirely` so admins can flip modes without losing the value. |
+| `threshold` | `Int` | Positive integer in `[1, 1000]`. **Always present**, default `50`. Applied only under `showAboveMinimum`. |
 
 ## Read the Config
 
@@ -143,22 +143,6 @@ Within a single mount, the visibility state still reacts to two things:
 - **Count ticks.** Under `showAboveMinimum`, if the viewer count crosses the threshold naturally, the count appears or disappears without a rejoin.
 - **Role changes.** A viewer promoted to co-host mid-stream immediately sees the actual count — no rejoin needed.
 
-```mermaid
-sequenceDiagram
-  participant Admin
-  participant BE as Backend
-  participant SDK as AmityClient
-  participant Viewer as Existing viewer
-  participant NewMount as Viewer on next mount
-  Admin->>BE: Update viewer count config
-  BE-->>Admin: OK
-  Note over Viewer: Keeps prior visibility state — no live update
-  NewMount->>SDK: getLiveViewerCountConfig()
-  SDK->>BE: GET network setting
-  BE-->>SDK: Latest config
-  SDK-->>NewMount: Applied for the life of this mount
-```
-
 ## Threshold Constraints
 
 | Constraint | Value |
@@ -168,7 +152,6 @@ sequenceDiagram
 | Default | `50` |
 | Maximum | `1000` |
 | Comparison | Inclusive (`count >= threshold`) |
-| Retention across mode changes | The threshold is retained under `alwaysShow` / `hideEntirely`. Admins can flip back to `showAboveMinimum` without re-entering the value. |
 
 <Info>
   The Console clamps admin-entered values on save: values above `1000` are clamped to `1000`; values below `1` (or empty) reset to `1`. Zero is explicitly rejected — use `alwaysShow` for "always visible" instead.
@@ -176,32 +159,14 @@ sequenceDiagram
 
 ## Defaults
 
-- Never-configured networks read as `{ mode: alwaysShow, threshold: 50 }` — the backend merges defaults at read time.
-- Tenants previously hidden via a support ticket migrate to `hideEntirely`.
-- No client-side fallback is required for absent fields.
-
-## Caching
-
-No client-side cache is required. Writes evict the network-setting cache on the backend, so every read after a write returns the current value. The SDK may keep an in-memory session cache as a network-cost optimization, but every livestream mount must observe the value that was current at mount time.
+Never-configured networks read as `{ mode: alwaysShow, threshold: 50 }` — the backend merges defaults at read time, so no client-side fallback is required for absent fields. Every read after an admin change returns the current value; no client-side cache is required.
 
 ## Error Handling
 
-The element that consumes this API (the UIKit `LiveViewerCountElement`) fails open — on any error, it behaves as `alwaysShow` so today's behavior is never silently regressed.
-
-| Situation | SDK behavior | Effective config |
-| --- | --- | --- |
-| Network error on cold read | Rejects with the platform's standard network error | Fail open to `{ alwaysShow, 50 }` |
-| Server error (5xx) | Rejects with the platform's standard server error | Fail open to `{ alwaysShow, 50 }` |
-| Unknown mode | Falls back to `alwaysShow`; a valid threshold in `[1, 1000]` is retained | `{ alwaysShow, <threshold> }` |
-| Missing or out-of-range threshold, under any mode | Returns the default config and discards the selected mode | `{ alwaysShow, 50 }` |
-| Never-configured network | Returns `{ alwaysShow, 50 }` — defaults are backend-merged | `{ alwaysShow, 50 }` |
+On any read error or malformed config, **fail open** — behave as `alwaysShow` (the UIKit `LiveViewerCountElement` does this automatically), so today's behavior is never silently regressed.
 
 <Warning>
   Never treat a config error as a reason to hide the count. If the admin never selected `hideEntirely`, viewers should still see it. Fail open, always.
-</Warning>
-
-<Warning>
-  Fail-open applies even when the mode itself parsed cleanly: a `hideEntirely` config carrying a missing or out-of-range threshold resolves to `{ alwaysShow, 50 }`, so viewers see a count on a network whose admin chose to hide it. Threshold validation runs before the mode is read.
 </Warning>
 
 ## UIKit Integration
