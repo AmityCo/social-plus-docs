@@ -24932,7 +24932,7 @@ Platform coverage varies by surface. Each linked page includes the platform-spec
 
 Use `AmityFeedRepository` to read feed-style post collections. Each feed is a separate SDK entry point over the same content — what changes is who the posts are selected for, and how they are ordered.
 
-    **Personalized per user.** The backend picks posts from the user's communities, follows, public content, and live streams, then ranks them. Requires the network setting.
+    **Personalized per user.** Surfaces the posts each member is most likely to care about — from their communities, follows, public content, and live streams — so the home feed stays relevant instead of showing everything at once. Requires the network setting.
     **Chronological.** The most recent posts come first. Use it for a real-time content stream.
     **Score-sorted.** The same global content, ordered by engagement, recency, and updates rather than by time alone.
     **Scoped to one owner.** Query posts for a single user or community, with richer filters.
@@ -32222,6 +32222,8 @@ For content creator applications:
 
 ## For You Feed
 
+As a community grows, the posts worth a member's attention get buried by volume. The **For You** tab surfaces the posts each member is most likely to care about, so the home experience stays relevant and worth returning to — without you building any ranking logic yourself.
+
 For You is a backend-personalized feed that appears as a tab on the social home page. It is a **network-level setting** — the tab only shows when the network has For You feed enabled and the current user is not a visitor or bot. When the setting is off (or the feed reports that it is disabled), the UIKit hides the tab and falls back to the newsfeed automatically.
 
 **Platform Support**: For You feed is available on the **React Web, iOS, and Android** UIKit. It is not available on Flutter or React Native.
@@ -32240,6 +32242,14 @@ The backend assembles For You from these content sources, then ranks them for th
 | Livestreams | Ongoing livestreams, injected while they are live |
 
 Ranking, and the mix between these sources, is owned by the backend. There are no client-side knobs in the UIKit or SDK to weight or filter them. For network-level tuning, contact [social.plus Support](https://ekoapp.atlassian.net/servicedesk/customer/portal/3).
+
+### How ranking works
+
+The backend ranks each post for the current user by blending four signals — **relevance** (what the user has engaged with before), **affinity** (authors and communities they're connected to), **popularity** (engagement across the network), and **freshness** (how recently it was posted) — then spaces out repetitive authors, communities, and topics so the feed stays varied. New users start with a popularity- and freshness-led feed that personalizes as they engage. The UIKit renders the ranked result as-is; the exact scoring model is backend-owned and not exposed. See [How ranking works](/social-plus-sdk/social/discovery-engagement/feed/for-you-feed#how-ranking-works) for the full behavior.
+
+The UIKit also reports post views for you, so the feed automatically skips posts the member has already seen — on any surface — without extra wiring.
+
+**Transparency.** For You is a personalized recommender. Where recommender-system transparency rules apply (such as the EU Digital Services Act), disclose the four signals above to your users in plain language and offer the non-personalized **Newsfeed** as the alternative they can switch to at any time — the tab switch is that control.
 
 ### How the tab is gated
 
@@ -50763,11 +50773,13 @@ Or explore related guides:
 > Generate shareable links for posts, communities, and user profiles to drive viral growth and cross-platform deep linking.
 
 ```typescript
+import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
+
 // 1. Get share link configuration
 const config = await Client.getShareableLinkConfiguration();
 
-// 2. Build a share URL for a post
-const shareUrl = `${config.baseUrl}/post/${postId}`;
+// 2. Generate a share URL for a post (null if the post pattern is not configured)
+const shareUrl = config.generateLink(AmitySharableContentType.POST, postId);
 
 // 3. Handle incoming deep link
 // (deep link routing is app-layer responsibility — not part of the TS SDK)
@@ -50817,14 +50829,13 @@ graph TD
 ## Quick Start: Generate a Shareable Link
 
 ```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
 
 const getPostShareLink = async (postId: string) => {
   try {
     const config = await Client.getShareableLinkConfiguration();
-    const { domain, patterns } = config;
-    const postLink = domain + patterns.post.replace('{postId}', postId);
-    return postLink;
+    // generateLink returns null when the post pattern is not configured.
+    return config.generateLink(AmitySharableContentType.POST, postId);
   } catch (error) {
     console.error('Failed to generate share link:', error);
     return null;
@@ -50836,7 +50847,7 @@ const getPostShareLink = async (postId: string) => {
 
 Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
 
-**Shareable links vs. in-app reposts**: This guide covers *external* shareable links — URLs for WhatsApp, SMS, or social media that open your app via deep link. social.plus also has a distinct *in-app repost* mechanism: when a user reshares a post inside the app, the new post stores the original's ID in `sharedPostId` and increments `sharedCount` on the original post. Use shareable links for viral distribution outside the app; use the repost API for in-feed resharing within the app.
+**Shareable links are for sharing *outside* the app.** They produce a URL a user can send to WhatsApp, SMS, or social media that deep-links back into your app. social.plus does not have an in-app repost or reshare API — there is no way to reshare a post into another feed from the SDK.
 
 ---
 
@@ -50845,28 +50856,29 @@ Full reference → [Content Sharing](/social-plus-sdk/social/content-management/
     The SDK fetches your configured domain and URL patterns from the server. Call this once and cache the result — it rarely changes.
 
 ```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
 
 const config = await Client.getShareableLinkConfiguration();
-// config.domain = "https://your-app.com"
-// config.patterns.post = "/posts/{postId}"
-// config.patterns.community = "/communities/{communityId}"
+// config.domain — your configured base domain
+// config.isEnabled(type) — whether a content type has a link pattern configured
+// config.getPattern(type) — the raw pattern for a content type
+// config.generateLink(type, referenceId) — the ready-to-share URL (null if unconfigured)
 ```
 
     Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
-    Use the pattern templates to construct URLs for posts, communities, and user profiles.
+    Use `generateLink` with the content type and reference ID. It returns `null` when that content type has no configured pattern, so gate on `isEnabled` if you need to hide the share action.
 
 ```typescript TypeScript
-const { domain, patterns } = config;
+import { AmitySharableContentType } from '@amityco/ts-sdk';
 
 // Post link
-const postLink = domain + patterns.post.replace('{postId}', postId);
+const postLink = config.generateLink(AmitySharableContentType.POST, postId);
 
 // Community link
-const communityLink = domain + patterns.community.replace('{communityId}', communityId);
+const communityLink = config.generateLink(AmitySharableContentType.COMMUNITY, communityId);
 
 // User profile link
-const userLink = domain + patterns.user.replace('{userId}', userId);
+const userLink = config.generateLink(AmitySharableContentType.USER, userId);
 ```
 
     Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
@@ -50915,7 +50927,7 @@ const handleDeepLink = (url: string) => {
 
   <img src="/images/uikit-shareable-link.png" alt="UIKit — Shareable link component" />
 
-    Track which posts and communities generate the most shares. Combine share events with impression data in **Admin Console → Analytics Dashboard** to measure viral coefficient.
+    Shareable links are generated on the client, so the SDK does not emit a built-in share event or a per-post share count. To measure sharing, log your own analytics event when a user taps share, and combine it with [post impressions](/social-plus-sdk/social/content-management/posts/analytics/post-impressions) for a reach picture.
     Links to private community content should only work for authenticated users who are members. Visitors landing on a private community link should see a "Request to join" prompt, not the content.
     If a shared post is later removed by moderators, the link should show a "Content unavailable" message rather than a 404. Handle this gracefully in your deep link handler.
 
@@ -50934,7 +50946,6 @@ const handleDeepLink = (url: string) => {
     - Add Open Graph meta tags to your web fallback pages so shared links show rich previews on social media
     - Use UTM parameters on share links to track which channels drive the most installs
     - Cache `getShareableLinkConfiguration()` at app startup — it only needs to refresh once per session
-    - Show a share count on posts to create social proof and encourage more sharing
     - Always implement a web fallback for users who don't have the app installed
     - Handle edge cases: deleted content, private content the user can't access, expired links
     - Test deep links on both iOS Universal Links and Android App Links — each platform has different setup requirements
@@ -51807,7 +51818,7 @@ Or explore related guides:
 
 ### [User Profile Moderation](https://learn.social.plus/use-cases/social/user-profile-moderation)
 
-> Moderate user profiles with AI-powered scanning, admin reset tools, profile blocklists, and webhook automation.
+> Moderate user profiles with AI-powered scanning, admin reset from the Users tab or User History, profile blocklists, and webhook automation.
 
 ```typescript
 // 1. Flag a user profile
@@ -51861,7 +51872,7 @@ graph TD
 **After completing this guide you'll have:**
 - User profile flagging via SDK (flag / unflag users)
 - AI scanning of display names, descriptions, and avatars
-- Admin review workflow with reset, clear, and ban actions
+- Admin review workflow with reset, clear, and ban actions, plus reset for any user from User History
 - Profile blocklist configured for display names and descriptions
 
 ---
@@ -51875,7 +51886,7 @@ User profile moderation is **flag-only** — unlike posts and messages, flagged 
 | Pre-moderation | ✅ Images blocked before upload | ✅ Avatar images blocked before upload |
 | Post-moderation | ✅ AI scans after publish | ✅ AI scans after profile save |
 | Auto-delete at block confidence | ✅ Content removed automatically | ❌ Never — flag only |
-| Admin reset | N/A | ✅ Reset display name, avatar, description |
+| Admin reset | N/A | ✅ Tick which fields to reset — flagged profiles from the Users tab, any user from User History |
 
 **Flag-only for profiles**: Flagged profiles always require manual admin review. This prevents automated systems from silently wiping user accounts.
 
@@ -51923,7 +51934,7 @@ await UserRepository.unflagUser('user-456');
     - **Clear flag** — dismiss the flag and approve the profile
 
     → [AI User Profile Moderation](/analytics-and-moderation/console/ai-user-profile-moderation)
-    When resetting a profile, fields are restored to safe defaults:
+    Whichever route you take, fields are restored to these defaults:
 
     | Field | Reset behavior |
     |---|---|
@@ -51931,7 +51942,16 @@ await UserRepository.unflagUser('user-456');
     | **Description** | Cleared to empty |
     | **Avatar** | Removed — reverts to default; original file deleted from storage |
 
-    The user receives a `USER_PROFILE_RESET` notification through the notification tray informing them which fields were reset.
+    There are two places to reset from, both opening the **same reset modal** where you tick the fields to restore:
+
+    | Where | Applies to |
+    |---|---|
+    | **Moderation Feed → Users tab** | Profiles in the review queue (AI-flagged and user-reported) |
+    | **User History page** | Any user, flagged or not |
+
+    To reset a profile that was never flagged — or to reset just one field, such as an avatar while leaving the display name alone — open the user's [User History](/analytics-and-moderation/console/user-and-content-management/user-social-history) page, click the three-dot (**⋮**) menu, and choose **Profile moderation → Reset profile**. Tick the fields to restore; unticked fields are left untouched.
+
+    The user receives a `USER_PROFILE_RESET` notification through the notification tray listing the fields that were reset.
 
     **Avatar reset is irreversible** — the original image file is deleted from storage. Only the reset event is logged; the original image cannot be recovered.
     Block specific words and phrases from appearing in display names and descriptions.
@@ -52036,7 +52056,7 @@ app.post('/webhook', (req, res) => {
 ## Best Practices
 
     Apply escalating actions based on violation history:
-    1. **First offense** — Reset the flagged field and notify the user
+    1. **First offense** — Reset only the offending field and notify the user
     2. **Second offense** — Reset + temporary mute
     3. **Repeat violations** — Global ban
 
@@ -57255,12 +57275,12 @@ For detailed administration workflows, see the [Moderation Overview](/analytics-
 
 ### [AI User Profile Moderation](https://learn.social.plus/analytics-and-moderation/console/ai-user-profile-moderation)
 
-> AI-powered moderation for user profiles including display names, avatars, and descriptions with admin reset capabilities
+> AI-powered moderation for user profiles including display names, avatars, and descriptions, with field-level admin reset for any user
 
-Extend your community safety beyond content with AI-powered user profile moderation. social.plus automatically scans user profiles — including display names, avatars, and descriptions — for policy violations, giving admins the tools to review, reset, and manage flagged profiles.
+Extend your community safety beyond content with AI-powered user profile moderation. social.plus automatically scans user profiles — including display names, avatars, and descriptions — for policy violations, giving admins the tools to review and act on flagged profiles. Admins can also reset **any** user's profile — flagged or not — from the User History page, choosing exactly which fields to reset.
 
     AI reviews profile content after save — flag-only, no auto-delete
-    Reset flagged profile fields (display name, avatar, description) to safe defaults
+    Reset any user's profile from User History — pick which fields (display name, avatar, description) to restore
     Unified Users tab to review AI-flagged and user-reported profiles
     Dedicated blocklist category for display names and descriptions
 
@@ -57348,6 +57368,8 @@ Flagged user profiles appear in a dedicated **Users** tab within the Moderation 
     - **Ban globally** — Ban the user across all communities
     - **Clear flag** — Dismiss the flag and approve the profile
 
+    To reset a profile that has **not** been flagged, use the [User History page](#admin-reset) — it opens the same reset modal for any user.
+
     The **Reviewed** list shows profiles that have already been moderated.
 
     Each reviewed item displays the action taken and who performed it:
@@ -57359,7 +57381,16 @@ Flagged user profiles appear in a dedicated **Users** tab within the Moderation 
 
 ## Admin Reset
 
-When an admin resets a flagged profile, the affected fields are restored to safe defaults:
+Resetting a profile does not require the profile to be flagged. From the **User History** page, admins can reset **any** user's profile at any time — whether it was flagged by AI, reported by other members, or never flagged at all. Flagging simply surfaces the profiles that may be worth resetting.
+
+Both entry points open the **same reset modal**, where the admin ticks which profile fields to restore:
+
+| Where | Applies to |
+|-------|-----------|
+| **Moderation feed > Users tab** | Profiles in the review queue (AI-flagged and user-reported) |
+| **User History page** | Any user, flagged or not |
+
+### Reset Behavior by Field
 
 | Field | Reset Behavior |
 |-------|---------------|
@@ -57367,13 +57398,21 @@ When an admin resets a flagged profile, the affected fields are restored to safe
 | **Description** | Cleared (set to empty) |
 | **Avatar** | Removed — reverts to default avatar. Original file is deleted from storage. |
 
-    Go to **Moderation > Moderation feed** and select the **Users** tab.
+### Resetting a Profile from User History
 
-    Click on a flagged user to view their profile details, AI moderation labels, and flag history.
+Reset is **field-level** — the admin ticks which of the three profile fields to restore. Fields that are not ticked are left untouched.
 
-    Select **Reset profile** from the moderation actions. A confirmation modal shows which fields will be reset.
+    Find the user in the Console and open their [User History](/analytics-and-moderation/console/user-and-content-management/user-social-history) page. This works for any user, flagged or not.
 
-    Confirm the reset. The user is notified that their profile has been reset.
+    Check the user's profile details and moderation history — including any AI moderation labels and past flags — before deciding to reset.
+
+    Click the three-dot (**⋮**) menu and choose **Profile moderation**. The submenu offers **Clear flags** and **Reset profile**.
+
+    Choose **Reset profile**. The reset modal opens — the same one used in the Moderation feed — listing the three profile fields as checkboxes.
+
+    Tick the fields you want restored to defaults: **Display name**, **Avatar**, **Description**, or any combination. At least one field must be ticked.
+
+    Confirm the reset. Only the ticked fields are changed, and the user is notified of which fields were reset.
 
 **Avatar Reset is Irreversible**: When an avatar is reset, the original file is deleted from storage. Only the fact that a reset occurred is logged — the original image cannot be recovered.
 
@@ -57384,7 +57423,7 @@ The display name reset prefix is configurable via the network setting `moderatio
 When a profile is reset, the affected user receives a notification through the notification tray:
 
 - **Notification type**: `USER_PROFILE_RESET`
-- **Content**: Informs the user which fields were reset and that they can update their profile again
+- **Content**: Informs the user which fields were reset — only the fields actually reset are listed — and that they can update their profile again
 - Delivered via the existing notification tray system
 
 ## Profile Blocklist
@@ -57411,6 +57450,7 @@ Profile moderation events are recorded in the user's activity history, accessibl
     - **Prioritize by severity**: Review profiles with multiple AI flag categories first
     - **Check context**: Some display names or descriptions may be flagged incorrectly — review before resetting
     - **Use reset judiciously**: Resetting a profile is disruptive to the user; prefer clearing the flag for borderline cases
+    - **Reset only what's wrong**: Untick the fields that are fine — clearing a clean display name alongside an offending avatar is unnecessary churn for the user
     - **Monitor repeat offenders**: Users who are repeatedly flagged may warrant a global ban
 
     - **Separate concerns**: Maintain different blocklists for content vs. user profiles
@@ -65442,8 +65482,6 @@ erDiagram
     | `postedUserId`          | string    | FK → User. Creator.                                                                                   |
     | `postedUserPublicId`    | string    | Creator's public ID.                                                                                           |
     | `postedUserInternalId`  | string    | Creator's internal ID.                                                                                         |
-    | `sharedPostId`          | string    | FK → Post. Reference to the shared/reposted post.                                                              |
-    | `sharedCount`           | integer   | Number of times shared.                                                                                        |
     | `targetId`              | string    | FK → Community or User. **Polymorphic target.**                                                                |
     | `targetPublicId`        | string    | Target's public ID.                                                                                            |
     | `targetInternalId`      | string    | Target's internal ID.                                                                                          |
