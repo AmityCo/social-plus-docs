@@ -31,6 +31,20 @@ This comprehensive guide provides AI assistants and developers with complete ins
 
 ## 🎨 Content Standards & Patterns
 
+### **Voice & Exposure** (read before writing any page)
+
+**Voice by section type.** Match the tone to the section's job:
+- **Overviews & feature introductions** — lead with the reader benefit, not the mechanism. Say *why* an integrator would use the feature and what problem it solves for their users before the API details. A light, benefit-led (marketing-aware) tone is correct here — e.g. "surface the posts each member cares about," not "returns a ranked collection." Stay honest: no hype, no invented metrics, no unbacked superlatives.
+- **Reference, how-to, parameters, behavior** — precise and technical. No marketing language (the clarity rubric flags it).
+
+**Expose vs. keep private.** Write for the integrator — give what they need to build, nothing internal or confidential:
+- **Expose:** public API names/signatures/parameters/return types, observable behavior, perceivable product behavior (e.g. "older posts age out," "seen posts aren't repeated"), and what the integrator must wire up themselves.
+- **Keep private:** exact ranking weights, scoring formulas, decay curves, thresholds and the math behind them (name the *signals* and their effect instead); backend storage/delivery mechanics (caches, snapshots, cursors, queues, datastore names); internal cold-start counts and tuning/experiment constants.
+- **Never document an unimplemented feature.** A schema field, type, or leftover trace is not a feature — if the code doesn't ship it, it's not in the docs, and never invent companion fields/APIs to make it look coherent. Label a dormant field as reserved/not implemented, or omit it.
+- **Personalization & regulation:** name a recommender's main parameters in plain language (e.g. EU DSA transparency) and point to the non-personalized alternative — without exposing the confidential scoring model.
+
+**Ground new features before writing.** When documenting new or changed functionality, first read what actually shipped: the product specs in the `cleverden` sibling repo (PRDs, `tech-proposals/`, `tech-specs/`, `front-end-tech-specs/SDK` and `/UIKIT`) and, if needed, the actual SDK source (sibling repos, same path convention as release notes). `cleverden` is internal — use it to understand the feature, then publish only the integrator-facing subset per the exposure rules above.
+
 ### **Required Mintlify Components**
 
 #### **Multi-Platform Code Examples**
