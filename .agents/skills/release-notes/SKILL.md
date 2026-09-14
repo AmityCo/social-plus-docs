@@ -43,17 +43,31 @@ All changelogs live in the docs repo at:
 
 ### Source Repo Locations (Local)
 
+The source repos are cloned locally as **siblings of this docs repo** — under the same parent folder, each directory named exactly by its repo name (see the tables above). Resolve the base directory at runtime instead of hardcoding an absolute path, so this works on any machine:
+
+```bash
+# Base directory that holds all source repos (the parent of this docs repo).
+GITHUB_ROOT="$(cd "$(git rev-parse --show-toplevel)/.." && pwd)"
+
+# Example: read tags from a source repo
+git -C "$GITHUB_ROOT/Amity-Social-Cloud-SDK-Android" tag --sort=-creatordate | head
 ```
-/Users/nakarinjupattanakul/Documents/GitHub/Amity-Social-Cloud-SDK-Android
-/Users/nakarinjupattanakul/Documents/GitHub/AmitySDKIOS
-/Users/nakarinjupattanakul/Documents/GitHub/AmityTypescriptSDK
-/Users/nakarinjupattanakul/Documents/GitHub/Amity-Social-Cloud-SDK-Flutter-Internal
-/Users/nakarinjupattanakul/Documents/GitHub/UIKit-V4
-/Users/nakarinjupattanakul/Documents/GitHub/AmityUIKitIOS
-/Users/nakarinjupattanakul/Documents/GitHub/Amity-Social-Cloud-UIKit-Web
-/Users/nakarinjupattanakul/Documents/GitHub/Amity-Social-UIKit-React-Native-CLI-OpenSource
-/Users/nakarinjupattanakul/Documents/GitHub/Amity-Social-Cloud-UIKit-Flutter
+
+Repo directory names (all under `$GITHUB_ROOT`):
+
 ```
+Amity-Social-Cloud-SDK-Android
+AmitySDKIOS
+AmityTypescriptSDK
+Amity-Social-Cloud-SDK-Flutter-Internal
+UIKit-V4
+AmityUIKitIOS
+Amity-Social-Cloud-UIKit-Web
+Amity-Social-UIKit-React-Native-CLI-OpenSource
+Amity-Social-Cloud-UIKit-Flutter
+```
+
+If a repo is not present under `$GITHUB_ROOT`, it may be cloned elsewhere or not cloned yet — ask the user for its location, or clone it from `github.com/AmityCo/<repo-name>` — rather than assuming a path.
 
 GitHub org: `AmityCo`
 
