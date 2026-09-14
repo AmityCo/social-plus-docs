@@ -7,11 +7,13 @@ description: "Generate shareable links for posts, communities, and user profiles
 
 <Accordion title="Speed run — just the code" icon="forward">
 ```typescript
+import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
+
 // 1. Get share link configuration
 const config = await Client.getShareableLinkConfiguration();
 
-// 2. Build a share URL for a post
-const shareUrl = `${config.baseUrl}/post/${postId}`;
+// 2. Generate a share URL for a post (null if the post pattern is not configured)
+const shareUrl = config.generateLink(AmitySharableContentType.POST, postId);
 
 // 3. Handle incoming deep link
 // (deep link routing is app-layer responsibility — not part of the TS SDK)
@@ -68,14 +70,13 @@ graph TD
 ## Quick Start: Generate a Shareable Link
 
 ```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
 
 const getPostShareLink = async (postId: string) => {
   try {
     const config = await Client.getShareableLinkConfiguration();
-    const { domain, patterns } = config;
-    const postLink = domain + patterns.post.replace('{postId}', postId);
-    return postLink;
+    // generateLink returns null when the post pattern is not configured.
+    return config.generateLink(AmitySharableContentType.POST, postId);
   } catch (error) {
     console.error('Failed to generate share link:', error);
     return null;
@@ -88,7 +89,7 @@ const getPostShareLink = async (postId: string) => {
 Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
 
 <Note>
-**Shareable links vs. in-app reposts**: This guide covers *external* shareable links — URLs for WhatsApp, SMS, or social media that open your app via deep link. social.plus also has a distinct *in-app repost* mechanism: when a user reshares a post inside the app, the new post stores the original's ID in `sharedPostId` and increments `sharedCount` on the original post. Use shareable links for viral distribution outside the app; use the repost API for in-feed resharing within the app.
+**Shareable links are for sharing *outside* the app.** They produce a URL a user can send to WhatsApp, SMS, or social media that deep-links back into your app. social.plus does not have an in-app repost or reshare API — there is no way to reshare a post into another feed from the SDK.
 </Note>
 
 ---
@@ -100,30 +101,31 @@ Full reference → [Content Sharing](/social-plus-sdk/social/content-management/
     The SDK fetches your configured domain and URL patterns from the server. Call this once and cache the result — it rarely changes.
 
     ```typescript TypeScript
-    import { Client } from '@amityco/ts-sdk';
+    import { AmitySharableContentType, Client } from '@amityco/ts-sdk';
 
     const config = await Client.getShareableLinkConfiguration();
-    // config.domain = "https://your-app.com"
-    // config.patterns.post = "/posts/{postId}"
-    // config.patterns.community = "/communities/{communityId}"
+    // config.domain — your configured base domain
+    // config.isEnabled(type) — whether a content type has a link pattern configured
+    // config.getPattern(type) — the raw pattern for a content type
+    // config.generateLink(type, referenceId) — the ready-to-share URL (null if unconfigured)
     ```
 
     Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
   </Step>
   <Step title="Generate links for different content types">
-    Use the pattern templates to construct URLs for posts, communities, and user profiles.
+    Use `generateLink` with the content type and reference ID. It returns `null` when that content type has no configured pattern, so gate on `isEnabled` if you need to hide the share action.
 
     ```typescript TypeScript
-    const { domain, patterns } = config;
+    import { AmitySharableContentType } from '@amityco/ts-sdk';
 
     // Post link
-    const postLink = domain + patterns.post.replace('{postId}', postId);
+    const postLink = config.generateLink(AmitySharableContentType.POST, postId);
 
     // Community link
-    const communityLink = domain + patterns.community.replace('{communityId}', communityId);
+    const communityLink = config.generateLink(AmitySharableContentType.COMMUNITY, communityId);
 
     // User profile link
-    const userLink = domain + patterns.user.replace('{userId}', userId);
+    const userLink = config.generateLink(AmitySharableContentType.USER, userId);
     ```
 
     Full reference → [Content Sharing](/social-plus-sdk/social/content-management/content-sharing)
@@ -184,7 +186,7 @@ Full reference → [Content Sharing](/social-plus-sdk/social/content-management/
 
 <AccordionGroup>
   <Accordion title="Share analytics" icon="chart-bar">
-    Track which posts and communities generate the most shares. Combine share events with impression data in **Admin Console → Analytics Dashboard** to measure viral coefficient.
+    Shareable links are generated on the client, so the SDK does not emit a built-in share event or a per-post share count. To measure sharing, log your own analytics event when a user taps share, and combine it with [post impressions](/social-plus-sdk/social/content-management/posts/analytics/post-impressions) for a reach picture.
   </Accordion>
   <Accordion title="Private content protection" icon="lock">
     Links to private community content should only work for authenticated users who are members. Visitors landing on a private community link should see a "Request to join" prompt, not the content.
@@ -217,7 +219,6 @@ Full reference → [Content Sharing](/social-plus-sdk/social/content-management/
     - Add Open Graph meta tags to your web fallback pages so shared links show rich previews on social media
     - Use UTM parameters on share links to track which channels drive the most installs
     - Cache `getShareableLinkConfiguration()` at app startup — it only needs to refresh once per session
-    - Show a share count on posts to create social proof and encourage more sharing
   </Accordion>
   <Accordion title="Deep link reliability" icon="link">
     - Always implement a web fallback for users who don't have the app installed
