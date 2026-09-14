@@ -43,6 +43,8 @@ This comprehensive guide provides AI assistants and developers with complete ins
 - **Never document an unimplemented feature.** A schema field, type, or leftover trace is not a feature — if the code doesn't ship it, it's not in the docs, and never invent companion fields/APIs to make it look coherent. Label a dormant field as reserved/not implemented, or omit it.
 - **Personalization & regulation:** name a recommender's main parameters in plain language (e.g. EU DSA transparency) and point to the non-personalized alternative — without exposing the confidential scoring model.
 
+**Ground new features before writing.** When documenting new or changed functionality, first read what actually shipped: the product specs in the `cleverden` sibling repo (PRDs, `tech-proposals/`, `tech-specs/`, `front-end-tech-specs/SDK` and `/UIKIT`) and, if needed, the actual SDK source (sibling repos, same path convention as release notes). `cleverden` is internal — use it to understand the feature, then publish only the integrator-facing subset per the exposure rules above.
+
 ### **Required Mintlify Components**
 
 #### **Multi-Platform Code Examples**

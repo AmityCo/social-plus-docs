@@ -12,6 +12,8 @@ Don't write docs from memory — consult the repo's doc-writing standards first.
 
 For **changelogs / release notes**, invoke the **`release-notes`** skill.
 
+When documenting **new or changed functionality**, first ground yourself in what actually shipped: read the product specs in the `cleverden` sibling repo (`$GITHUB_ROOT/cleverden` — PRDs, tech proposals, `front-end-tech-specs/`) and, if needed, the actual SDK source (sibling repos, same path convention as the release-notes skill). Then document only what the integrator needs — see the `docs-style` skill's grounding workflow. `cleverden` is internal; treat its ranking weights, formulas, and backend mechanics as private.
+
 ## Non-negotiables
 
 - **Accuracy first.** Verify every API name, signature, parameter, and behavior against the actual SDK source before documenting it. **Never infer or describe a feature from a schema field, type, or partial trace alone** — if the code doesn't implement it, don't document it, and don't invent companion fields or APIs to make it sound coherent.

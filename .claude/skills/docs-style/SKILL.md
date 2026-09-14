@@ -55,6 +55,24 @@ Write for the integrator: give them everything they need to build, and nothing t
 
 **Personalization & regulation:** for recommender or personalization features, name the main parameters in plain language (transparency expectations such as the EU Digital Services Act) **and** point to the non-personalized alternative the user can switch to — without exposing the confidential scoring model.
 
+## Grounding a new or changed feature
+
+When you document new or changed functionality, ground yourself in what was **actually built** before writing — never describe a feature from its name, a ticket title, or a schema field. The product specs and source live in repos cloned as **siblings of this docs repo**, the same convention the `release-notes` skill uses:
+
+```bash
+GITHUB_ROOT="$(cd "$(git rev-parse --show-toplevel)/.." && pwd)"
+```
+
+Read in this order, stopping once you have what the integrator needs:
+
+1. **Product specs — `$GITHUB_ROOT/cleverden`** (a sibling repo of PRDs, tech proposals, and tech specs):
+   - `front-end-tech-specs/SDK/…` and `front-end-tech-specs/UIKIT/…` — the integrator-facing API and component specs (closest to what you're documenting).
+   - `front-end-tech-specs/ImplementationPlan/…` — how the feature is split and staged across platforms.
+   - `tech-specs/`, `tech-proposals/`, `prd/` and `prds/` — behavior, eligibility rules, and the *why*.
+2. **Actual SDK / UIKit source** — the sibling repos listed in the `release-notes` skill (`$GITHUB_ROOT/<repo-name>`). Confirm the real API names, signatures, and that the code path actually ships. Distribution/tag conventions are in the `release-notes` skill.
+
+**cleverden is internal.** It contains exactly the material you must NOT publish — exact ranking weights, formulas, thresholds, backend storage/delivery mechanics, cold-start constants, and roadmap items that haven't shipped. Use it to *understand* the feature, then apply **What to expose vs. keep private** (above) to the output: document only the public API, the observable behavior, and what the integrator must do. If a spec describes something the shipped source does not yet implement, do not document it as available.
+
 ## Enforcement
 
 Pushes run structure/drift gates (`.docs-ops/CI_GATE.md`): `check-mdx.py`, `check-sdk-style.py`, and `check-drift.py`. A PR is blocked if it introduces a new stale (file, API-ref) pair versus `origin/main`. Match the archetype shape so `check-sdk-style.py` passes.
