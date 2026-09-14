@@ -14,10 +14,10 @@ For **changelogs / release notes**, invoke the **`release-notes`** skill.
 
 ## Non-negotiables
 
-- **Accuracy first.** Verify every API name, signature, parameter, and behavior against the actual SDK source before documenting it. **Never infer or describe a feature from a schema field, type, or partial trace alone** — if the code doesn't implement it, don't document it.
-- **No marketing fluff** in reference or solution content (the clarity rubric forbids it). A light benefit framing is allowed only in section overviews.
+- **Accuracy first.** Verify every API name, signature, parameter, and behavior against the actual SDK source before documenting it. **Never infer or describe a feature from a schema field, type, or partial trace alone** — if the code doesn't implement it, don't document it, and don't invent companion fields or APIs to make it sound coherent.
+- **Voice by section.** Overviews and feature introductions lead with the reader benefit (a light, marketing-aware tone — why to use it, what problem it solves). Reference, how-to, and behavior sections are precise and technical with no marketing language.
 - **Cross-platform parity.** When a feature ships on multiple platforms, describe it consistently across them.
-- **Confidential internals stay out.** Don't publish exact ranking weights, scoring formulas, or backend storage/mechanics — describe behavior at the customer-facing level.
+- **Expose what the integrator needs; keep system internals private.** Public APIs, parameters, and perceivable product behavior are fair game. Exact ranking weights, scoring formulas, thresholds, and backend storage/delivery mechanics are not — describe named signals and behavior at the customer-facing level. For personalization features, name the main parameters in plain language (e.g. for EU DSA transparency) and point to the non-personalized alternative.
 - Navigation lives in **`docs.json`** (not `placeholder.json`, which is stale and unused).
 - Don't hand-edit generated layers (`.docs-ops/sdk-surface/*`); the SDK best-practice "opinion" layer lives in the separate `social-plus-foundry` (Vise) repo.
 
