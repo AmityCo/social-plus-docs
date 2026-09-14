@@ -1,0 +1,464 @@
+---
+title: "Product Tagging"
+description: "Attach products to a livestream post and pin one at a time, so viewers always see the item the host is talking about right now."
+---
+
+Shopping moments in a livestream are short. A host holds up a pair of sneakers, talks about them for ninety seconds, then moves on — and viewers need a way to act on that item while it is still on screen. Product tagging gives you the SDK surface for exactly that: attach a set of products to a livestream post up front, then pin and swap the one product that is featured at any moment. Hosts control it, co-hosts can be granted the same control, and every viewer sees the change immediately.
+
+<Note>
+  **Product tagging operations target the child room post.** Creating a room post produces a parent post with a child post of type `room`. `pinProduct`, `unpinProduct`, and tagged-product updates all take the **child** post ID. See [Get the child room post ID](#get-the-child-room-post-id).
+</Note>
+
+## Platform support
+
+| Capability | TypeScript | iOS | Android |
+| --- | --- | --- | --- |
+| Create a room post with product tags | `PostRepository.createRoomPost(...)` | `AmityPostRepository().createRoomPost(...)` | `AmitySocialClient.newPostRepository().createRoomPost(...)` |
+| Replace the tagged product list | `PostRepository.updateProductTags(postId, productTags)` | `updateProductTags(postId:productTags:)` | `editPost(postId).taggedProducts(productTags).build().apply()` |
+| Pin a product | `PostRepository.pinProduct(postId, productId)` | `pinProduct(postId:productId:)` | `pinProduct(postId, productId)` |
+| Unpin the pinned product | `PostRepository.unpinProduct(postId)` | `unpinProduct(postId:)` | `unpinProduct(postId)` |
+| Grant a co-host product-tag permission | `RoomRepository.updateCohostPermission(...)` | `AmityRoomRepository().updateCohostPermissions(...)` | `AmityVideoClient.newRoomRepository().updateCohostPermission(...)` |
+| Product view and click analytics | `product.analytics.markAsViewed(...)` / `markAsClicked(...)` | `product.analytics.markAsViewed(...)` / `markAsClicked(...)` | `product.analytics().markAsViewed(...)` / `markAsClicked(...)` |
+
+<Info>
+  Livestream product tagging is **not exposed** in the Flutter SDK or the React Native SDK. React Native apps can reach it through the TypeScript SDK.
+</Info>
+
+## Parameters
+
+Inputs shared across the operations on this page.
+
+| Input | Type | Platforms | Description |
+| --- | --- | --- | --- |
+| `roomId` | `string` | TypeScript, iOS, Android | The livestream room the post points at |
+| `postId` | `string` | TypeScript, iOS, Android | The **child** room post ID — required by pin, unpin, and tag updates |
+| `productTags` | Media product tag array | TypeScript, iOS, Android | Products available on the post. `Amity.MediaProductTag` · `AmityMediaProductTag` · `AmityProductTag.Media` |
+| `productId` | `string` | TypeScript, iOS, Android | Product to pin; must already be in `productTags` |
+| `pinnedProductId` | `string` | TypeScript, iOS, Android | Product pinned at creation time; must be in `productTags` |
+| `canManageProductTags` | `boolean` | TypeScript, iOS, Android | Grants a co-host the ability to manage this post's products |
+| `sourceType` | Post or room | TypeScript, iOS, Android | Analytics source. `"room"` · `AmityAnalyticsSourceType.room` · `AnalyticsEventSourceType.ROOM` |
+
+A media product tag carries only a `productId` on write; on read it also exposes the resolved `product`.
+
+<Warning>
+  Room-post product tags carry only a `productId` (plus the resolved `product` on read). The positional fields `text`, `index`, and `length` belong to **text** product tags (`Amity.TextProductTag`, `AmityTextProductTag`, `AmityProductTag.Text`), which are used on text and media posts — not on room posts.
+</Warning>
+
+## Create a room post with product tags
+
+Creates the livestream post that references a room, optionally with the products you intend to feature and one of them already pinned. Any product you pass in `pinnedProductId` must also appear in `productTags`.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `targetType` | community or user | Yes | Where the post is created |
+| `targetId` | `string` | Yes | Community ID or user ID |
+| `roomId` | `string` | Yes | The livestream room ID |
+| `title` | `string` | No | Livestream title |
+| `text` | `string` | No | Livestream description |
+| `productTags` | media product tag array | No | Products available to pin during the stream |
+| `pinnedProductId` | `string` | No | Product pinned at creation; must be present in `productTags` |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: post } = await PostRepository.createRoomPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    roomId,
+    title: "Flash Sale",
+    text: "Flash Sale Live!",
+  },
+  productTags: [{ productId: "prod_001" }, { productId: "prod_002" }],
+  pinnedProductId: "prod_001",
+});
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+
+let builder = AmityRoomPostBuilder(roomId: roomId, text: "Flash Sale Live!")
+builder.setTitle("Flash Sale")
+
+let post = try await postRepository.createRoomPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil,
+    productTags: [
+        AmityMediaProductTag(productId: "prod_001"),
+        AmityMediaProductTag(productId: "prod_002")
+    ],
+    pinnedProductId: "prod_001"
+)
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.AmitySocialClient
+import com.amity.socialcloud.sdk.model.core.producttag.AmityProductTag
+import com.amity.socialcloud.sdk.model.social.post.AmityPost
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+AmitySocialClient.newPostRepository()
+    .createRoomPost(
+        targetType = AmityPost.TargetType.COMMUNITY,
+        targetId = communityId,
+        roomId = roomId,
+        text = "Flash Sale Live!",
+        title = "Flash Sale",
+        productTags = listOf(
+            AmityProductTag.Media(productId = "prod_001"),
+            AmityProductTag.Media(productId = "prod_002")
+        ),
+        pinnedProductId = "prod_001"
+    )
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { post -> Log.d("PostRepository", "Room post created: ${post.getPostId()}") },
+        { error -> Log.e("PostRepository", "Failed to create room post", error) }
+    )
+```
+
+</CodeGroup>
+
+## Get the child room post ID
+
+`createRoomPost` returns the **parent** post. The room content lives in its first child, and every later product-tag operation takes that child's post ID. Read it once after creation and hold on to it for the duration of the stream.
+
+<CodeGroup>
+
+```typescript TypeScript
+// Post IDs of the children
+const childPostId = post.children[0];
+
+// Or via the linked child post objects
+const childPost = post.childrenPosts[0];
+```
+
+```swift iOS
+let childPostId = post.childrenPosts.first?.postId
+```
+
+```kotlin Android
+val childPostId = post.getChildren().firstOrNull()?.getPostId()
+```
+
+</CodeGroup>
+
+## Replace the tagged product list
+
+Sets the complete list of products available on the livestream post. This is a full replacement, not a merge: to add one product, read the current list, append, and send the whole array back. Sending an empty array clears every tag. If the currently pinned product is no longer in the list, it stops being pinned.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `postId` | `string` | Yes | The child room post ID |
+| `productTags` | media product tag array | Yes | The full replacement list; empty clears all tags |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: updatedPost } = await PostRepository.updateProductTags(childPostId, [
+  { productId: "prod_001" },
+  { productId: "prod_003" },
+]);
+
+// Clear every tag
+await PostRepository.updateProductTags(childPostId, []);
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+
+let updatedPost = try await postRepository.updateProductTags(
+    postId: childPostId,
+    productTags: [
+        AmityMediaProductTag(productId: "prod_001"),
+        AmityMediaProductTag(productId: "prod_003")
+    ]
+)
+
+// Clear every tag
+_ = try await postRepository.updateProductTags(postId: childPostId, productTags: [])
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.AmitySocialClient
+import com.amity.socialcloud.sdk.model.core.producttag.AmityProductTag
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+AmitySocialClient.newPostRepository()
+    .editPost(childPostId)
+    .taggedProducts(
+        listOf(
+            AmityProductTag.Media(productId = "prod_001"),
+            AmityProductTag.Media(productId = "prod_003")
+        )
+    )
+    .build()
+    .apply()
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { /* Tags replaced */ },
+        { error -> Log.e("PostRepository", "Failed to update product tags", error) }
+    )
+```
+
+</CodeGroup>
+
+<Note>
+  Android has no dedicated `updateProductTags` method. Use the post-edit builder: `editPost(postId).taggedProducts(List<AmityProductTag.Media>)`. The same builder exposes `pinnedProduct(productId)` if you want to change the tag list and the pinned product in a single call.
+</Note>
+
+## Pin a product
+
+Marks one product as the featured item on the livestream post, which viewers see prominently. The product must already be in the post's tagged product list. Only one product is pinned at a time, and pinning a new one replaces the previous one — there is no need to unpin first.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `postId` | `string` | Yes | The child room post ID |
+| `productId` | `string` | Yes | Product to pin; must be in the post's tagged product list |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: updatedPost } = await PostRepository.pinProduct(childPostId, "prod_002");
+
+console.log(updatedPost.pinnedProductId); // "prod_002"
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+
+let updatedPost = try await postRepository.pinProduct(
+    postId: childPostId,
+    productId: "prod_002"
+)
+
+print(updatedPost.pinnedProductId as Any) // Optional("prod_002")
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.AmitySocialClient
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+AmitySocialClient.newPostRepository()
+    .pinProduct(postId = childPostId, productId = "prod_002")
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { /* Product pinned */ },
+        { error -> Log.e("PostRepository", "Failed to pin product", error) }
+    )
+```
+
+</CodeGroup>
+
+## Unpin the pinned product
+
+Clears the featured product. The product stays in the post's tagged product list; it is simply no longer displayed prominently. The call is idempotent — unpinning when nothing is pinned succeeds without error.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `postId` | `string` | Yes | The child room post ID |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: updatedPost } = await PostRepository.unpinProduct(childPostId);
+
+console.log(updatedPost.pinnedProductId); // null
+```
+
+```swift iOS
+let postRepository = AmityPostRepository()
+
+let updatedPost = try await postRepository.unpinProduct(postId: childPostId)
+
+print(updatedPost.pinnedProductId as Any) // nil
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.AmitySocialClient
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+AmitySocialClient.newPostRepository()
+    .unpinProduct(postId = childPostId)
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { /* Product unpinned */ },
+        { error -> Log.e("PostRepository", "Failed to unpin product", error) }
+    )
+```
+
+</CodeGroup>
+
+## Grant a co-host product-tag permission
+
+The room host can let a co-host manage products during the stream. With `canManageProductTags` set to `true`, that co-host can pin, unpin, and change the tagged product list. The permission is read back on each room participant as `canManageProductTags`.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `roomId` | `string` | Yes | The livestream room ID |
+| `cohostId` | `string` | Yes | User ID of the co-host |
+| `canManageProductTags` | `boolean` | Yes | Whether the co-host can manage products |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { RoomRepository } from "@amityco/ts-sdk";
+
+const { data: room } = await RoomRepository.updateCohostPermission(
+  roomId,
+  cohostId,
+  true,
+);
+```
+
+```swift iOS
+let roomRepository = AmityRoomRepository()
+
+let room = try await roomRepository.updateCohostPermissions(
+    roomId: roomId,
+    cohostId: cohostId,
+    canManageProductTags: true
+)
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.video.AmityVideoClient
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.schedulers.Schedulers
+
+AmityVideoClient.newRoomRepository()
+    .updateCohostPermission(
+        roomId = roomId,
+        cohostId = cohostId,
+        canManageProductTags = true
+    )
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe(
+        { /* Permission updated */ },
+        { error -> Log.e("RoomRepository", "Failed to update co-host permission", error) }
+    )
+```
+
+</CodeGroup>
+
+## Track product views and clicks
+
+Each product carries an analytics handle for reporting impressions and link clicks. Call `markAsViewed` when a product card becomes visible on screen and `markAsClicked` when the viewer taps through to the product. Both are fire-and-forget: they return nothing, queue the event, and send it in the background. Repeat calls for the same product in the same source are collapsed into one event, so it is safe to call them on every render.
+
+### Inputs
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `location` | `string` | Yes | Placement identifier in `pageId/componentId/elementId` form |
+| `sourceType` | post or room | Yes | Where the product appeared |
+| `sourceId` | `string` | Yes | The post ID or room ID matching `sourceType` |
+
+Product objects come back resolved on the post's product tags, so you do not need a separate product fetch to report analytics.
+
+<CodeGroup>
+
+```typescript TypeScript
+const tag = post.productTags[0];
+
+tag.product?.analytics.markAsViewed(
+  `${pageId}/${componentId}/${elementId}`,
+  "room",
+  roomId,
+);
+
+tag.product?.analytics.markAsClicked(
+  `${pageId}/${componentId}/${elementId}`,
+  "room",
+  roomId,
+);
+```
+
+```swift iOS
+if let product = post.getMediaProductTags().first?.product {
+    product.analytics.markAsViewed(
+        location: "\(pageId)/\(componentId)/\(elementId)",
+        sourceType: .room,
+        sourceId: roomId
+    )
+
+    product.analytics.markAsClicked(
+        location: "\(pageId)/\(componentId)/\(elementId)",
+        sourceType: .room,
+        sourceId: roomId
+    )
+}
+```
+
+```kotlin Android
+import com.amity.socialcloud.sdk.core.engine.analytics.AnalyticsEventSourceType
+
+val product = post.getProductTags().firstOrNull()?.product
+
+product?.analytics()?.markAsViewed(
+    location = "$pageId/$componentId/$elementId",
+    sourceType = AnalyticsEventSourceType.ROOM,
+    sourceId = roomId
+)
+
+product?.analytics()?.markAsClicked(
+    location = "$pageId/$componentId/$elementId",
+    sourceType = AnalyticsEventSourceType.ROOM,
+    sourceId = roomId
+)
+```
+
+</CodeGroup>
+
+## Platform notes
+
+- **TypeScript** — `createRoomPost`, `updateProductTags`, `pinProduct`, and `unpinProduct` all resolve to a cached wrapper. Destructure `data` to reach the post: `const { data: post } = await PostRepository.pinProduct(...)`.
+- **iOS** — the product-tag methods on `AmityPostRepository` are `async throws` and main-actor isolated; each returns the updated `AmityPost`. Room product tags are read back with `post.getMediaProductTags()`.
+- **Android** — `createRoomPost` returns `Single<AmityPost>`, while `pinProduct` and `unpinProduct` return `Completable` and do **not** emit the updated post. Observe the post live object to pick up the new `getPinnedProductId()` value. There is no `updateProductTags` method; use `editPost(postId).taggedProducts(...)`.
+- **Flutter and React Native** — not exposed.
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="Co-Host Management" href="/social-plus-sdk/video-new/broadcasting/co-host-management">
+    Invite co-hosts and manage room participants and their permissions.
+  </Card>
+  <Card title="Create a Room" href="/social-plus-sdk/video-new/broadcasting/create-room">
+    Create the livestream room a room post points at.
+  </Card>
+  <Card title="Start Broadcasting" href="/social-plus-sdk/video-new/broadcasting/start-broadcasting">
+    Go live once the room and its post exist.
+  </Card>
+  <Card title="Live Viewing" href="/social-plus-sdk/video-new/broadcasting/live-viewing">
+    Watch an active room and observe its post in real time.
+  </Card>
+</CardGroup>
