@@ -1,0 +1,429 @@
+---
+title: "Comment Review"
+description: "Hold new and edited comments for moderator review, then query the review queue and approve or decline them."
+---
+
+Turn on comment review when a community should read a comment before anyone else does. A held comment still belongs to its author — they see it, and can keep editing it — but it stays out of everyone else's comment lists and comment counts until a reviewer approves it. Reviewers work from a community-wide queue and approve or decline by comment ID.
+
+## Platform Support
+
+| Platform   | Read approval status          | Query review queue                                          | Approve                                       | Decline                                                |
+| ---------- | ----------------------------- | ----------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| TypeScript | `comment.approvalStatus`      | `CommentRepository.getCommentReviewQueue(params, callback)` | `CommentRepository.approveComment(commentId)` | `CommentRepository.declineComment(commentId, reason?)` |
+| iOS        | `comment.approvalStatus`      | `commentRepository.getCommentReviewQueue(with:)`            | `commentRepository.approveComment(withId:)`   | `commentRepository.declineComment(withId:reason:)`     |
+| Android    | `comment.getApprovalStatus()` | `commentRepository.getCommentReviewQueue(communityId)`      | `commentRepository.approveComment(commentId)` | `commentRepository.declineComment(commentId, reason)`  |
+
+<Info>
+  Flutter does not ship comment review. A Flutter client reads approved comments as it always has; it cannot read a review queue or approve a comment.
+
+Comment review is separate from [post review](/social-plus-sdk/social/content-management/posts/moderation/post-review). The two features have their own settings, their own permission, and their own status values — a comment is `pending` / `approved` / `rejected`, while a post is `reviewing` / `published` / `declined`.
+
+</Info>
+
+## Approval Status
+
+Every comment carries an approval status. A comment in a community that does not require review is always approved.
+
+| Status   | TypeScript   | iOS         | Android    | What it means                                                                                                                                     |
+| -------- | ------------ | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pending  | `"pending"`  | `.pending`  | `PENDING`  | Held for review. Visible to its author, the community's reviewers, and network admins. It accepts no replies, reactions, or flags while it waits. |
+| Approved | `"approved"` | `.approved` | `APPROVED` | Visible to everyone. Not terminal — editing an approved comment in a community that requires review sends it back to pending.                     |
+| Rejected | `"rejected"` | `.rejected` | `REJECTED` | Declined by a reviewer. Terminal, and the comment is deleted at the same time.                                                                    |
+
+<Note>
+  The server sends `approvalStatus` only while a comment is pending or after it
+  was rejected. Every SDK reads an absent value as **approved**, which is what
+  every comment written before this feature is. Do not write your own defaulting
+  on the raw payload — read the status from the SDK model.
+</Note>
+
+## Permission
+
+Reading the queue and deciding on a comment both require the `REVIEW_COMMUNITY_COMMENT` permission on the target community. A client-side check is for hiding controls only; the server enforces the permission on every call, and a reviewer can never review their own comment.
+
+<CodeGroup>
+
+```typescript TypeScript
+const canReview = client
+  .hasPermission(Amity.Permission.ReviewCommunityCommentPermission)
+  .community(communityId);
+
+renderResults(canReview);
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned iOS SDK) */}
+
+```swift iOS
+let canReview = await client.hasPermission(
+    .reviewCommunityComment,
+    forCommunity: "community-id"
+)
+
+showSuccessMessage(canReview)
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned Android SDK) */}
+
+```kotlin Android
+import com.amity.socialcloud.sdk.model.core.permission.AmityPermission
+
+AmityCoreClient
+    .hasPermission(permission = AmityPermission.REVIEW_COMMUNITY_COMMENT)
+    .atCommunity(communityId = communityId)
+    .check()
+    .doOnNext { canReview: Boolean ->
+        showSuccessMessage(canReview)
+    }
+    .subscribe()
+```
+
+</CodeGroup>
+
+## Parameters
+
+| Operation              | Parameter                       | Platforms                | Required | Description                                                                                                                                                       |
+| ---------------------- | ------------------------------- | ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Require review         | `needApprovalOnCommentCreation` | TypeScript, iOS          | Yes      | Turns comment review on for the community. Defaults to `false`.                                                                                                   |
+| Query the review queue | `communityId`                   | TypeScript, iOS, Android | Yes      | Community whose pending comments to list.                                                                                                                         |
+| Query the review queue | `postId`                        | TypeScript, iOS, Android | No       | Narrows the queue to one post. A post from another community returns an empty list, not an error.                                                                 |
+| Query the review queue | `startDate` / `endDate`         | TypeScript, iOS, Android | No       | Filters on when the comment was **written**, not when it entered the queue — the two differ for a re-reviewed comment. `endDate` includes the whole calendar day. |
+| Query the review queue | `timeZone`                      | TypeScript, iOS, Android | No       | IANA time-zone name the date filters are read in. Defaults to `UTC`.                                                                                              |
+| Query the review queue | Page size                       | TypeScript, iOS, Android | No       | Defaults to **10** on this route — not the SDK-wide 20 — and is capped at 100.                                                                                    |
+| Approve or decline     | `commentId`                     | TypeScript, iOS, Android | Yes      | Comment to approve or decline.                                                                                                                                    |
+| Decline                | `reason`                        | TypeScript, iOS, Android | No       | Reviewer's note, at most 250 characters. Kept for the moderation record only.                                                                                     |
+
+<Warning>
+  `reason` is never shown to the comment's author or to anyone else through the
+  SDK. Do not build an author-facing rejection message on it.
+</Warning>
+
+## Require Review for a Community's Comments
+
+Set `needApprovalOnCommentCreation` when you create or update the community. After it is on, new comments and effective edits in that community enter the queue.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommunityRepository } from "@amityco/ts-sdk";
+
+const { data: community } = await CommunityRepository.updateCommunity(
+  communityId,
+  {
+    needApprovalOnCommentCreation: true,
+  },
+);
+
+renderResults(community.needApprovalOnCommentCreation);
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned iOS SDK) */}
+
+```swift iOS
+let updateOptions = AmityCommunityUpdateOptions()
+updateOptions.setNeedApprovalOnCommentCreation(true)
+
+let community = try await communityRepository.editCommunity(
+    withId: "community-id",
+    options: updateOptions
+)
+
+renderResults(community.isCommentReviewEnabled)
+```
+
+</CodeGroup>
+
+<Info>
+  The Android SDK reads and applies the setting, but does not expose it on the
+  community model or on the create and update builders. Turn comment review on
+  from the Console, from a Web or iOS client, or from the server API; an Android
+  client then sees the pending comments it produces.
+</Info>
+
+<Note>
+  Turning the setting off does not drain the queue. Comments already waiting
+  stay waiting, and the review queue keeps serving them until each one is
+  decided.
+</Note>
+
+## Read Approval Status on a Comment
+
+Read the status on any comment you hold — including the one returned by create and edit — before you show it as published. In a community that requires review, a create or an effective edit comes back pending.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const { data: comment } = await CommentRepository.createComment({
+  referenceId: postId,
+  referenceType: "post",
+  data: { text: "Hello world!" },
+});
+
+if (comment.approvalStatus === "pending") {
+  renderResults("Awaiting review — only you can see this comment");
+} else {
+  renderResults(comment);
+}
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned iOS SDK) */}
+
+```swift iOS
+let options = AmityCommentCreateOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    text: "Hello world!"
+)
+
+let comment = try await commentRepository.createComment(with: options)
+
+switch comment.approvalStatus {
+case .pending:
+    showSuccessMessage("Awaiting review — only you can see this comment")
+case .approved:
+    showSuccessMessage(comment.commentId)
+case .rejected:
+    showSuccessMessage("declined")
+}
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned Android SDK) */}
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.comment.review.AmityCommentApprovalStatus
+
+when (comment.getApprovalStatus()) {
+    AmityCommentApprovalStatus.PENDING ->
+        showSuccessMessage("Awaiting review — only you can see this comment")
+    AmityCommentApprovalStatus.APPROVED -> showSuccessMessage(comment.getCommentId())
+    AmityCommentApprovalStatus.REJECTED -> showSuccessMessage("declined")
+}
+```
+
+</CodeGroup>
+
+<Note>
+  An author may keep editing their own pending comment unless the network turns
+  that off. Read `isAllowEditCommentWhenReviewingEnabled` from social settings
+  before you show an edit control: when it is `false`, editing a pending comment
+  fails with `403` / `400300`.
+</Note>
+
+## Query the Review Queue
+
+List a community's pending comments, oldest first on queue entry. The queue is community-wide unless you narrow it to one post, and it stays readable after the community's review setting is turned off.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const unsubscribe = CommentRepository.getCommentReviewQueue(
+  {
+    communityId,
+    startDate: "2026-09-01",
+    endDate: "2026-09-30",
+    timeZone: "Asia/Bangkok",
+    limit: 10,
+  },
+  ({ data: comments, loading, error, onNextPage, hasNextPage }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(comments);
+
+    if (hasNextPage) {
+      onNextPage?.();
+    }
+  },
+);
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned iOS SDK) */}
+
+```swift iOS
+let options = AmityCommentReviewQueueQueryOptions(
+    communityId: "community-id",
+    postId: nil,
+    startDate: nil,
+    endDate: nil,
+    timeZone: "Asia/Bangkok",
+    pageSize: 10
+)
+
+token = commentRepository.getCommentReviewQueue(with: options).observe { collection, error in
+    if let error = error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned Android SDK) */}
+
+```kotlin Android
+import org.joda.time.DateTime
+
+AmitySocialClient.newCommentRepository()
+    .getCommentReviewQueue(communityId = communityId)
+    .startDate(startDate = DateTime.parse("2026-09-01"))
+    .endDate(endDate = DateTime.parse("2026-09-30"))
+    .timeZone(timeZone = "Asia/Bangkok")
+    .pageSize(pageSize = 10)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+<Warning>
+  The review queue reports no total. There is no count on the response and no
+  count endpoint, so an "N comments awaiting review" badge cannot be built on
+  it. Page through the collection instead.
+</Warning>
+
+## Approve or Decline a Comment
+
+Approve to reveal the comment to everyone and move the post's comment count by one. Decline to reject it — a declined comment is deleted at the same time.
+
+Neither call is idempotent. A second decision on a comment that was already decided is refused, so two reviewers acting at once cannot both record an outcome.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const { data: approvedComment } =
+  await CommentRepository.approveComment(commentId);
+
+const { data: declinedComment } = await CommentRepository.declineComment(
+  commentId,
+  "Off-topic",
+);
+
+renderResults([approvedComment, declinedComment]);
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned iOS SDK) */}
+
+```swift iOS
+try await commentRepository.approveComment(withId: "comment-id")
+try await commentRepository.declineComment(withId: "comment-id", reason: "Off-topic")
+
+showSuccessMessage()
+```
+
+{/* doc-as-test: skip (comment review ships after the currently pinned Android SDK) */}
+
+```kotlin Android
+AmitySocialClient.newCommentRepository()
+    .approveComment(commentId = commentId)
+    .subscribe(
+        { showSuccessMessage(commentId) },
+        { error -> handleGeneralError(error) }
+    )
+
+AmitySocialClient.newCommentRepository()
+    .declineComment(commentId = commentId, reason = "Off-topic")
+    .subscribe(
+        { showSuccessMessage(commentId) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+</CodeGroup>
+
+## Receive Approvals in Realtime
+
+Subscribe to the community or post comment topic so the SDK receives comment events. Without a subscription no comment event arrives and none of the behavior below runs — see [social realtime events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events) for the subscription call on each platform.
+
+Once subscribed, the SDK keeps your comment lists and counts correct on its own: a pending comment is not inserted into a public list, an approval inserts it once and moves the count once, and a decline arrives as a deletion. On TypeScript you can also listen for the approval directly.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const dispose = CommentRepository.onCommentApproved((comment) => {
+  renderResults(comment.commentId);
+});
+```
+
+</CodeGroup>
+
+<Warning>
+  A pending comment reaches the client over realtime before the REST API will serve it, so delivery is not visibility. Read the approval status rather than treating an incoming comment as public.
+
+There is no `comment.declined` event. A decline arrives as a comment deletion, which means an author cannot tell a decline apart from a moderator deleting their comment.
+
+</Warning>
+
+## Errors
+
+Every error keeps the server `code`. None of them should be retried as-is.
+
+| Condition                                                                                                                       | HTTP | `code`   |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
+| Caller lacks `REVIEW_COMMUNITY_COMMENT`, or is reviewing their own comment                                                      | 403  | `400301` |
+| Comment was already approved or declined, or is already deleted                                                                 | 403  | `400300` |
+| Author edits a pending comment on a network where that is disabled                                                              | 403  | `400300` |
+| Unknown community, unknown time zone, a date that is not `YYYY-MM-DD`, a page size above 100, or a `reason` over 250 characters | 422  | `500000` |
+
+<Note>
+  Treat `400300` on approve or decline as a conflict, not a failure: another reviewer got there first. Re-read the review queue instead of retrying.
+
+A `404` on a pending comment means the viewer may not see it — not that it was deleted.
+
+</Note>
+
+## Platform Notes
+
+- **Counts.** A pending comment does not count toward its post's comment count or its parent's reply count for anyone but its author. The count moves for everyone else on approval, so expect a count to change without a new comment appearing in the list.
+- **Re-review.** Editing an approved comment in a community that requires review returns it to pending: it leaves public comment lists and the count drops by one until it is approved again. An edit that changes nothing does not send it back.
+- **Story comments.** Comment review applies to comments in a community. Confirm the behavior for comments on stories against the release notes for your platform before relying on it.
+- **Session scope.** Pending comments and the review queue are held for one signed-in user. They are dropped on logout and on user switch, and the queue stops loading if the user loses the review permission mid-session.
+- **Return shapes follow each platform's post-review API.** TypeScript returns the comment, iOS returns nothing, and Android returns a `Completable`.
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card
+    title="Post Review"
+    href="/social-plus-sdk/social/content-management/posts/moderation/post-review"
+    icon="gavel"
+  >
+    Approve, decline, and query posts held for community review.
+  </Card>
+  <Card
+    title="Edit Comment"
+    href="/social-plus-sdk/social/content-management/comments/actions/edit-comment"
+    icon="pen"
+  >
+    Update comment text and attachments, and see when an edit needs review
+    again.
+  </Card>
+  <Card
+    title="Query Comments"
+    href="/social-plus-sdk/social/content-management/comments/retrieval/query-comments"
+    icon="filter"
+  >
+    List comments and replies on a post, story, or custom content ID.
+  </Card>
+  <Card
+    title="Social Realtime Events"
+    href="/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events"
+    icon="bolt"
+  >
+    Subscribe to community and post topics so comment events reach the client.
+  </Card>
+</CardGroup>
