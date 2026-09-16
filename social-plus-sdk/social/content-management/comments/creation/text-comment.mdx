@@ -7,15 +7,15 @@ Create a text comment by passing a reference target and text body to the comment
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `referenceId` | Yes | ID of the post, story, or custom content item being commented on |
-| `referenceType` | Yes | Use `post`, `story`, or `content` |
-| `text` | Yes | Text body of the comment |
-| `parentId` | No | Existing comment ID when creating a reply |
-| `metadata` | No | Custom metadata attached to the comment |
-| `mentionees` / mention builder | No | User mention payloads |
-| `links` | No | Link metadata on TypeScript, iOS, and Android |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `referenceId` | Yes | All | ID of the post, story, or custom content item being commented on |
+| `referenceType` | Yes | All | Use `post`, `story`, or `content` |
+| `text` | Yes | All | Text body of the comment |
+| `parentId` | No | All | Existing comment ID when creating a reply |
+| `metadata` | No | All | Custom metadata attached to the comment |
+| `mentionees` / mention builder | No | All | User mention payloads |
+| `links` | No | TypeScript, iOS, Android | Link metadata; not exposed on the Flutter comment builder |
 
 <Info>
   The current Flutter public comment creation builder exposes `metadata(...)` and `mentionUsers(...)`, but it does not expose a `links(...)` method.
@@ -26,17 +26,7 @@ Create a text comment by passing a reference target and text body to the comment
 Create a top-level text comment with the reference target and text body.
 
 <Note>
-  **Comment creation is local-first on TypeScript, iOS, and Android.** These SDKs persist a local comment and start the server request immediately, so an active comment collection can render it before the round trip completes. The state is observable, but the names and failure behavior differ:
-
-  | Platform | State and failure behavior |
-  | --- | --- |
-  | TypeScript | Read `comment.syncState`: `syncing` while the request is in flight, `synced` after server confirmation, or `error` when creation fails. The optimistic item remains in the collection on failure and carries a temporary local comment ID. |
-  | iOS | Observe `AmityComment.syncState`: `.syncing` becomes `.synced` after confirmation. A failed local comment becomes `.error` and is removed from its parent relationship. |
-  | Android | Read `comment.getState()`: `SYNCING` becomes `SYNCED` after confirmation. A failed local comment is marked `FAILED` in the local store. |
-  | Flutter | The current public comment-creation path waits for the server response before persisting the comment; it does not create the same local-first temporary comment. |
-  | React Native | The UIKit wrapper uses `@amityco/ts-sdk-react-native`, so it follows the TypeScript behavior. |
-
-  Render local-first comments in a pending style, and handle each platform's failure state so a failed comment is not mistaken for a server-created one. Use the live collection or observable query for state transitions; the creation method resolves after the server request completes on local-first SDKs.
+  Comment creation is local-first on TypeScript, iOS, Android, and React Native: the SDK persists a local comment before the server confirms it. See [Local-First Comment Creation](#local-first-comment-creation) for the per-platform sync states and failure handling.
 </Note>
 
 <CodeGroup>
@@ -154,6 +144,28 @@ final replyId = reply.commentId;
 ```
 
 </CodeGroup>
+
+## Local-First Comment Creation
+
+On TypeScript, iOS, Android, and React Native, the SDK writes the comment to its local store and starts the server request immediately, so an active comment collection can render it before the round trip completes. Flutter waits for the server response instead.
+
+The state is observable on every local-first platform, but the names and failure behavior differ:
+
+| Platform | State and failure behavior |
+| --- | --- |
+| TypeScript | Read `comment.syncState`: `syncing` while the request is in flight, `synced` after server confirmation, or `error` when creation fails. The optimistic item remains in the collection on failure and carries a temporary local comment ID. |
+| iOS | Observe `AmityComment.syncState`: `.syncing` becomes `.synced` after confirmation. A failed local comment becomes `.error` and is removed from its parent relationship, so it no longer appears among its parent's children. |
+| Android | Read `comment.getState()`: `SYNCING` becomes `SYNCED` after confirmation. A failed local comment is marked `FAILED` in the local store. |
+| Flutter | The current public comment-creation path waits for the server response before persisting the comment; it does not create the same local-first temporary comment. |
+| React Native | Uses `@amityco/ts-sdk-react-native`, which shares the TypeScript implementation and behaves identically. |
+
+Render local-first comments in a pending style, and handle each platform's failure state so a failed comment is not mistaken for a server-created one.
+
+<Warning>
+  On TypeScript and React Native, local-first creation requires the client cache. When the cache is disabled no local comment is created, and the call behaves like a plain server request.
+</Warning>
+
+The creation call also rejects when the server request fails; it does not only set the failure state. Catch the error from the creation call and watch sync state through the live collection or observable query. Handling only one of the two leaves either an unhandled rejection or a pending comment that never resolves.
 
 ## Notes
 
