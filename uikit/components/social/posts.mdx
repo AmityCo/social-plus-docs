@@ -1342,19 +1342,35 @@ Product tagging enables commerce integration within posts, allowing users to tag
   </Card>
 
   <Card title="In-App Browser" icon="arrow-up-right-from-square">
-    Tapping a product opens its link in an in-app browser, keeping users within the app. Override this to route the tap yourself — see below.
+    Tapping a product opens its link in an in-app browser on iOS and Android, and in a new tab on Web. Override this to route the tap yourself — see below.
   </Card>
 </CardGroup>
 
 ### Customize the Product Tap
 
-The in-app browser is the default. Override `onPostProductTagClick` on `AmityGlobalBehavior` to send the tap to your own product screen or commerce flow instead.
+Opening the product link is the default. Override `onPostProductTagClick` on `AmityGlobalBehavior` to send the tap to your own product screen or commerce flow instead.
+
+The handler receives the tapped product on the context. Read it to decide where to go.
+
+| Context field | Type | Available on |
+| --- | --- | --- |
+| `product` | `AmityProduct` | iOS, Android, Web |
+| `pageContext` | `android.content.Context` | Android |
+
+`AmityProduct` carries `productId`, `productName`, `productUrl`, `price`, `currency`, and `thumbnailUrl`. Use `productId` to look the item up in your own catalogue, or `productUrl` to open it yourself.
 
 <CodeGroup>
 ```swift iOS
 class MyGlobalBehavior: AmityGlobalBehavior {
     override func onPostProductTagClick(context: AmityGlobalBehavior.Context) {
-        // Route to your own product screen.
+        guard let product = context.product else { return }
+
+        if let item = MyCatalogue.find(id: product.productId) {
+            MyNavigator.showProduct(item)
+        } else {
+            // Fall back to the UIKit in-app browser.
+            super.onPostProductTagClick(context: context)
+        }
     }
 }
 
@@ -1364,16 +1380,37 @@ AmityUIKit4Manager.behaviour.globalBehavior = MyGlobalBehavior()
 ```kotlin Android
 AmityUIKit4Manager.behavior.globalBehavior = object : AmityGlobalBehavior() {
     override fun onPostProductTagClick(context: AmityGlobalBehavior.Context): Boolean {
-        // Route to your own product screen.
-        // Return true when you handled it, so the default in-app browser is skipped.
+        val product = context.product ?: return false
+
+        val intent = Intent(context.pageContext, ProductActivity::class.java)
+        intent.putExtra("productId", product.getProductId())
+        context.pageContext.startActivity(intent)
+
+        // Return true to claim the tap, so the in-app browser is skipped.
         return true
     }
 }
 ```
+
+```typescript Web
+<AmityUIKitProvider
+  pageBehavior={{
+    AmityGlobalBehavior: {
+      onPostProductTagClick: ({ product }) => {
+        router.push(`/products/${product.productId}`);
+      },
+    },
+  }}
+>
+```
 </CodeGroup>
 
 <Note>
-On Android the handler returns a `Boolean`: return `true` when your app handled the tap so the default in-app browser is skipped, or `false` to fall through to it. The iOS handler returns no value.
+**The platforms differ in how you fall back to the default.**
+
+- **Android** — the handler returns a `Boolean`. Return `true` when your app handled the tap, or `false` to get the built-in product web view.
+- **iOS** — the handler returns no value, so an override always replaces the default. Call `super.onPostProductTagClick(context:)` where you want the in-app browser instead.
+- **Web** — the handler returns no value and behaves like iOS. There is no `super` to call: open `product.productUrl` yourself if you want the default behavior for some products.
 </Note>
 
 ### Limits & Constraints
