@@ -18449,13 +18449,13 @@ Member query APIs return paginated or live collection results depending on the p
 
 ### Common Parameters
 
-| Parameter | Description |
-|-----------|-------------|
-| `communityId` | Community to query. |
-| `roles` | Optional role IDs to include, such as `community-moderator`. |
-| `includeDeleted` | Include deleted users when supported. |
-| `excludingRoles` | Exclude members with any role in the list. Available in TypeScript, iOS, and Android. |
-| `limit` / pagination token | Page-size and pagination controls where supported. |
+| Parameter | Platforms | Description |
+|-----------|-----------|-------------|
+| `communityId` | All | Community to query. |
+| `roles` | All | Optional role IDs to include, such as `community-moderator`. |
+| `includeDeleted` | All | Include deleted users. |
+| `excludingRoles` | TypeScript, iOS, Android | Exclude members holding any role in the list. Applies to both query and search. |
+| `limit` / pagination token | TypeScript, Flutter | Explicit page size. iOS and Android paginate through the live collection and `PagingData` instead. |
 
 ### Query Filters
 
@@ -18715,7 +18715,13 @@ void searchCommunityMembers(String communityId, String keyword) {
 
 ## Excluding Roles
 
-Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. This filter is available in TypeScript, iOS, and Android. The current Flutter member query builder does not expose `excludingRoles`.
+Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. It is available in TypeScript, iOS, and Android, on both the member query and the member search APIs. Flutter exposes `excludingRoles` on neither builder.
+
+How it resolves:
+
+- A member is removed if they hold **any** role in the list — not only if they hold all of them.
+- An **empty list applies no exclusion**, so you can pass one unconditionally and let the caller decide. iOS and Android default the parameter to an empty list; in TypeScript it is optional.
+- `roles` and `excludingRoles` combine as an intersection: a member is returned only if they match `roles` and hold none of the roles in `excludingRoles`. Listing the same role in both therefore yields no members.
 
 
 ```typescript TypeScript
@@ -22470,6 +22476,8 @@ Use the comment repository when you need discussions on posts, stories, or custo
 
   A reply is a normal comment with `parentId` set to another comment ID. There is no separate reply API in the SDK.
 
+  Each comment also carries `rootId`, the ID of the top-level comment that starts the thread. `parentId` is the comment being replied to directly, while `rootId` stays the same for every comment in the thread — use it to group or navigate a whole thread without walking the parent chain.
+
 ## Comment Targets
 
 | Reference type | Use it for | SDK value |
@@ -22486,6 +22494,7 @@ The exact property names vary by platform, but the SDK model centers on the same
 | --- | --- | --- | --- | --- |
 | Comment ID | `comment.commentId` | `comment.commentId` | `comment.getCommentId()` | `comment.commentId` |
 | Parent comment | `comment.parentId` | `comment.parentId` | `comment.getParentId()` | `comment.parentId` |
+| Root comment | `comment.rootId` | `comment.rootId` | `comment.getRootId()` | `comment.rootId` |
 | Reference | `referenceId`, `referenceType` | `referenceId`, `referenceType` | `comment.getReference()` | `referenceId`, `referenceType` |
 | Text data | `comment.data.text` | `comment.data` text value | `comment.getData()` | `comment.data` |
 | Image attachments | `comment.attachments` | `comment.attachments` | `comment.getAttachments()` | `comment.attachments` |
@@ -22666,21 +22675,23 @@ Create a text comment by passing a reference target and text body to the comment
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `referenceId` | Yes | ID of the post, story, or custom content item being commented on |
-| `referenceType` | Yes | Use `post`, `story`, or `content` |
-| `text` | Yes | Text body of the comment |
-| `parentId` | No | Existing comment ID when creating a reply |
-| `metadata` | No | Custom metadata attached to the comment |
-| `mentionees` / mention builder | No | User mention payloads |
-| `links` | No | Link metadata on TypeScript, iOS, and Android |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `referenceId` | Yes | All | ID of the post, story, or custom content item being commented on |
+| `referenceType` | Yes | All | Use `post`, `story`, or `content` |
+| `text` | Yes | All | Text body of the comment |
+| `parentId` | No | All | Existing comment ID when creating a reply |
+| `metadata` | No | All | Custom metadata attached to the comment |
+| `mentionees` / mention builder | No | All | User mention payloads |
+| `links` | No | TypeScript, iOS, Android | Link metadata; not exposed on the Flutter comment builder |
 
   The current Flutter public comment creation builder exposes `metadata(...)` and `mentionUsers(...)`, but it does not expose a `links(...)` method.
 
 ## Create a Text Comment
 
 Create a top-level text comment with the reference target and text body.
+
+  Comment creation is local-first on TypeScript, iOS, Android, and React Native: the SDK persists a local comment before the server confirms it. See [Local-First Comment Creation](#local-first-comment-creation) for the per-platform sync states and failure handling.
 
 
 ```typescript TypeScript
@@ -22793,6 +22804,115 @@ final reply = await AmitySocialClient.newCommentRepository()
 final replyId = reply.commentId;
 ```
 
+
+## Add Structured Links
+
+TypeScript, iOS, and Android accept a `links` payload when creating a comment, which stores the links found in the comment text alongside the comment.
+
+Comments highlight link text; they do not render link preview cards. Build each link with `renderPreview: false` and leave the preview metadata fields unset — a comment never needs a preview metadata lookup.
+
+Each link carries:
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `url` | Yes | The link target. |
+| `renderPreview` | Yes | Set `false` for comments. Comments never render preview cards, so this value does not affect how a comment link displays. |
+| `index`, `length` | No | Position and length of the link text within the comment text. Include both whenever you send a `links` payload. |
+| `domain`, `title`, `imageUrl` | No | Preview card metadata. Leave unset for comments. |
+
+  Sending `links` is optional. Clients detect URLs in the comment text and highlight them on their own, so a comment created without a `links` payload still renders highlighted links. When you do send the payload, include `index` and `length` for every link. On Android, `AmityLink` has no default arguments — pass `null` for every field you are not setting.
+
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const { data: comment } = await CommentRepository.createComment({
+  referenceId: postId,
+  referenceType: "post",
+  data: {
+    text: "Check this out https://www.amity.co",
+  },
+  links: [
+    {
+      index: 15,
+      length: 20,
+      url: "https://www.amity.co",
+      renderPreview: false,
+    },
+  ],
+});
+
+renderResults(comment);
+```
+
+```swift iOS
+let options = AmityCommentCreateOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    text: "Check this out https://www.amity.co",
+    links: [
+        AmityLink(
+            url: "https://www.amity.co",
+            index: 15,
+            length: 20,
+            renderPreview: false
+        )
+    ]
+)
+
+let comment = try await commentRepository.createComment(with: options)
+showSuccessMessage(comment.commentId)
+```
+
+```kotlin Android
+val links = listOf(
+    AmityLink(
+        index = 15,
+        length = 20,
+        url = "https://www.amity.co",
+        renderPreview = false,
+        domain = null,
+        title = null,
+        imageUrl = null
+    )
+)
+
+AmitySocialClient.newCommentRepository()
+    .createComment()
+    .post(postId = postId)
+    .with()
+    .text(text = "Check this out https://www.amity.co")
+    .links(links = links)
+    .build()
+    .send()
+    .subscribe(
+        { comment -> showSuccessMessage(comment.getCommentId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+
+When editing a comment on iOS, `links` follows update semantics: pass `nil` to leave the existing links unchanged, or `[]` to remove them all. See [Edit Comment](../actions/edit-comment).
+
+## Local-First Comment Creation
+
+On TypeScript, iOS, Android, and React Native, the SDK writes the comment to its local store and starts the server request immediately, so an active comment collection can render it before the round trip completes. Flutter waits for the server response instead.
+
+The state is observable on every local-first platform, but the names and failure behavior differ:
+
+| Platform | State and failure behavior |
+| --- | --- |
+| TypeScript | Read `comment.syncState`: `syncing` while the request is in flight, `synced` after server confirmation, or `error` when creation fails. The optimistic item remains in the collection on failure and carries a temporary local comment ID. |
+| iOS | Observe `AmityComment.syncState`: `.syncing` becomes `.synced` after confirmation. A failed local comment becomes `.error` and is removed from its parent relationship, so it no longer appears among its parent's children. |
+| Android | Read `comment.getState()`: `SYNCING` becomes `SYNCED` after confirmation. A failed local comment is marked `FAILED` in the local store. |
+| Flutter | The current public comment-creation path waits for the server response before persisting the comment; it does not create the same local-first temporary comment. |
+| React Native | Uses `@amityco/ts-sdk-react-native`, which shares the TypeScript implementation and behaves identically. |
+
+Render local-first comments in a pending style, and handle each platform's failure state so a failed comment is not mistaken for a server-created one.
+
+  On TypeScript and React Native, local-first creation requires the client cache. When the cache is disabled no local comment is created, and the call behaves like a plain server request.
+
+The creation call also rejects when the server request fails; it does not only set the failure state. Catch the error from the creation call and watch sync state through the live collection or observable query. Handling only one of the two leaves either an unhandled rejection or a pending comment that never resolves.
 
 ## Notes
 
@@ -23078,7 +23198,7 @@ final commentStream = AmitySocialClient.newCommentRepository()
     .getComment(commentId);
 
 final subscription = commentStream.listen((comment) {
-  final latestCommentId = comment.commentId;
+  final fetchedCommentId = comment.commentId;
 }, onError: (error) {
   showError(error);
 });
@@ -33331,7 +33451,7 @@ The Post Components UIKit provides a complete suite of tools for post creation, 
 
     - **Text Product Mentions**: Tag products in post captions using `@` trigger with product suggestion overlay for easy discovery
     - **Media Product Tags**: Tag products directly on images and videos with coordinate-based positioning to highlight specific items
-    - **Product Search**: Real-time product search with debounce (300ms) for seamless product discovery
+    - **Product Search**: Real-time product search for quick product discovery
     - **Multi-select Support**: Select multiple products per post (maximum 20 products combined across text and media)
     - **Product Carousel Display**: View all tagged products in a scrollable carousel below post content
     - **Product Links**: Tap products to open in in-app browser without interrupting social experience
@@ -37245,6 +37365,7 @@ The Comments & Reactions UIKit provides comprehensive tools for building engagin
 | Brand User Comment | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Comment Ads | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Multi-Level Comment Replies (2-Level) | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Link Rendering in Comments | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Post / Comment / Story Reactions | ✅ | ✅ | ✅ | ✅ | ✅ |
 | View Reactions | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Multiple Reactions | ✅ | ✅ | ✅ | ❌ | ❌ |
@@ -37258,6 +37379,7 @@ The Comments & Reactions UIKit provides comprehensive tools for building engagin
     - **Threaded Comments**: Nested reply conversations with two-level display model
     - **Comment Creation**: Rich text editing with mention support
     - **Comment Management**: Edit, delete, and report capabilities
+    - **Link Rendering**: URLs in comment text are highlighted and tappable, opening the link target. Unlike posts, comments do not render link preview cards
     - **Real-time Updates**: Live comment synchronization
 
     **Expressive User Engagement**
@@ -41531,6 +41653,7 @@ The **Livestream** feature in social.plus UIKit v4 empowers users to broadcast a
     - Stream title, description, and thumbnail setup
     - Real-time broadcasting controls
     - Camera switching and stream management
+    - Start from a Bluetooth remote or hardware volume key (iOS & Android)
 
 
     **Multi-broadcaster collaboration**\
@@ -41714,6 +41837,7 @@ fun startTargetSelectionActivity(context: Context) {
     | Stream Setup | Add title, description, and thumbnail for the live stream |
     | Camera Controls | Switch between front and back cameras |
     | Broadcasting Controls | Start, pause, and end live stream broadcasting |
+    | Hardware Start Triggers | Start the stream with a paired Bluetooth remote shutter or the device's hardware volume key, the same way those controls fire the shutter in the native camera app (iOS and Android) |
     | Co-Host Management | Invite co-hosts to join your stream |
     | Co-Host Stage | View and manage active co-hosts during broadcast |
     | Real-time Preview | Live preview of stream content before broadcasting |
@@ -44225,7 +44349,7 @@ AmityProductTagSelectionComponent(
     selectedProductTags = selectedProductTags,
     existingProducts = listOf("product-3", "product-4"),
     mode = SelectionMode.CREATE,  // CREATE | EDIT | LIVESTREAM
-    maxCount = 15,
+    maxCount = 20,
     canMultiSelect = true,
     onTagChanges = { tags ->
         // Handle selection changes
@@ -57065,7 +57189,7 @@ Once you've completed the initial setup:
 
 > Upload, manage, and preview products used for tagging in community content through the social.plus Console
 
-The Product Catalogue in the social.plus Console allows administrators to manage a centralized product database. Products added here can be tagged in community content such as posts, comments, and stories — enabling social commerce experiences and product discovery within your application.
+The Product Catalogue in the social.plus Console allows administrators to manage a centralized product database. Products added here can be tagged in **posts** — in the post text or directly on image and video attachments — and in **livestream posts**, enabling social commerce experiences and product discovery within your application.
 
     View, search, and filter all products in a comprehensive table view
 
@@ -57081,7 +57205,7 @@ The Product Catalogue in the social.plus Console allows administrators to manage
 
 ## Overview
 
-The Product Catalogue provides a centralized dashboard for uploading, managing, and previewing products that can be tagged in community content. This enables social commerce workflows where users can discover and engage with products directly within posts, comments, and stories.
+The Product Catalogue provides a centralized dashboard for uploading, managing, and previewing products that can be tagged in community content. This enables social commerce workflows where users can discover and engage with products directly within posts and livestream posts.
 
 <img
   src="/images/analytics-and-moderation/console/product-management/product-catalogue-list.png"
@@ -64448,7 +64572,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | TS | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | Single-Level Comments | Available | ✅ | ✅ | ✅ | ✅ |
-| Multi-Level Comments | Planned | ✅ | ✅ | ✅ | — |
+| Multi-Level Comments | Available | ✅ | ✅ | ✅ | — |
 | GIF Comments | Not Available | — | — | — | — |
 | Comment Ranking | Not Available | — | — | — | — |
 | Multiple Reactions | Available | ✅ | ✅ | ✅ | — |
@@ -64457,7 +64581,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Feature | Availability | Android | iOS | Web | RN | Flutter |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | Single-Level Comments | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Multi-Level Comments | Planned | ✅ | ✅ | ✅ | — | — |
+| Multi-Level Comments | Available | ✅ | ✅ | ✅ | — | — |
 | GIF Comments | Not Available | — | — | — | — | — |
 | Comment Ranking | Not Available | — | — | — | — | — |
 | Multiple Reactions | Available | ✅ | ✅ | ✅ | — | — |
