@@ -18449,13 +18449,13 @@ Member query APIs return paginated or live collection results depending on the p
 
 ### Common Parameters
 
-| Parameter | Description |
-|-----------|-------------|
-| `communityId` | Community to query. |
-| `roles` | Optional role IDs to include, such as `community-moderator`. |
-| `includeDeleted` | Include deleted users when supported. |
-| `excludingRoles` | Exclude members with any role in the list. Available in TypeScript, iOS, and Android. |
-| `limit` / pagination token | Page-size and pagination controls where supported. |
+| Parameter | Platforms | Description |
+|-----------|-----------|-------------|
+| `communityId` | All | Community to query. |
+| `roles` | All | Optional role IDs to include, such as `community-moderator`. |
+| `includeDeleted` | All | Include deleted users. |
+| `excludingRoles` | TypeScript, iOS, Android | Exclude members holding any role in the list. Applies to both query and search. |
+| `limit` / pagination token | TypeScript, Flutter | Explicit page size. iOS and Android paginate through the live collection and `PagingData` instead. |
 
 ### Query Filters
 
@@ -18715,7 +18715,13 @@ void searchCommunityMembers(String communityId, String keyword) {
 
 ## Excluding Roles
 
-Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. This filter is available in TypeScript, iOS, and Android. The current Flutter member query builder does not expose `excludingRoles`.
+Use `excludingRoles` when you need a member list that removes users with any role in the exclusion list. It is available in TypeScript, iOS, and Android, on both the member query and the member search APIs. Flutter exposes `excludingRoles` on neither builder.
+
+How it resolves:
+
+- A member is removed if they hold **any** role in the list — not only if they hold all of them.
+- An **empty list applies no exclusion**, so you can pass one unconditionally and let the caller decide. iOS and Android default the parameter to an empty list; in TypeScript it is optional.
+- `roles` and `excludingRoles` combine as an intersection: a member is returned only if they match `roles` and hold none of the roles in `excludingRoles`. Listing the same role in both therefore yields no members.
 
 
 ```typescript TypeScript
@@ -19440,6 +19446,8 @@ const postCommentTopic = getPostTopic(post, SubscriptionLevels.COMMENT);
 
 Text posts publish written content to a user feed, a community feed, or the current user's own feed. Use them for plain updates, status messages, and posts that attach structured link metadata.
 
+  The text is the parent post content. The SDK creation fields below describe the SDK API; UIKit's product-tag UI is a separate surface and may support fewer post types. See [UIKit Product Tagging](/uikit/components/social/product-tagging) for the UI-specific coverage.
+
     Publish to user feeds, community feeds, or the current user's feed depending on the SDK target API.
     TypeScript, Android, and iOS can attach structured links during text post creation.
 
@@ -19453,6 +19461,9 @@ Text posts publish written content to a user feed, a community feed, or the curr
 | `metadata` | No | TypeScript, iOS, Android, Flutter | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android, Flutter | User mention payload where supported by the platform builder. |
 | `links` | No | TypeScript, Android, iOS | Structured link metadata supported by TypeScript, Android, and iOS. |
+| `productTags` | No | TypeScript, Android, iOS | Products tagged in the post text. Text product tag types: `Amity.TextProductTag`, `AmityTextProductTag`, `AmityProductTag.Text`. |
+
+**Product tags (SDK API).** `productTags` tags products mentioned in the post **text**. Each tag names a product and the character range it covers in that text. Media product tags do not apply to a text-only post. When a post also has media, the text remains on the parent and the media is a child; use the media page's `attachmentProductTags` for that child. See [Image Post](./image-post) or [Video Post](./video-post) for those fields. Flutter does not expose product tags on any post builder. For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create a Text Post
 
@@ -19593,6 +19604,67 @@ const { data: post } = await PostRepository.createPost({
 ```
 
 
+## Tag Products in the Text
+
+TypeScript, Android, and iOS accept a `productTags` array when creating a text post. Each tag names a product and the character range it covers in the post text, so UIKit can render that range as a tappable product mention.
+
+Set `index` and `length` against the same string you pass as `text`. In the examples below, `featured product` starts at index 12 and is 16 characters long. iOS stores only the range. TypeScript and Android also carry the matched `text`.
+
+
+```swift iOS
+let postRepository = AmityPostRepository()
+let builder = AmityTextPostBuilder()
+builder.setText("Loving this featured product for my morning runs!")
+
+let post = try await postRepository.createTextPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil,
+    productTags: [
+        AmityTextProductTag(productId: "prod_001", index: 12, length: 12)
+    ]
+)
+```
+
+```kotlin Android
+postRepository.createTextPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    text = "Loving this featured product for my morning runs!",
+    productTags = listOf(
+        AmityProductTag.Text(
+            productId = "prod_001",
+            text = "featured product",
+            index = 12,
+            length = 16
+        )
+    )
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { PostRepository } from "@amityco/ts-sdk";
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    text: "Loving this featured product for my morning runs!",
+  },
+  productTags: [
+    { productId: "prod_001", text: "featured product", index: 12, length: 16 },
+  ],
+});
+```
+
+
 ## Query Text Posts
 
 Post query APIs are SDK-specific. For TypeScript, `PostRepository.getPosts` returns a live collection through a callback instead of a promise, so do not call it with `await`.
@@ -19628,6 +19700,10 @@ This page focuses on the SDK call that creates the post. See [Image Handling](/s
 | `targetId` | Yes | TypeScript, iOS, Android, Flutter | Community ID or user ID for the target feed. |
 | `metadata` | No | TypeScript, iOS, Android, Flutter | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android, Flutter | User mention payload where supported by the platform builder. |
+| `productTags` | No | TypeScript, Android, iOS | Products tagged in the post text. Text product tag types: `Amity.TextProductTag`, `AmityTextProductTag`, `AmityProductTag.Text`. |
+| `attachmentProductTags` | No | TypeScript, Android, iOS | Products tagged on individual image attachments. An `AmityAttachmentProductTags` container, keyed by each attachment's `fileId`. |
+
+**Product tags (SDK API).** An image post has a text parent and an image child. `productTags` tags products mentioned in the parent **text**. `attachmentProductTags` tags products on the child **media attachment**, and is not an array: it is an `AmityAttachmentProductTags` container that maps each attachment's `fileId` to that attachment's media tags. Flutter does not expose product tags on any post builder. See [Tag Products](#tag-products) below for both. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging). For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create an Image Post
 
@@ -19703,6 +19779,93 @@ Future<AmityPost> createImagePost(List<AmityImage> uploadedImages) {
 ```
 
 
+## Tag Products
+
+TypeScript, Android, and iOS accept two separate product inputs when creating an image post. The text tag is applied to the parent; the attachment tag is applied to the image child.
+
+| Input | Tags what | Shape |
+| --- | --- | --- |
+| `productTags` | Products named in the post text | An array of text product tags, each with a character range |
+| `attachmentProductTags` | Products shown in one image | An `AmityAttachmentProductTags` container, keyed by `fileId` |
+
+Build `attachmentProductTags` by setting the tags for each uploaded image's `fileId`. Images you do not set tags for stay untagged.
+
+
+```swift iOS
+let postRepository = AmityPostRepository()
+let builder = AmityImagePostBuilder()
+builder.setImages(uploadedImages)
+builder.setText("Wearing the featured product today")
+
+let attachmentTags = AmityAttachmentProductTags()
+attachmentTags.set(
+    fileId: uploadedImages[0].fileId,
+    tags: [AmityMediaProductTag(productId: "prod_001")]
+)
+
+let post = try await postRepository.createImagePost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil,
+    productTags: [
+        AmityTextProductTag(productId: "prod_001", index: 12, length: 12)
+    ],
+    attachmentProductTags: attachmentTags
+)
+```
+
+```kotlin Android
+val attachmentTags = AmityAttachmentProductTags.Builder()
+attachmentTags.set(
+    uploadedImages.first().getFileId(),
+    listOf(AmityProductTag.Media(productId = "prod_001"))
+)
+
+postRepository.createImagePost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    images = uploadedImages,
+    text = "Wearing the featured product today",
+    productTags = listOf(
+        AmityProductTag.Text(
+            productId = "prod_001",
+            text = "featured product",
+            index = 12,
+            length = 16
+        )
+    ),
+    attachmentProductTags = attachmentTags.build()
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { AmityAttachmentProductTags, PostRepository } from "@amityco/ts-sdk";
+
+const attachmentTags = new AmityAttachmentProductTags();
+attachmentTags.set(fileId, [{ productId: "prod_001" }]);
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    text: "Wearing the featured product today",
+  },
+  attachments: [{ type: "image", fileId }],
+  productTags: [
+    { productId: "prod_001", text: "featured product", index: 12, length: 16 },
+  ],
+  attachmentProductTags: attachmentTags,
+});
+```
+
+
 ## Notes
 
 - TypeScript accepts image attachments as `{ type: "image", fileId }`.
@@ -19741,6 +19904,10 @@ This page focuses on the SDK call that creates the post. See [Video Handling](/s
 | `targetId` | Yes | TypeScript, iOS, Android, Flutter | Community ID or user ID for the target feed. |
 | `metadata` | No | TypeScript, iOS, Android, Flutter | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android, Flutter | User mention payload where supported by the platform builder. |
+| `productTags` | No | TypeScript, Android, iOS | Products tagged in the post text. Text product tag types: `Amity.TextProductTag`, `AmityTextProductTag`, `AmityProductTag.Text`. |
+| `attachmentProductTags` | No | TypeScript, Android, iOS | Products tagged on individual video attachments. An `AmityAttachmentProductTags` container, keyed by each attachment's `fileId`. |
+
+**Product tags (SDK API).** A video post has a text parent and a video child. `productTags` tags products mentioned in the parent **text**. `attachmentProductTags` tags products on the child **media attachment**, and is not an array: it is an `AmityAttachmentProductTags` container that maps each attachment's `fileId` to that attachment's media tags. Flutter does not expose product tags on any post builder. See [Tag Products](#tag-products) below for both. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging). For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create a Video Post
 
@@ -19816,6 +19983,93 @@ Future<AmityPost> createVideoPost(List<AmityVideo> uploadedVideos) {
 ```
 
 
+## Tag Products
+
+TypeScript, Android, and iOS accept two separate product inputs when creating a video post. The text tag is applied to the parent; the attachment tag is applied to the video child.
+
+| Input | Tags what | Shape |
+| --- | --- | --- |
+| `productTags` | Products named in the post text | An array of text product tags, each with a character range |
+| `attachmentProductTags` | Products shown in one video | An `AmityAttachmentProductTags` container, keyed by `fileId` |
+
+Build `attachmentProductTags` by setting the tags for each uploaded video's `fileId`. Videos you do not set tags for stay untagged.
+
+
+```swift iOS
+let postRepository = AmityPostRepository()
+let builder = AmityVideoPostBuilder()
+builder.setVideos(uploadedVideos)
+builder.setText("Wearing the featured product today")
+
+let attachmentTags = AmityAttachmentProductTags()
+attachmentTags.set(
+    fileId: uploadedVideos[0].fileId,
+    tags: [AmityMediaProductTag(productId: "prod_001")]
+)
+
+let post = try await postRepository.createVideoPost(
+    builder,
+    targetId: communityId,
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil,
+    productTags: [
+        AmityTextProductTag(productId: "prod_001", index: 12, length: 12)
+    ],
+    attachmentProductTags: attachmentTags
+)
+```
+
+```kotlin Android
+val attachmentTags = AmityAttachmentProductTags.Builder()
+attachmentTags.set(
+    uploadedVideos.first().getFileId(),
+    listOf(AmityProductTag.Media(productId = "prod_001"))
+)
+
+postRepository.createVideoPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    videos = uploadedVideos,
+    text = "Wearing the featured product today",
+    productTags = listOf(
+        AmityProductTag.Text(
+            productId = "prod_001",
+            text = "featured product",
+            index = 12,
+            length = 16
+        )
+    ),
+    attachmentProductTags = attachmentTags.build()
+)
+    .subscribe({ post ->
+        showSuccessMessage(post.getPostId())
+    }, { error ->
+        handleGeneralError(error)
+    })
+```
+
+```typescript TypeScript
+import { AmityAttachmentProductTags, PostRepository } from "@amityco/ts-sdk";
+
+const attachmentTags = new AmityAttachmentProductTags();
+attachmentTags.set(fileId, [{ productId: "prod_001" }]);
+
+const { data: post } = await PostRepository.createPost({
+  targetType: "community",
+  targetId: communityId,
+  data: {
+    text: "Wearing the featured product today",
+  },
+  attachments: [{ type: "video", fileId }],
+  productTags: [
+    { productId: "prod_001", text: "featured product", index: 12, length: 16 },
+  ],
+  attachmentProductTags: attachmentTags,
+});
+```
+
+
 ## Notes
 
 - TypeScript accepts video attachments as `{ type: "video", fileId }`.
@@ -19846,14 +20100,18 @@ TypeScript, Android, and iOS expose audio post creation APIs. Flutter can upload
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `audios`, `uploadedAudios`, or `fileId` | Yes | Uploaded audio objects or audio file IDs, depending on SDK. |
-| `text` | No | Caption text shown with the audio post. |
-| `targetType` | Yes | Feed target, usually `community` or `user`. |
-| `targetId` | Yes | Community ID or user ID for the target feed. |
-| `metadata` | No | Custom metadata stored with the post where supported. |
-| `mentionees` | No | User mention payload where supported by the platform builder. |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `audios`, `uploadedAudios`, or `fileId` | Yes | TypeScript, iOS, Android | Uploaded audio objects or audio file IDs, depending on SDK. |
+| `text` | No | TypeScript, iOS, Android | Caption text shown with the audio post. |
+| `targetType` | Yes | TypeScript, iOS, Android | Feed target, usually `community` or `user`. |
+| `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed. |
+| `metadata` | No | TypeScript, iOS, Android | Custom metadata stored with the post where supported. |
+| `mentionees` | No | TypeScript, iOS, Android | User mention payload where supported by the platform builder. |
+| `productTags` | No | iOS | Products named in the parent post text. |
+| `attachmentProductTags` | No | TypeScript, iOS | Products shown on the child audio attachment. An `AmityAttachmentProductTags` container keyed by `fileId`. |
+
+**Product tags (SDK API).** An audio post has a text parent and an audio child. iOS accepts both inputs on `createAudioPost`; TypeScript accepts `attachmentProductTags` for the child only. The public Android and Flutter audio creators expose neither field, so this page does not promise a post-creation workaround. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging). For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create an Audio Post
 
@@ -19960,6 +20218,8 @@ This page focuses on the SDK call that creates the post. See [File Handling](/so
 | `targetId` | Yes | TypeScript, iOS, Android, Flutter | Community ID or user ID for the target feed. |
 | `metadata` | No | TypeScript, iOS, Android, Flutter | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android, Flutter | User mention payload where supported by the platform builder. |
+| `productTags` | No | TypeScript, iOS | Products named in the parent post text. |
+| `attachmentProductTags` | No | TypeScript, iOS | Products shown on child file attachments. An `AmityAttachmentProductTags` container keyed by `fileId`. |
 
 ## Create a File Post
 
@@ -19974,14 +20234,24 @@ func createFilePost(
     let postRepository = AmityPostRepository()
     let builder = AmityFilePostBuilder()
     builder.setFiles(uploadedFiles)
-    builder.setText("Resources for the team")
+    builder.setText("Featured product resources")
+
+    let attachmentTags = AmityAttachmentProductTags()
+    attachmentTags.set(
+        fileId: uploadedFiles[0].fileId,
+        tags: [AmityMediaProductTag(productId: "prod_001")]
+    )
 
     return try await postRepository.createFilePost(
         builder,
         targetId: communityId,
         targetType: .community,
         metadata: nil,
-        mentionees: nil
+        mentionees: nil,
+        productTags: [
+            AmityTextProductTag(productId: "prod_001", index: 0, length: 12)
+        ],
+        attachmentProductTags: attachmentTags
     )
 }
 ```
@@ -20006,13 +20276,16 @@ fun createFilePost(
 ```
 
 ```typescript TypeScript
-import { PostRepository } from "@amityco/ts-sdk";
+import { AmityAttachmentProductTags, PostRepository } from "@amityco/ts-sdk";
+
+const attachmentTags = new AmityAttachmentProductTags();
+attachmentTags.set(fileId, [{ productId: "prod_001" }]);
 
 const { data: post } = await PostRepository.createPost({
   targetType: "community",
   targetId: communityId,
   data: {
-    text: "Resources for the team",
+    text: "Featured product resources",
   },
   attachments: [
     {
@@ -20020,6 +20293,10 @@ const { data: post } = await PostRepository.createPost({
       fileId,
     },
   ],
+  productTags: [
+    { productId: "prod_001", text: "Featured product", index: 0, length: 16 },
+  ],
+  attachmentProductTags: attachmentTags,
 });
 ```
 
@@ -20034,6 +20311,8 @@ Future<AmityPost> createFilePost(List<AmityFile> uploadedFiles) {
 }
 ```
 
+
+**Product tags (SDK API).** A file post has a text parent and one child per file attachment. TypeScript's generic `createPost` and iOS `createFilePost` expose both text `productTags` for the parent and `attachmentProductTags` for the file children. The public Android and Flutter file creators expose neither field. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging).
 
 ## Notes
 
@@ -20181,6 +20460,7 @@ Create the poll before creating the post. See [Poll Creation Guidelines](/social
 | `targetId` | Yes | TypeScript, iOS, Android, Flutter | Community ID or user ID for the target feed. |
 | `metadata` | No | TypeScript, iOS, Android, Flutter | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android, Flutter | User mention payload where supported by the platform builder. |
+| `productTags` | No | TypeScript, iOS | Products named in the parent post text. Poll choices are not product-tag targets. |
 
 ## Create a Poll Post
 
@@ -20195,14 +20475,17 @@ func createPollPost(
     let postRepository = AmityPostRepository()
     let builder = AmityPollPostBuilder()
     builder.setPollId(pollId)
-    builder.setText("Vote in this poll")
+    builder.setText("Vote for featured product")
 
     return try await postRepository.createPollPost(
         builder,
         targetId: communityId,
         targetType: .community,
         metadata: nil,
-        mentionees: nil
+        mentionees: nil,
+        productTags: [
+            AmityTextProductTag(productId: "prod_001", index: 9, length: 12)
+        ]
     )
 }
 ```
@@ -20229,9 +20512,12 @@ const { data: post } = await PostRepository.createPost({
   targetId: communityId,
   dataType: "poll",
   data: {
-    text: "Vote in this poll",
+    text: "Vote for featured product",
     pollId,
   },
+  productTags: [
+    { productId: "prod_001", text: "featured product", index: 9, length: 16 },
+  ],
 });
 ```
 
@@ -20244,6 +20530,8 @@ final post = await AmitySocialClient.newPostRepository()
     .post();
 ```
 
+
+**Product tags (SDK API).** A poll post has a text parent and a poll child. TypeScript's generic `createPost({ dataType: "poll", ... })` and iOS `createPollPost` expose text `productTags` for the parent caption. The public Android and Flutter poll creators expose no product-tag field, and a poll child has no attachment-tag input. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging).
 
 ## Notes
 
@@ -20380,14 +20668,18 @@ Clip posts publish an uploaded clip into a user or community feed. Upload the cl
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `clip` or `fileId` | Yes | Uploaded clip data or clip file ID, depending on SDK |
-| `text` | No | Caption text shown with the post |
-| `displayMode` | No | Clip display mode where supported, such as `fill` or `fit` |
-| `isMuted` | No | Whether playback should start muted where supported |
-| `targetType` | Yes | Feed target, usually `community` or `user` |
-| `targetId` | Yes | Community ID or user ID for the target feed |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `clip` or `fileId` | Yes | TypeScript, iOS, Android | Uploaded clip data or clip file ID, depending on SDK |
+| `text` | No | TypeScript, iOS, Android | Caption text shown with the post |
+| `displayMode` | No | TypeScript, iOS, Android | Clip display mode where supported, such as `fill` or `fit` |
+| `isMuted` | No | TypeScript, iOS, Android | Whether playback should start muted where supported |
+| `targetType` | Yes | TypeScript, iOS, Android | Feed target, usually `community` or `user` |
+| `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed |
+| `productTags` | No | iOS | Products named in the parent post text. |
+| `attachmentProductTags` | No | TypeScript, iOS | Products shown on the child clip attachment. An `AmityAttachmentProductTags` container keyed by `fileId`. |
+
+**Product tags (SDK API).** A clip post has a text parent and a clip child. iOS accepts both inputs on `createClipPost`; TypeScript accepts `attachmentProductTags` for the child only. The public Android and Flutter clip creators expose neither field, so this page does not promise a post-creation workaround. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging). For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create a Clip Post
 
@@ -20492,6 +20784,10 @@ TypeScript, Android, and iOS expose mixed media post creation APIs. The current 
 | `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed. |
 | `metadata` | No | TypeScript, iOS, Android | Custom metadata stored with the post where supported. |
 | `mentionees` | No | TypeScript, iOS, Android | User mention payload where supported by the platform builder. |
+| `productTags` | No | iOS | Products named in the parent post text. Text product tags. |
+| `attachmentProductTags` | Yes on TypeScript | TypeScript, iOS | Products shown on child attachments. An `AmityAttachmentProductTags` container keyed by `fileId`. |
+
+**Product tags (SDK API).** A mixed-media post has a text parent and one child per attachment. iOS accepts both inputs on `createMixedMediaPost`, both optional. TypeScript accepts `attachmentProductTags` for the children only, and its type declares the field as required: pass an empty `new AmityAttachmentProductTags()` when the post has no product tags. The public Android and Flutter mixed-media creators expose neither field, so this page does not promise a post-creation workaround. UIKit's product-tag UI is a separate surface and may support fewer post types; see [UIKit Product Tagging](/uikit/components/social/product-tagging). For tagging limits and tap-through behavior, see [Product Tagging](/uikit/components/social/posts#product-tagging).
 
 ## Create a Mixed Media Post
 
@@ -20594,20 +20890,24 @@ Mixed-structure posts can still be **read** from Flutter: pass `includeMixedStru
 
 > Create feed posts that reference an existing live room.
 
-Room posts publish an existing room into a user or community feed. Create the room first through the room or video APIs, then pass its `roomId` to the post creation API.
+Room posts publish an existing room into a user or community feed. Create the room first through the room or video APIs, then pass its `roomId` to the post creation API. A room post has a text parent and a child room post; product tagging is attached to that post child, not to the room entity itself.
 
   Room posts are the current path for new live and co-host room experiences. This page focuses only on creating the feed post from an existing `roomId`.
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `roomId` | Yes | ID of the room to attach to the post |
-| `text` | No | Caption text shown with the post |
-| `title` | No | Optional title stored in the room post data |
-| `targetType` | Yes | Feed target, usually `community` or `user` |
-| `targetId` | Yes | Community ID or user ID for the target feed |
-| `metadata` | No | Custom metadata stored with the post where supported |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `roomId` | Yes | TypeScript, iOS, Android | ID of the room to attach to the post |
+| `text` | No | TypeScript, iOS, Android | Caption text shown on the parent post |
+| `title` | No | TypeScript, iOS, Android | Optional title stored in the room child post data |
+| `targetType` | Yes | TypeScript, iOS, Android | Feed target, usually `community` or `user` |
+| `targetId` | Yes | TypeScript, iOS, Android | Community ID or user ID for the target feed |
+| `metadata` | No | TypeScript, iOS, Android | Custom metadata stored with the post where supported |
+| `productTags` | No | TypeScript, iOS, Android | Media products available on the child room post; each tag carries `productId` only |
+| `pinnedProductId` | No | TypeScript, iOS, Android | Product featured on the child at creation. Must also appear in `productTags` |
+
+**Product tags (SDK API).** Room posts take **media** product tags, which carry a `productId` and nothing else. The positional fields `text`, `index`, and `length` belong to text product tags and do not apply here. `createRoomPost` returns the parent post; pinning, unpinning, and later tag updates target its **child** room post. These are SDK capabilities; UIKit's product-tag UI is a separate surface and may support fewer post types. See [UIKit Product Tagging](/uikit/components/social/product-tagging) for UI coverage and [Livestream Product Tagging](/social-plus-sdk/video-new/broadcasting/product-tagging) for the lifecycle operations.
 
 ## Create a Room Post
 
@@ -20625,17 +20925,23 @@ const { data: post } = await PostRepository.createRoomPost({
     text: "Join this live room",
     title: "Live room",
   },
+  productTags: [{ productId: "prod_001" }],
+  pinnedProductId: "prod_001",
 });
 ```
 
 ```kotlin Android
+import com.amity.socialcloud.sdk.model.core.producttag.AmityProductTag
+
 fun createRoomPost(roomId: String, communityId: String) {
     postRepository.createRoomPost(
         targetType = AmityPost.TargetType.COMMUNITY,
         targetId = communityId,
         roomId = roomId,
         text = "Join this live room",
-        title = "Live room"
+        title = "Live room",
+        productTags = listOf(AmityProductTag.Media(productId = "prod_001")),
+        pinnedProductId = "prod_001"
     )
         .subscribe(
             { post -> showSuccessMessage(post.getPostId()) },
@@ -20658,7 +20964,9 @@ func createRoomPost(roomId: String, communityId: String) async throws -> AmityPo
         targetId: communityId,
         targetType: .community,
         metadata: nil,
-        mentionees: nil
+        mentionees: nil,
+        productTags: [AmityMediaProductTag(productId: "prod_001")],
+        pinnedProductId: "prod_001"
     )
 }
 ```
@@ -22390,21 +22698,23 @@ Create a text comment by passing a reference target and text body to the comment
 
 ## Parameters
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `referenceId` | Yes | ID of the post, story, or custom content item being commented on |
-| `referenceType` | Yes | Use `post`, `story`, or `content` |
-| `text` | Yes | Text body of the comment |
-| `parentId` | No | Existing comment ID when creating a reply |
-| `metadata` | No | Custom metadata attached to the comment |
-| `mentionees` / mention builder | No | User mention payloads |
-| `links` | No | Link metadata on TypeScript, iOS, and Android |
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| `referenceId` | Yes | All | ID of the post, story, or custom content item being commented on |
+| `referenceType` | Yes | All | Use `post`, `story`, or `content` |
+| `text` | Yes | All | Text body of the comment |
+| `parentId` | No | All | Existing comment ID when creating a reply |
+| `metadata` | No | All | Custom metadata attached to the comment |
+| `mentionees` / mention builder | No | All | User mention payloads |
+| `links` | No | TypeScript, iOS, Android | Link metadata; not exposed on the Flutter comment builder |
 
   The current Flutter public comment creation builder exposes `metadata(...)` and `mentionUsers(...)`, but it does not expose a `links(...)` method.
 
 ## Create a Text Comment
 
 Create a top-level text comment with the reference target and text body.
+
+  Comment creation is local-first on TypeScript, iOS, Android, and React Native: the SDK persists a local comment before the server confirms it. See [Local-First Comment Creation](#local-first-comment-creation) for the per-platform sync states and failure handling.
 
 
 ```typescript TypeScript
@@ -22517,6 +22827,115 @@ final reply = await AmitySocialClient.newCommentRepository()
 final replyId = reply.commentId;
 ```
 
+
+## Add Structured Links
+
+TypeScript, iOS, and Android accept a `links` payload when creating a comment, which stores the links found in the comment text alongside the comment.
+
+Comments highlight link text; they do not render link preview cards. Build each link with `renderPreview: false` and leave the preview metadata fields unset — a comment never needs a preview metadata lookup.
+
+Each link carries:
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `url` | Yes | The link target. |
+| `renderPreview` | Yes | Set `false` for comments. Comments never render preview cards, so this value does not affect how a comment link displays. |
+| `index`, `length` | No | Position and length of the link text within the comment text. Include both whenever you send a `links` payload. |
+| `domain`, `title`, `imageUrl` | No | Preview card metadata. Leave unset for comments. |
+
+  Sending `links` is optional. Clients detect URLs in the comment text and highlight them on their own, so a comment created without a `links` payload still renders highlighted links. When you do send the payload, include `index` and `length` for every link. On Android, `AmityLink` has no default arguments — pass `null` for every field you are not setting.
+
+
+```typescript TypeScript
+import { CommentRepository } from "@amityco/ts-sdk";
+
+const { data: comment } = await CommentRepository.createComment({
+  referenceId: postId,
+  referenceType: "post",
+  data: {
+    text: "Check this out https://www.amity.co",
+  },
+  links: [
+    {
+      index: 15,
+      length: 20,
+      url: "https://www.amity.co",
+      renderPreview: false,
+    },
+  ],
+});
+
+renderResults(comment);
+```
+
+```swift iOS
+let options = AmityCommentCreateOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    text: "Check this out https://www.amity.co",
+    links: [
+        AmityLink(
+            url: "https://www.amity.co",
+            index: 15,
+            length: 20,
+            renderPreview: false
+        )
+    ]
+)
+
+let comment = try await commentRepository.createComment(with: options)
+showSuccessMessage(comment.commentId)
+```
+
+```kotlin Android
+val links = listOf(
+    AmityLink(
+        index = 15,
+        length = 20,
+        url = "https://www.amity.co",
+        renderPreview = false,
+        domain = null,
+        title = null,
+        imageUrl = null
+    )
+)
+
+AmitySocialClient.newCommentRepository()
+    .createComment()
+    .post(postId = postId)
+    .with()
+    .text(text = "Check this out https://www.amity.co")
+    .links(links = links)
+    .build()
+    .send()
+    .subscribe(
+        { comment -> showSuccessMessage(comment.getCommentId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+
+When editing a comment on iOS, `links` follows update semantics: pass `nil` to leave the existing links unchanged, or `[]` to remove them all. See [Edit Comment](../actions/edit-comment).
+
+## Local-First Comment Creation
+
+On TypeScript, iOS, Android, and React Native, the SDK writes the comment to its local store and starts the server request immediately, so an active comment collection can render it before the round trip completes. Flutter waits for the server response instead.
+
+The state is observable on every local-first platform, but the names and failure behavior differ:
+
+| Platform | State and failure behavior |
+| --- | --- |
+| TypeScript | Read `comment.syncState`: `syncing` while the request is in flight, `synced` after server confirmation, or `error` when creation fails. The optimistic item remains in the collection on failure and carries a temporary local comment ID. |
+| iOS | Observe `AmityComment.syncState`: `.syncing` becomes `.synced` after confirmation. A failed local comment becomes `.error` and is removed from its parent relationship, so it no longer appears among its parent's children. |
+| Android | Read `comment.getState()`: `SYNCING` becomes `SYNCED` after confirmation. A failed local comment is marked `FAILED` in the local store. |
+| Flutter | The current public comment-creation path waits for the server response before persisting the comment; it does not create the same local-first temporary comment. |
+| React Native | Uses `@amityco/ts-sdk-react-native`, which shares the TypeScript implementation and behaves identically. |
+
+Render local-first comments in a pending style, and handle each platform's failure state so a failed comment is not mistaken for a server-created one.
+
+  On TypeScript and React Native, local-first creation requires the client cache. When the cache is disabled no local comment is created, and the call behaves like a plain server request.
+
+The creation call also rejects when the server request fails; it does not only set the failure state. Catch the error from the creation call and watch sync state through the live collection or observable query. Handling only one of the two leaves either an unhandled rejection or a pending comment that never resolves.
 
 ## Notes
 
@@ -34211,7 +34630,70 @@ Product tagging enables commerce integration within posts, allowing users to tag
 
     All tagged products are displayed in a scrollable list below the post content — in both the feed and post detail view.
 
-    Tapping a product opens its link in an in-app browser, keeping users within the app.
+    Tapping a product opens its link in an in-app browser on iOS and Android, and in a new tab on Web. Override this to route the tap yourself — see below.
+
+### Customize the Product Tap
+
+Opening the product link is the default. Override `onPostProductTagClick` on `AmityGlobalBehavior` to send the tap to your own product screen or commerce flow instead.
+
+The handler receives the tapped product on the context. Read it to decide where to go.
+
+| Context field | Type | Available on |
+| --- | --- | --- |
+| `product` | `AmityProduct` | iOS, Android, Web |
+| `pageContext` | `android.content.Context` | Android |
+
+`AmityProduct` carries `productId`, `productName`, `productUrl`, `price`, `currency`, and `thumbnailUrl`. Use `productId` to look the item up in your own catalogue, or `productUrl` to open it yourself.
+
+```swift iOS
+class MyGlobalBehavior: AmityGlobalBehavior {
+    override func onPostProductTagClick(context: AmityGlobalBehavior.Context) {
+        guard let product = context.product else { return }
+
+        if let item = MyCatalogue.find(id: product.productId) {
+            MyNavigator.showProduct(item)
+        } else {
+            // Fall back to the UIKit in-app browser.
+            super.onPostProductTagClick(context: context)
+        }
+    }
+}
+
+AmityUIKit4Manager.behaviour.globalBehavior = MyGlobalBehavior()
+```
+
+```kotlin Android
+AmityUIKit4Manager.behavior.globalBehavior = object : AmityGlobalBehavior() {
+    override fun onPostProductTagClick(context: AmityGlobalBehavior.Context): Boolean {
+        val product = context.product ?: return false
+
+        val intent = Intent(context.pageContext, ProductActivity::class.java)
+        intent.putExtra("productId", product.getProductId())
+        context.pageContext.startActivity(intent)
+
+        // Return true to claim the tap, so the in-app browser is skipped.
+        return true
+    }
+}
+```
+
+```typescript Web
+<AmityUIKitProvider
+  pageBehavior={{
+    AmityGlobalBehavior: {
+      onPostProductTagClick: ({ product }) => {
+        router.push(`/products/${product.productId}`);
+      },
+    },
+  }}
+>
+```
+
+**The platforms differ in how you fall back to the default.**
+
+- **Android** — the handler returns a `Boolean`. Return `true` when your app handled the tap, or `false` to get the built-in product web view.
+- **iOS** — the handler returns no value, so an override always replaces the default. Call `super.onPostProductTagClick(context:)` where you want the in-app browser instead.
+- **Web** — the handler returns no value and behaves like iOS. There is no `super` to call: open `product.productUrl` yourself if you want the default behavior for some products.
 
 ### Limits & Constraints
 
@@ -36969,6 +37451,7 @@ The Comments & Reactions UIKit provides comprehensive tools for building engagin
 | Brand User Comment | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Comment Ads | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Multi-Level Comment Replies (2-Level) | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Link Rendering in Comments | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Post / Comment / Story Reactions | ✅ | ✅ | ✅ | ✅ | ✅ |
 | View Reactions | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Multiple Reactions | ✅ | ✅ | ✅ | ❌ | ❌ |
@@ -36982,6 +37465,7 @@ The Comments & Reactions UIKit provides comprehensive tools for building engagin
     - **Threaded Comments**: Nested reply conversations with two-level display model
     - **Comment Creation**: Rich text editing with mention support
     - **Comment Management**: Edit, delete, and report capabilities
+    - **Link Rendering**: URLs in comment text are highlighted and tappable, opening the link target. Unlike posts, comments do not render link preview cards
     - **Real-time Updates**: Live comment synchronization
 
     **Expressive User Engagement**
@@ -42226,6 +42710,47 @@ The host controls whether a co-host can manage products. This permission can be 
 - A count badge on the tag icon updates in real-time as products are added or removed
 - Tapping the tag icon opens a scrollable product list overlay
 - Tapping a product opens its link in an in-app browser — the livestream continues playing behind the browser
+
+### Customize the Product Tap
+
+To route that tap somewhere else, override `onLivestreamProductTagClick` on `AmityGlobalBehavior`. The handler receives the tapped product on `context.product`.
+
+```swift iOS
+class MyGlobalBehavior: AmityGlobalBehavior {
+    override func onLivestreamProductTagClick(context: AmityGlobalBehavior.Context) {
+        guard let product = context.product else { return }
+        MyNavigator.showProduct(id: product.productId)
+    }
+}
+
+AmityUIKit4Manager.behaviour.globalBehavior = MyGlobalBehavior()
+```
+
+```kotlin Android
+AmityUIKit4Manager.behavior.globalBehavior = object : AmityGlobalBehavior() {
+    override fun onLivestreamProductTagClick(context: AmityGlobalBehavior.Context): Boolean {
+        val product = context.product ?: return false
+        MyCommerceFlow.openProduct(product.getProductId())
+
+        // Return true to claim the tap, so the built-in product web view is skipped.
+        return true
+    }
+}
+```
+
+```typescript Web
+<AmityUIKitProvider
+  pageBehavior={{
+    AmityGlobalBehavior: {
+      onLivestreamProductTagClick: ({ product }) => {
+        router.push(`/products/${product.productId}`);
+      },
+    },
+  }}
+>
+```
+
+**Returning `false` on Android is not the same as doing nothing.** It gives you UIKit's built-in product web view, which leaves the stream playing in a floating window over it. iOS and Web return no value, so an override always replaces the default. On iOS, call `super.onLivestreamProductTagClick(context:)` where you still want the in-app browser.
 
 ### Limits & Constraints
 
@@ -53096,7 +53621,7 @@ Or explore related guides:
     style={{ maxWidth: "40%", margin: "0 auto", display: "block" }}
   />
 
-social.plus provides a full livestream stack built on top of LiveKit. A broadcast lives inside a **Room**, which owns a live chat channel, co-host invitations, product tags, and recordings. This section breaks the livestream workflow into focused guides.
+social.plus provides a full livestream stack built on top of LiveKit. A broadcast lives inside a **Room**, which owns the live chat channel, co-host invitations, and recording lifecycle. Products are tagged on the published room post (the child room post), not on the Room entity itself. This section breaks the livestream workflow into focused guides.
 
 ## Architecture
 
@@ -53903,8 +54428,8 @@ const post = await PostRepository.createRoomPost({
   targetType: 'community', targetId: communityId,
   data: { roomId: room.roomId, title: 'Flash Sale Live!' },
   productTags: [
-    { productId: 'prod_001', text: 'Nike Air Max', index: 0, length: 12 },
-    { productId: 'prod_002', text: 'Adidas Ultra', index: 13, length: 12 },
+    { productId: 'prod_001' },
+    { productId: 'prod_002' },
   ],
   pinnedProductId: 'prod_001',
 });
@@ -53919,7 +54444,7 @@ Full walkthrough below ↓
 
   <img
     src="/images/livestream-product-tagging.png"
-    alt="Livestream with a pinned product card (GlowLab Soft Glow Blush Stick, $24) at the bottom, Unpin button, viewer count, and live chat"
+    alt="Livestream with a pinned product card, Unpin button, viewer count, and live chat"
     style={{ maxWidth: "40%", margin: "0 auto", display: "block" }}
   />
 
@@ -54018,10 +54543,10 @@ const post = await PostRepository.createRoomPost({
   data: {
     roomId: room.roomId,
     title: 'Flash Sale',
-    text: 'Flash Sale Live! Check out Nike Air Max!',
+    text: 'Flash Sale Live! Explore featured products!',
   },
   productTags: [
-    { productId: 'prod_001', text: 'Nike Air Max', index: 38, length: 12 },
+    { productId: 'prod_001' },
   ],
   pinnedProductId: 'prod_001',
 });
