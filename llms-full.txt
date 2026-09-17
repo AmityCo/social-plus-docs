@@ -4456,12 +4456,12 @@ The SDK exposes upload progress and video file metadata. Playback UI, caching, r
 
 ## Platform Surface
 
-| Platform | Upload | Fetch | Status and resolutions | Notes |
-| --- | --- | --- | --- | --- |
-| TypeScript | `FileRepository.uploadVideo(formData, feedType?, onProgress?)` | `FileRepository.getFile(fileId)` | `status` and `videoUrl` on the returned file | `ContentFeedType` includes `story`, `clip`, `chat`, `post`, and `message`. |
-| iOS | `AmityFileRepository.uploadVideo(with:progress:)` and `uploadVideo(with:feedType:progress:completion:)` | `getFile(fileId:)`, then `mapToVideoData()` | `AmityVideoData.status`, `videoUrls`, and `getVideo(resolution:)` | The async upload method checks for files over 1 GB. The feed-type callback overload checks 4 GB and 2 hours. |
-| Android | `AmityCoreClient.newFileRepository().uploadVideo(uri, contentFeedType)` | `getFile(fileId)`, then `asAmityVideo()` | `getStatus()`, `getResolutions()`, and `getVideoUrl(resolution)` | `AmityContentFeedType` exposes `STORY`, `CLIP`, `MESSAGE`, and `POST`. |
-| Flutter | `AmityCoreClient.newFileRepository().uploadVideo(file, feedtype?)` | Not exposed as a direct public file-repository fetch method in the current SDK | `AmityVideo.getResolutions()` and `getVideoUrl(resolution)` on video objects | `AmityContentFeedType` exposes `STORY`, `POST`, `MESSAGE`, and `CLIP`. |
+| Platform | Upload | Fetch | Status and resolutions | Frame dimensions | Notes |
+| --- | --- | --- | --- | --- | --- |
+| TypeScript | `FileRepository.uploadVideo(formData, feedType?, onProgress?)` | `FileRepository.getFile(fileId)` | `status` and `videoUrl` on the returned file | `getWidth()`, `getHeight()`, and `getRotation()` on a `'video'` file. Requires `@amityco/ts-sdk` 7.27.0 or later. | `ContentFeedType` includes `story`, `clip`, `chat`, `post`, and `message`. |
+| iOS | `AmityFileRepository.uploadVideo(with:progress:)` and `uploadVideo(with:feedType:progress:completion:)` | `getFile(fileId:)`, then `mapToVideoData()` | `AmityVideoData.status`, `videoUrls`, and `getVideo(resolution:)` | No dedicated accessors. Read `attributes["metadata"]["video"]` off `AmityVideoData`. | The async upload method checks for files over 1 GB. The feed-type callback overload checks 4 GB and 2 hours. |
+| Android | `AmityCoreClient.newFileRepository().uploadVideo(uri, contentFeedType)` | `getFile(fileId)`, then `asAmityVideo()` | `getStatus()`, `getResolutions()`, and `getVideoUrl(resolution)` | `getWidth()`, `getHeight()`, and `getRotation()` on `AmityVideo`. Requires Android SDK 7.26.0 or later. | `AmityContentFeedType` exposes `STORY`, `CLIP`, `MESSAGE`, and `POST`. |
+| Flutter | `AmityCoreClient.newFileRepository().uploadVideo(file, feedtype?)` | Not exposed as a direct public file-repository fetch method in the current SDK | `AmityVideo.getResolutions()` and `getVideoUrl(resolution)` on video objects | `fileProperties.width` and `fileProperties.height` only. Rotation is not exposed. | `AmityContentFeedType` exposes `STORY`, `POST`, `MESSAGE`, and `CLIP`. |
 
 ## Parameters
 
@@ -4568,14 +4568,21 @@ AmityCoreClient.newFileRepository()
 
 ## Read Video Status And URLs
 
-Read video status and resolution URLs when your UI needs to render playback or processing state. The returned video file also exposes its frame dimensions. On TypeScript, iOS, and Android these are `getWidth()`, `getHeight()`, and `getRotation()`; on Flutter the video exposes `width` and `height` only (no rotation). Width and height are the **stored** (pre-rotation) values — apply the rotation to get the displayed orientation, swapping width and height when the rotation is ±90°.
+Read video status and resolution URLs when your UI needs to render playback or processing state. The returned video file also carries the frame dimensions, but each platform surfaces them differently — see the **Frame dimensions** column above for the accessor and the minimum SDK version.
+
+Width and height are the **stored** (pre-rotation) values. Apply the rotation to get the displayed orientation: swap width and height when `rotation % 180 != 0`. A quarter turn (±90° or ±270°) changes the shape; a half turn (180°) leaves it alone, so testing for any non-zero rotation gives half of your portrait videos a landscape shape.
+
+Flutter exposes the stored width and height but **no rotation** — the SDK drops the field while parsing the file response, so it is not reachable from the raw map either. A Flutter client cannot tell a rotated portrait clip from a landscape one by these values alone; read the orientation from the local file or let the player handle it.
 
 
 ```typescript TypeScript
 import { FileRepository } from '@amityco/ts-sdk';
 
 async function getVideo(videoFileId: string) {
-  const { data: video } = await FileRepository.getFile<'video'>(videoFileId);
+  // getFile does not narrow its return type, so cast to the video file shape
+  // before reading the video-only members.
+  const { data } = await FileRepository.getFile(videoFileId);
+  const video = data as Amity.File<'video'>;
   const playbackUrl = video.videoUrl?.['720p'] ?? video.fileUrl;
 
   return {
@@ -4595,9 +4602,12 @@ if rawFile.type == .video, let videoData = rawFile.mapToVideoData() {
     let status = videoData.status
     let resolutions = Array(videoData.videoUrls.keys).sorted()
     let playbackURL = videoData.getVideo(resolution: .res_720p)
-    let width = videoData.getWidth()
-    let height = videoData.getHeight()
-    let rotation = videoData.getRotation()
+
+    // Stored frame dimensions. iOS has no dedicated accessors — read the raw metadata.
+    let videoStream = (videoData.attributes["metadata"] as? [String: Any])?["video"] as? [String: Any]
+    let width = videoStream?["width"] as? Int
+    let height = videoStream?["height"] as? Int
+    let rotation = videoStream?["rotation"] as? Int
 }
 ```
 
@@ -4621,9 +4631,10 @@ void inspectVideo(AmityVideo video) {
   final resolutions = video.getResolutions();
   final playbackUrl = video.getVideoUrl(AmityVideoResolution.RES_720);
 
-  // Stored frame dimensions (no rotation on Flutter).
-  final int? width = video.width;
-  final int? height = video.height;
+  // Stored frame dimensions. They live on the file properties, not on AmityVideo,
+  // and Flutter does not expose the rotation that goes with them.
+  final int? width = video.fileProperties.width;
+  final int? height = video.fileProperties.height;
 }
 ```
 
