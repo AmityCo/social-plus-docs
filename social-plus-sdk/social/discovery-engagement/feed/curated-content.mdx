@@ -1,207 +1,125 @@
 ---
-title: "Curated Content"
-description: "Fetch a topic-curated pool of posts and report the engagement signals that keep it relevant."
+title: "Topic-based Content Discovery"
+description: "Help users discover relevant community conversations through configured topics, using the SDK or the Discovery Widget."
 ---
 
-Not every surface in your app should show the same feed. A homepage module, a "What's trending" rail, or a sponsor placement each needs a small, deliberate set of posts rather than an endless stream. **Curated content gives you a named topic and the ranked pool of posts behind it**, so you can drop a focused, editorially-shaped selection anywhere in your product.
+Topic-based content discovery helps brands and community teams bring relevant conversations to the pages people already visit. Instead of relying on users to search for a community, surface posts about a topic on your homepage, category pages, or other browsing surfaces. Post previews help people understand what your community offers and decide which conversations to explore.
 
-A topic is configured in the social.plus Console. The SDK fetches the pool for a topic and returns the posts, along with the analytics handles you use to report what the reader actually saw and clicked.
+Your team configures a topic in the social.plus Console. The SDK uses its topic ID to fetch an ordered selection of community posts, called a **pool**. Build your own presentation with these posts, or use the UIKit's [Discovery Widget](/uikit/components/social/discovery-widget) for a ready-made carousel.
 
 <Info>
-Curated content is available on **iOS**, **Android**, and **TypeScript**. Flutter and React Native are not yet supported.
+The SDK supports topic-based content discovery on **TypeScript**, **iOS**, and **Android**. Flutter and React Native are not supported.
 </Info>
 
-## Platform Support
+## How recommendations are selected
 
-| Feature | iOS | Android | TypeScript | Flutter | React Native |
-| --- | --- | --- | --- | --- | --- |
-| `getPool` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Analytics handles | ✅ | ✅ | ✅ | ❌ | ❌ |
+Recommendations use three main signals:
 
-## How a pool differs from a feed
+- **Topic relevance:** how closely a post matches the configured topic. This is the main signal.
+- **Engagement:** activity on a post, such as reactions and comments, helps identify relevant conversations people are participating in.
+- **Freshness:** newer posts help keep the selection timely.
 
-Three properties set a pool apart from every other feed read in the SDK, and each one changes how you integrate it:
+Selection is based on the configured topic rather than a reader's personal interests or engagement history. Topic configuration and eligibility rules determine which posts can appear. Viewer-specific restrictions, such as blocked authors, can further affect the returned selection.
 
-1. **It is not a live collection.** A pool is one bounded response — no cursor, no `nextPage()`, no server-side pagination. To re-evaluate, call `getPool` again rather than paging.
-2. **Zero results is success.** A topic whose every candidate was filtered out returns an empty list and resolves normally. It does not throw.
-3. **The response is viewer-specific.** Each request re-applies the viewer's block list, so two people can get different posts for the same topic.
+The SDK returns posts in recommendation order. Preserve that order when presenting the recommended selection.
 
-<Warning>
-Because pools are viewer-specific, **never cache one across viewers**, and never in a shared or CDN layer. If you cache at all, key it by viewer *and* topic and keep it to minutes — a post removed upstream is expected to disappear within roughly 10–15 minutes.
-</Warning>
+## Before you start
 
-## Fetch a pool
+Configure a topic in the social.plus Console and obtain its topic ID. Initialize the SDK and establish a [user session](/social-plus-sdk/getting-started/authentication) or a [visitor session](/social-plus-sdk/getting-started/visitor-mode) before fetching posts.
 
-`getPool` returns the topic and its ranked posts in one call.
+Topic configuration is managed in the Console. This page covers reading its recommendations and reporting interactions from your app.
+
+## Parameters
+
+| Parameter | Type | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| `topicId` | `string` | Yes | TypeScript, iOS, Android | The topic ID configured in the Console. |
+| `limit` | integer | No | TypeScript, iOS, Android | Maximum number of posts to return, from 1 to 100. Omit to use the server default. |
+
+## Fetch recommended posts
+
+`getPool` returns the topic and its ordered posts in a single request. It is not a live collection and does not support pagination. Call it again when your app needs a new selection.
 
 <CodeGroup>
 
 ```typescript TypeScript
 import { CuratedContentRepository } from '@amityco/ts-sdk';
 
-const pool = await CuratedContentRepository.getPool(topicId);
-
-console.log(pool.topic.topicName); // e.g. "Trending this week"
-console.log(pool.posts.length);
+const pool = await CuratedContentRepository.getPool('your-topic-id', 10);
+const topicName = pool.topic.topicName;
+const posts = pool.posts;
 ```
 
 ```swift iOS
 let repository = AmityCuratedContentRepository()
+let pool = try await repository.getPool(topicId: "your-topic-id", limit: 10)
 
-let pool = try await repository.getPool(topicId: topicId)
-
-print(pool.topic.topicName)
-print(pool.posts.count)
+let topicName = pool.topic.topicName
+let posts = pool.posts
 ```
 
 ```kotlin Android
 val repository = AmityCoreClient.newCuratedContentRepository()
 
-repository.getPool(topicId = topicId)
+repository.getPool(topicId = "your-topic-id", limit = 10)
     .subscribeOn(Schedulers.io())
     .observeOn(AndroidSchedulers.mainThread())
-    .subscribe { pool ->
+    .subscribe({ pool ->
         val topicName = pool.topic.topicName
         val posts = pool.posts
-    }
+    }, { error ->
+        // Handle the failed request in your app.
+    })
 ```
 
 </CodeGroup>
 
-## Parameters
+The returned posts are standard post objects that you can render in your own UI. Results may contain fewer posts than requested, including an empty list. An empty list is a successful response; omit the discovery surface when there is no content to display.
 
-| Parameter | Type | Required | Platforms | Description |
-| --- | --- | --- | --- | --- |
-| `topicId` | `string` | Yes | iOS, Android, TypeScript | The topic slug, exactly as saved in the Console — lowercase letters, digits and hyphens. Must not be empty. |
-| `limit` | `number` | No | iOS, Android, TypeScript | How many posts to return, **1–100**. Omit to use the network's configured default (**10** unless your network changes it) — the SDK does not substitute one of its own. |
+## Report interactions
 
-Both constraints are validated on the client on **all three platforms** before the request is made, so an invalid call fails immediately rather than costing a round trip. An empty `topicId`, or a `limit` outside 1–100, raises an invalid-parameter error — `INVALID_PARAMETERS` on TypeScript, `AmityError.INVALID_PARAMETER` on Android, and an `invalidParameter` error on iOS. iOS and Android also reject a whitespace-only `topicId`; TypeScript does not.
-
-<CodeGroup>
-
-```typescript TypeScript
-// Cap the pool at 10 posts
-const pool = await CuratedContentRepository.getPool(topicId, 10);
-```
-
-```swift iOS
-// Cap the pool at 10 posts
-let pool = try await repository.getPool(topicId: topicId, limit: 10)
-```
-
-```kotlin Android
-// Cap the pool at 10 posts
-repository.getPool(topicId = topicId, limit = 10)
-```
-
-</CodeGroup>
-
-**Expect fewer posts than you asked for.** Filtering runs after ranking, so a request for 10 may return 6. The SDK does not pad the result or re-request to fill the gap.
-
-The returned posts are standard post objects, so everything you already do with a post — rendering its content, reading its author, checking its data type — works unchanged.
-
-Returned posts are fully hydrated — the author and target community resolve without a second call.
-
-## Topic
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `topicId` | `string` | The topic slug, exactly as requested. Immutable, so it is safe to hard-code. |
-| `topicName` | `string` | The display name configured for the topic. Safe to use directly as your section heading. |
-| `poolSize` | `number` | How many posts came back in **this response**, after filtering — not the size of the underlying pool. |
-| `refreshedAt` | date, nullable | When the pool was last rebuilt. **Null means it has never been built** — which is a different situation from a pool that was built and then filtered down to nothing. `Date?` on iOS, `DateTime?` on Android, an ISO-8601 string on TypeScript. |
-| `analytics` | object | The analytics handles described below. A property on TypeScript and iOS; a method, `analytics()`, on Android. |
-
-Since `poolSize` counts what you actually received, it is the number to check when deciding whether a surface is worth rendering — a topic that returns one or two posts may not justify a carousel. It is always equal to `posts.length`, so either will do.
-
-The topic id is bound into the analytics handle, so you cannot attribute an event to the wrong topic by accident.
-
-## Analytics
-
-Curated content ranks on engagement, so the pool only stays relevant if your app reports what happened. Three handles hang off the topic:
+When building your own discovery surface, use the topic's analytics handle to measure what readers see and open. Report views when the surface or card becomes visible, rather than when an off-screen element is mounted.
 
 | Method | Report when |
 | --- | --- |
-| `markAsViewed()` | The curated surface itself became visible to the reader. |
-| `markPostAsViewed(postId)` | An individual post in the pool became visible. |
-| `markPostClick(postId)` | The reader opened a post from the pool. |
+| `markAsViewed()` | The discovery surface becomes visible. |
+| `markPostAsViewed(postId)` | A post card becomes visible. |
+| `markPostClick(postId)` | The reader selects a post card. |
 
 <CodeGroup>
 
 ```typescript TypeScript
-const pool = await CuratedContentRepository.getPool(topicId);
-
-// The section scrolled into view
 pool.topic.analytics.markAsViewed();
-
-// A card scrolled into view
 pool.topic.analytics.markPostAsViewed(post.postId);
-
-// The reader tapped a card
 pool.topic.analytics.markPostClick(post.postId);
 ```
 
 ```swift iOS
-// The section scrolled into view
 pool.topic.analytics.markAsViewed()
-
-// A card scrolled into view
 pool.topic.analytics.markPostAsViewed(postId: post.postId)
-
-// The reader tapped a card
 pool.topic.analytics.markPostClick(postId: post.postId)
 ```
 
 ```kotlin Android
-// The section scrolled into view
+val topic = pool.topic
 topic.analytics().markAsViewed()
-
-// A card scrolled into view
 topic.analytics().markPostAsViewed(post.getPostId())
-
-// The reader tapped a card
 topic.analytics().markPostClick(post.getPostId())
 ```
 
 </CodeGroup>
 
-<Warning>
-**Nothing de-duplicates these for you.** Send the same impression ten times and all ten land in analytics. Fire each signal once per surface per page load, and report views on actual visibility rather than on render — posts are commonly mounted off-screen in a carousel or a virtualized list, and counting those distorts the signal for every reader on your network.
-</Warning>
+Report the surface impression and each post impression once per page load. Report a click when the reader selects a card, and let navigation proceed without waiting for analytics.
 
-If you use the [Discovery Widget](/uikit/components/social/discovery-widget), it already applies this discipline for you.
+The Discovery Widget reports these interactions automatically, so you do not need to report them again for that component.
 
-## Ranking, filtering and freshness
+## Related topics
 
-The backend assembles and orders each topic's pool. The ordering blends the topic's own configuration with engagement signals gathered from the analytics calls above — which posts readers see, and which ones they open.
-
-**Render the posts in the order you receive them. Do not re-sort, re-filter or de-duplicate.** The scoring model and its weighting are owned by the backend and tuned per network; they are not exposed through the SDK, and the SDK does not let the client re-rank a pool. Ranking runs before the safety gate, so what you get is the ranked pool with holes removed — **a post's position is not stable across requests**, and nothing should be keyed to it.
-
-Two filters run on **every request**, which is why the same topic can look different to different people:
-
-- **Safety** — deleted, hidden, flagged and non-discoverable posts are removed, along with posts by banned or deleted authors.
-- **Block list** — posts by authors the current viewer has blocked are removed.
-
-The pool behind a topic is built by a backend pipeline on its own schedule, which the SDK does not expose. `topic.refreshedAt` tells you when that last happened, and **`null` means it has never run for this topic** — so a topic can be configured correctly and still return nothing until the pipeline first builds it.
-
-Because the two filters above run per request rather than per build, a post removed upstream disappears within roughly **10–15 minutes**, even though the pool behind it is older than that.
-
-## When a pool can't be returned
-
-Some failures are not worth an error state. In each of these, **render nothing** rather than showing the reader a message:
-
-| Situation | What to do |
-| --- | --- |
-| Curated content isn't enabled for the network | Not retryable — hide the surface and contact support |
-| The topic doesn't exist, or was deactivated or deleted | Hide the surface and confirm the slug with your admin |
-| The pool is empty | Hide the surface — this is a success, not an error |
-
-An expired session is the one case worth retrying: re-mint the session and try once more.
-
-## Visitor sessions
-
-A pool can be read with a **visitor session** as well as a user session.
-
-## Using this with the UIKit
-
-If you want the ready-made carousel rather than building your own surface, the UIKit ships a drop-in component that calls `getPool` and reports all three analytics events for you. See [Discovery Widget](/uikit/components/social/discovery-widget).
+<CardGroup cols={2}>
+  <Card title="Discovery Widget" icon="window-maximize" href="/uikit/components/social/discovery-widget">
+    Embed a ready-made carousel of topic-based recommendations.
+  </Card>
+  <Card title="Visitor mode" icon="user" href="/social-plus-sdk/getting-started/visitor-mode">
+    Establish a session for readers who have not signed in.
+  </Card>
+</CardGroup>
