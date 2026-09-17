@@ -1,0 +1,332 @@
+---
+title: "Content Widget"
+description: "Drop-in carousel of topic-curated community posts, with impression and click tracking built in"
+---
+
+Most surfaces in an app aren't a feed. A homepage module, a category landing page, or a partner placement needs a small, deliberate set of posts — and building that means wiring a fetch, a carousel, responsive layouts, and engagement tracking every time. **The Content Widget is that surface, ready to embed**: give it a topic and it renders a curated, ranked carousel of community posts and reports the engagement signals back for you.
+
+It is read-only. Readers can browse the cards and open a post; they cannot react, comment, or post from inside the widget.
+
+<Info>
+The Content Widget is available on **iOS**, **Android**, and **Web**. It is built on the curated content APIs — see [Curated Content](/social-plus-sdk/social/discovery-engagement/feed/curated-content) for the underlying SDK surface.
+</Info>
+
+
+## Platform Support
+
+| Component | iOS | Android | Web | React Native | Flutter |
+| --- | --- | --- | --- | --- | --- |
+| Widget | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Post card | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+The widget is `AmityContentWidgetComponent` on all three platforms.
+
+The card is not treated the same way everywhere. iOS and Web ship it as a component, `AmityContentWidgetPostCardComponent`, each with its own component id. Android ships it as an **element**, `AmityContentWidgetPostCard`, with no component id — so on Android it has no customization or exclusion surface of its own, and the widget is the only piece you configure.
+
+## AmityContentWidgetComponent
+
+The widget owns its heading, its navigation controls, the card track, and both responsive layouts.
+
+### Usage
+
+<CodeGroup>
+
+```tsx Web
+import { AmityContentWidgetComponent } from '@amityco/ui-kit';
+
+<AmityContentWidgetComponent
+  topicId="your-topic-id"
+  onCardClick={(topicId, post) => {
+    // Open the post
+  }}
+/>
+```
+
+```swift iOS
+AmityContentWidgetComponent(
+    topicId: "your-topic-id",
+    onCardClick: { topicId, post in
+        // Open the post
+    }
+)
+```
+
+```kotlin Android
+AmityContentWidgetComponent(
+    topicId = "your-topic-id",
+    onCardClick = { topicId, post ->
+        // Open the post
+    },
+)
+```
+
+</CodeGroup>
+
+### Parameters
+
+| Parameter | Type | Default | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| `topicId` | `string` | — | iOS, Android, Web | **Required.** The topic slug, exactly as saved in the Console. |
+| `showHeader` | `boolean` | `true` | iOS, Android, Web | Show the heading row. Navigation arrows are part of the header, so hiding it also hides them. |
+| `minVisibilityThreshold` | `number` | `3` | iOS, Android, Web | The fewest renderable posts required before the widget shows at all. Accepts any value **≥ 1**; lower values are clamped to 1. |
+| `onCardClick` | `(topicId, post)` | none | iOS, Android, Web | Per-instance callback for a card tap. When set it **replaces** the behavior class for that instance — see [Where a card click goes](#where-a-card-click-goes). |
+| `pageId` | `PageId?` / `string` | `nil` / `'*'` | iOS, Web | Page identifier, used for customization scoping. |
+| `pageScope` | `AmityComposePageScope?` | `null` | Android | Compose page scope, the Android equivalent of `pageId`. |
+| `modifier` | `Modifier` | `Modifier` | Android | Standard Compose modifier. |
+
+### It hides itself
+
+This is the behavior most worth designing around: **the widget renders nothing** — no heading, no empty state, no placeholder — when any of these is true:
+
+- the topic holds fewer posts than `minVisibilityThreshold`
+- the content request fails
+- the component is excluded by your network's customization settings (**Web and Android only** — iOS does not check exclusion for this component)
+
+A failed request and a below-threshold pool are deliberately indistinguishable — the widget hides either way, and no platform retries a failed pool request.
+
+**Whether a hidden widget can come back mid-session differs by platform:**
+
+| Platform | Pool fetch |
+| --- | --- |
+| iOS, Android | **Once per mount.** A widget that hid stays hidden until the next page load |
+| Web | Cached **5 minutes** per topic, then refetched on window focus or remount — so a widget can appear or disappear mid-session |
+
+Web's cache is keyed by topic, so two widgets on the same topic share one request rather than issuing two.
+
+A curated surface with one post, or a broken one, looks worse than no surface at all. Because the widget removes itself entirely rather than collapsing to an empty box, **don't wrap it in a container with its own heading, border, or spacing** — that chrome will be left stranded. Let the widget supply its own heading via `showHeader`.
+
+<Warning>
+Give the widget a host container with a real, determinate height. The widget sizes itself from its content and imposes no height on its parent, so a container with zero or indeterminate height clips or hides it — most visibly the engagement bar, the last row of every card.
+
+On **iOS** a hidden widget still fetches, still meets its threshold and **still fires its impression**, because visibility is computed from the widget's own frame and does not account for an ancestor clipping it. Your analytics would then report a widget nobody could see. Web measures visibility with an `IntersectionObserver`, which does account for ancestor clipping, so a fully clipped widget reports nothing there.
+</Warning>
+
+<Warning>
+**Don't mount the widget inside a horizontally-scrolling container.** The card track is itself a horizontal scroller, so nesting it in another one leaves the two competing for the same drag, and which one wins varies by platform and OS version. Put the widget in a vertically-scrolling or non-scrolling container.
+
+This is a limitation, not a guard: no platform can reliably detect a horizontally-scrolling ancestor, so none of them tries. Nothing will warn you.
+</Warning>
+
+### Responsive layouts
+
+The widget picks one of two layouts automatically, with no configuration:
+
+| Layout | Cards | Gap | Inset | Paging |
+| --- | --- | --- | --- | --- |
+| `compact` | 343 | 8 | 16 | Swipe only |
+| `expanded` | 375 | 16 | 0 | Arrows, where the platform draws them |
+
+| Platform | Switches to `expanded` at | Measured on |
+| --- | --- | --- |
+| iOS | ≥ **769 pt** | Container |
+| Android | ≥ **769 dp** | Container |
+| Web | ≥ **48em** — 768 px at a default browser font size | Viewport |
+
+Two differences matter if you are comparing platforms:
+
+- **iOS and Android measure the container**, Web measures the **viewport**. So a tablet split pane renders compact on mobile, while on Web a narrow column inside a wide window still renders expanded.
+- **Web's boundary is font-relative.** `48em` in a media query resolves against the browser's font size, not your page's, so a reader who has raised their default font switches layouts at a wider viewport than 768 px.
+
+**Navigation arrows only exist in the `expanded` layout, and only on Web and Android.** Below the breakpoint they are not built at all, rather than hidden — so on a phone, every platform is swipe-only. Android reaches `expanded` on tablets and wide panes, which is where its arrows appear.
+
+iOS draws no arrows at either layout. It reserves the same header height regardless, so the widget measures identically across platforms.
+
+Where arrows are drawn, they disable at each end of the track and are suppressed while loading. A long topic title truncates to one line rather than wrapping, so it never pushes them out of the row.
+
+### Keyboard and screen readers
+
+All three platforms give each card a single composed accessible name — author, community, title, body, then the reaction and comment counts — so a screen reader announces what the card is rather than just "button". The name is built from the **full** text, so a body that truncates visually is still announced in full. Web adds a type word (photo, video, clip, poll); iOS announces the card as a link and reads out the poll percentages, which matters because the leading option's emphasis is color alone.
+
+On every platform the widget exposes its **topic name as the accessible label** for the whole section. On **iOS** the heading is additionally marked as a header, so VoiceOver users can navigate to it by heading.
+
+On **Web** the track is keyboard navigable: <kbd>→</kbd> and <kbd>←</kbd> move between cards, <kbd>Home</kbd> and <kbd>End</kbd> jump to either end, and <kbd>Enter</kbd> or <kbd>Space</kbd> opens the focused card. Only one card is in the tab order at a time, so tabbing past the widget does not walk through every post.
+
+Decorative parts — the play glyph, the `1/n` counter, *See more*, *See full results*, the link preview, the engagement bar on iOS and Android — are hidden from assistive technology rather than announced separately.
+
+## AmityContentWidgetPostCardComponent
+
+Each post in the track renders as a card with three parts: the **author header** (avatar, author name, community name, timestamp), the content, and an **engagement bar** showing reaction and comment counts.
+
+Every card is the same fixed height, so the middle section is what varies. Body text is clamped to fit — one title line and two body lines beside a poll or media, and more on a text-only card — and truncated text ends with a **"See more"** label. That label is decoration, not a control: it does not expand the card, and tapping it does what tapping anywhere else on the card does.
+
+Mentions, hashtags and URLs in the body are **never tappable inside the widget**. iOS and Android color them; Web renders them as plain text. Nothing inside a card opens a profile, a hashtag search, or an external URL.
+
+### Card parameters
+
+The widget builds its own cards, so you only need these if you render a card on its own.
+
+| Parameter | Type | Platforms | Description |
+| --- | --- | --- | --- |
+| `post` | `AmityPost` | iOS, Android, Web | **Required.** The post to render. Poll details are read from it — there is no separate poll parameter. |
+| `onClick` | `() => void` | iOS, Android, Web | Fired when the card is tapped. Takes **no arguments** — you already hold the post you passed in, so close over it: `onClick={() => open(post)}`. |
+| `layout` | `ContentWidgetLayout` | iOS, Web | `compact` or `expanded`, which sets the card width. On Android the width comes from `modifier` instead. |
+| `pageId` | `PageId?` / `string` | iOS, Web | Page identifier, for customization scoping. |
+| `modifier` | `Modifier` | Android | Standard Compose modifier — this is where the card's width and height come from. |
+| `tabIndex` | `number` | Web | Tab order position. The widget uses it to keep one card in the tab order at a time. |
+
+`onClick` is required on iOS and Android and optional on Web. A card with no handler renders normally and does nothing when tapped.
+
+### Card variants
+
+The card picks its layout from the post's content, resolved in this order — the first match wins:
+
+| Order | Variant | When |
+| --- | --- | --- |
+| 1 | **Poll** | The post contains a poll |
+| 2 | **Media** | The post has an image, video or clip attachment |
+| 3 | **Link** | The body text contains a URL, and the post has no media of its own |
+| 4 | **Text** | Everything else |
+
+Image, video and clip all use the same media block — the difference is only that a video or clip adds a play glyph. There is no precedence among them: the **first media attachment** decides what the thumbnail shows.
+
+Because poll and media both win over a link, **a post with its own attachments never renders as a link card** — the post's own content beats a preview of somewhere else. And because poll wins over media, a post with both renders as a poll card.
+
+All three platforms draw a link preview on a link card — a thumbnail with the page title and domain. On every platform it sits inside the card's single tap target and **never opens the URL**.
+
+### Media
+
+A media card shows the **first attachment only**. The block is not swipeable, has no pagination dots, and never plays: a video or clip shows a play glyph as a cue that there is video at the destination. When the post carries more than one attachment, a `1/n` counter marks that there is more to see at the destination.
+
+A thumbnail that fails to load shows a placeholder and keeps its space. The card does not collapse, and one broken image never makes the widget hide — hiding is a pool-level decision, never a per-card one.
+
+### Supported post types
+
+| Type | Rendered |
+| --- | --- |
+| Text | ✅ |
+| Image | ✅ |
+| Video | ✅ |
+| Clip | ✅ |
+| Poll | ✅ — read-only, with results |
+| Livestream | ❌ |
+| Room | ❌ |
+
+<Warning>
+Unsupported posts are dropped **before** the `minVisibilityThreshold` check, not after. A pool of 4 containing 2 livestreams counts as 2 — so a topic can fall below threshold on post types alone and the widget will not render.
+</Warning>
+
+**On Web**, a supported post is also dropped if the data it needs is missing — a poll post whose poll details didn't arrive counts as unrenderable and never reaches the threshold check. iOS and Android filter on post type alone, so such a post is kept and its poll block simply stays empty until the details resolve.
+
+Dropping is a rendering decision only: the widget never re-requests to backfill what it dropped, and dropped posts leave no gap in the track.
+
+### Polls in the widget
+
+A poll card is read-only, and it differs from a poll in the feed in two ways worth knowing before you place the widget:
+
+- **Results are always revealed.** In the feed a reader has to vote, or the poll has to close, before percentages appear. In the widget every reader sees the percentages immediately — voted or not, ongoing or ended. There is no *Vote* control and no "tap to see results".
+- **Options are re-ordered.** The option with the most votes is always shown first, whatever order the author wrote them in. This is the only surface in the product that re-orders poll options. A poll with no votes keeps its authored order and nothing is emphasized.
+
+Only the **first two options** fit the card. The rest are not drawn, and a *See full results* label — itself inert — marks the route to the post. Because the leading option survives the cap, what is visible is the part that carries the result.
+
+An ended poll renders identically to an ongoing one; only the status line under the options differs.
+
+### Nothing inside a card is interactive
+
+The engagement bar shows the post's **reaction and comment counts** and nothing else. It renders even at zero, so the card's height stays the same — a post with no reactions reads "0 reactions" rather than a bare `0`.
+
+The whole card is a single tap target. Every interactive affordance — reacting, commenting, sharing, the post menu, poll voting, closing a poll, media playback, opening a profile or community — is **absent from the card entirely** rather than hidden, so there is nothing inside it to tap and nothing for assistive technology to reach. Poll moderation is never available in the widget, even to an author looking at their own poll.
+
+## Analytics
+
+The widget reports all three curated content signals for you — you don't need to call them yourself:
+
+| Signal | Reported when | Visibility threshold |
+| --- | --- | --- |
+| Widget impression | The widget becomes visible to the reader | Any part on screen |
+| Card impression | A card becomes sufficiently visible | iOS **50%** · Web **50%** · Android **60%** |
+| Card click | The reader opens a post from the widget | — |
+
+**Impressions are de-duplicated; clicks are not.** The widget fires its own impression once, and each card's impression once — scrolling a card out of view and back does not report it again. A card click, by contrast, is reported every time, so a reader who taps the same card three times produces three click events.
+
+That distinction matters because nothing de-duplicates any of this server-side. The widget applies the impression discipline for you; if you build your own surface instead, you have to enforce it yourself.
+
+No analytics fire while the widget is loading or absent — only once it has actually rendered.
+
+<Warning>
+The card impression threshold is **60% on Android** against 50% on iOS and Web. If you compare impression counts across platforms, expect Android to report slightly fewer card views for identical content.
+</Warning>
+
+These signals feed the ranking behind the topic, so a widget that renders but never reports would gradually degrade the quality of its own pool.
+
+## Customization
+
+**Every option that changes what the widget shows is a parameter you pass in code** — `topicId`, `showHeader`, `minVisibilityThreshold`, `onCardClick`. There is no Console field and no config key for any of them.
+
+| What | Where |
+| --- | --- |
+| `showHeader`, `minVisibilityThreshold` | Component parameters |
+| Where a card click goes | `onCardClick` or the behavior class — see below |
+| Color and theme | Your app's UIKit theme, optionally overridden per component in config — see below |
+
+Keeping the options in code is deliberate: the widget is embedded on a page via a snippet whose only input is a topic slug, so a second place to change its behavior would split decisions about that page in two.
+
+### What config can still reach
+
+The widget does register itself with the customization system, so `amity-uikit-config.json` has two levers even though the shipped default config has **no entry for it**:
+
+| Lever | Key | Platforms |
+| --- | --- | --- |
+| Exclude the widget entirely | `isExcluded` | Web, Android — iOS does not check it |
+| Force a theme, or override the primary color | `preferred_theme`, `theme.light` / `theme.dark` | iOS, Android, Web |
+
+The component id differs by platform: `content_widget_component` on Web, `content_widget` on Android.
+
+<Info>
+The component spec says this widget should have **no** `config.json` surface at all. All three platforms wired one anyway. Nothing is configured by default, so the two levers above only take effect if you add a key yourself — but they do work, and that is a difference between the spec and shipped behavior worth knowing before you rely on either.
+</Info>
+
+## Where a card click goes
+
+The widget hands the reader into your community, but **it cannot know where that should be** — a product page, a hosted community, a deep link. So routing is an override you provide, not a built-in.
+
+| Platform | Override | Default if you don't |
+| --- | --- | --- |
+| Web | `AmityContentWidgetComponentBehavior.goToDestination({ topicId, post })` | **Nothing happens** |
+| Android | `AmityContentWidgetBehavior.goToDestination(context, topicId, post)` | **Nothing happens** |
+| iOS | `AmityContentWidgetBehavior.goToDestination(context)` | Pushes the post detail page — but only if the widget sits inside a navigation stack. Outside one, nothing happens |
+
+<Warning>
+On **Web and Android there is no default destination**. If you ship without providing the override, cards are tappable and nothing happens. Set it before you go live.
+</Warning>
+
+On every platform you have two places to handle the click, and **`onCardClick` wins**: pass it and the behavior class is not consulted at all for that instance. The two branches are mutually exclusive, so exactly one runs per click. Use `onCardClick` for a single placement and the behavior class for app-wide routing.
+
+Because the callback is per instance and the behavior class is app-wide, two widgets on the same page can route differently: give one a callback and let the other fall through to the behavior.
+
+Either way the click analytics fire first and are never awaited, so telemetry cannot delay navigation.
+
+The topic ID travels with the post, so a single override can route differently per topic without you threading topic state through your own code.
+
+<Info>
+iOS's default — opening the post detail page — is provisional. Don't rely on it; set the override explicitly so behavior stays the same across platforms and survives a future change to that default.
+</Info>
+
+## Localization
+
+On **Web and iOS** the widget introduces no new keys — every string it shows already exists in your bundle, so overrides you already apply carry through to the widget automatically.
+
+**Android ships six widget-specific keys**, because its card words the counts differently from the feed:
+
+| Key | Used for |
+| --- | --- |
+| `amity_social_button_content_widget_reaction_count_singular` / `_plural` | Reaction count on the card |
+| `amity_social_button_content_widget_comment_count_singular` / `_plural` | Comment count on the card |
+| `amity_social_button_content_widget_poll_voter` / `_poll_voters` | Vote count on an image poll option |
+
+Everything else is reused, but **the key names are not the same on every platform**, so an override has to be applied per platform:
+
+| String | Web | iOS | Android |
+| --- | --- | --- | --- |
+| Reaction count | `amity_social_label_reaction_count_plural` | `amity_social_label_reaction_count_plural` | see above |
+| Comment count | `amity_social_button_feed_comment_count_singular` / `_plural` | `post_comment_count_singular` / `_plural` | see above |
+| "See more" | `amity_social_button_see_more` | `expandable_text_see_more` | `amity_social_button_see_more` |
+| "See full results" | `amity_social_label_see_full_results` | `poll_see_full_results_label` | `amity_social_label_see_full_results` |
+| Poll vote count | `amity_social_button_poll_voter` / `_poll_voters` | `amity_social_button_poll_voter` / `_poll_voters` | `amity_social_button_poll_voters` |
+| Option voter line | `amity_social_label_voted_by_1_participant` / `_participants` | `poll_answer_result_voted_by_single_participant` / `_multiple_participants` | `amity_social_label_voted_by_participants` |
+| No votes | `amity_social_button_no_votes` | `poll_answer_result_no_votes` | `amity_social_button_image_poll_no_votes` |
+| Poll ended | `amity_social_button_poll_ended` | `amity_social_status_poll_ended` | `amity_social_button_poll_ended` |
+| Arrow labels | `amity_social_button_previous` / `_next` | — no arrows | `amity_social_button_previous` / `_next` |
+
+## Building your own instead
+
+If the carousel doesn't fit your design, fetch the pool directly and render whatever you want. The SDK returns standard post objects and the same analytics handles the widget uses. See [Curated Content](/social-plus-sdk/social/discovery-engagement/feed/curated-content).
