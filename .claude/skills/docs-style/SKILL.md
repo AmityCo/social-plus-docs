@@ -73,6 +73,42 @@ Read in this order, stopping once you have what the integrator needs:
 
 **cleverden is internal.** It contains exactly the material you must NOT publish — exact ranking weights, formulas, thresholds, backend storage/delivery mechanics, cold-start constants, and roadmap items that haven't shipped. Use it to *understand* the feature, then apply **What to expose vs. keep private** (above) to the output: document only the public API, the observable behavior, and what the integrator must do. If a spec describes something the shipped source does not yet implement, do not document it as available.
 
+## Context checklist
+
+A page can only be as good as the context you were given. Writing style cannot invent a problem statement, and grounding cannot invent a spec that was never written. Track which inputs you actually had, and report it — so a reviewer can tell the difference between "this page has no benefit framing because the writer skipped it" and "…because no product context existed."
+
+Assess these eight inputs for every docs change:
+
+| # | Context | What it unlocks in the output |
+| --- | --- | --- |
+| 1 | **Problem statement / marketing framing** | The benefit-led intro on overviews — why a reader should care, what problem it solves |
+| 2 | **Product spec** (PRD, scope, acceptance criteria, out-of-scope) | Correct scope, eligibility rules, and what to leave out |
+| 3 | **Technical spec / implementation plan** | Intended API shape and how the feature is staged across platforms |
+| 4 | **Source verification** | Real names, signatures, return types, and that the code path actually ships |
+| 5 | **Platform availability** | Honest per-platform support and "Not exposed" rows |
+| 6 | **Design reference** (Figma, screenshots) | UI anatomy, states, and interaction behavior for UIKit pages |
+| 7 | **Exposure review** | Confidential/internal material identified and deliberately excluded |
+| 8 | **Regulatory / compliance** | Transparency obligations where they apply (e.g. EU DSA for recommenders) |
+
+Status values: **✅ used** · **⚠️ partial** · **❌ not available** · **— n/a**.
+
+Two rules that make this worth doing:
+
+- **Never fabricate a missing input.** If there is no problem statement, write a descriptive intro — do not invent a benefit claim. If there is no spec, document only what source proves. A `❌` is a legitimate outcome, not a failure.
+- **Say what the gap cost.** Every `❌` or `⚠️` needs a one-line note on what the page therefore lacks, so the gap is visible and fixable later.
+
+## Pull request description
+
+Every docs PR description carries, in this order:
+
+1. **## Improvement** (or **## Change**) — what this does and why, in a sentence or two.
+2. **## The bug — proof** — for any accuracy fix: what the docs claimed, why it is wrong, and the source evidence (file, symbol, commit) for the correct value. Skip for pure additions.
+3. **## What changed** — the concrete edits.
+4. **## Context checklist** — the table above, with a status and note per row. Include only rows that are meaningful for the change; keep `❌` rows, since they are the point.
+5. **Deliberately not done / flagged** — anything intentionally left, and why.
+
+**Keep it current.** The description describes the branch, not the first commit. Whenever you add a commit that changes the content, update the affected sections **and** re-assess the context checklist in the same step — a later commit often adds source verification or a spec reference that flips a `⚠️` to `✅`. A stale checklist is worse than none, because it is read as a claim about the work.
+
 ## Enforcement
 
 Pushes run structure/drift gates (`.docs-ops/CI_GATE.md`): `check-mdx.py`, `check-sdk-style.py`, and `check-drift.py`. A PR is blocked if it introduces a new stale (file, API-ref) pair versus `origin/main`. Match the archetype shape so `check-sdk-style.py` passes.
