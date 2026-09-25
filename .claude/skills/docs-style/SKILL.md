@@ -24,6 +24,11 @@ Follow the repo's doc-writing contract. Read the authoritative sources relevant 
 - **Accuracy first:** verify every API name, signature, parameter, and behavior against the current SDK source before writing it. **Never document a feature inferred from a schema field, type, or partial trace** — if the code doesn't implement it, it doesn't go in the docs.
 - **Clarity:** plain language, define your terms, right-sized for an engineer. **No marketing fluff** in reference/solution content; a light benefit framing is allowed only in section overviews.
 - **Parity:** describe a multi-platform feature consistently across every platform it ships on.
+- **Code sample order:** inside every `CodeGroup`, order the samples **Android, iOS, then web, then React Native, then Flutter**, and omit any platform that doesn't ship the feature.
+  - **SDK pages:** `kotlin Android` → `swift iOS` → `typescript TypeScript` → `dart Flutter`.
+  - **UIKit pages:** `kotlin Android` → `swift iOS` → the web UIKit sample, labeled `React` (`typescript React` / `tsx React`, the existing UIKit convention; a few older pages use `Web`) → `jsx React Native` → `dart Flutter`.
+  - A `{/* doc-as-test: … */}` comment belongs to the block right after it; move it with that block.
+  - Pages written before this rule may still use the older TypeScript-first order. Reorder a page's groups when you edit it rather than mixing orders on one page.
 - **Confidential internals stay out:** no exact ranking weights, scoring formulas, or backend storage/mechanics — keep to customer-facing behavior.
 - **Navigation:** defined in `docs.json` (not `placeholder.json`, which is stale).
 - **Don't hand-edit** generated layers (`.docs-ops/sdk-surface/*`). The SDK best-practice "opinion" layer lives in the `social-plus-foundry` (Vise) repo.
