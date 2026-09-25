@@ -24778,22 +24778,6 @@ AmityCoreClient
 ```
 
 
-## Parameters
-
-| Operation              | Parameter                       | Platforms                | Required | Description                                                                                                                                                       |
-| ---------------------- | ------------------------------- | ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Require review         | `needApprovalOnCommentCreation` | TypeScript, iOS          | Yes      | Turns comment review on for the community. Defaults to `false`.                                                                                                   |
-| Query the review queue | `communityId`                   | TypeScript, iOS, Android | Yes      | Community whose pending comments to list.                                                                                                                         |
-| Query the review queue | `postId`                        | TypeScript, iOS, Android | No       | Narrows the queue to one post. A post from another community returns an empty list, not an error.                                                                 |
-| Query the review queue | `startDate` / `endDate`         | TypeScript, iOS, Android | No       | Filters on when the comment was **written**, not when it entered the queue — the two differ for a re-reviewed comment. `endDate` includes the whole calendar day. |
-| Query the review queue | `timeZone`                      | TypeScript, iOS, Android | No       | IANA time-zone name the date filters are read in. Defaults to `UTC`.                                                                                              |
-| Query the review queue | Page size                       | TypeScript, iOS, Android | No       | Defaults to **10** on this route — not the SDK-wide 20 — and is capped at 100.                                                                                    |
-| Approve or decline     | `commentId`                     | TypeScript, iOS, Android | Yes      | Comment to approve or decline.                                                                                                                                    |
-| Decline                | `reason`                        | TypeScript, iOS, Android | No       | Reviewer's note, at most 250 characters. Kept for the moderation record only.                                                                                     |
-
-  `reason` is never shown to the comment's author or to anyone else through the
-  SDK. Do not build an author-facing rejection message on it.
-
 ## Require Review for Community Comments
 
 Set `needApprovalOnCommentCreation` when you create or update the community. After it is on, new comments and effective edits in that community enter the queue, unless their author can review the community's comments. See [Approval Lifecycle](#approval-lifecycle) for the full rule.
@@ -24826,11 +24810,6 @@ let community = try await communityRepository.editCommunity(
 renderResults(community.isCommentReviewEnabled)
 ```
 
-
-  The Android SDK reads and applies the setting, but does not expose it on the
-  community model or on the create and update builders. Turn comment review on
-  from the Console, from a Web or iOS client, or from the server API; an Android
-  client then sees the pending comments it produces.
 
   Turning the setting off does not drain the queue. Comments already waiting
   stay waiting, and the review queue keeps serving them until each one is
@@ -24911,7 +24890,15 @@ when (comment.getApprovalStatus()) {
 
 ## Query the Review Queue
 
-List a community's pending comments, newest first by when each entered the queue. A comment sent back for re-review returns to the top. The queue is community-wide unless you narrow it to one post, and it stays readable after the community's review setting is turned off.
+List a community's pending comments, newest first by when each entered the queue. A comment sent back for re-review returns to the top.
+
+| Input | Required | Description |
+| --- | --- | --- |
+| `communityId` | Yes | Community whose pending comments to list. |
+| `postId` | No | Narrows the queue to one post. A post from another community returns an empty list, not an error. |
+| `startDate` / `endDate` | No | Filter on when the comment was **written**, not when it entered the queue. `endDate` includes the whole calendar day. |
+| `timeZone` | No | IANA time-zone name the date filters are read in. Defaults to `UTC`. |
+| Page size | No | Defaults to **10** on this route, not the SDK-wide 20, and is capped at 100. | The queue is community-wide unless you narrow it to one post, and it stays readable after the community's review setting is turned off.
 
 
 ```typescript TypeScript
@@ -24991,6 +24978,11 @@ AmitySocialClient.newCommentRepository()
 
 Approve to reveal the comment to everyone and move the post's comment count by one. Decline to reject it — a declined comment is deleted at the same time. [What Approving or Declining Changes](#what-approving-or-declining-changes) lists every effect of both.
 
+Both calls take the comment ID. Decline also takes an optional `reason`, at most 250 characters, kept for the moderation record only.
+
+  `reason` is never shown to the comment's author or to anyone else through the
+  SDK. Do not build an author-facing rejection message on it.
+
 Neither call is idempotent. A second decision on a comment that was already decided is refused, so two reviewers acting at once cannot both record an outcome.
 
 
@@ -25034,23 +25026,6 @@ AmitySocialClient.newCommentRepository()
         { error -> handleGeneralError(error) }
     )
 ```
-
-
-## Errors
-
-Every error keeps the server `code`. None of them should be retried as-is.
-
-| Condition                                                                                                                       | HTTP | `code`   |
-| ------------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
-| Caller lacks `REVIEW_COMMUNITY_COMMENT`, or is reviewing their own comment                                                      | 403  | `400301` |
-| Comment was already approved or declined, or is already deleted                                                                 | 403  | `400300` |
-| Author edits a pending comment on a network where that is disabled                                                              | 403  | `400300` |
-| Replying to, reacting to, or flagging a pending comment. Callers the comment is hidden from get `404` / `400400` instead; for a reaction, that is everyone except its author | 400  | `400000` |
-| Unknown community, unknown time zone, a date that is not `YYYY-MM-DD`, a page size above 100, or a `reason` over 250 characters | 422  | `500000` |
-
-  Treat `400300` on approve or decline as a conflict, not a failure: another reviewer got there first. Re-read the review queue instead of retrying.
-
-A `404` on a pending comment means the viewer may not see it — not that it was deleted.
 
 
 ## Related SDK Functions
