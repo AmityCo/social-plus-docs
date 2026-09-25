@@ -47,7 +47,7 @@ For single-method operation pages, `## Parameters` should usually be the method'
 ## Code Snippets
 
 - Use `CodeGroup` for SDK language snippets.
-- Keep language order consistent: TypeScript, iOS, Android, Flutter.
+- Keep language order consistent: **Android, iOS, then web, then React Native, then Flutter**. On SDK pages the web sample is labeled `TypeScript`; on UIKit pages it is labeled `React`, the existing UIKit convention (a few older pages use `Web`). Include React Native and Flutter only where the platform ships the feature. See the `docs-style` skill.
 - Omit unsupported platforms from the `CodeGroup`, then explain the gap in an `Info` note or platform notes.
 - Reserve `CardGroup` for related links or navigation, not code.
 - TypeScript snippets should be framework-neutral by default. Use React-specific examples only when the page is about UI lifecycle or subscription cleanup; label those snippets as React and include visible React imports.
