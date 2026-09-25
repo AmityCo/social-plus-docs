@@ -7,6 +7,8 @@ Use pin APIs to surface one important message above a livestream chat so every v
 
 <Info>
   Pinning is available on `live` channels only, the channel type attached to a livestream room. The server rejects pin requests on conversation, community, broadcast, standard, and private channels.
+
+  The Flutter and React Native SDKs do not ship pin support.
 </Info>
 
 ## Platform Surface
@@ -42,7 +44,9 @@ import { Client } from '@amityco/ts-sdk';
 
 const client = Client.createClient('your-api-key', 'sg');
 
-const canPin = client.hasPermission('PIN_MESSAGE').channel(channelId);
+// A network-level grant (Console) shows up on the user; a channel role shows up on the channel.
+const permission = client.hasPermission('PIN_MESSAGE');
+const canPin = permission.currentUser() || permission.channel(channelId);
 
 if (canPin) {
   // Show the pin control in the message action menu.
@@ -86,7 +90,7 @@ On Android the check is a `Flowable` and re-emits when the user's channel member
 
 ## Pin A Message
 
-Pin a message in its livestream channel. If another message is already pinned, the new pin replaces it in one step. You do not need to unpin first.
+Pin a message in its livestream channel. If another message is already pinned, the new pin replaces it in one step. You do not need to unpin first. The SDK calls `POST /api/v5/messages/{messageId}/pin`.
 
 <CodeGroup>
 
@@ -124,7 +128,7 @@ Pinning the message that is already pinned returns a `400` error. Pinning a dele
 
 ## Unpin A Message
 
-Remove the current pin. Pass the `messageId` of the message that is currently pinned.
+Remove the current pin. Pass the `messageId` of the message that is currently pinned. The SDK calls `DELETE /api/v5/messages/{messageId}/pin`.
 
 <CodeGroup>
 
@@ -162,7 +166,7 @@ Unpin is allowed regardless of stream state, so a moderator can clean up after a
 
 ## Read The Pinned Message
 
-The pinned message lives on the channel, so observe the channel you already hold for the live chat. The field is `null` when nothing is pinned.
+The pinned message lives on the channel, so observe the channel you already hold for the live chat. The field is `null` when nothing is pinned. On TypeScript it is typed optional, so a channel payload that omits it reads as `undefined`. Treat `null` and `undefined` the same way, as the `?? null` in the example does.
 
 <CodeGroup>
 
@@ -357,16 +361,17 @@ A community ban does not affect the pin. The SDK also clears the cached pinned m
 
 ## Server Rules And Errors
 
-| Condition | Result |
-| --- | --- |
-| Caller lacks `PIN_MESSAGE` and is not an admin with the moderate-channel permission | `403` permission denied. Permission changes also arrive over realtime events — `channel.roleAdded` / `channel.roleRemoved` for a channel-level role change, and `user.updated` for a network-level change made from the Console — which update the caller's permissions, so a revoked permission is usually reflected before a pin attempt. The TypeScript SDK additionally refreshes the caller's permissions on the `403` itself, as a backstop. |
-| Message or channel not found | `404` |
-| Message is deleted | `400` |
-| Message is already pinned (pin) | `400` |
-| Message is not the current pin (unpin) | `400` |
-| Message author is channel-banned or globally banned (pin) | `400` |
-| Channel type is not `live` (pin) | `400` |
-| Visitor or bot attempts to pin | Visitor or bot permission denied |
+| Condition | HTTP | `code` |
+| --- | --- | --- |
+| Caller lacks `PIN_MESSAGE` and is not an admin with the moderate-channel permission | `403` | `400301`. Permission changes also arrive over realtime events — `channel.roleAdded` / `channel.roleRemoved` for a channel-level role change, and `user.updated` for a network-level change made from the Console — which update the caller's permissions, so a revoked permission is usually reflected before a pin attempt. The TypeScript SDK additionally refreshes the caller's permissions on the `403` itself, as a backstop. |
+| Message or channel not found | `404` | `400400` |
+| Message is deleted | `400` | `400000` |
+| Message is already pinned (pin) | `400` | `400000` |
+| Message is not the current pin (unpin) | `400` | `400000` |
+| Message author is channel-banned or globally banned (pin) | `400` | `400000` |
+| Channel type is not `live` (pin) | `400` | `400000` |
+
+Every `400` condition shares the code `400000`. Only the server `message` string tells them apart, so do not branch on the code to decide which one happened.
 
 Pin state is never changed by a failed request, so a client does not need to roll anything back. Re-read the channel, or wait for the next event, and render what it says.
 

@@ -14943,6 +14943,8 @@ Use pin APIs to surface one important message above a livestream chat so every v
 
   Pinning is available on `live` channels only, the channel type attached to a livestream room. The server rejects pin requests on conversation, community, broadcast, standard, and private channels.
 
+  The Flutter and React Native SDKs do not ship pin support.
+
 ## Platform Surface
 
 | Operation | TypeScript | iOS | Android | Flutter |
@@ -14975,7 +14977,9 @@ import { Client } from '@amityco/ts-sdk';
 
 const client = Client.createClient('your-api-key', 'sg');
 
-const canPin = client.hasPermission('PIN_MESSAGE').channel(channelId);
+// A network-level grant (Console) shows up on the user; a channel role shows up on the channel.
+const permission = client.hasPermission('PIN_MESSAGE');
+const canPin = permission.currentUser() || permission.channel(channelId);
 
 if (canPin) {
   // Show the pin control in the message action menu.
@@ -15016,7 +15020,7 @@ On Android the check is a `Flowable` and re-emits when the user's channel member
 
 ## Pin A Message
 
-Pin a message in its livestream channel. If another message is already pinned, the new pin replaces it in one step. You do not need to unpin first.
+Pin a message in its livestream channel. If another message is already pinned, the new pin replaces it in one step. You do not need to unpin first. The SDK calls `POST /api/v5/messages/{messageId}/pin`.
 
 
 ```typescript TypeScript
@@ -15052,7 +15056,7 @@ Pinning the message that is already pinned returns a `400` error. Pinning a dele
 
 ## Unpin A Message
 
-Remove the current pin. Pass the `messageId` of the message that is currently pinned.
+Remove the current pin. Pass the `messageId` of the message that is currently pinned. The SDK calls `DELETE /api/v5/messages/{messageId}/pin`.
 
 
 ```typescript TypeScript
@@ -15088,7 +15092,7 @@ Unpin is allowed regardless of stream state, so a moderator can clean up after a
 
 ## Read The Pinned Message
 
-The pinned message lives on the channel, so observe the channel you already hold for the live chat. The field is `null` when nothing is pinned.
+The pinned message lives on the channel, so observe the channel you already hold for the live chat. The field is `null` when nothing is pinned. On TypeScript it is typed optional, so a channel payload that omits it reads as `undefined`. Treat `null` and `undefined` the same way, as the `?? null` in the example does.
 
 
 ```typescript TypeScript
@@ -15277,16 +15281,17 @@ A community ban does not affect the pin. The SDK also clears the cached pinned m
 
 ## Server Rules And Errors
 
-| Condition | Result |
-| --- | --- |
-| Caller lacks `PIN_MESSAGE` and is not an admin with the moderate-channel permission | `403` permission denied. Permission changes also arrive over realtime events — `channel.roleAdded` / `channel.roleRemoved` for a channel-level role change, and `user.updated` for a network-level change made from the Console — which update the caller's permissions, so a revoked permission is usually reflected before a pin attempt. The TypeScript SDK additionally refreshes the caller's permissions on the `403` itself, as a backstop. |
-| Message or channel not found | `404` |
-| Message is deleted | `400` |
-| Message is already pinned (pin) | `400` |
-| Message is not the current pin (unpin) | `400` |
-| Message author is channel-banned or globally banned (pin) | `400` |
-| Channel type is not `live` (pin) | `400` |
-| Visitor or bot attempts to pin | Visitor or bot permission denied |
+| Condition | HTTP | `code` |
+| --- | --- | --- |
+| Caller lacks `PIN_MESSAGE` and is not an admin with the moderate-channel permission | `403` | `400301`. Permission changes also arrive over realtime events — `channel.roleAdded` / `channel.roleRemoved` for a channel-level role change, and `user.updated` for a network-level change made from the Console — which update the caller's permissions, so a revoked permission is usually reflected before a pin attempt. The TypeScript SDK additionally refreshes the caller's permissions on the `403` itself, as a backstop. |
+| Message or channel not found | `404` | `400400` |
+| Message is deleted | `400` | `400000` |
+| Message is already pinned (pin) | `400` | `400000` |
+| Message is not the current pin (unpin) | `400` | `400000` |
+| Message author is channel-banned or globally banned (pin) | `400` | `400000` |
+| Channel type is not `live` (pin) | `400` | `400000` |
+
+Every `400` condition shares the code `400000`. Only the server `message` string tells them apart, so do not branch on the code to decide which one happened.
 
 Pin state is never changed by a failed request, so a client does not need to roll anything back. Re-read the channel, or wait for the next event, and render what it says.
 
@@ -42696,28 +42701,17 @@ The banner renders at the top of the chat column, above the feed and above the p
 
 The pin controls and the banner use the `livestream_chat_feed` component ID. Existing `livestream_chat` keys for the compose bar and theme keep working.
 
+All platforms build a config key as `pageId/componentId/elementId`, and `livestream_chat_feed` is the **component** ID — so it goes in the **middle** slot: `*/livestream_chat_feed/<element>`.
+
 | Config ID | Type | Description |
 | --- | --- | --- |
-| `livestream_chat_feed/*/pinned_message_banner` | Element | Customize or exclude the pinned message banner |
-| `livestream_chat_feed/*/pin_message_button` | Element | Customize or exclude the "Pin message" item in the message ⋮ menu |
-| `livestream_chat_feed/*/unpin_message_button` | Element | Customize or exclude the unpin control: the "X" on the banner and, on Android and Web, the ⋮ menu's "Unpin message" item |
-
-| Theme token | Default | Description |
-| --- | --- | --- |
-| `live_stream_chat_bubble_pinned_color` | `rgb(41 43 50 / 30%)` | Background of the pinned message banner |
-| `live_stream_chat_pinned_badge_color` | `rgb(99 104 120 / 50%)` | Background of the "Pinned" pill |
-
-| Default | Localization key (iOS) | Localization key (Web) |
-| --- | --- | --- |
-| Pin message | `live_chat_pin_message` | `amity_livechat_pinned_message_pin_button` |
-| Unpin message | `live_chat_unpin_message` | `amity_livechat_pinned_message_unpin_button` |
-| Pinned | `live_chat_pinned_message_badge` | `amity_livechat_pinned_message_badge` |
-| more | `live_chat_pinned_message_more` | `amity_livechat_pinned_message_more` |
-| less | `live_chat_pinned_message_less` | `amity_livechat_pinned_message_less` |
+| `*/livestream_chat_feed/pinned_message_banner` | Element | Customize or exclude the pinned message banner. **All platforms.** |
+| `*/livestream_chat_feed/pin_message_button` | Element | Customize or exclude the "Pin message" item in the message ⋮ menu. **Web and Android only** — iOS does not register this element (the pin control is not customizable there). |
+| `*/livestream_chat_feed/unpin_message_button` | Element | Customize or exclude the unpin control: the "X" on the banner and, on Android and Web, the ⋮ menu's "Unpin message" item. **Web and Android only** — not registered on iOS. |
 
 ### Code Examples
 
-The pin action and the banner are built into the livestream chat, so the pages you already use render them. The viewer sees them on the livestream player page and the streamer sees them on the broadcast view. There is nothing to mount separately. Use the config keys above to relabel or exclude the controls and to recolor the banner.
+The pin action and the banner are built into the livestream chat, so the pages you already use render them. The viewer sees them on the livestream player page and the streamer sees them on the broadcast view. There is nothing to mount separately. Use the config keys above to relabel or exclude the controls.
 
 
 ```tsx React
@@ -42726,22 +42720,12 @@ import { AmityUiKitProvider, AmityLiveStreamPlayerPage } from '@amityco/ui-kit';
 
 // Pin controls appear automatically for hosts, co-hosts, and PIN_MESSAGE holders.
 const config = {
-  theme: {
-    light: {
-      live_stream_chat_bubble_pinned_color: 'rgb(41 43 50 / 30%)',
-      live_stream_chat_pinned_badge_color: 'rgb(99 104 120 / 50%)',
-    },
-    dark: {
-      live_stream_chat_bubble_pinned_color: 'rgb(41 43 50 / 30%)',
-      live_stream_chat_pinned_badge_color: 'rgb(99 104 120 / 50%)',
-    },
-  },
   // Hide a control entirely by excluding its element key.
   excludes: [],
   customizations: {
-    'livestream_chat_feed/*/pin_message_button': { text: 'Pin message' },
-    'livestream_chat_feed/*/unpin_message_button': { text: 'Unpin message' },
-    'livestream_chat_feed/*/pinned_message_banner': {},
+    '*/livestream_chat_feed/pin_message_button': { text: 'Pin message' },
+    '*/livestream_chat_feed/unpin_message_button': { text: 'Unpin message' },
+    '*/livestream_chat_feed/pinned_message_banner': {},
   },
 };
 
@@ -42764,9 +42748,10 @@ export default LivestreamViewer;
 {
   "excludes": [],
   "customizations": {
-    "livestream_chat_feed/*/pin_message_button": { "text": "Pin message" },
-    "livestream_chat_feed/*/pinned_message_banner": {},
-    "livestream_chat_feed/*/unpin_message_button": {}
+    // iOS registers only the banner element (`pinned_message_banner`).
+    // There are no `pin_message_button` / `unpin_message_button` element IDs on iOS,
+    // so the ⋮-menu pin/unpin items cannot be customized or excluded there.
+    "*/livestream_chat_feed/pinned_message_banner": {}
   }
 }
 ```
@@ -42802,7 +42787,7 @@ fun composeLivestreamPlayerPage(post: AmityPost) {
 ```
 
 
-  Android writes the component ID in the middle slot of a config key (`*/livestream_chat_feed/pin_message_button`). iOS and Web write it first (`livestream_chat_feed/*/pin_message_button`). To remove a control, add its key to `excludes`. Excluding `unpin_message_button` keeps the banner visible but removes the "X" for everyone. On Android and Web it also removes the ⋮ menu's "Unpin message" item, because both controls share that key.
+  All platforms write the component ID in the **middle** slot of a config key (`*/livestream_chat_feed/<element>`). To remove a control, add its key to `excludes`. Excluding `unpin_message_button` keeps the banner visible but removes the "X" for everyone; on Android and Web it also removes the ⋮ menu's "Unpin message" item, because both controls share that key. On **iOS**, only `pinned_message_banner` is registered — the pin and unpin menu items have no element IDs there, so they cannot be relabeled or excluded.
 
 ### Error Handling
 
