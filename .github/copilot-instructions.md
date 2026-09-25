@@ -49,21 +49,6 @@ This comprehensive guide provides AI assistants and developers with complete ins
 
 #### **Multi-Platform Code Examples**
 <CodeGroup>
-```swift iOS
-Task { @MainActor in
-    do {
-        try await client.login(
-            userId: "user-123",
-            displayName: "John Doe",
-            authToken: "your-auth-token", // Optional for development
-            sessionHandler: sessionHandler
-        )
-        print("Login successful")
-    } catch {
-        print("Login failed: \(error)")
-    }
-}
-```
 
 ```kotlin Android
 AmityCoreClient.login(userId = "user-123")
@@ -79,6 +64,22 @@ AmityCoreClient.login(userId = "user-123")
         // Login failed
     }
     .subscribe()
+```
+
+```swift iOS
+Task { @MainActor in
+    do {
+        try await client.login(
+            userId: "user-123",
+            displayName: "John Doe",
+            authToken: "your-auth-token", // Optional for development
+            sessionHandler: sessionHandler
+        )
+        print("Login successful")
+    } catch {
+        print("Login failed: \(error)")
+    }
+}
 ```
 
 ```typescript TypeScript
@@ -105,6 +106,7 @@ try {
     print('Login failed: $error');
 }
 ```
+
 </CodeGroup>
 
 #### **Feature Cards**
@@ -1116,21 +1118,6 @@ Brief description of the feature and its primary use cases.
 ## Code Examples
 
 <CodeGroup>
-```swift iOS
-Task { @MainActor in
-    do {
-        try await client.login(
-            userId: "user-123",
-            displayName: "John Doe",
-            authToken: "your-auth-token", // Optional for development
-            sessionHandler: sessionHandler
-        )
-        print("Login successful")
-    } catch {
-        print("Login failed: \(error)")
-    }
-}
-```
 
 ```kotlin Android
 AmityCoreClient.login(userId = "user-123")
@@ -1146,6 +1133,22 @@ AmityCoreClient.login(userId = "user-123")
         // Login failed
     }
     .subscribe()
+```
+
+```swift iOS
+Task { @MainActor in
+    do {
+        try await client.login(
+            userId: "user-123",
+            displayName: "John Doe",
+            authToken: "your-auth-token", // Optional for development
+            sessionHandler: sessionHandler
+        )
+        print("Login successful")
+    } catch {
+        print("Login failed: \(error)")
+    }
+}
 ```
 
 ```typescript TypeScript
@@ -1172,6 +1175,7 @@ try {
     print('Login failed: $error');
 }
 ```
+
 </CodeGroup>
 
 
