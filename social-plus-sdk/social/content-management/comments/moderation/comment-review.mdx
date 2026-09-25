@@ -14,7 +14,7 @@ Turn on comment review when a community should read a comment before anyone else
 | Android    | `comment.getApprovalStatus()` | `commentRepository.getCommentReviewQueue(communityId)`      | `commentRepository.approveComment(commentId)` | `commentRepository.declineComment(commentId, reason)`  |
 
 <Info>
-  Comment review is reached through a post's community: a comment is held for review when it is written on a post that belongs to a community requiring review. Comments on stories and on your own content IDs are outside the approval path the SDKs implement — see [Scope](#scope).
+  Comment review is reached through a post's community: a comment is held for review when it is written on a post that belongs to a community requiring review. Comments on stories, on your own content IDs, and on posts in a user's feed are never held — see [When Review Applies](#when-review-applies).
 
   Flutter does not ship comment review. A Flutter client reads approved comments as it always has; it cannot read a review queue or approve a comment.
 
@@ -22,15 +22,42 @@ Comment review is separate from [post review](/social-plus-sdk/social/content-ma
 
 </Info>
 
-## Approval Status
+## Approval Lifecycle
 
-Every comment carries an approval status. A comment in a community that does not require review is always approved.
+Every comment carries an `approvalStatus`. This section is the single reference for when a comment is held, how its status moves, and what each move changes on the comment and its post. The method sections below show the calls.
 
-| Status   | TypeScript   | iOS         | Android    | What it means                                                                                                                                     |
-| -------- | ------------ | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pending  | `"pending"`  | `.pending`  | `PENDING`  | Held for review. Visible to its author, the community's reviewers, and network admins. It accepts no replies, reactions, or flags while it waits. |
-| Approved | `"approved"` | `.approved` | `APPROVED` | Visible to everyone. Not terminal — editing an approved comment in a community that requires review sends it back to pending.                     |
-| Rejected | `"rejected"` | `.rejected` | `REJECTED` | Declined by a reviewer. Terminal, and the comment is deleted at the same time.                                                                    |
+### When Review Applies
+
+A comment is held for review only when all three of these are true:
+
+1. It is written on a post that belongs to a community. This includes replies: a reply on such a post is held under the same rule as a top-level comment.
+2. That community has `needApprovalOnCommentCreation` turned on. See [Require Review for a Community's Comments](#require-review-for-a-communitys-comments).
+3. Its author cannot review that community's comments. The community's creator, and anyone who holds `REVIEW_COMMUNITY_COMMENT` on the community, publish immediately. Community moderators hold that permission by default.
+
+Every other comment is approved when it is written.
+
+| Comment on | Held for review |
+| --- | --- |
+| A post in a community with review on, written by a member who cannot review | Yes |
+| A post in a community with review on, written by the community's creator or a holder of `REVIEW_COMMUNITY_COMMENT` | No |
+| A post in a community with review off | No |
+| A post that is itself awaiting post review | Follows the same rule as any other post in its community |
+| A post on a user's own feed | No. There is no community to carry the setting. |
+| A story | No, even when the story's community has review on |
+| Your own content IDs (`referenceType: "content"`) | No |
+
+Changing the setting affects future transitions, not existing comments:
+
+- **Turning review on** changes no existing comment. A comment written before the switch enters review only if someone who cannot review later makes an effective edit to it. See [How the Status Changes](#how-the-status-changes).
+- **Turning review off** does not drain the queue. Comments already pending stay pending, stay in the review queue, and can still be approved or declined.
+
+### Statuses
+
+| Status   | TypeScript   | iOS         | Android    | What it means |
+| -------- | ------------ | ----------- | ---------- | ------------- |
+| Pending  | `"pending"`  | `.pending`  | `PENDING`  | Held for review. Its author, the community's reviewers, and network admins can fetch it by ID; everyone else gets `404`. In comment lists, only its author sees it; reviewers find it in the [review queue](#query-the-review-queue). It accepts no replies, reactions, or flags. |
+| Approved | `"approved"` | `.approved` | `APPROVED` | Visible to everyone. Not terminal: an effective edit can send it back to pending. |
+| Rejected | `"rejected"` | `.rejected` | `REJECTED` | Declined by a reviewer. Terminal, and the comment is deleted at the same time. |
 
 <Note>
   The server omits `approvalStatus` on a comment that has never been through
@@ -38,6 +65,55 @@ Every comment carries an approval status. A comment in a community that does not
   reads an absent value as **approved**. Read the value from the SDK model, not
   the field's presence on the raw payload, and do not write your own defaulting.
 </Note>
+
+### How the Status Changes
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Approved: Review does not apply
+    [*] --> Pending: Review applies
+    Pending --> Approved: Approve
+    Pending --> Rejected: Decline
+    Pending --> Pending: Author edits
+    Approved --> Pending: Effective edit
+    Rejected --> [*]
+```
+
+| From | Trigger | Result |
+| --- | --- | --- |
+| New comment | Written where [review applies](#when-review-applies) | `pending` |
+| New comment | Written anywhere else, or by someone who can review | `approved` |
+| `pending` | A reviewer approves | `approved` |
+| `pending` | A reviewer declines | `rejected`, and the comment is deleted |
+| `pending` | The author edits | Stays `pending` and keeps its place in the queue. Refused with `403` / `400300` when the network's `isAllowEditCommentWhenReviewingEnabled` is `false`. |
+| `pending` | The author or a moderator deletes it | Deleted, and removed from the review queue |
+| `approved` | An effective edit by someone who cannot review, while the community has review on | `pending`. The comment leaves public comment lists and returns to the top of the review queue. |
+| `approved` | An edit that changes nothing, or an edit by someone who can review | Stays `approved` |
+| `approved` or `rejected` | Approve or decline again | Refused with `403` / `400300` |
+| `rejected` | Anything | Nothing. A rejected comment cannot be approved, edited, or restored. |
+
+<Note>
+  An edit is **effective** when it changes the comment's text, or when it sends
+  attachments, links, or metadata at all, even the same values as before. An
+  edit that sends only unchanged text leaves the status as it is.
+</Note>
+
+### What Approving or Declining Changes
+
+Only `approvalStatus` records the outcome on the comment. The other changes land on visibility, counts, and events.
+
+| What changes | Approve (`pending` → `approved`) | Decline (`pending` → `rejected`) | Re-review (`approved` → `pending`) |
+| --- | --- | --- | --- |
+| `approvalStatus` | `approved` | `rejected` | `pending` |
+| Who sees it | Everyone | No one: the comment is deleted | Author, reviewers, and network admins only |
+| `isDeleted` | Unchanged (`false`) | `true`, and its attachments are removed | Unchanged (`false`) |
+| Position in the thread | Where it was written, because `createdAt` does not change | Not shown | Keeps its `createdAt` |
+| `post.commentsCount` and the parent's reply count | Increase by one for everyone | Unchanged; a pending comment was never counted | Decrease by one until it is approved again |
+| Realtime event | `comment.approved` | A comment deletion. There is no `comment.declined` event. | A comment update carrying the `pending` status |
+| Notifications | Sent now, on the first approval only; none are sent while a comment is pending | None | None |
+
+The reviewer who decided, the time of the decision, and the decline `reason` are kept for the moderation record only. No SDK returns them.
 
 ## Permission
 
@@ -101,7 +177,7 @@ AmityCoreClient
 
 ## Require Review for a Community's Comments
 
-Set `needApprovalOnCommentCreation` when you create or update the community. After it is on, new comments and effective edits in that community enter the queue.
+Set `needApprovalOnCommentCreation` when you create or update the community. After it is on, new comments and effective edits in that community enter the queue, unless their author can review the community's comments. See [Approval Lifecycle](#approval-lifecycle) for the full rule.
 
 <CodeGroup>
 
@@ -214,7 +290,7 @@ when (comment.getApprovalStatus()) {
 
 ## Query the Review Queue
 
-List a community's pending comments, oldest first on queue entry. The queue is community-wide unless you narrow it to one post, and it stays readable after the community's review setting is turned off.
+List a community's pending comments, newest first by when each entered the queue. A comment sent back for re-review returns to the top. The queue is community-wide unless you narrow it to one post, and it stays readable after the community's review setting is turned off.
 
 <CodeGroup>
 
@@ -296,7 +372,7 @@ AmitySocialClient.newCommentRepository()
 
 ## Approve or Decline a Comment
 
-Approve to reveal the comment to everyone and move the post's comment count by one. Decline to reject it — a declined comment is deleted at the same time.
+Approve to reveal the comment to everyone and move the post's comment count by one. Decline to reject it — a declined comment is deleted at the same time. [What Approving or Declining Changes](#what-approving-or-declining-changes) lists every effect of both.
 
 Neither call is idempotent. A second decision on a comment that was already decided is refused, so two reviewers acting at once cannot both record an outcome.
 
@@ -366,7 +442,7 @@ const dispose = CommentRepository.onCommentApproved((comment) => {
 <Warning>
   A pending comment reaches the client over realtime before the REST API will serve it, so delivery is not visibility. Read the approval status rather than treating an incoming comment as public.
 
-There is no `comment.declined` event. A decline arrives as a comment deletion, which means an author cannot tell a decline apart from a moderator deleting their comment.
+There is no `comment.declined` event. A decline arrives as a comment deletion, so do not rely on the deletion event to tell a decline apart from a moderator deleting the comment.
 
 </Warning>
 
@@ -379,6 +455,7 @@ Every error keeps the server `code`. None of them should be retried as-is.
 | Caller lacks `REVIEW_COMMUNITY_COMMENT`, or is reviewing their own comment                                                      | 403  | `400301` |
 | Comment was already approved or declined, or is already deleted                                                                 | 403  | `400300` |
 | Author edits a pending comment on a network where that is disabled                                                              | 403  | `400300` |
+| Replying to, reacting to, or flagging a pending comment. Callers the comment is hidden from get `404` / `400400` instead; for a reaction, that is everyone except its author | 400  | `400000` |
 | Unknown community, unknown time zone, a date that is not `YYYY-MM-DD`, a page size above 100, or a `reason` over 250 characters | 422  | `500000` |
 
 <Note>
@@ -388,25 +465,9 @@ A `404` on a pending comment means the viewer may not see it — not that it was
 
 </Note>
 
-## Scope
-
-Comment review is a community setting, and the SDKs reach that community through the commented-on post. That shapes which comments the feature covers.
-
-| Comment on | Held for review | Notes |
-| --- | --- | --- |
-| A post in a community that requires review | Yes | The case the feature is built for. Counts, comment lists, and the review queue all handle it. |
-| A post in a community that does not require review | No | Always approved. |
-| A post on a user's own feed | No | There is no community to carry the setting. |
-| A story | Not implemented | The SDK approval path does not gate story comments, and story comment counts are tracked separately from post comment counts. |
-| Your own content IDs | Not implemented | Treated like an ungated post comment: always approved, and it still moves the content's comment count. |
-
-<Warning>
-  Treat the last two rows as unconfirmed rather than guaranteed. The SDKs do not hold story or content comments for review, but the server is the authority on approval status — read `approvalStatus` off the comment the SDK returns rather than deciding from the reference type yourself. Check your platform's release notes before building on either behavior.
-</Warning>
-
 ## Platform Notes
 
-- **Counts.** A pending comment does not count toward its post's comment count or its parent's reply count for anyone but its author. The count moves for everyone else on approval, so expect a count to change without a new comment appearing in the list. Two different counts express this: the server figure (`comment.commentsCount`, what UIKit shows) stays **approved-only for everyone, including the author**, while the author's own pending `+1` is visible only through the SDK's local count — read it with `getLocalCommentCount(includePending: true)` on iOS and TypeScript. Pass `includePending: false` (the default) for the count everyone else sees. The author's `+1` is session-scoped — it is gone after logout or app restart until the post is refetched.
+- **Counts.** A pending comment does not count toward its post's comment count or its parent's reply count for anyone but its author. The count moves for everyone else on approval, so expect a count to change without a new comment appearing in the list. Two different counts express this: the server figure (`post.commentsCount`, what UIKit shows) stays **approved-only for everyone, including the author**, while the author's own pending `+1` is visible only through the SDK's local count. Read it with `getLocalCommentCount(includePending: true)` on iOS and Android, or `getLocalCommentCount(true)` on TypeScript. Leave `includePending` at its default, `false`, for the count everyone else sees. The author's `+1` is session-scoped — it is gone after logout or app restart until the post is refetched.
 
 <Note>
   **Migrating from `localCommentCount`.** `post.localCommentCount` is
@@ -415,7 +476,7 @@ Comment review is a community setting, and the SDKs reach that community through
   flag explicitly — `true` to include the author's own pending comment (the old
   `localCommentCount` behavior), `false` for the shared, approved-only count.
 </Note>
-- **Re-review.** Editing an approved comment in a community that requires review returns it to pending: it leaves public comment lists and the count drops by one until it is approved again. An edit that changes nothing does not send it back.
+- **Re-review.** An effective edit can send an approved comment back to pending, and its count drops by one until it is approved again. [How the Status Changes](#how-the-status-changes) lists which edits do and which do not.
 - **Session scope.** Pending comments and the review queue are held for one signed-in user. They are dropped on logout and on user switch, and the queue stops loading if the user loses the review permission mid-session.
 - **Return shapes follow each platform's post-review API.** TypeScript returns the comment, iOS returns nothing, and Android returns a `Completable`.
 
