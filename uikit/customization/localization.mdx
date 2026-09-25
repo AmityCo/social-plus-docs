@@ -315,15 +315,15 @@ Select your platform below for API details and integration code.
   </Tab>
 
   <Tab title="React Native">
-    <Warning>
-      **Requires a fork.** The npm package `@amityco/react-native-social-uikit` doesn't expose a localization API yet: `AmityUiKitProvider` takes no localization props, and the package exports no localization hooks. To change UIKit strings, [fork the UIKit](/uikit/getting-started/installation#github-fork-installation) and make the changes below in your fork. Only Chat UIKit strings (v4.3.0+) go through this localization layer. Social UIKit screens don't.
-    </Warning>
+    <Info>
+      Requires `@amityco/react-native-social-uikit` **v4.3.1** or later. Only Chat UIKit strings go through this API; Social UIKit screens don't. In v4.3.0 the package has no localization API — strings can only be changed by [forking the UIKit](/uikit/getting-started/installation#github-fork-installation).
+    </Info>
 
     ### How to Add a New Language
 
     <Steps>
       <Step title="Create a translation file">
-        Create a flat JSON file in your fork with the keys you want to translate, for example `src/core/localization/defaults/ja.json`. You only need to include keys you're translating — missing keys automatically fall back to English.
+        Create a flat JSON file with the keys you want to translate. You only need to include keys you're translating — missing keys automatically fall back to English.
 
         ```json
         {
@@ -333,19 +333,26 @@ Select your platform below for API details and integration code.
         }
         ```
       </Step>
-      <Step title="Register the locale bundle">
-        In `src/core/providers/AmityUIKitProvider.tsx`, pass the bundle to `LocaleProvider` through `initialLocaleBundle`:
+      <Step title="Register via localeMap">
+        Pass the bundle via `localeMap` on `AmityUiKitProvider` so the UIKit picks it from the device language:
 
         ```tsx
-        import jaLocale from '../localization/defaults/ja.json';
+        import { AmityUiKitProvider, defaultLocaleMap } from '@amityco/react-native-social-uikit';
+        import jaLocale from './locales/ja.json';
 
-        <LocaleProvider initialLocaleBundle={jaLocale}>
-          {children}
-          {/* ... */}
-        </LocaleProvider>
+        <AmityUiKitProvider
+          localization={{
+            localeMap: {
+              ...defaultLocaleMap,
+              ja: jaLocale,
+            },
+          }}
+        >
+          <App />
+        </AmityUiKitProvider>
         ```
 
-        The React Native UIKit doesn't detect the device language, so it uses the bundle you set here for every user. To follow the device language, choose the bundle in your fork before rendering `LocaleProvider`.
+        The UIKit checks the device language — exact match first (e.g. `"ja"`), then language-prefix match (e.g. `"ja-JP"` → `"ja"`). Falls back to English if no match is found. A `localeMap` you pass replaces the built-in one, so spread `defaultLocaleMap` to keep the built-in Thai bundle.
       </Step>
       <Step title="Verify coverage">
         Compare your translation file against [`en.json`](https://github.com/AmityCo/Amity-Social-UIKit-React-Native-CLI-OpenSource/blob/develop/src/core/localization/defaults/en.json) to identify missing keys. Any untranslated key silently falls back to English — no errors are thrown.
@@ -356,51 +363,48 @@ Select your platform below for API details and integration code.
       </Step>
     </Steps>
 
+    <Note>
+      **Built-in Thai:** when you don't pass `localization`, the UIKit uses its built-in locale map, which includes Thai. Users whose device language is Thai see chat in Thai automatically. To always use English, pass `localization={{ localeMap: {} }}`.
+    </Note>
+
     ### Other Scenarios
 
     <AccordionGroup>
-      <Accordion title="Use the built-in Thai bundle">
-        The UIKit source includes a Thai bundle for chat strings at `src/core/localization/defaults/th.json`. Register it the same way:
+      <Accordion title="Use one language for every user">
+        Set `localeBundle` to skip device-language detection and use the same bundle for everyone:
 
         ```tsx
-        import thLocaleBundle from '../localization/defaults/th';
+        import { AmityUiKitProvider, thLocaleBundle } from '@amityco/react-native-social-uikit';
 
-        <LocaleProvider initialLocaleBundle={thLocaleBundle}>
-          {children}
-          {/* ... */}
-        </LocaleProvider>
+        <AmityUiKitProvider localization={{ localeBundle: thLocaleBundle }}>
+          <App />
+        </AmityUiKitProvider>
         ```
       </Accordion>
 
       <Accordion title="Override specific strings">
-        Use `initialOverrides` on `LocaleProvider` to replace individual keys without providing a full locale bundle. Overrides take precedence over the active locale bundle.
+        Use the `overrides` prop to replace individual keys without providing a full locale bundle. Overrides merge on top of the active locale.
 
         ```tsx
-        <LocaleProvider
-          initialOverrides={{
-            amity_chat_archive: 'Hide chat',
-            amity_chat_block_confirm_label: 'Block now',
+        <AmityUiKitProvider
+          localization={{
+            overrides: {
+              amity_chat_archive: 'Hide chat',
+              amity_chat_block_confirm_label: 'Block now',
+            },
           }}
         >
-          {children}
-          {/* ... */}
-        </LocaleProvider>
+          <App />
+        </AmityUiKitProvider>
         ```
       </Accordion>
 
       <Accordion title="Switch locale at runtime">
-        `useLocale` controls the active locale, and every string in the chat UIKit re-renders when it changes. It isn't exported from the package root, so export it from `src/index.tsx` in your fork first:
+        `useLocale` controls the active locale. `useString` consumes strings and automatically re-renders all consumers when the locale changes. Both must be used inside `AmityUiKitProvider`.
 
         ```tsx
-        // src/index.tsx in your fork
-        export { useLocale } from './core/localization';
-        ```
-
-        Then use it anywhere inside `AmityUiKitProvider`:
-
-        ```tsx
-        import { Button } from 'react-native';
-        import { useLocale } from '@amityco/react-native-social-uikit';
+        import { Button, Text } from 'react-native';
+        import { useLocale, useString } from '@amityco/react-native-social-uikit';
         import jaLocale from './locales/ja.json';
 
         function LanguageSwitcher() {
@@ -412,6 +416,12 @@ Select your platform below for API details and integration code.
               <Button title="English" onPress={() => clearLocaleBundle()} />
             </>
           );
+        }
+
+        // Any child component — automatically re-renders on locale change
+        function ArchiveLabel() {
+          const label = useString('amity_chat_archive');
+          return <Text>{label}</Text>;
         }
         ```
       </Accordion>
