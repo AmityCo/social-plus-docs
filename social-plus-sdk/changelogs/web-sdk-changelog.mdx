@@ -11,32 +11,48 @@ rss: true
 <Update label="7.28.0  (25/09/2026)" tags={["New Releases","Improvements"]}>
   ## 🚀 New Features
 
-  #### Pin Messages in Live Channels
+  #### Comment Approval for Communities
 
-  Added the ability to pin and unpin messages in live (livestream) channels. `MessageRepository.pinMessage` / `unpinMessage` set or clear a channel's single pinned message — pinning a new message replaces the current pin in one step, no unpin required first. The pin is exposed on `channel.pinnedMessage`, gated by the `PinMessagePermission` permission, and kept in sync in real time. `ChannelRepository.onChannelMessagePinned` / `onChannelMessageUnpinned` are also available as callbacks.
+  A community can now require review before a new comment is visible. While a comment is pending, only its author, the community's reviewers, and network admins can see it. It stays out of public comment lists and comment counts until a reviewer approves it.
 
-  #### Comment Approval in Communities
-
-  Added moderation-gated comment approval for communities. When a community's `needApprovalOnCommentCreation` setting is enabled, new comments carry an `approvalStatus` and are held out of public collections and post comment counts until approved (the author can still see their own pending comment). Reviewers read the queue with `CommentRepository.getCommentReviewQueue` and act with `CommentRepository.approveComment` / `declineComment`. Subscribe to approvals with `CommentRepository.onCommentApproved`. Gated by the new `ReviewCommunityCommentPermission` permission.
-
-  #### Local Comment Count
-
-  Added `post.getLocalCommentCount(includePending)` to read a post's comment count with the current user's own optimistic, not-yet-confirmed comments factored in, without ever double-counting or losing a comment once the server confirms it. The existing `post.localCommentCount` field is unchanged but now deprecated in favor of the new method.
+  - **Turn it on:** set `needApprovalOnCommentCreation` when you create or update the community.
+  - **Approval status:** `comment.approvalStatus` is `pending`, `approved`, or `rejected`.
+  - **Review queue:** `CommentRepository.getCommentReviewQueue` returns the community's pending comments. Narrow it to one post or a date range.
+  - **Approve or decline:** `CommentRepository.approveComment` and `declineComment`. Declining deletes the comment. The optional `reason` (at most 250 characters) is kept for the moderation record only.
+  - **Permission:** reviewers need `ReviewCommunityCommentPermission`.
+  - **Editing while pending:** `Client.getSocialSettings()` returns `isAllowEditCommentWhenReviewingEnabled`, which tells you whether an author may edit a pending comment.
+  - **Realtime:** an approved comment appears as soon as it is approved, through the `comment.approved` event. Subscribe with `CommentRepository.onCommentApproved`. A declined comment arrives as a deletion.
 
   #### Curated Content
 
-  Added `CuratedContentRepository.getPool(topicId, limit?)`, returning the curated content pool for a topic: the topic plus its ranked posts. Added `topic.analytics` helpers — `markAsViewed`, `markPostAsViewed`, and `markPostClick` — to record widget and post-level engagement.
+  Fetch the posts selected for a topic configured in the Console, and build your own discovery surface around them. A pool is one bounded, ranked result with no pagination, and the SDK keeps the server's order.
+
+  - **Fetch a pool:** `CuratedContentRepository.getPool(topicId, limit?)` returns a promise of the pool: the topic plus its ranked posts. `limit` must be between 1 and 100.
+  - **Analytics:** `topic.analytics` provides `markAsViewed()`, `markPostAsViewed(postId)`, and `markPostClick(postId)`.
+
+  #### Pin Message in Live Channels
+
+  Pin one message in a live channel so it stays visible above the chat. Pinning a new message replaces the current pin. The server clears the pin when the message is deleted or its author is banned from the channel or globally.
+
+  - **Pin and unpin:** `MessageRepository.pinMessage` and `unpinMessage`.
+  - **Read the pin:** `channel.pinnedMessage` holds the current pinned message, or `null` when nothing is pinned.
+  - **Permission:** `PinMessagePermission`. Channel moderators, and livestream hosts and co-hosts, have it by default.
+  - **Realtime:** `ChannelRepository.getChannel` emits on every pin and unpin, driven by the `channel.messagePinned` and `channel.messageUnpinned` events. `ChannelRepository.onChannelMessagePinned` and `onChannelMessageUnpinned` are also available as separate callbacks.
 
   #### Local Event on Channel Creation
 
-  `createChannel` now fires a local `channel.created` event right after a successful create, so a newly created channel appears immediately in a running `ChannelRepository.getChannels` collection instead of waiting on the first message.
+  `createChannel` now fires a local `channel.created` event right after a successful create. A newly created channel appears immediately in a running `ChannelRepository.getChannels` query, instead of waiting for its first message.
+
+  ## ✨ Improvements
+
+  - Added `post.getLocalCommentCount(includePending)`. By default, the count leaves out the current user's own comments that are still awaiting approval. Pass `true` to include them. `post.localCommentCount` is now deprecated and equals `getLocalCommentCount(true)`.
 
   ## 🐞 Bug Fixes
 
-  - Fixed `ChannelRepository.getChannel` not emitting an update when a member's role changed, which could leave a stale pin-message permission cached for that member.
-  - Fixed a globally banned user's session staying active when the realtime ban event was missed — the next API call now terminates the session and notifies `onClientBanned`.
-  - Fixed a deleted message's text lingering in the channel list preview when the "don't include deleted messages" preview setting is enabled.
-  - Fixed `message.creator.avatar` always resolving to `undefined` even though the type declared it as available.
+  - Fixed a member's channel role change (`channel.roleAdded` / `channel.roleRemoved`) not updating `ChannelRepository.getChannel`, which could leave a stale pin permission.
+  - Fixed a globally banned user's session staying active when the realtime ban event was missed. The next API call now terminates the session and notifies `onClientBanned`.
+  - Fixed a deleted message's text lingering in the channel list preview when the preview setting excludes deleted messages.
+  - Fixed `message.creator.avatar` always resolving to `undefined` even though the type declared it.
 
   ## 🧩 Compatibility
 
