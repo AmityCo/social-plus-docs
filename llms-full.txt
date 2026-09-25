@@ -40483,13 +40483,13 @@ Choose where a card should open in your app, such as a post detail page or your 
 
 ## Embed the widget
 
-The component is named `AmityContentWidgetComponent` on all three platforms. Pass a topic ID and handle card selection with `onCardClick`.
+Pass a topic ID and handle card selection with `onCardClick`.
 
 
 ```tsx Web
-import { AmityContentWidgetComponent } from '@amityco/ui-kit';
+import { AmityDiscoveryWidgetComponent } from '@amityco/ui-kit';
 
-<AmityContentWidgetComponent
+<AmityDiscoveryWidgetComponent
   topicId="your-topic-id"
   onCardClick={(topicId, post) => {
     // Navigate to the selected post in your app.
@@ -40498,7 +40498,7 @@ import { AmityContentWidgetComponent } from '@amityco/ui-kit';
 ```
 
 ```swift iOS
-AmityContentWidgetComponent(
+AmityDiscoveryWidgetComponent(
     topicId: "your-topic-id",
     onCardClick: { topicId, post in
         // Navigate to the selected post in your app.
@@ -40507,7 +40507,7 @@ AmityContentWidgetComponent(
 ```
 
 ```kotlin Android
-AmityContentWidgetComponent(
+AmityDiscoveryWidgetComponent(
     topicId = "your-topic-id",
     onCardClick = { topicId, post ->
         // Navigate to the selected post in your app.
@@ -40534,6 +40534,14 @@ The widget adapts to compact and expanded layouts. Readers swipe through cards; 
 
 The widget renders nothing when the request fails or the number of renderable posts is below `minVisibilityThreshold`. It shows no heading, empty state, or error message in these cases. Avoid a separate decorative container that would remain visible when the widget hides.
 
+### Host container
+
+The widget sizes itself from its content and does not set a height on its parent. Place it in a container that fits it:
+
+- Use a wrap-content container, or give the container a minimum height that fits the widget. A shorter container clips the cards, starting with the reaction and comment counts at the bottom.
+- Avoid a container with zero or undefined height. The widget still loads posts and reports its impression, but readers can't see it.
+- Place the widget in a vertically scrolling or non-scrolling container. A horizontally scrolling parent is not supported, because the widget's own horizontal scrolling competes with it for swipes.
+
 ### Supported content
 
 | Post type | Display |
@@ -40554,13 +40562,13 @@ Use `onCardClick` for navigation specific to one placement. For app-wide navigat
 
 | Platform | Behavior |
 | --- | --- |
-| Web | `AmityContentWidgetComponentBehavior.goToDestination({ topicId, post })` |
-| Android | `AmityContentWidgetBehavior.goToDestination(context, topicId, post)` |
-| iOS | `AmityContentWidgetBehavior.goToDestination(context)` |
+| Web | `AmityDiscoveryWidgetComponentBehavior.goToDestination({ topicId, post })` |
+| Android | `AmityDiscoveryWidgetComponentBehavior.goToDestination(context, topicId, post)` |
+| iOS | `AmityDiscoveryWidgetComponentBehavior.goToDestination(context)` |
 
 When `onCardClick` is provided, the behavior class is not called for that instance.
 
-Web and Android have no default destination. Provide a navigation handler so selecting a card opens the intended content. An explicit handler also keeps your app's navigation consistent across platforms.
+No platform has a default destination. If you provide neither `onCardClick` nor a behavior override, selecting a card does nothing. Provide a navigation handler so a card opens the intended content.
 
 ## Analytics
 
@@ -68438,36 +68446,40 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   #### Comment Approval for Communities
 
-  Community moderators can now hold comments for review before they become public. A comment made in a review-enabled community is created with a `pending` status, visible only to its author, community reviewers and network admins, until a reviewer approves or declines it.
+  A community can now require review before a new comment is visible. While a comment is pending, only its author, the community's reviewers, and network admins can see it. It stays out of public comment lists and comment counts until a reviewer approves it.
 
-  - New enum `AmityCommentApprovalStatus` (`PENDING`, `APPROVED`, `REJECTED`) with `AmityComment.getApprovalStatus()`.
-  - New permission `AmityPermission.REVIEW_COMMUNITY_COMMENT`.
-  - `AmityCommentRepository.getCommentReviewQueue(communityId)` returns a builder for a paged queue of pending comments across the community. Narrow it to one post with `.post(postId)`.
-  - `AmityCommentRepository.approveComment(commentId)` and `declineComment(commentId, reason)` resolve a pending comment.
-  - Turn comment review on for a community from the Console. This release does not expose the community setting in the Android SDK.
-  - `AmitySocialSettings.isAllowEditCommentWhenReviewingEnabled()` reports the network's edit-while-reviewing setting.
-  - New realtime event `comment.approved` reveals an approved comment as soon as a reviewer acts, without waiting for a refresh.
-  - A pending comment is excluded from the public comment list, the post's latest-comment previews, and the comment count until it is approved.
+  - **Turn it on:** from the Console. This release does not expose the community setting in the Android SDK.
+  - **Approval status:** `AmityComment.getApprovalStatus()` returns `AmityCommentApprovalStatus` (`PENDING`, `APPROVED`, `REJECTED`).
+  - **Review queue:** `AmityCommentRepository.getCommentReviewQueue(communityId)` returns a builder for the community's pending comments. Narrow it to one post with `.post(postId)`.
+  - **Approve or decline:** `AmityCommentRepository.approveComment(commentId)` and `declineComment(commentId, reason)`. Declining deletes the comment. The optional `reason` (at most 250 characters) is kept for the moderation record only.
+  - **Permission:** reviewers need `AmityPermission.REVIEW_COMMUNITY_COMMENT`.
+  - **Editing while pending:** `AmitySocialSettings.isAllowEditCommentWhenReviewingEnabled()` tells you whether an author may edit a pending comment.
+  - **Realtime:** an approved comment appears as soon as it is approved, through the `comment.approved` event. A declined comment arrives as a deletion.
 
   #### Curated Content
 
-  Read a moderated pool of posts for a content-widget placement, plus its view/click analytics.
+  Fetch the posts selected for a topic configured in the Console, and build your own discovery surface around them. A pool is one bounded, ranked result with no pagination, and the SDK keeps the server's order.
 
-  - `AmityCoreClient.newCuratedContentRepository().getPool(topicId, limit)` returns a ranked `AmityCuratedContentPool` for a topic; the server applies safety filtering and the viewer's block list, and the SDK preserves the returned order.
-  - `AmityCuratedContentTopic.analytics()` exposes widget-view, post-view and post-link-click tracking.
+  - **Fetch a pool:** `AmityCoreClient.newCuratedContentRepository().getPool(topicId, limit)` returns `Single<AmityCuratedContentPool>`. `limit` must be between 1 and 100.
+  - **Analytics:** `AmityCuratedContentTopic.analytics()` provides `markAsViewed()`, `markPostAsViewed(postId)`, and `markPostClick(postId)`.
 
   #### Pin Message in Live Channels
 
-  A channel member with permission can now pin a message so it stays visible above the conversation.
+  Pin one message in a live channel so it stays visible above the chat. Pinning a new message replaces the current pin. The server clears the pin when the message is deleted or its author is banned from the channel or globally.
 
-  - `AmityMessageRepository.pinMessage(messageId)` / `unpinMessage(messageId)`, gated by the new `AmityPermission.PIN_MESSAGE`.
-  - `AmityChannel.getPinnedMessage()` returns the current `AmityPinnedMessage`, if any.
-  - The channel's `Flowable` emits immediately on pin/unpin, and also reacts to the realtime `channel.messagePinned` / `channel.messageUnpinned` events.
+  - **Pin and unpin:** `AmityMessageRepository.pinMessage(messageId)` and `unpinMessage(messageId)`.
+  - **Read the pin:** `AmityChannel.getPinnedMessage()` returns the current `AmityPinnedMessage`, or `null` when nothing is pinned.
+  - **Permission:** `AmityPermission.PIN_MESSAGE`. Channel moderators, and livestream hosts and co-hosts, have it by default.
+  - **Realtime:** the channel `Flowable` emits on every pin and unpin, driven by the `channel.messagePinned` and `channel.messageUnpinned` events.
+
+  ## ✨ Improvements
+
+  - `AmityPost.getLocalCommentCount()` now takes an optional `includePending` flag. By default, the count leaves out the current user's own comments that are still awaiting approval. Pass `true` to include them.
 
   ## 🐞 Bug Fixes
 
-  - Fixed `AmityRoomStatus` falling back to `IDLE` for a room terminated by moderation — a `terminated` room now surfaces as `AmityRoomStatus.TERMINATED`.
-  - Fixed a channel permission change (a role granted or revoked via `channel.roleAdded` / `channel.roleRemoved`) not reaching the client until the app was restarted.
+  - Fixed `AmityRoomStatus` falling back to `IDLE` for a room terminated by moderation. A terminated room now surfaces as `AmityRoomStatus.TERMINATED`.
+  - Fixed a member's channel role change (`channel.roleAdded` / `channel.roleRemoved`) not reaching the client until the app was restarted, which could leave a stale pin permission.
 
   ## 🧩 Compatibility
 
@@ -69927,25 +69939,41 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
 
   ## 🚀 New Features
 
-  #### Comment Approval
+  #### Comment Approval for Communities
 
-  Communities can now require review before a comment is publicly visible. Enable it with `AmityCommunityDataBuilder.setNeedApprovalOnCommentCreation(_:)` (read back via `AmityCommunity.isCommentReviewEnabled`), and check `AmitySocialSettings.isAllowEditCommentWhenReviewingEnabled` to know whether an author may edit a comment while it is pending. A new comment carries `AmityComment.approvalStatus` (`AmityCommentApprovalStatus`: `pending`, `approved`, `rejected`); pending and rejected comments are excluded from default queries and counts, but remain visible to their author and to reviewers. Reviewers with the new `AmityPermission.reviewCommunityComment` permission can call `AmityCommentRepository.getCommentReviewQueue(with:)` for a live, per-community queue of pending comments, and `approveComment(withId:)` / `declineComment(withId:reason:)` to action them.
+  A community can now require review before a new comment is visible. While a comment is pending, only its author, the community's reviewers, and network admins can see it. It stays out of public comment lists and comment counts until a reviewer approves it.
+
+  - **Turn it on:** `AmityCommunityDataBuilder.setNeedApprovalOnCommentCreation(_:)` on create or update. Read it back with `AmityCommunity.isCommentReviewEnabled`.
+  - **Approval status:** `AmityComment.approvalStatus` is an `AmityCommentApprovalStatus` (`pending`, `approved`, `rejected`).
+  - **Review queue:** `AmityCommentRepository.getCommentReviewQueue(with:)` returns the community's pending comments as an `AmityCollection<AmityComment>`. Narrow it to one post or a date range with `AmityCommentReviewQueueQueryOptions`.
+  - **Approve or decline:** `AmityCommentRepository.approveComment(withId:)` and `declineComment(withId:reason:)`. Declining deletes the comment. The optional `reason` (at most 250 characters) is kept for the moderation record only.
+  - **Permission:** reviewers need `AmityPermission.reviewCommunityComment`.
+  - **Editing while pending:** `AmitySocialSettings.isAllowEditCommentWhenReviewingEnabled` tells you whether an author may edit a pending comment.
+  - **Realtime:** an approved comment appears as soon as it is approved, through the `comment.approved` event. A declined comment arrives as a deletion.
 
   #### Curated Content
 
-  Added `AmityCuratedContentRepository.getPool(topicId:limit:)`, which fetches the ranked, safety-gated pool of posts behind a console-configured curated-content topic. The response is a single bounded read (no pagination) and is viewer-specific, since block-list filtering is applied per request. Pair it with `AmityCuratedContentTopic.analytics` (`AmityCuratedContentAnalytics`) to record widget views, post views, and post clicks for a topic.
+  Fetch the posts selected for a topic configured in the Console, and build your own discovery surface around them. A pool is one bounded, ranked result with no pagination, and the SDK keeps the server's order.
+
+  - **Fetch a pool:** `AmityCuratedContentRepository.getPool(topicId:limit:)` is an `async throws` call that returns an `AmityCuratedContentPool`. `limit` must be between 1 and 100.
+  - **Analytics:** `AmityCuratedContentTopic.analytics` (`AmityCuratedContentAnalytics`) provides `markAsViewed()`, `markPostAsViewed(postId:)`, and `markPostClick(postId:)`.
 
   #### Pin Message in Live Channels
 
-  Added the ability to pin a message in a livestream (`live`) chat channel. `AmityMessageRepository.pinMessage(withId:)` and `unpinMessage(withId:)` set or clear the channel's single pinned message, exposed as `AmityChannel.pinnedMessage`; pinning a new message replaces the current pin. Gated by the new `AmityPermission.pinMessage` permission, and channel role/permission changes now update in real time so a promoted or demoted member's pin permission reflects immediately.
+  Pin one message in a live channel so it stays visible above the chat. Pinning a new message replaces the current pin. The server clears the pin when the message is deleted or its author is banned from the channel or globally.
+
+  - **Pin and unpin:** `AmityMessageRepository.pinMessage(withId:)` and `unpinMessage(withId:)`.
+  - **Read the pin:** `AmityChannel.pinnedMessage` holds the current pinned message, or `nil` when nothing is pinned.
+  - **Permission:** `AmityPermission.pinMessage`. Channel moderators, and livestream hosts and co-hosts, have it by default. Channel role changes now update a member's permissions in real time, so a promoted or demoted member's pin permission changes immediately.
+  - **Realtime:** the observed `AmityChannel` updates on every pin and unpin, driven by the `channel.messagePinned` and `channel.messageUnpinned` events.
 
   #### Typed Network Activity Observation
 
-  Added `AmityClient.observeNetworkActivities(_:)`, a typed, multi-observer replacement for the previous single-slot callback. It returns a cancellable `AmityNetworkActivityToken` and delivers `AmityNetworkActivity` records — covering HTTP, uploads, downloads and MQTT traffic, each labeled with an `AmityNetworkActivityType` and carrying real timings and byte counts. The old `observeNetworkActivities((URLRequest?, HTTPURLResponse?, Data?) -> Void)` overload is deprecated but still works.
+  Added `AmityClient.observeNetworkActivities(_:)`, a typed observer that supports multiple observers and replaces the previous single-slot callback. It returns a cancellable `AmityNetworkActivityToken` and delivers `AmityNetworkActivity` records for HTTP, upload, download, and MQTT traffic. Each record is labeled with an `AmityNetworkActivityType` and carries real timings and byte counts. The previous `observeNetworkActivities((URLRequest?, HTTPURLResponse?, Data?) -> Void)` overload is deprecated but still works.
 
   ## ✨ Improvements
 
-  - Added `AmityPost.getLocalCommentCount(includePending:)`; `AmityPost.localCommentCount` is now deprecated in favor of it (equivalent to passing `includePending: true`).
+  - Added `AmityPost.getLocalCommentCount(includePending:)`. By default, the count leaves out the current user's own comments that are still awaiting approval. Pass `true` to include them. `AmityPost.localCommentCount` is now deprecated and equals `getLocalCommentCount(includePending: true)`.
 
   ## 🧩 Compatibility
 
@@ -71221,32 +71249,48 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   ## 🚀 New Features
 
-  #### Pin Messages in Live Channels
+  #### Comment Approval for Communities
 
-  Added the ability to pin and unpin messages in live (livestream) channels. `MessageRepository.pinMessage` / `unpinMessage` set or clear a channel's single pinned message — pinning a new message replaces the current pin in one step, no unpin required first. The pin is exposed on `channel.pinnedMessage`, gated by the `PinMessagePermission` permission, and kept in sync in real time. `ChannelRepository.onChannelMessagePinned` / `onChannelMessageUnpinned` are also available as callbacks.
+  A community can now require review before a new comment is visible. While a comment is pending, only its author, the community's reviewers, and network admins can see it. It stays out of public comment lists and comment counts until a reviewer approves it.
 
-  #### Comment Approval in Communities
-
-  Added moderation-gated comment approval for communities. When a community's `needApprovalOnCommentCreation` setting is enabled, new comments carry an `approvalStatus` and are held out of public collections and post comment counts until approved (the author can still see their own pending comment). Reviewers read the queue with `CommentRepository.getCommentReviewQueue` and act with `CommentRepository.approveComment` / `declineComment`. Subscribe to approvals with `CommentRepository.onCommentApproved`. Gated by the new `ReviewCommunityCommentPermission` permission.
-
-  #### Local Comment Count
-
-  Added `post.getLocalCommentCount(includePending)` to read a post's comment count with the current user's own optimistic, not-yet-confirmed comments factored in, without ever double-counting or losing a comment once the server confirms it. The existing `post.localCommentCount` field is unchanged but now deprecated in favor of the new method.
+  - **Turn it on:** set `needApprovalOnCommentCreation` when you create or update the community.
+  - **Approval status:** `comment.approvalStatus` is `pending`, `approved`, or `rejected`.
+  - **Review queue:** `CommentRepository.getCommentReviewQueue` returns the community's pending comments. Narrow it to one post or a date range.
+  - **Approve or decline:** `CommentRepository.approveComment` and `declineComment`. Declining deletes the comment. The optional `reason` (at most 250 characters) is kept for the moderation record only.
+  - **Permission:** reviewers need `ReviewCommunityCommentPermission`.
+  - **Editing while pending:** `Client.getSocialSettings()` returns `isAllowEditCommentWhenReviewingEnabled`, which tells you whether an author may edit a pending comment.
+  - **Realtime:** an approved comment appears as soon as it is approved, through the `comment.approved` event. Subscribe with `CommentRepository.onCommentApproved`. A declined comment arrives as a deletion.
 
   #### Curated Content
 
-  Added `CuratedContentRepository.getPool(topicId, limit?)`, returning the curated content pool for a topic: the topic plus its ranked posts. Added `topic.analytics` helpers — `markAsViewed`, `markPostAsViewed`, and `markPostClick` — to record widget and post-level engagement.
+  Fetch the posts selected for a topic configured in the Console, and build your own discovery surface around them. A pool is one bounded, ranked result with no pagination, and the SDK keeps the server's order.
+
+  - **Fetch a pool:** `CuratedContentRepository.getPool(topicId, limit?)` returns a promise of the pool: the topic plus its ranked posts. `limit` must be between 1 and 100.
+  - **Analytics:** `topic.analytics` provides `markAsViewed()`, `markPostAsViewed(postId)`, and `markPostClick(postId)`.
+
+  #### Pin Message in Live Channels
+
+  Pin one message in a live channel so it stays visible above the chat. Pinning a new message replaces the current pin. The server clears the pin when the message is deleted or its author is banned from the channel or globally.
+
+  - **Pin and unpin:** `MessageRepository.pinMessage` and `unpinMessage`.
+  - **Read the pin:** `channel.pinnedMessage` holds the current pinned message, or `null` when nothing is pinned.
+  - **Permission:** `PinMessagePermission`. Channel moderators, and livestream hosts and co-hosts, have it by default.
+  - **Realtime:** `ChannelRepository.getChannel` emits on every pin and unpin, driven by the `channel.messagePinned` and `channel.messageUnpinned` events. `ChannelRepository.onChannelMessagePinned` and `onChannelMessageUnpinned` are also available as separate callbacks.
 
   #### Local Event on Channel Creation
 
-  `createChannel` now fires a local `channel.created` event right after a successful create, so a newly created channel appears immediately in a running `ChannelRepository.getChannels` collection instead of waiting on the first message.
+  `createChannel` now fires a local `channel.created` event right after a successful create. A newly created channel appears immediately in a running `ChannelRepository.getChannels` query, instead of waiting for its first message.
+
+  ## ✨ Improvements
+
+  - Added `post.getLocalCommentCount(includePending)`. By default, the count leaves out the current user's own comments that are still awaiting approval. Pass `true` to include them. `post.localCommentCount` is now deprecated and equals `getLocalCommentCount(true)`.
 
   ## 🐞 Bug Fixes
 
-  - Fixed `ChannelRepository.getChannel` not emitting an update when a member's role changed, which could leave a stale pin-message permission cached for that member.
-  - Fixed a globally banned user's session staying active when the realtime ban event was missed — the next API call now terminates the session and notifies `onClientBanned`.
-  - Fixed a deleted message's text lingering in the channel list preview when the "don't include deleted messages" preview setting is enabled.
-  - Fixed `message.creator.avatar` always resolving to `undefined` even though the type declared it as available.
+  - Fixed a member's channel role change (`channel.roleAdded` / `channel.roleRemoved`) not updating `ChannelRepository.getChannel`, which could leave a stale pin permission.
+  - Fixed a globally banned user's session staying active when the realtime ban event was missed. The next API call now terminates the session and notifies `onClientBanned`.
+  - Fixed a deleted message's text lingering in the channel list preview when the preview setting excludes deleted messages.
+  - Fixed `message.creator.avatar` always resolving to `undefined` even though the type declared it.
 
   ## 🧩 Compatibility
 
@@ -71611,32 +71655,40 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   #### Discovery Widget
 
-  Added `AmityDiscoveryWidgetComponent`, a read-only carousel of community posts and polls you can embed on your own screen, independent of the main feed. Pass a `topicId`, plus optional `showHeader` and `minVisibilityThreshold`.
+  Added `AmityDiscoveryWidgetComponent`, an embeddable, read-only carousel of the posts selected for a topic configured in the Console. Place it on a page or screen you own, outside the social feed.
 
-  - Depending on the available width, it renders as a compact swipeable strip or as an expanded, paged carousel with arrows.
-  - It renders nothing, and leaves no placeholder, when there isn't enough qualifying content.
-  - Tapping a card is the only interaction. There is no default destination: handle the tap with `onCardClick`, or override `AmityDiscoveryWidgetComponentBehavior.goToDestination`.
+  - **Parameters:** `topicId` (required), `showHeader` (default `true`), `minVisibilityThreshold` (default `3`; values below 1 are treated as 1), and `onCardClick`.
+  - **Platform parameters:** `modifier` and `pageScope`.
+  - **Content:** text, image, video, clip, and poll posts. Livestream and room posts are not shown.
+  - **Visibility:** the widget renders nothing, and takes no space, when fewer supported posts than `minVisibilityThreshold` are available or the request fails.
+  - **Layout:** adapts to the available width, from a compact swipeable strip to an expanded carousel.
+  - **Card taps:** there is no default destination. Handle a tap with `onCardClick`, or override `AmityDiscoveryWidgetComponentBehavior.goToDestination` for app-wide handling. `onCardClick` takes precedence.
+  - **Customization:** component IDs `discovery_widget_component` and `discovery_widget_post_card_component`.
 
-  #### Pin Messages in Live Chat
+  #### Pinned Messages in Livestream Chat
 
-  A user with the `PIN_MESSAGE` permission (or the streamer) can now pin a message from the live chat action menu. The pinned message shows as a banner above the chat feed for every viewer, with expand/collapse for long text. The menu switches between Pin and Unpin depending on the message's current state, and the pin controls disappear immediately if the permission is revoked mid-stream.
+  Hosts, co-hosts, moderators, and anyone with the `PIN_MESSAGE` permission can pin a message from the livestream chat message ⋮ menu. The pinned message shows as a banner above the chat for every viewer, and a long message expands on tap.
+
+  - **Unpin:** from the banner or from the message menu.
+  - **Permission changes:** the pin controls appear or disappear as soon as a user's permission changes mid-stream.
+  - **Customization:** `*/livestream_chat_feed/pinned_message_banner`, `*/livestream_chat_feed/pin_message_button`, and `*/livestream_chat_feed/unpin_message_button`.
 
   ## ✨ Improvements
 
-  - Chat and community moderation actions — deleting a message or comment, muting, banning, editing channel or community settings, promoting/demoting, editing an event — are now gated on the specific backend permission each action enforces, instead of a moderator/role-name check.
+  - Moderation controls are now gated on the permission each action requires instead of on the user's role name, so a custom role with the right permission gets the same controls as a built-in moderator. This covers deleting a message or comment, muting, banning, editing channel or community settings, promoting and demoting members, and editing an event.
   - The chat media viewer can now save videos, not just images. Downloads use the file's direct download endpoint instead of the transcoded stream, and the save survives dismissing the viewer mid-transfer.
   - Upgraded the social.plus SDK dependency to 7.27.0.
 
   ## 🐞 Bug Fixes
 
-  - Fixed @mention taps inside chat messages doing nothing; mentions are now tappable and route through the existing `AmityMessageBubbleBehavior.onMentionUserTap` hook, including on the expanded "See more" message page.
+  - Fixed tapping an @mention in a chat message doing nothing. Mentions now route through `AmityMessageBubbleBehavior.onMentionUserTap`, including on the expanded "See more" message page.
   - Fixed the conversation header opening a blank full-screen avatar viewer for a peer with no avatar photo; the header's avatar tap is now also customizable, through `AmityChatPageBehavior.onAvatarTap`.
   - Fixed the live chat message list and pinned message banner staying on screen over the keyboard instead of hiding while the user types.
   - Fixed a terminated live stream sometimes leaving the host without a "stream terminated" alert before landing on the post.
   - Reverted the 4.26.0 change that restricted chat mention search to display-name matches; results can again include profile-handle and user-ID matches.
   - Fixed the group chat name field, and the edit-profile name field, accepting line breaks.
   - Fixed post text being truncated with "See more" even when it fully fit the card.
-  - Fixed the poll, livestream, and clip rows in the create-post menu — including on the event detail page — not respecting an `excludes` config entry.
+  - Fixed the poll, livestream, and clip options in the create-post menu, including on the event detail page, ignoring the `excludes` configuration.
 
   ## 🧩 Compatibility
 
@@ -73088,20 +73140,33 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   #### Discovery Widget
 
-  Added the Discovery Widget — a read-only, topic-scoped carousel of ranked community posts that you embed on a page you own, configured from a console-generated snippet. Set it up with `AmityDiscoveryWidgetComponent`, passing `topicId`, `showHeader`, `minVisibilityThreshold`, and an optional `onCardClick` and `pageId`; each card renders via `AmityDiscoveryWidgetPostCardComponent`. Card taps are unhandled by default — wire `onCardClick` or override `AmityDiscoveryWidgetComponentBehavior` to route them. The widget renders nothing and takes up no layout space when the pool is below threshold or the content call fails.
+  Added `AmityDiscoveryWidgetComponent`, an embeddable, read-only carousel of the posts selected for a topic configured in the Console. Place it on a page or screen you own, outside the social feed.
+
+  - **Parameters:** `topicId` (required), `showHeader` (default `true`), `minVisibilityThreshold` (default `3`; values below 1 are treated as 1), and `onCardClick`.
+  - **Platform parameters:** `pageId`.
+  - **Content:** text, image, video, clip, and poll posts. Livestream and room posts are not shown.
+  - **Visibility:** the widget renders nothing, and takes no space, when fewer supported posts than `minVisibilityThreshold` are available or the request fails.
+  - **Layout:** adapts to the available width, from a compact swipeable strip to an expanded carousel.
+  - **Card taps:** there is no default destination. Handle a tap with `onCardClick`, or override `AmityDiscoveryWidgetComponentBehavior.goToDestination` for app-wide handling. `onCardClick` takes precedence.
+  - **Customization:** component IDs `discovery_widget_component` and `discovery_widget_post_card_component`.
+  - **Host container:** give the widget wrap-content or a minimum height, and do not place it inside a horizontally scrolling parent.
 
   #### Pinned Messages in Livestream Chat
 
-  Hosts, co-hosts, and moderators (or holders of the `PIN_MESSAGE` permission) can now pin a message in livestream chat. The pinned message shows as a persistent, expandable banner at the top of the chat for every viewer, and can be pinned or unpinned from the message's ⋮ menu.
+  Hosts, co-hosts, moderators, and anyone with the `PIN_MESSAGE` permission can pin a message from the livestream chat message ⋮ menu. The pinned message shows as a banner above the chat for every viewer, and a long message expands on tap.
+
+  - **Unpin:** from the banner or from the message menu.
+  - **Permission changes:** the pin controls appear or disappear as soon as a user's permission changes mid-stream.
+  - **Customization:** `*/livestream_chat_feed/pinned_message_banner`. The pin and unpin menu items are not customizable on iOS.
 
   ## ✨ Improvements
 
-  - Migrated chat, community, event, and story moderation controls from role-name checks to backend permission checks, so gates (message delete, mute, group settings, member actions, banned members, mention-all, community settings and profile actions, pending-post review, post-menu actions, story management, event edit) reflect a viewer's actual permissions in real time rather than a role label.
+  - Moderation controls are now gated on the permission each action requires instead of on the user's role name, so a custom role with the right permission gets the same controls as a built-in moderator. This covers message delete, mute, group settings, member actions, banned members, mention-all, community settings and profile actions, pending-post review, post-menu actions, story management, and event edit, and the gates follow permission changes in real time.
 
   ## 🐞 Bug Fixes
 
   - Fixed video download and playback in chat using swapped URLs — downloading a video previously saved the streamed playback asset, and playback used the download asset.
-  - Fixed the Post, Poll, and Live stream options in an event's create-post sheet not responding to configured excludes.
+  - Fixed the post, poll, and livestream options in an event's create-post menu ignoring the `excludes` configuration.
   - Fixed toast messages appearing in the wrong position on livestream, post detail, and story surfaces; toasts now sit above the bottom bar.
   - Fixed Picture-in-Picture starting automatically while a livestream chat sheet (message actions, moderation, share, or menu) was open.
   - Fixed the post-creation button state after removing a failed media attachment.
@@ -74605,11 +74670,23 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   #### Discovery Widget
 
-  A new embeddable widget, exported as `AmityDiscoveryWidgetComponent`, surfaces a topic's posts as a card carousel. Configure it with `topicId`, `showHeader`, `minVisibilityThreshold`, and `pageId`, and handle a card tap with either the `onCardClick` prop or the `AmityDiscoveryWidgetComponentBehavior.goToDestination` page behavior.
+  Added `AmityDiscoveryWidgetComponent`, an embeddable, read-only carousel of the posts selected for a topic configured in the Console. Place it on a page or screen you own, outside the social feed.
+
+  - **Parameters:** `topicId` (required), `showHeader` (default `true`), `minVisibilityThreshold` (default `3`; values below 1 are treated as 1), and `onCardClick`.
+  - **Platform parameters:** `pageId`.
+  - **Content:** text, image, video, clip, and poll posts. Livestream and room posts are not shown.
+  - **Visibility:** the widget renders nothing, and takes no space, when fewer supported posts than `minVisibilityThreshold` are available or the request fails.
+  - **Layout:** adapts to the available width, from a compact swipeable strip to an expanded carousel.
+  - **Card taps:** there is no default destination. Handle a tap with `onCardClick`, or override `AmityDiscoveryWidgetComponentBehavior.goToDestination` for app-wide handling. `onCardClick` takes precedence.
+  - **Customization:** component IDs `discovery_widget_component` and `discovery_widget_post_card_component`.
 
   #### Pinned Messages in Livestream Chat
 
-  Hosts, co-hosts, moderators, and anyone holding the `PIN_MESSAGE` permission can now pin and unpin a message from the livestream chat message menu. The pinned message stays visible in a banner above the chat feed until it is unpinned or replaced.
+  Hosts, co-hosts, moderators, and anyone with the `PIN_MESSAGE` permission can pin a message from the livestream chat message ⋮ menu. The pinned message shows as a banner above the chat for every viewer, and a long message expands on tap.
+
+  - **Unpin:** from the banner or from the message menu.
+  - **Permission changes:** the pin controls appear or disappear as soon as a user's permission changes mid-stream.
+  - **Customization:** `*/livestream_chat_feed/pinned_message_banner`, `*/livestream_chat_feed/pin_message_button`, and `*/livestream_chat_feed/unpin_message_button`.
 
   ## ✨ Improvements
 
@@ -74619,12 +74696,11 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
   ## 🐞 Bug Fixes
 
   - Fixed a pending comment in a community that requires comment approval appearing as published before it was approved; the composer now shows an "awaiting review" notice instead.
-  - Fixed chat avatar and mention taps not opening the tapped user's profile, including from the channel header.
+  - Fixed tapping an @mention or an avatar in chat not opening the user's profile, including from the channel header.
   - Fixed the reply band not being clickable, the reply-quote width and header gap, the new-message pill, the reaction-list skeleton rows, the failed-message sheet icons, and long reaction-list names not truncating.
   - Fixed the chat group name wrapping instead of truncating with an ellipsis.
-  - Fixed the community profile menu to check the `EDIT_COMMUNITY` permission instead of moderator membership, so a custom role with that permission gets the same options as a built-in moderator.
+  - Fixed the community profile menu checking moderator membership instead of the `EDIT_COMMUNITY` permission. A custom role with that permission now gets the same options as a built-in moderator.
   - Fixed the public-community icon rendering filled instead of outlined.
-  - Fixed the pin option still showing in livestream chat after a user's pin permission was revoked at the network level.
   - Fixed a globally banned user not being removed from an active livestream session immediately.
   - Fixed missing customization exclude keys for the livestream/create-post button, the media feed tabs, and the user-profile create button.
   - Fixed chat media downloads saving the video file with an incorrect URL and extension.
