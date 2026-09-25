@@ -108,6 +108,71 @@ Confidence levels represent the AI's certainty in detecting specific content typ
 </Tip>
 
 
+### Retaining Rejected Uploads
+
+When pre-moderation refuses an image, the upload fails and the file is gone. There is nothing to look at if the uploader disputes the decision, nothing to tune your thresholds against, and no record that the attempt happened at all.
+
+Turning on **reserved for review** changes that: social.plus keeps the refused original and tells your backend, over a webhook, the moment a rejection happens. Your moderators can then look at what the classifier actually blocked.
+
+Retention is off by default and applies to images, the only content type pre-moderation covers today. The upload response is identical whether it is on or off, so your apps need no changes.
+
+<Steps>
+  <Step title="Turn on retention">
+    Send `reservedForReview: true` to [Update file configuration](/api-reference/network-setting/update-file-configuration) with an admin token.
+  </Step>
+
+  <Step title="Subscribe to the rejection event">
+    Add [`file.didReject`](/api-reference/webhook-event/file-didreject-webhook-event) to your webhook subscription. It carries the `fileId` of the retained file — the upload response never does, so this event is the only way to learn it.
+  </Step>
+
+  <Step title="Review the file">
+    Fetch the retained image with [Download file](/api-reference/file/download-file), using the `fileId` from the event. Remove it when you are done with [Delete file](/api-reference/file/delete-file).
+  </Step>
+</Steps>
+
+#### What the uploader sees
+
+Nothing changes. A refused image still returns `403` with error code `400314` (`UnsafeContent`) and no `fileId`, whether or not retention is on:
+
+```json
+{
+  "status": "error",
+  "code": 400314,
+  "message": "Image uploading failed: Nudity content is not permitted"
+}
+```
+
+The message names the first category that breached its threshold: `Nudity content is not permitted`, `Suggestive content is not permitted`, `Violence content is not permitted`, or `Disturbing content is not permitted`.
+
+#### What is retained
+
+A retained file is an ordinary file document with `status` set to `rejected`. It uses the same `fileId`, the same file endpoints, and the same `network` access type as any other file your network owns.
+
+Two differences are worth knowing:
+
+- **Only the original is kept.** No resized variants are generated, so a download returns the original whatever `size` you ask for.
+- **The rejection details are not on the file.** Reading the file never returns them. They reach you through the `file.didReject` webhook only.
+
+Retention covers images, matching pre-moderation's coverage. A file that is deleted is deleted normally, whether or not it was retained.
+
+#### Rejection and upload events
+
+Three file lifecycle events are available to webhook subscribers:
+
+| Event | Fires when |
+|-------|------------|
+| [`file.didUpload`](/api-reference/webhook-event/file-didupload-webhook-event) | A user uploads a file successfully |
+| [`file.didReject`](/api-reference/webhook-event/file-didreject-webhook-event) | Pre-moderation refuses an image |
+| [`file.didDelete`](/api-reference/webhook-event/file-diddelete-webhook-event) | A file is deleted |
+
+`file.didReject` is useful on its own. With retention off, you still receive every rejection — with the classifier's verdict but no `file`, because no file was kept. A rejected upload raises this event instead of `file.didUpload`.
+
+Its `rejection` object lists every category that breached its threshold with the confidence the classifier assigned, echoes your network's configured thresholds, and carries the message the uploader saw — enough to tell a marginal call from a clear one, and to tune your thresholds from real traffic.
+
+<Warning>
+**The rejection details are sensitive.** They pair your configured thresholds with the classifier's scores. Treat the `file.didReject` payload as admin-only data and do not forward it to end users. This is why reading the file never returns it.
+</Warning>
+
 ## AI Post-Moderation
 
 Monitor and moderate published content with intelligent detection and automated response workflows. Post-moderation provides comprehensive scanning across all content types while maintaining user experience.

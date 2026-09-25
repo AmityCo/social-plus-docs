@@ -9534,6 +9534,18 @@ func playbackSource(for room: AmityRoom) -> String? {
 ```
 
 
+### Thumbnail and Resolution
+
+Alongside the playback URL, the room exposes a thumbnail and the stream's dimensions — useful for a poster image before playback starts and for sizing the player without waiting for the first frame.
+
+| Field | TypeScript | iOS | Android | Available |
+| --- | --- | --- | --- | --- |
+| Live thumbnail | `room.liveThumbnailUrl` | `room.liveThumbnailUrl` | `room.getLiveThumbnailUrl()` | Live or reconnecting sessions, when generated |
+| Live resolution | `room.liveResolution` | `room.liveResolution` | `room.getLiveResolution()` | Live or reconnecting sessions, when available |
+| Recorded resolution | `room.recordedResolution` | `room.recordedResolution` | `room.getRecordedResolution()` | After the recording is available |
+
+Resolution carries the stream's aspect ratio, width, and height. These fields can be absent early in a session, so treat them as optional and fall back to your own placeholder. See [Rooms Overview](./rooms-overview) for the full room field reference.
+
 ## Status Handling
 
 | Status | Viewer behavior |
@@ -57603,6 +57615,61 @@ Confidence levels represent the AI's certainty in detecting specific content typ
 **Recommendation**: Start with medium confidence levels (40-60) and adjust based on your community's needs and false positive rates.
 
 
+### Retaining Rejected Uploads
+
+When pre-moderation refuses an image, the upload fails and the file is gone. There is nothing to look at if the uploader disputes the decision, nothing to tune your thresholds against, and no record that the attempt happened at all.
+
+Turning on **reserved for review** changes that: social.plus keeps the refused original and tells your backend, over a webhook, the moment a rejection happens. Your moderators can then look at what the classifier actually blocked.
+
+Retention is off by default and applies to images, the only content type pre-moderation covers today. The upload response is identical whether it is on or off, so your apps need no changes.
+
+    Send `reservedForReview: true` to [Update file configuration](/api-reference/network-setting/update-file-configuration) with an admin token.
+
+    Add [`file.didReject`](/api-reference/webhook-event/file-didreject-webhook-event) to your webhook subscription. It carries the `fileId` of the retained file — the upload response never does, so this event is the only way to learn it.
+
+    Fetch the retained image with [Download file](/api-reference/file/download-file), using the `fileId` from the event. Remove it when you are done with [Delete file](/api-reference/file/delete-file).
+
+#### What the uploader sees
+
+Nothing changes. A refused image still returns `403` with error code `400314` (`UnsafeContent`) and no `fileId`, whether or not retention is on:
+
+```json
+{
+  "status": "error",
+  "code": 400314,
+  "message": "Image uploading failed: Nudity content is not permitted"
+}
+```
+
+The message names the first category that breached its threshold: `Nudity content is not permitted`, `Suggestive content is not permitted`, `Violence content is not permitted`, or `Disturbing content is not permitted`.
+
+#### What is retained
+
+A retained file is an ordinary file document with `status` set to `rejected`. It uses the same `fileId`, the same file endpoints, and the same `network` access type as any other file your network owns.
+
+Two differences are worth knowing:
+
+- **Only the original is kept.** No resized variants are generated, so a download returns the original whatever `size` you ask for.
+- **The rejection details are not on the file.** Reading the file never returns them. They reach you through the `file.didReject` webhook only.
+
+Retention covers images, matching pre-moderation's coverage. A file that is deleted is deleted normally, whether or not it was retained.
+
+#### Rejection and upload events
+
+Three file lifecycle events are available to webhook subscribers:
+
+| Event | Fires when |
+|-------|------------|
+| [`file.didUpload`](/api-reference/webhook-event/file-didupload-webhook-event) | A user uploads a file successfully |
+| [`file.didReject`](/api-reference/webhook-event/file-didreject-webhook-event) | Pre-moderation refuses an image |
+| [`file.didDelete`](/api-reference/webhook-event/file-diddelete-webhook-event) | A file is deleted |
+
+`file.didReject` is useful on its own. With retention off, you still receive every rejection — with the classifier's verdict but no `file`, because no file was kept. A rejected upload raises this event instead of `file.didUpload`.
+
+Its `rejection` object lists every category that breached its threshold with the confidence the classifier assigned, echoes your network's configured thresholds, and carries the message the uploader saw — enough to tell a marginal call from a clear one, and to tune your thresholds from real traffic.
+
+**The rejection details are sensitive.** They pair your configured thresholds with the classifier's scores. Treat the `file.didReject` payload as admin-only data and do not forward it to end users. This is why reading the file never returns it.
+
 ## AI Post-Moderation
 
 Monitor and moderate published content with intelligent detection and automated response workflows. Post-moderation provides comprehensive scanning across all content types while maintaining user experience.
@@ -58470,60 +58537,64 @@ Moderation capabilities are determined by user roles, ranging from basic users t
 
     ### Automated Moderation
 
-        **Automated Content Filtering:**
-        - Block specific words and phrases
-        - Support for exact and partial matching
-        - Automatic muting for violations
-        - Custom violation responses
+        Reject content that contains words or phrases you don't want in your community.
 
-        **Moderated Content Types:**
-        - Chat messages
-        - Posts and comments
-        - Poll questions and answers
-        - User-generated text content
+        **How rules match:**
+        - Each rule is a word or phrase, matched case-insensitively.
+        - Rules match as plain text. Characters such as `*` or `.` are literal, not patterns.
+        - **Partial match** (default): the rule matches anywhere in the text, including inside longer words.
+        - **Exact word match** (`isMatchExactWord: true`): the rule matches only as a whole word.
+        - Each rule can be enabled or disabled without deleting it.
 
-        **Non-Moderated Content:**
-        - Community names
-        - Channel names
-        - User display names
-        - File names
-        - System-generated content
+        **Rule categories:**
+        - `content` (default): checked against chat messages, posts, comments, and polls. For posts, the title is checked too.
+        - `user`: checked against user display names and descriptions.
+
+        **On violation:**
+        - The request is rejected with error `400308` (HTTP 403).
+        - For chat messages, the sender can also be muted in the channel when a blocklist mute duration is configured. The duration is one network-wide value, not set per rule.
+
+        **Exemptions:** by default, users with the `global-admin` or `super-moderator` role skip the check for chat messages. Posts and comments are always checked.
+
+        Manage rules with the blocklist API. Test text against your rules with `POST /api/v3/blocklists/verify`:
 
 ```json
+POST /api/v3/blocklists
 {
-  "blocklist": {
-    "expressions": ["inappropriate_word", "spam_phrase"],
-    "matchType": "partial",
-    "autoMute": true,
-    "muteDuration": 300000,
-    "customResponse": "Your message violates community guidelines."
-  }
+  "regexs": ["inappropriate word", "spam phrase"],
+  "isMatchExactWord": false,
+  "category": "content"
 }
 ```
 
-        **Link Control System:**
-        - Default link blocking enabled
-        - Whitelist approved domains
-        - Pattern-based URL filtering
-        - Real-time link validation
+        Keep links in your community limited to sources you trust. When link moderation is on, any link that doesn't match a rule on your allowlist is rejected.
 
-        **Configuration Options:**
-        - Enable/disable link restrictions
-        - Add trusted domains
-        - Wildcard domain support
-        - Protocol-specific rules
+        **Enable or disable:**
+        - Link moderation is **on by default**. With an empty allowlist, every link is blocked.
+        - Toggle it with the network moderation setting `isWhitelistEnabled`. When off, all links are allowed.
+
+        **How rules match:**
+        - Each rule is plain text, matched case-insensitively against every link found in the content.
+        - A link is allowed if it **contains** the text of any enabled rule.
+        - Wildcards and patterns aren't supported. `*.example.com` matches only the literal text `*.example.com`. To allow a domain and its subdomains, add `example.com`.
+        - Protocols get no special treatment. `https://example.com` allows only links containing that exact text, so `http://example.com` is still blocked.
+        - Because matching is by substring, a rule can also match text in another link's path or query string. For example, `example.com` allows `https://other.site/?ref=example.com`. Use a more specific rule, such as `https://example.com/`, to reduce this.
+        - Each rule can be enabled or disabled without deleting it.
+
+        **Checked content:** chat messages, posts, comments, and polls.
+
+        **On violation:**
+        - The request is rejected with error `400309` (HTTP 403).
+        - For chat messages, the sender can also be muted in the channel when an allowlist mute duration is configured. The duration is one network-wide value, not set per rule.
+
+        **Exemptions:** by default, users with the `global-admin` or `super-moderator` role skip the check for chat messages. Posts and comments are always checked.
+
+        Manage rules with the allowlist API. Test links against your rules with `POST /api/v3/allowlists/verify`:
 
 ```json
+POST /api/v3/allowlists
 {
-  "allowlist": {
-    "enabled": true,
-    "domains": [
-      "example.com",
-      "*.trusted-site.org",
-      "https://secure.domain.net"
-    ],
-    "bypassRoles": ["moderator", "admin"]
-  }
+  "regexs": ["https://example.com/", "trusted-site.org"]
 }
 ```
 
@@ -60748,6 +60819,57 @@ Comments support **multi-level threading** — replies can be nested multiple le
     - Prioritize review based on severity & volume
     - Clearing a flag removes it from escalation metrics
 
+## Comment Approval
+
+A community can require that member comments are reviewed before anyone else sees them. While the setting is on, a member's comment is held the moment it is written: the author still sees their own comment, and nobody else does until a moderator approves it.
+
+Comments left by moderators and admins are never held — a reviewer is not gated by their own setting. Comments on stories are never held either, because a story expires and an approval could publish a comment onto a story no member can still open.
+
+### Turning it on
+
+The setting belongs to a community, not the network, so you can require approval in one space and leave the rest open.
+
+
+  <img src="/images/analytics-and-moderation/console/community-permissions-approve-comments.png" alt="Approve member comments toggle on the community Permissions tab" />
+
+Turning the setting on affects new comments only. Comments already published stay published.
+
+### Reviewing the queue
+
+
+  <img src="/images/analytics-and-moderation/console/comments-requires-approval-queue.png" alt="Requires approval queue" />
+
+When nothing is waiting, the queue reads "No comments are waiting for approval in this community."
+
+### Approving and declining
+
+    **Approve** publishes the comment to everyone who can see the post. The Console confirms with "Comment has been approved".
+
+    An approved comment appears in the thread **where it was written**, not at the end — so a comment approved some time after it was posted is inserted back into its original position, which readers may already have scrolled past.
+    **Decline** opens a confirmation: "Decline this comment?" — "Declining permanently deletes this comment. You can add a reason for your records."
+
+    The reason is optional and accepts up to 250 characters. It is kept with the record for your own audit, and is never shown to the comment's author. The Console confirms with "Comment has been declined".
+
+    Declining cannot be undone, and a declined comment cannot be restored or re-reviewed.
+
+You cannot review your own comment. If you write a comment in a community where you hold review permission, it publishes immediately rather than entering the queue.
+
+### After approval
+
+An approved comment is an ordinary comment, with one exception: **editing it sends it back for review**. If the author edits an approved comment, it returns to the queue and is hidden again until a moderator approves the new text. This stops a comment being approved on innocuous wording and then changed.
+
+Editing by someone who holds review permission does not send the comment back, and neither does a change made by automated moderation.
+
+Whether an author may edit a comment at all while it is awaiting approval is a network-level setting, separate from this one. It is on by default.
+
+### Who can review
+
+| Role | Can review |
+| --- | --- |
+| Community moderator with the review-comments permission | Yes, in that community |
+| Admin with the manage post and comment permission | Yes, in any community |
+| Community member | No — they cannot see held comments at all, apart from their own |
+
 ## Moderation Actions
 
 Each comment and reply has a **more options menu** (⋮) with actions tailored to the item. The wording adjusts depending on whether it is a top-level comment or a nested reply.
@@ -61260,14 +61382,14 @@ Key indicators at top:
 - Totals: posts, comments, reactions, communities joined
 - Active flagged posts & comments count (decrements as flags cleared)
 - Global bans & community bans counts
-- Quick actions: change role, global ban/unban, copy user ID
+- Quick actions: change role, [global mute/unmute](/analytics-and-moderation/console/user-and-content-management/global-mute), global ban/unban, copy user ID
 
 {/* Removed missing image: User Statistics Panel */}
 
     Filter by feed (User / Community), status (Flagged, Non-Flagged, Deleted), sort by Created Date / Last Activity. Action: delete content, clear flags. Provides separate totals for posts vs comments & replies.
     View all reactions (posts & comments) from Nov 28, 2024 onward. Filter by Community feed vs User feed. Sort by Reaction Date. Inspect target content, copy IDs, or remove underlying content if policy violated.
     Lists joined (active/deleted), left, banned, removed (tracking removed state starting Dec 19, 2024). Shows per-community counts (posts / comments / reactions). Actions: community ban, unban, remove. Assess spread & influence concentration.
-    Chronological log: Ban, Community Ban, Removed (post Dec 19, 2024), plus counts summary. Supports pattern detection (recurring infractions, escalation thresholds).
+    Chronological log: Ban, [Global Mute](/analytics-and-moderation/console/user-and-content-management/global-mute), Community Ban, Removed (post Dec 19, 2024), plus counts summary. Supports pattern detection (recurring infractions, escalation thresholds).
 
 {/* Removed missing images: Posts List / Comments List / Reactions View / Communities Participation / Moderation History Log */}
 
@@ -61279,7 +61401,7 @@ Key indicators at top:
 
     Multiple high-activity communities = broader impact; concentrated activity aids targeted intervention.
 
-    Escalate from content deletion → temporary community ban → global ban if violation severity escalates or cross-community spread emerges.
+    Depending on your moderation policy and the case, you can remove individual content, apply a timed global mute to stop contributions across the network while preserving read access, restrict participation in a community, or globally ban the user to block network access.
 
 ## Decision Playbooks
 
@@ -61287,7 +61409,7 @@ Key indicators at top:
 
     Pattern in 1 community → community ban period, educate, reassess.
 
-    Flags across several communities → consider global temporary ban \+ review historical moderation notes.
+    For reports across several communities, review the user's moderation history and consider a global mute to stop further contributions while the case is assessed. Apply a global ban when your moderation policy calls for blocking network access.
 
     Severe violation (threats, explicit abuse) → immediate global ban \+ document for compliance.
 
@@ -61324,6 +61446,7 @@ Key indicators at top:
 | Flags count mismatch                | Recently cleared / delayed sync     | Refresh or wait sync cycle                    |
 | Cannot change global role           | Permission scope lacking            | Adjust admin role privileges                  |
 | Ban option disabled                 | Already globally banned             | Unban first to reapply variant action         |
+| Mute option unavailable             | Brand account, or insufficient role | Brand accounts cannot be globally muted       |
 | Community missing from list         | Deleted & purged / permission scope | Confirm retention policy / scope              |
 
 ## Next Steps
@@ -64463,7 +64586,6 @@ If you have questions, contact support at <a href="mailto:support@social.plus">s
       Manage apps, regions, billing, usage, and account settings from one centralized platform.
       Monitor data, configure settings, and manage moderation across your social.plus applications.
       Analyze chat, community, and live stream data to track engagement and platform performance.
-      Moderate content, manage posts, and publish updates from your mobile device.
   </div>
 
   </div>
@@ -65954,6 +66076,8 @@ erDiagram
     | `hashFlag`        | object    | Bloom-filter flag structure.                                  |
     | `metadata`        | object    | Custom fields.                                                |
     | `isGlobalBan`     | boolean   | Whether user is globally banned (v3+).                        |
+    | `isGlobalMuted`   | boolean   | _(Computed)_ `true` when `globalMuteTimeout > now` (v3+).     |
+    | `globalMuteTimeout` | date-time | When the global mute expires; a far-future date means no expiry. Admin-only — returned with `includeModerationDetails`. |
     | `isBrand`         | boolean   | Whether user is a brand account (v3+).                        |
     | `tags`            | array     | Tag assignments: `[{tagId: "...", assignedAt: "..."}]` (v3+). |
     | `isDeleted`       | boolean   | Soft-delete flag.                                             |
@@ -66378,6 +66502,8 @@ erDiagram
     | `recordedAt`            | date-time | When the recording became available.                                                                |
     | `livePlaybackUrl`       | string    | _(Computed)_ HLS playback URL. Only present for non-banned users while room is live.                |
     | `liveThumbnailUrl`      | string    | _(Computed)_ Live thumbnail URL. Same access conditions as `livePlaybackUrl`.                       |
+    | `liveResolution`        | object    | _(Computed)_ Resolution while live: `{aspectRatio, width, height}`.                                 |
+    | `recordedResolution`    | object    | _(Computed)_ Resolution of the recorded stream: `{aspectRatio, width, height}`.                     |
     | `recordedPlaybackInfos` | array     | _(Computed)_ Recorded playback: `[{url, thumbnailUrl}]`. Only for non-banned users after recording. |
     | `isDeleted`             | boolean   | Soft-delete flag.                                                                                   |
     | `deletedAt`             | date-time | Deletion timestamp.                                                                                 |
@@ -67152,7 +67278,7 @@ Compatibility rows on this page are checked against the matching Android SDK Git
 
   #### Live Thumbnail and Resolution in AmityRoom
 
-  Add `liveThumbnailUrl` and `resolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
+  Add `liveThumbnailUrl`, `liveResolution`, and `recordedResolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
 
   #### Link Detection in Comments
 
@@ -68542,7 +68668,7 @@ This page is generated from the Flutter SDK source changelog in `Amity-Social-Cl
 
   #### Live Thumbnail and Resolution in AmityRoom
 
-  Add `liveThumbnailUrl` and `resolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
+  Add `liveThumbnailUrl`, `liveResolution`, and `recordedResolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
 
   #### Link Detection in Comments
 
@@ -69539,7 +69665,7 @@ This page is checked against `@amityco/ts-sdk` package metadata and the TypeScri
 
   #### Live Thumbnail and Resolution in AmityRoom
 
-  Add `liveThumbnailUrl` and `resolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
+  Add `liveThumbnailUrl`, `liveResolution`, and `recordedResolution` fields to `AmityRoom` to expose server-generated thumbnail and stream resolution data.
 
   #### Link Detection in Comments
 
