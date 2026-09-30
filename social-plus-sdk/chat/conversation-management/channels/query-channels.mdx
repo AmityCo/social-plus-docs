@@ -1,6 +1,6 @@
 ---
 title: "Query Channels"
-description: "Query chat channels by type, membership, tags, deletion state, archive state, or known channel IDs."
+description: "Query chat channels by type, membership, tags, deletion state, archive state, sort order, or known channel IDs."
 ---
 
 Use channel queries to build inboxes, public channel discovery, event chat lists, and moderation views. Query support is similar across platforms, but not identical: TypeScript and Flutter expose keyword/display-name style searching, while Android's public channel query builder focuses on type, membership, tags, and deleted-state filters.
@@ -15,7 +15,7 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 | Deleted state | `isDeleted` | `includeDeleted` | `.includeDeleted(...)` | `.includeDeleted(...)` |
 | Name or keyword | `displayName` | Not exposed on `AmityChannelQueryOptions` | Not exposed on public query builder | `.withKeyword(...)` |
 | Archive exclusion | `excludeArchives` | `excludeArchives` on `AmityChannelQueryOptions` | `.excludeArchived(...)` | `.excludeArchives(...)` |
-| Sort | `sortBy` | Not exposed on current options | Not exposed on public query builder | `.sortBy(...)` with `LAST_ACTIVITY` |
+| Sort | `sortBy` | `sortBy` with `.lastActivity` or `.lastMessage` | Not exposed on public query builder | `.sortBy(...)` with `LAST_ACTIVITY` |
 | Known IDs | `channelIds` | `getChannels(channelIds:)` | `getChannels(channelIds)` | Not exposed in the current public repository |
 
 ## Parameters
@@ -29,7 +29,7 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 | `isDeleted` / `includeDeleted` | No | TypeScript, iOS, Android, Flutter | Include or exclude deleted channels where the platform exposes the filter. |
 | `displayName` / `keyword` | No | TypeScript, Flutter | Search by name or keyword where supported by the platform SDK. |
 | `excludeArchives` | No | TypeScript, iOS, Android, Flutter | Exclude channels archived by the current user where supported. |
-| `sortBy` | No | TypeScript, Flutter | Sort channel lists where the platform exposes sort options. |
+| `sortBy` | No | TypeScript, iOS, Flutter | Sort channel lists where the platform exposes sort options. On iOS, choose `.lastActivity` (default) or `.lastMessage`; see [Sort A Channel List](#sort-a-channel-list). |
 | Pagination controls | No | TypeScript, iOS, Android, Flutter | Use collection callbacks, live collections, or paging data to load additional channels. |
 
 ## Query A Channel List
@@ -37,6 +37,46 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 Query channels with type, membership, tag, deletion, archive, search, and pagination options where each platform exposes them.
 
 <CodeGroup>
+
+```kotlin Android
+val includingTags = AmityTags().apply { add("support") }
+val excludingTags = AmityTags().apply { add("hidden") }
+
+val disposable = channelRepository
+    .getChannels()
+    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
+    .filter(AmityChannelFilter.MEMBER)
+    .includingTags(includingTags)
+    .excludingTags(excludingTags)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```swift iOS
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.community, AmityChannelQueryType.live]),
+    filter: .userIsMember,
+    includingTags: ["support"],
+    excludingTags: ["hidden"],
+    includeDeleted: false,
+    sortBy: .lastMessage
+)
+
+let channels = channelRepository.getChannels(with: options)
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
 
 ```typescript TypeScript
 import { ChannelRepository } from '@amityco/ts-sdk';
@@ -66,45 +106,6 @@ const unsubscribe = ChannelRepository.getChannels(
 unsubscribe();
 ```
 
-```swift iOS
-let options = AmityChannelQueryOptions(
-    types: Set([AmityChannelQueryType.community, AmityChannelQueryType.live]),
-    filter: .userIsMember,
-    includingTags: ["support"],
-    excludingTags: ["hidden"],
-    includeDeleted: false
-)
-
-let channels = channelRepository.getChannels(with: options)
-token = channels.observe { collection, error in
-    if let error {
-        handleError(error)
-        return
-    }
-
-    showSuccessMessage(collection.snapshots.count)
-}
-```
-
-```kotlin Android
-val includingTags = AmityTags().apply { add("support") }
-val excludingTags = AmityTags().apply { add("hidden") }
-
-val disposable = channelRepository
-    .getChannels()
-    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
-    .filter(AmityChannelFilter.MEMBER)
-    .includingTags(includingTags)
-    .excludingTags(excludingTags)
-    .includeDeleted(includeDeleted = false)
-    .build()
-    .query()
-    .subscribe(
-        { pagingData -> showSuccessMessage(pagingData) },
-        { error -> handleGeneralError(error) },
-    )
-```
-
 ```dart Flutter
 final liveCollection = AmityChatClient.newChannelRepository()
     .getChannels()
@@ -127,6 +128,47 @@ await liveCollection.loadNext();
 
 </CodeGroup>
 
+## Sort A Channel List
+
+Use `sortBy` to choose how a channel list is ordered. Choose `.lastMessage` for an inbox that should follow the conversation, so that joining or leaving a channel does not push it to the top. On iOS, `AmityChannelQueryOptions.sortBy` takes an `AmityChannelSortBy`:
+
+| Value | Order | What moves a channel to the top |
+| --- | --- | --- |
+| `.lastActivity` (default) | Newest activity first | A new message, or a member being added, removed, or banned |
+| `.lastMessage` | Newest message first | A new message. Membership changes do not reorder the list. |
+
+<CodeGroup>
+
+```swift iOS
+// Newest message first
+let options = AmityChannelQueryOptions(
+    filter: .userIsMember,
+    sortBy: .lastMessage
+)
+
+let channels = channelRepository.getChannels(with: options)
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    for channel in collection.snapshots {
+        showRow(name: channel.displayName, lastMessageAt: channel.lastMessageAt)
+    }
+}
+```
+
+</CodeGroup>
+
+- **Live order.** The collection reorders as messages arrive. When the current user sends a message, that channel moves to the top right away, before the server responds.
+- **`lastMessageAt`.** `AmityChannel.lastMessageAt` is the time of the channel's newest message, or its creation time if it has none. Unlike `lastActivity`, membership changes and closing the channel do not change it. It is `nil` when the backend has no value for the channel yet, and those channels are listed last, ordered by creation time.
+- **Backend support.** `.lastMessage` needs backend support for your network. Until it is available, the query fails with `AmityErrorCode.business` (HTTP 422). The SDK does not retry and does not fall back to `.lastActivity`, so handle the error in the collection's `observe` block. `error.isAmityErrorCode(.business)` identifies it.
+
+<Info>
+This page documents `.lastMessage` for iOS. The other platforms' sort options are listed in the tables above; check each platform's release notes for availability.
+</Info>
+
 ## Query A Specific Type
 
 Use the type-specific helpers when the platform exposes them. Some helpers apply membership defaults: for example, Flutter's `conversationType()` and `liveType()` also set the filter to `MEMBER`.
@@ -134,6 +176,30 @@ Use the type-specific helpers when the platform exposes them. Some helpers apply
 Use type-specific channel queries when your UI needs a focused list such as conversations or live channels.
 
 <CodeGroup>
+
+```kotlin Android
+val disposable = channelRepository
+    .getChannels()
+    .conversationType()
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```swift iOS
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.conversation]),
+    filter: .userIsMember,
+    includeDeleted: false
+)
+
+let conversations = channelRepository.getChannels(with: options)
+showSuccessMessage(conversations)
+```
 
 ```typescript TypeScript
 import { ChannelRepository } from '@amityco/ts-sdk';
@@ -150,30 +216,6 @@ const unsubscribe = ChannelRepository.getChannels(
 );
 
 unsubscribe();
-```
-
-```swift iOS
-let options = AmityChannelQueryOptions(
-    types: Set([AmityChannelQueryType.conversation]),
-    filter: .userIsMember,
-    includeDeleted: false
-)
-
-let conversations = channelRepository.getChannels(with: options)
-showSuccessMessage(conversations)
-```
-
-```kotlin Android
-val disposable = channelRepository
-    .getChannels()
-    .conversationType()
-    .includeDeleted(includeDeleted = false)
-    .build()
-    .query()
-    .subscribe(
-        { pagingData -> showSuccessMessage(pagingData) },
-        { error -> handleGeneralError(error) },
-    )
 ```
 
 ```dart Flutter
