@@ -26,7 +26,7 @@ A member can hold several reports on the same user, one per report type plus one
 | Flag user         | `AmityUser` object                                     | Flutter                           | Returns `Future<AmityUser>`.                                                                                                          |
 | Unflag user       | `userId` (optional: `reportType`)                      | TypeScript, iOS, Android          | TypeScript returns `Promise<boolean>`; iOS async call throws on failure; Android returns `Completable`.                               |
 | Unflag user       | `AmityUser` object                                     | Flutter                           | Returns `Future<AmityUser>`. Withdraws all of your reports.                                                                           |
-| Check flag status | `userId`                                               | TypeScript, iOS, Android          | A flag-state result: `isFlagByMe` plus the list of your own reports (`flags`). TypeScript `Promise<Amity.UserFlagByMe>`, iOS `AmityUserFlagByMe`, Android `Single<AmityUserFlagByMe>`. |
+| Check flag status | `userId`                                               | TypeScript, iOS, Android          | A flag-state result: `isFlagByMe` plus the list of your own reports (`flags`). TypeScript `Promise<Amity.UserFlagByMe>`, iOS `AmityUserFlagByMe` from `AmityUser.getUserFlagsByMe()`, Android `Single<AmityUserFlagByMe>`. |
 | Check flag status | `AmityUser` object                                     | Android, Flutter                  | Boolean flag state from the loaded user model.                                                                                        |
 
 ## Flag a user
@@ -295,9 +295,13 @@ Future<void> unflagUser(AmityUser user) async {
 Use the flag-state API to decide what to show: a "reported" badge, which report options to disable because the current member already used them, and a withdraw action per report. Only the current member's own reports come back; other members' reports are never exposed.
 
 <Warning>
-  On TypeScript and iOS this call previously returned a boolean. From the
-  October 2026 releases it returns a flag-state result. Read `isFlagByMe` on
-  the result for the same yes/no answer.
+  On TypeScript this call previously returned a boolean. From the October 2026
+  releases it returns a flag-state result. Read `isFlagByMe` on the result for
+  the same yes/no answer.
+
+  On iOS nothing breaks: `userRepository.isUserFlaggedByMe(withId:)` still
+  returns a boolean and is now **deprecated**. Use `AmityUser.isFlaggedByMe` and
+  `AmityUser.getUserFlagsByMe()` instead.
 </Warning>
 
 ### Inputs
@@ -306,7 +310,9 @@ Use the flag-state API to decide what to show: a "reported" badge, which report 
 | ---------- | --------------------------------------------- | ------------------ | --------------------------------------------------------------- |
 | Android    | `userRepository.isUserFlaggedByMe(userId)`    | `userId`           | Returns `Single<AmityUserFlagByMe>`.                            |
 | Android    | `user.isFlaggedByMe()`                        | `AmityUser` object | Returns `Boolean` from the loaded user model (yes/no only).     |
-| iOS        | `userRepository.isUserFlaggedByMe(withId:)`   | `userId`           | Returns `AmityUserFlagByMe` from an async call.                 |
+| iOS        | `user.isFlaggedByMe`                          | `AmityUser` object | Returns `Bool`, a quick hint with no request (see below).       |
+| iOS        | `user.getUserFlagsByMe()`                     | `AmityUser` object | Returns `AmityUserFlagByMe` from an async call.                 |
+| iOS        | `userRepository.isUserFlaggedByMe(withId:)`   | `userId`           | **Deprecated.** Returns `Bool` from an async call.              |
 | TypeScript | `UserRepository.isUserFlaggedByMe(userId)`    | `userId`           | Returns `Promise<Amity.UserFlagByMe>`.                          |
 | Flutter    | `user.isFlaggedByMe`                          | `AmityUser` object | Returns `bool` from the loaded user model (yes/no only).        |
 
@@ -343,9 +349,13 @@ fun checkFlagState(userRepository: AmityUserRepository, userId: String) {
 ```
 
 ```swift iOS
-func checkFlagState() async {
+func checkFlagState(user: AmityUser) async {
+    // A quick hint with no request: false is exact, true can be a false positive
+    print("Probably flagged by me: \(user.isFlaggedByMe)")
+
     do {
-        let result = try await userRepository.isUserFlaggedByMe(withId: "<user-id>")
+        // The exact reports; skips the request when the hint is false
+        let result = try await user.getUserFlagsByMe()
         print("Flagged by me: \(result.isFlagByMe)")
 
         // Disable the report options the member already used
@@ -413,8 +423,8 @@ fun withdrawAllListedReports(userRepository: AmityUserRepository, userId: String
 ```
 
 ```swift iOS
-func withdrawAllListedReports() async throws {
-    let result = try await userRepository.isUserFlaggedByMe(withId: "<user-id>")
+func withdrawAllListedReports(user: AmityUser) async throws {
+    let result = try await user.getUserFlagsByMe()
     for flag in result.flags {
         let filter: AmityUserReportTypeFilter
         switch flag.reportType {
@@ -425,7 +435,7 @@ func withdrawAllListedReports() async throws {
         case .none: filter = .untyped
         @unknown default: filter = .untyped
         }
-        try await userRepository.unflagUser(withId: "<user-id>", reportType: filter)
+        try await userRepository.unflagUser(withId: user.userId, reportType: filter)
     }
 }
 ```
@@ -450,6 +460,7 @@ async function withdrawAllListedReports(userId: string) {
 - TypeScript, iOS, and Android flag, unflag, and read flag state by `userId`.
 - Flutter flags and unflags through the loaded `AmityUser` object, withdraws all reports at once, and exposes a boolean flag state only.
 - Android also keeps the boolean `isFlaggedByMe()` on the loaded user model; use the repository call when you need the per-report list.
+- On iOS, `AmityUser.isFlaggedByMe` is read from the user's `hashFlag` bloom filter when the user is loaded, so it needs no request. `false` is exact; `true` can be a false positive, and it only reflects the user as of its last update. Use it to draw a feed row or a badge, and call `getUserFlagsByMe()` when you show the options to flag or unflag. `getUserFlagsByMe()` skips the request when `isFlaggedByMe` is `false`.
 - The backend returns the updated user, including its current `flagCount`, and the SDK saves it. Read flag state after a flag or unflag when your UI needs the updated per-report list.
 
 ## Related topics
