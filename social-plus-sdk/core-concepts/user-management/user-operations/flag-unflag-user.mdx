@@ -336,6 +336,45 @@ A report filed on another device shows once the user is refreshed. Call `getUser
 
 `getUserFlagsByMe()` uses the hint of the `AmityUser` you call it on: when that hint is `false` it returns no reports without a request. Call it on the user you just observed, or on a freshly loaded one, not on an object you held from before a flag or unflag.
 
+#### Load the user, then check
+
+`getUserFlagsByMe()` is called on an `AmityUser`, so get the user first. Use this when the options to flag or unflag open.
+
+```swift iOS
+var token: AmityNotificationToken?
+
+func openReportOptions(userId: String) {
+    // 1. Get the user. observeOnce delivers the first value and stops.
+    token = userRepository.getUser(userId).observeOnce { liveObject, error in
+        guard let user = liveObject.snapshot else { return }
+
+        Task {
+            // 2. Read the exact reports now
+            let result = try? await user.getUserFlagsByMe()
+            let isReported = result?.isFlagByMe ?? false
+            // Show "Unreport" when isReported is true, otherwise "Report"
+        }
+    }
+}
+```
+
+#### Migrating from `isUserFlaggedByMe(withId:)` on iOS
+
+`userRepository.isUserFlaggedByMe(withId:)` still works and returns a `Bool`, but it is deprecated and calls the deprecated v3 endpoint. Replace it with the user and `getUserFlagsByMe()`:
+
+```swift iOS
+// Before (deprecated)
+let isFlagged = try await userRepository.isUserFlaggedByMe(withId: userId)
+
+// After
+userRepository.getUser(userId).observeOnce { liveObject, error in
+    guard let user = liveObject.snapshot else { return }
+    Task {
+        let isFlagged = try await user.getUserFlagsByMe().isFlagByMe
+    }
+}
+```
+
 ### Inputs
 
 | Platform   | Method                                        | Required inputs    | Result shape                                                    |
@@ -489,7 +528,7 @@ async function withdrawAllListedReports(userId: string) {
 ## Platform notes
 
 - Flagging is a report signal for moderation review; it does not automatically block, ban, or delete the user.
-- TypeScript, iOS, and Android flag, unflag, and read flag state by `userId`.
+- TypeScript and Android flag, unflag, and read flag state by `userId`. iOS flags and unflags by `userId`, and reads flag state from the `AmityUser` (`isFlaggedByMe` and `getUserFlagsByMe()`).
 - Flutter flags and unflags through the loaded `AmityUser` object, withdraws all reports at once, and exposes a boolean flag state only.
 - Android also keeps the boolean `isFlaggedByMe()` on the loaded user model; use the repository call when you need the per-report list.
 - On iOS, `AmityUser.isFlaggedByMe` is read from the user's `hashFlag` bloom filter when the user is loaded, so it needs no request. `false` is exact; `true` can be a false positive, and it only reflects the user as of its last update. Use it to draw a feed row or a badge, and call `getUserFlagsByMe()` when you show the options to flag or unflag. `getUserFlagsByMe()` skips the request when `isFlaggedByMe` is `false`.
