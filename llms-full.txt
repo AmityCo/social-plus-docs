@@ -11331,7 +11331,7 @@ Media-message inputs differ by platform. TypeScript creates media messages from 
 
 ### [Message Flagging](https://learn.social.plus/social-plus-sdk/chat/messaging-features/message-flagging)
 
-> Flag, unflag, and read the current user's flag state for chat messages.
+> Flag chat messages with an optional reason and detail, unflag them, and read the current user's flag state.
 
 Use message flagging when a signed-in user reports a chat message. The SDKs expose three client-side actions: flag a message, unflag a message, and check whether the current user has already flagged a fetched message.
 
@@ -11339,60 +11339,79 @@ Flagged messages are sent to the moderation backend. Keep product policy, review
 
 ## Platform Surface
 
-| Platform | Flag with reason | Unflag | Check current user's flag |
+| Platform | Flag | Unflag | Check current user's flag |
 | --- | --- | --- | --- |
-| TypeScript | `MessageRepository.flagMessage(messageId, reason)` | `MessageRepository.unflagMessage(messageId)` | `MessageRepository.isMessageFlaggedByMe(messageId)` |
-| iOS | `messageRepository.flagMessage(withId:reason:)` | `messageRepository.unflagMessage(withId:)` | `messageRepository.isMessageFlaggedByMe(withId:)` |
-| Android | `messageRepository.flagMessage(messageId, reason)` | `messageRepository.unflagMessage(messageId)` | `message.isFlaggedByMe()` on a fetched `AmityMessage` |
+| Android | `messageRepository.flagMessage(messageId)` or `flagMessage(messageId, reason, detail?)` | `messageRepository.unflagMessage(messageId)` | `message.isFlaggedByMe()` on a fetched `AmityMessage` |
+| iOS | `messageRepository.flagMessage(withId:)` or `flagMessage(withId:reason:detail:)` | `messageRepository.unflagMessage(withId:)` | `messageRepository.isMessageFlaggedByMe(withId:)` |
+| TypeScript | `MessageRepository.flagMessage(messageId)` or `flagMessage(messageId, { reason, detail? })` | `MessageRepository.unflagMessage(messageId)` | `MessageRepository.isMessageFlaggedByMe(messageId)` |
 | Flutter | `messageRepository.flagMessage(messageId:reason:)` or `message.flagWithReason(reason)` | `messageRepository.unflag(messageId)` or `message.unflag()` | `message.isFlaggedByMe` on a fetched `AmityMessage` |
-
-The older Android no-reason `flagMessage(messageId)` overload and Flutter `flag(messageId)` repository method still exist for compatibility, but new docs should use reason-based flagging.
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Flag | `messageId` | Yes | Message ID to report. |
-| Flag | `reason` | Yes | Moderation reason enum or custom reason string, depending on platform. |
-| Unflag | `messageId` | Yes | Message ID whose report should be removed for the current user. |
-| Check flag state | `messageId` | Yes | Message ID to check through the repository where supported. |
-| Check flag state | Fetched message object | Depends | Android and Flutter expose `isFlaggedByMe` on a fetched `AmityMessage`. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Flag | `messageId` | Yes | All | Message ID to report. |
+| Flag | `reason` | No on Android, iOS, TypeScript; yes on Flutter `flagMessage` | All | One reason category. Android and iOS use `AmityContentFlagReasonType`, TypeScript uses `ContentFlagReasonEnum`, Flutter uses `AmityContentFlagReason`. See [Flag reasons](/social-plus-sdk/social/content-management/moderation/content-flagging#flag-reasons). |
+| Flag | `detail` | No | Android, iOS, TypeScript | The reporter's own words, for any reason including Others. Needs a `reason`. Sent as given; omitted when not set. The server limits it to 300 characters. |
+| Unflag | `messageId` | Yes | All | Message ID whose report should be removed for the current user. |
+| Check flag state | `messageId` | Yes | iOS, TypeScript | Message ID to check through the repository. |
+| Check flag state | Fetched message object | Yes | Android, Flutter | `isFlaggedByMe` on a fetched `AmityMessage`. |
 
 ## Flag A Message
 
-Flag a message with a moderation reason so your product can route it into review.
+Flag a message with a reason so your product can route it into review, and add the reporter's own words as `detail` when they give some. Use the no-reason call when your UI only offers a single "Report" action.
 
-
-```typescript TypeScript
-import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
-
-const flagged = await MessageRepository.flagMessage(
-  messageId,
-  ContentFlagReasonEnum.SpamOrScams,
-);
-
-renderResults(flagged);
-```
-
-```swift iOS
-try await messageRepository.flagMessage(
-    withId: "message-id",
-    reason: .spamOrScams
-)
-
-showSuccessMessage("Message flagged")
-```
 
 ```kotlin Android
+// Reason with the reporter's own words
 val disposable = messageRepository
     .flagMessage(
         messageId = messageId,
-        reason = AmityContentFlagReason.SpamOrScams,
+        reason = AmityContentFlagReasonType.SPAM_OR_SCAMS,
+        detail = "Same promo link sent to every member",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleFlagError(error) },
     )
+
+// No reason
+messageRepository.flagMessage(messageId = messageId).subscribe()
+```
+
+```swift iOS
+// Reason with the reporter's own words
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: .spamOrScams,
+    detail: "Same promo link sent to every member"
+)
+
+// Reason only: type the reason explicitly so the current call is used
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: AmityContentFlagReasonType.spamOrScams
+)
+
+// No reason
+try await messageRepository.flagMessage(withId: "message-id")
+
+showSuccessMessage("Message flagged")
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
+
+// Reason with the reporter's own words
+const flagged = await MessageRepository.flagMessage(messageId, {
+  reason: ContentFlagReasonEnum.SpamOrScams,
+  detail: 'Same promo link sent to every member',
+});
+
+renderResults(flagged);
+
+// No reason
+await MessageRepository.flagMessage(messageId);
 ```
 
 ```dart Flutter
@@ -11406,43 +11425,41 @@ final isFlaggedByMe = flaggedMessage.isFlaggedByMe;
 ```
 
 
-## Use A Custom Reason
+## Report With Others
 
-Use the `Others` reason only when your UI collects additional detail from the reporter.
+Use the Others reason when none of the categories fit. On Android, iOS, and TypeScript, put the reporter's explanation in `detail`, as for any other reason. Flutter carries the text on its Others reason.
 
-Pass a custom reason string when the platform enum supports `Others` or direct string reasons.
-
-
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const flagged = await MessageRepository.flagMessage(
-  messageId,
-  'Contains sensitive account information',
-);
-
-renderResults(flagged);
-```
-
-```swift iOS
-try await messageRepository.flagMessage(
-    withId: "message-id",
-    reason: .others("Contains sensitive account information")
-)
-```
 
 ```kotlin Android
 val disposable = messageRepository
     .flagMessage(
         messageId = messageId,
-        reason = AmityContentFlagReason.Others(
-            "Contains sensitive account information",
-        ),
+        reason = AmityContentFlagReasonType.OTHERS,
+        detail = "Contains sensitive account information",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleFlagError(error) },
     )
+```
+
+```swift iOS
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: .others,
+    detail: "Contains sensitive account information"
+)
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
+
+const flagged = await MessageRepository.flagMessage(messageId, {
+  reason: ContentFlagReasonEnum.Others,
+  detail: 'Contains sensitive account information',
+});
+
+renderResults(flagged);
 ```
 
 ```dart Flutter
@@ -11458,23 +11475,18 @@ final flagCount = flaggedMessage.flagCount;
 ```
 
 
+  The earlier calls that took only a reason are **deprecated** but still work on
+  Android, iOS, and TypeScript: `flagMessage(messageId, reason)` with a reason
+  string on TypeScript, and with `AmityContentFlagReason` on Android and iOS,
+  where custom text was passed as `Others("...")` / `.others("...")`. Move custom
+  text to `detail` with the Others reason. Flagging with only a message ID is
+  not deprecated on these platforms. On Flutter, the repository `flag(messageId)`
+  is deprecated; use `flagMessage(messageId:reason:)`.
+
 ## Unflag A Message
 
 Remove the current user's flag from a message when the user reverses the report action.
 
-
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const unflagged = await MessageRepository.unflagMessage(messageId);
-
-renderResults(unflagged);
-```
-
-```swift iOS
-try await messageRepository.unflagMessage(withId: "message-id")
-showSuccessMessage("Message unflagged")
-```
 
 ```kotlin Android
 val disposable = messageRepository
@@ -11483,6 +11495,19 @@ val disposable = messageRepository
         { showSuccessMessage() },
         { error -> handleUnflagError(error) },
     )
+```
+
+```swift iOS
+try await messageRepository.unflagMessage(withId: "message-id")
+showSuccessMessage("Message unflagged")
+```
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const unflagged = await MessageRepository.unflagMessage(messageId);
+
+renderResults(unflagged);
 ```
 
 ```dart Flutter
@@ -11500,22 +11525,6 @@ TypeScript and iOS can ask the repository for the current user's flag state by m
 Read flag state before rendering selected or disabled report controls.
 
 
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const isFlaggedByMe =
-  await MessageRepository.isMessageFlaggedByMe(messageId);
-
-updateUI({ isFlaggedByMe });
-```
-
-```swift iOS
-let isFlaggedByMe = try await messageRepository
-    .isMessageFlaggedByMe(withId: "message-id")
-
-showSuccessMessage(isFlaggedByMe)
-```
-
 ```kotlin Android
 messageRepository
     .getMessage(messageId = messageId)
@@ -11528,6 +11537,22 @@ messageRepository
     )
 ```
 
+```swift iOS
+let isFlaggedByMe = try await messageRepository
+    .isMessageFlaggedByMe(withId: "message-id")
+
+showSuccessMessage(isFlaggedByMe)
+```
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const isFlaggedByMe =
+  await MessageRepository.isMessageFlaggedByMe(messageId);
+
+updateUI({ isFlaggedByMe });
+```
+
 ```dart Flutter
 final fetchedMessage = await AmityChatClient.newMessageRepository()
     .getMessage(messageId);
@@ -11535,6 +11560,13 @@ final fetchedMessage = await AmityChatClient.newMessageRepository()
 final isFlaggedByMe = fetchedMessage.isFlaggedByMe;
 ```
 
+
+## Platform Notes
+
+- Reason with optional detail ships in TypeScript 7.29.0 and in the October 2026 iOS and Android releases.
+- On iOS, when you omit `detail`, write the reason with its type, for example `AmityContentFlagReasonType.spamOrScams`. The shorthand `.spamOrScams` on its own selects the deprecated call.
+- A flag without a reason is recorded with a default reason: Others on TypeScript and Android, and Against community guidelines on iOS.
+- Flutter has no separate `detail`; the reporter's text travels on `AmityContentFlagReason.others(...)`.
 
 ## Related Topics
 
@@ -19586,84 +19618,120 @@ The SDK exposes the actions and status checks listed above. It does not define y
 
 ### [Content Flagging](https://learn.social.plus/social-plus-sdk/social/content-management/moderation/content-flagging)
 
-> Flag, unflag, and check flag status for posts and comments.
+> Flag posts and comments with an optional reason and detail, unflag them, and check flag status.
 
-Use content flagging APIs when users need to report posts or comments for review. The SDK supports flagging, unflagging, and checking whether the current user has flagged a loaded item.
+Use content flagging APIs when users need to report posts or comments for review. A report can say _why_ with a reason, and add the reporter's own words as an optional detail, so moderators see the context without a follow-up. The SDK supports flagging, unflagging, and checking whether the current user has flagged a loaded item.
 
-TypeScript, iOS, and Android support reasoned flagging for posts and comments. Flutter supports post and comment flag/unflag actions, but the current public post/comment flag builders do not accept a reason parameter.
+  TypeScript, iOS, and Android flag posts and comments with no reason, or with a
+  reason and an optional detail. Flutter flags posts and comments without a
+  reason; its public post and comment flag builders do not accept a reason yet.
 
 ## SDK surfaces
 
     Flag and unflag posts through the post repository or post model extension, depending on platform.
     Flag and unflag comments through the comment repository or comment model extension.
-    Use predefined reasons such as spam, harassment, violence, or a custom "Others" detail where supported.
+    Pick one predefined reason and optionally add the reporter's own words as detail, for any reason including Others.
     Check whether the current user has flagged a loaded post or comment before rendering an unflag action.
 
 ## Flag reasons
 
-| Reason | TypeScript | iOS | Android | Flutter |
+A reason is one fixed category. On Android, iOS, and TypeScript it never carries text: the reporter's own words always go in `detail`. Flutter uses these reasons for messages only, and its Others reason carries the text.
+
+| Reason | Android `AmityContentFlagReasonType` | iOS `AmityContentFlagReasonType` | TypeScript `ContentFlagReasonEnum` | Flutter `AmityContentFlagReason` (messages only) |
 | --- | --- | --- | --- | --- |
-| Community guidelines | `ContentFlagReasonEnum.CommunityGuidelines` | `.communityGuidelines` | `AmityContentFlagReason.CommunityGuidelines` | Reason enum exists; post/comment flag builders do not accept it |
-| Harassment or bullying | `ContentFlagReasonEnum.HarassmentOrBullying` | `.harassmentOrBullying` | `AmityContentFlagReason.HarassmentOrBullying` | Reason enum exists; post/comment flag builders do not accept it |
-| Self-harm or suicide | `ContentFlagReasonEnum.SelfHarmOrSuicide` | `.SelfHarmOrSuicide` | `AmityContentFlagReason.SelfHarmOrSuicide` | Reason enum exists; post/comment flag builders do not accept it |
-| Violence or threatening content | `ContentFlagReasonEnum.ViolenceOrThreateningContent` | `.ViolenceOrThreateningContent` | `AmityContentFlagReason.ViolenceOrThreateningContent` | Reason enum exists; post/comment flag builders do not accept it |
-| Selling and promoting restricted items | `ContentFlagReasonEnum.SellingAndPromotingRestrictedItems` | `.SellingAndPromotingRestrictedItems` | `AmityContentFlagReason.SellingAndPromotingRestrictedItems` | Reason enum exists; post/comment flag builders do not accept it |
-| Sexual content or nudity | `ContentFlagReasonEnum.SexualContentOrNudity` | `.SexualContentOrNudity` | `AmityContentFlagReason.SexualContentOrNudity` | Reason enum exists; post/comment flag builders do not accept it |
-| Spam or scams | `ContentFlagReasonEnum.SpamOrScams` | `.spamOrScams` | `AmityContentFlagReason.SpamOrScams` | Reason enum exists; post/comment flag builders do not accept it |
-| False information or misinformation | `ContentFlagReasonEnum.FalseInformationOrMisinformation` | `.FalseInformationOrMisinformation` | `AmityContentFlagReason.FalseInformationOrMisinformation` | Reason enum exists; post/comment flag builders do not accept it |
-| Other custom detail | Any custom string | `.others("...")` | `AmityContentFlagReason.Others("...")` | Reason enum exists; post/comment flag builders do not accept it |
+| Against community guidelines | `COMMUNITY_GUIDELINES` | `.communityGuidelines` | `CommunityGuidelines` | `communityGuidelines` |
+| Harassment or bullying | `HARASSMENT_OR_BULLYING` | `.harassmentOrBullying` | `HarassmentOrBullying` | `harassmentOrBullying` |
+| Self-harm or suicide | `SELF_HARM_OR_SUICIDE` | `.selfHarmOrSuicide` | `SelfHarmOrSuicide` | `selfHarmOrSuicide` |
+| Violence or threatening content | `VIOLENCE_OR_THREATENING_CONTENT` | `.violenceOrThreateningContent` | `ViolenceOrThreateningContent` | `violenceOrThreateningContent` |
+| Selling and promoting restricted items | `SELLING_RESTRICTED_ITEMS` | `.sellingRestrictedItems` | `SellingRestrictedItems` | `sellingRestrictedItems` |
+| Sexual content or nudity | `SEXUAL_CONTENT_OR_NUDITY` | `.sexualContentOrNudity` | `SexualContentOrNudity` | `sexualContentOrNudity` |
+| Spam or scams | `SPAM_OR_SCAMS` | `.spamOrScams` | `SpamOrScams` | `spamOrScams` |
+| False information or misinformation | `FALSE_INFORMATION` | `.falseInformation` | `FalseInformation` | `falseInformation` |
+| Others | `OTHERS` | `.others` | `Others` | `others('...')` |
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Flag a post | `postId` | Yes | Post ID to report. |
-| Flag a post | `reason` | Depends | Required on TypeScript, iOS, and Android reasoned flagging APIs; not accepted by the current public Flutter post flag builder. |
-| Flag a comment | `commentId` | Yes | Comment ID to report. |
-| Flag a comment | `reason` | Depends | Required on TypeScript, iOS, and Android reasoned flagging APIs; not accepted by the current public Flutter comment flag builder. |
-| Unflag content | `postId` / `commentId` | Yes | Content ID whose current-user report should be removed. |
-| Check flag status | `postId` / `commentId` | Yes | Content ID or loaded model used to check whether the current user has flagged the item. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- | --- |
+| Flag a post or comment | `postId` / `commentId` | Yes | All | ID of the content to report. |
+| Flag a post or comment | `reason` | No | Android, iOS, TypeScript | One reason from the table above. Omit it to flag without a reason. |
+| Flag a post or comment | `detail` | No | Android, iOS, TypeScript | The reporter's own words, for any reason including Others. Needs a `reason`. Sent as given; omitted when not set. The server limits it to 300 characters. |
+| Unflag content | `postId` / `commentId` | Yes | All | Content ID whose current-user report should be removed. |
+| Check flag status | `postId` / `commentId` or loaded model | Yes | All | Checks whether the current user has flagged the item. |
+
+  A `detail` without a `reason` is not possible: every call that takes `detail`
+  also requires `reason`. On TypeScript, a malformed options object is rejected
+  before any request is sent.
 
 ## Flag a post
 
-Flag a post with a supported reason where the platform exposes reasoned flagging.
+Flag a post when a member reports it. Pass a reason when your report menu offers one, and pass the reporter's text as `detail` when they add some. Use the no-reason call when your UI only offers a single "Report" action.
 
-
-```typescript TypeScript
-import { ContentFlagReasonEnum, PostRepository } from '@amityco/ts-sdk';
-
-const didFlag = await PostRepository.flagPost(
-  postId,
-  ContentFlagReasonEnum.SpamOrScams,
-);
-
-if (didFlag) {
-  showSuccessMessage('Post flagged');
-}
-```
-
-```swift iOS
-let repository = AmityPostRepository()
-
-try await repository.flagPost(
-    withId: "post-id",
-    reason: .spamOrScams
-)
-```
 
 ```kotlin Android
-val disposable = AmitySocialClient.newPostRepository()
+val postRepository = AmitySocialClient.newPostRepository()
+
+// Reason with the reporter's own words
+val disposable = postRepository
     .flagPost(
         postId = postId,
-        reason = AmityContentFlagReason.SpamOrScams,
+        reason = AmityContentFlagReasonType.SPAM_OR_SCAMS,
+        detail = "Repeated promotional links",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleGeneralError(error) },
     )
+
+// Reason only
+postRepository.flagPost(postId, AmityContentFlagReasonType.HARASSMENT_OR_BULLYING).subscribe()
+
+// No reason
+postRepository.flagPost(postId = postId).subscribe()
+```
+
+```swift iOS
+let repository = AmityPostRepository()
+
+// Reason with the reporter's own words
+try await repository.flagPost(
+    withId: "post-id",
+    reason: .spamOrScams,
+    detail: "Repeated promotional links"
+)
+
+// Reason only: type the reason explicitly so the current call is used
+try await repository.flagPost(
+    withId: "post-id",
+    reason: AmityContentFlagReasonType.harassmentOrBullying
+)
+
+// No reason
+try await repository.flagPost(withId: "post-id")
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, PostRepository } from '@amityco/ts-sdk';
+
+// Reason with the reporter's own words
+const didFlag = await PostRepository.flagPost(postId, {
+  reason: ContentFlagReasonEnum.SpamOrScams,
+  detail: 'Repeated promotional links',
+});
+
+if (didFlag) {
+  showSuccessMessage('Post flagged');
+}
+
+// Reason only
+await PostRepository.flagPost(postId, { reason: ContentFlagReasonEnum.HarassmentOrBullying });
+
+// No reason
+await PostRepository.flagPost(postId);
 ```
 
 ```dart Flutter
+// Flutter flags posts without a reason
 final didFlag = await post.report().flag();
 
 if (didFlag) {
@@ -19674,44 +19742,61 @@ if (didFlag) {
 
 ## Flag a comment
 
-Flag a comment with a supported reason where the platform exposes reasoned flagging.
+Flag a comment the same way: no reason, or a reason with an optional `detail`.
 
-
-```typescript TypeScript
-import { CommentRepository, ContentFlagReasonEnum } from '@amityco/ts-sdk';
-
-const didFlag = await CommentRepository.flagComment(
-  commentId,
-  ContentFlagReasonEnum.HarassmentOrBullying,
-);
-
-if (didFlag) {
-  showSuccessMessage('Comment flagged');
-}
-```
-
-```swift iOS
-let repository = AmityCommentRepository()
-
-try await repository.flagComment(
-    withId: "comment-id",
-    reason: .harassmentOrBullying
-)
-```
 
 ```kotlin Android
-val disposable = AmitySocialClient.newCommentRepository()
+val commentRepository = AmitySocialClient.newCommentRepository()
+
+// Reason with the reporter's own words
+val disposable = commentRepository
     .flagComment(
         commentId = commentId,
-        reason = AmityContentFlagReason.HarassmentOrBullying,
+        reason = AmityContentFlagReasonType.HARASSMENT_OR_BULLYING,
+        detail = "Insults another member in every reply",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleGeneralError(error) },
     )
+
+// No reason
+commentRepository.flagComment(commentId = commentId).subscribe()
+```
+
+```swift iOS
+let repository = AmityCommentRepository()
+
+// Reason with the reporter's own words
+try await repository.flagComment(
+    withId: "comment-id",
+    reason: .harassmentOrBullying,
+    detail: "Insults another member in every reply"
+)
+
+// No reason; returns a Bool
+let didFlag = try await repository.flagComment(withId: "comment-id")
+```
+
+```typescript TypeScript
+import { CommentRepository, ContentFlagReasonEnum } from '@amityco/ts-sdk';
+
+// Reason with the reporter's own words
+const didFlag = await CommentRepository.flagComment(commentId, {
+  reason: ContentFlagReasonEnum.HarassmentOrBullying,
+  detail: 'Insults another member in every reply',
+});
+
+if (didFlag) {
+  showSuccessMessage('Comment flagged');
+}
+
+// No reason
+await CommentRepository.flagComment(commentId);
 ```
 
 ```dart Flutter
+// Flutter flags comments without a reason
 final didFlag = await comment.report().flag();
 
 if (didFlag) {
@@ -19720,16 +19805,59 @@ if (didFlag) {
 ```
 
 
+## Report with Others
+
+Use the Others reason when none of the categories fit. Put the reporter's explanation in `detail`, exactly as for any other reason.
+
+
+```kotlin Android
+AmitySocialClient.newPostRepository()
+    .flagPost(
+        postId = postId,
+        reason = AmityContentFlagReasonType.OTHERS,
+        detail = "Shares a member's home address",
+    )
+    .subscribe()
+```
+
+```swift iOS
+try await AmityPostRepository().flagPost(
+    withId: "post-id",
+    reason: .others,
+    detail: "Shares a member's home address"
+)
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, PostRepository } from '@amityco/ts-sdk';
+
+await PostRepository.flagPost(postId, {
+  reason: ContentFlagReasonEnum.Others,
+  detail: "Shares a member's home address",
+});
+```
+
+
+  The earlier calls that took only a reason are **deprecated** but still work:
+  `flagPost(postId, reason)` and `flagComment(commentId, reason)` with a reason
+  string on TypeScript, and with `AmityContentFlagReason` on Android and iOS,
+  where custom text was passed as `Others("...")` / `.others("...")`. Move custom
+  text to `detail` with the Others reason. Flagging with only an ID is not
+  deprecated.
+
 ## Unflag content
 
 Unflag content when the current user removes their own report from a post or comment.
 
 
-```typescript TypeScript
-import { CommentRepository, PostRepository } from '@amityco/ts-sdk';
+```kotlin Android
+val postDisposable = AmitySocialClient.newPostRepository()
+    .unflagPost(postId = postId)
+    .subscribe()
 
-const didUnflagPost = await PostRepository.unflagPost(postId);
-const didUnflagComment = await CommentRepository.unflagComment(commentId);
+val commentDisposable = AmitySocialClient.newCommentRepository()
+    .unflagComment(commentId = commentId)
+    .subscribe()
 ```
 
 ```swift iOS
@@ -19740,14 +19868,11 @@ try await postRepository.unflagPost(withId: "post-id")
 try await commentRepository.unflagComment(withId: "comment-id")
 ```
 
-```kotlin Android
-val postDisposable = AmitySocialClient.newPostRepository()
-    .unflagPost(postId = postId)
-    .subscribe()
+```typescript TypeScript
+import { CommentRepository, PostRepository } from '@amityco/ts-sdk';
 
-val commentDisposable = AmitySocialClient.newCommentRepository()
-    .unflagComment(commentId = commentId)
-    .subscribe()
+const didUnflagPost = await PostRepository.unflagPost(postId);
+const didUnflagComment = await CommentRepository.unflagComment(commentId);
 ```
 
 ```dart Flutter
@@ -19761,11 +19886,12 @@ final didUnflagComment = await comment.report().unflag();
 Check flag status before rendering a flag or unflag action for the loaded item.
 
 
-```typescript TypeScript
-import { CommentRepository, PostRepository } from '@amityco/ts-sdk';
+```kotlin Android
+val loadedPost = post ?: return
+val loadedComment = comment ?: return
 
-const isPostFlagged = await PostRepository.isPostFlaggedByMe(postId);
-const isCommentFlagged = await CommentRepository.isCommentFlaggedByMe(commentId);
+val isPostFlagged = loadedPost.isFlaggedByMe()
+val isCommentFlagged = loadedComment.isFlaggedByMe()
 ```
 
 ```swift iOS
@@ -19776,12 +19902,11 @@ let isPostFlagged = try await postRepository.isFlaggedByMe(withId: "post-id")
 let isCommentFlagged = try await commentRepository.isCommentFlaggedByMe(withId: "comment-id")
 ```
 
-```kotlin Android
-val loadedPost = post ?: return
-val loadedComment = comment ?: return
+```typescript TypeScript
+import { CommentRepository, PostRepository } from '@amityco/ts-sdk';
 
-val isPostFlagged = loadedPost.isFlaggedByMe()
-val isCommentFlagged = loadedComment.isFlaggedByMe()
+const isPostFlagged = await PostRepository.isPostFlaggedByMe(postId);
+const isCommentFlagged = await CommentRepository.isCommentFlaggedByMe(commentId);
 ```
 
 ```dart Flutter
@@ -19792,12 +19917,20 @@ final isCommentFlagged = comment.isFlaggedByMe;
 
 Flagging creates report state; it does not delete, hide, approve, or decline content by itself. For review workflows, use the moderation tools available in Console and the SDK APIs for the content type you are moderating.
 
+## Platform notes
+
+- Reason with optional detail ships in TypeScript 7.29.0 and in the October 2026 iOS and Android releases.
+- On iOS, when you omit `detail`, write the reason with its type, for example `AmityContentFlagReasonType.spamOrScams`. The shorthand `.spamOrScams` on its own selects the deprecated call.
+- A flag without a reason is recorded with a default reason: Others on TypeScript and Android, and Against community guidelines on iOS.
+- Flutter flags posts and comments without a reason.
+
 ## Related topics
 
     Approve or decline posts in review workflows.
     Remove posts after a moderation decision.
     Remove comments after a moderation decision.
     Manage community roles, bans, and permissions.
+    Flag chat messages with the same reasons and detail.
 
 ## Social — Posts
 
