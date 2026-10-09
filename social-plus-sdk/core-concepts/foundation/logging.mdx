@@ -85,8 +85,9 @@ SDK operations throw or emit platform-native errors. Convert those errors to SDK
 
 <CodeGroup>
 ```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+import { Client, MessageRepository, MessageContentType } from '@amityco/ts-sdk';
 
+// Session-level: a global ban ends the session.
 const unsubscribe = Client.onConnectionError(error => {
   if (error.code === Amity.ServerError.GLOBAL_BAN) {
     console.log('The current user is globally banned.');
@@ -94,6 +95,27 @@ const unsubscribe = Client.onConnectionError(error => {
 });
 
 unsubscribe();
+
+// Action-level: global mute and unsafe content reject only the failed call.
+async function sendTextMessage(subChannelId: string, text: string) {
+  try {
+    await MessageRepository.createMessage({
+      subChannelId,
+      dataType: MessageContentType.TEXT,
+      data: { text },
+    });
+  } catch (error) {
+    const { code } = error as { code?: number };
+
+    if (code === Amity.ServerError.GLOBAL_MUTE) {
+      console.log('The current user is globally muted and cannot post right now.');
+    } else if (code === Amity.ServerError.UNSAFE_CONTENT) {
+      console.log('The content was rejected by moderation. Edit it before sending again.');
+    } else {
+      throw error;
+    }
+  }
+}
 ```
 
 ```swift iOS
@@ -119,6 +141,23 @@ fun handleSdkError(exception: Throwable) {
         print("The current user is globally banned.")
     }
 }
+
+// Action-level: global mute and unsafe content reject only the failed call.
+fun sendTextMessage(subChannelId: String, text: String): Disposable {
+    return AmityChatClient.newMessageRepository()
+        .createTextMessage(subChannelId, text)
+        .build()
+        .send()
+        .subscribe({}, { exception ->
+            when (AmityError.from(exception)) {
+                AmityError.USER_IS_GLOBAL_MUTED ->
+                    print("The current user is globally muted and cannot post right now.")
+                AmityError.UNSAFE_CONTENT ->
+                    print("The content was rejected by moderation. Edit it before sending again.")
+                else -> print(exception)
+            }
+        })
+}
 ```
 
 ```dart Flutter
@@ -142,6 +181,8 @@ if (error is AmityException) {
 | Meaning | TypeScript | iOS | Android | Flutter |
 | --- | --- | --- | --- | --- |
 | Globally banned user | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
+| Globally muted user (`400313`) | `Amity.ServerError.GLOBAL_MUTE` | `.globalMute` | `AmityError.USER_IS_GLOBAL_MUTED` | Not exposed as a public Flutter SDK enum in the current source |
+| Unsafe content rejected (`400314`) | `Amity.ServerError.UNSAFE_CONTENT` | `.unsafeContent` | `AmityError.UNSAFE_CONTENT` | Not exposed as a public Flutter SDK enum in the current source |
 | Unauthorized session | `Amity.ServerError.UNAUTHORIZED` | `.unauthorized` | `AmityError.UNAUTHORIZED_ERROR` | `AmityError.UNAUTHORIZED_ERROR` |
 | Item not found | `Amity.ServerError.ITEM_NOT_FOUND` | `.itemNotFound` | `AmityError.ITEM_NOT_FOUND` | `AmityError.ITEM_NOT_FOUND` |
 | Permission denied | `Amity.ServerError.PERMISSION_DENIED` | `.permissionDenied` | `AmityError.PERMISSION_DENIED` | `AmityError.PERMISSION_DENIED` |
@@ -151,10 +192,12 @@ if (error is AmityException) {
 | Max blocked users reached | `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`) | `.maxBlockedUsersReached` | `AmityError.MAX_BLOCKED_USERS_REACHED` | Refer to platform SDK |
 | Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
+A global mute (`400313`) is not a global ban (`400312`). The user stays signed in and the session continues; only the blocked action fails. Unsafe content (`400314`) means the request was rejected by content moderation, so sending the same content again fails the same way. Neither code ends the session, so handle both as a per-action error: tell the user why the action failed instead of signing them out.
+
 ## Production Checklist
 
 - Disable broad network payload logging outside development builds.
 - Redact tokens, authorization headers, user identifiers, and message or post bodies before writing logs.
-- Keep retry logic bounded and avoid retrying authorization or global-ban errors.
+- Keep retry logic bounded and avoid retrying authorization, global-ban, global-mute, or unsafe-content errors.
 - Show user-friendly messages in the app UI; keep SDK codes in developer logs and support diagnostics.
 - Unsubscribe or dispose observers when the screen, debug session, or application lifecycle no longer needs them.
