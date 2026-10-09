@@ -1,6 +1,6 @@
 ---
 title: "Message Flagging"
-description: "Flag, unflag, and read the current user's flag state for chat messages."
+description: "Flag chat messages with an optional reason and detail, unflag them, and read the current user's flag state."
 ---
 
 Use message flagging when a signed-in user reports a chat message. The SDKs expose three client-side actions: flag a message, unflag a message, and check whether the current user has already flagged a fetched message.
@@ -9,63 +9,85 @@ Flagged messages are sent to the moderation backend. Keep product policy, review
 
 ## Platform Surface
 
-| Platform | Flag with reason | Unflag | Check current user's flag |
+| Platform | Flag | Unflag | Check current user's flag |
 | --- | --- | --- | --- |
-| TypeScript | `MessageRepository.flagMessage(messageId, reason)` | `MessageRepository.unflagMessage(messageId)` | `MessageRepository.isMessageFlaggedByMe(messageId)` |
-| iOS | `messageRepository.flagMessage(withId:reason:)` | `messageRepository.unflagMessage(withId:)` | `messageRepository.isMessageFlaggedByMe(withId:)` |
-| Android | `messageRepository.flagMessage(messageId, reason)` | `messageRepository.unflagMessage(messageId)` | `message.isFlaggedByMe()` on a fetched `AmityMessage` |
+| Android | `messageRepository.flagMessage(messageId)` or `flagMessage(messageId, reason, detail?)` | `messageRepository.unflagMessage(messageId)` | `message.isFlaggedByMe()` on a fetched `AmityMessage` |
+| iOS | `messageRepository.flagMessage(withId:)` or `flagMessage(withId:reason:detail:)` | `messageRepository.unflagMessage(withId:)` | `messageRepository.isMessageFlaggedByMe(withId:)` |
+| TypeScript | `MessageRepository.flagMessage(messageId)` or `flagMessage(messageId, { reason, detail? })` | `MessageRepository.unflagMessage(messageId)` | `MessageRepository.isMessageFlaggedByMe(messageId)` |
 | Flutter | `messageRepository.flagMessage(messageId:reason:)` or `message.flagWithReason(reason)` | `messageRepository.unflag(messageId)` or `message.unflag()` | `message.isFlaggedByMe` on a fetched `AmityMessage` |
-
-<Warning>
-The older Android no-reason `flagMessage(messageId)` overload and Flutter `flag(messageId)` repository method still exist for compatibility, but new docs should use reason-based flagging.
-</Warning>
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Flag | `messageId` | Yes | Message ID to report. |
-| Flag | `reason` | Yes | Moderation reason enum or custom reason string, depending on platform. |
-| Unflag | `messageId` | Yes | Message ID whose report should be removed for the current user. |
-| Check flag state | `messageId` | Yes | Message ID to check through the repository where supported. |
-| Check flag state | Fetched message object | Depends | Android and Flutter expose `isFlaggedByMe` on a fetched `AmityMessage`. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Flag | `messageId` | Yes | All | Message ID to report. |
+| Flag | `reason` | No on Android, iOS, TypeScript; yes on Flutter `flagMessage` | All | One reason category. Android and iOS use `AmityContentFlagReasonType`, TypeScript uses `ContentFlagReasonEnum`, Flutter uses `AmityContentFlagReason`. See [Flag reasons](/social-plus-sdk/social/content-management/moderation/content-flagging#flag-reasons). |
+| Flag | `detail` | No | Android, iOS, TypeScript | The reporter's own words, for any reason including Others. Needs a `reason`. Sent as given; omitted when not set. The server limits it to 300 characters. |
+| Unflag | `messageId` | Yes | All | Message ID whose report should be removed for the current user. |
+| Check flag state | `messageId` | Yes | iOS, TypeScript | Message ID to check through the repository. |
+| Check flag state | Fetched message object | Yes | Android, Flutter | `isFlaggedByMe` on a fetched `AmityMessage`. |
 
 ## Flag A Message
 
-Flag a message with a moderation reason so your product can route it into review.
+Flag a message with a reason so your product can route it into review, and add the reporter's own words as `detail` when they give some. Use the no-reason call when your UI only offers a single "Report" action.
 
 <CodeGroup>
 
-```typescript TypeScript
-import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
-
-const flagged = await MessageRepository.flagMessage(
-  messageId,
-  ContentFlagReasonEnum.SpamOrScams,
-);
-
-renderResults(flagged);
-```
-
-```swift iOS
-try await messageRepository.flagMessage(
-    withId: "message-id",
-    reason: .spamOrScams
-)
-
-showSuccessMessage("Message flagged")
-```
-
 ```kotlin Android
-val disposable = messageRepository
+// Reason with the reporter's own words
+messageRepository
     .flagMessage(
         messageId = messageId,
-        reason = AmityContentFlagReason.SpamOrScams,
+        reason = AmityContentFlagReasonType.SPAM_OR_SCAMS,
+        detail = "Same promo link sent to every member",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleFlagError(error) },
     )
+
+// No reason
+messageRepository
+    .flagMessage(messageId = messageId)
+    .subscribe(
+        { showSuccessMessage() },
+        { error -> handleFlagError(error) },
+    )
+```
+
+```swift iOS
+// Reason with the reporter's own words
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: .spamOrScams,
+    detail: "Same promo link sent to every member"
+)
+
+// Reason only: type the reason explicitly so the current call is used
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: AmityContentFlagReasonType.spamOrScams
+)
+
+// No reason
+try await messageRepository.flagMessage(withId: "message-id")
+
+showSuccessMessage("Message flagged")
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
+
+// Reason with the reporter's own words
+const flagged = await MessageRepository.flagMessage(messageId, {
+  reason: ContentFlagReasonEnum.SpamOrScams,
+  detail: 'Same promo link sent to every member',
+});
+
+renderResults(flagged);
+
+// No reason
+await MessageRepository.flagMessage(messageId);
 ```
 
 ```dart Flutter
@@ -80,44 +102,42 @@ final isFlaggedByMe = flaggedMessage.isFlaggedByMe;
 
 </CodeGroup>
 
-## Use A Custom Reason
+## Report With Others
 
-Use the `Others` reason only when your UI collects additional detail from the reporter.
-
-Pass a custom reason string when the platform enum supports `Others` or direct string reasons.
+Use the Others reason when none of the categories fit. On Android, iOS, and TypeScript, put the reporter's explanation in `detail`, as for any other reason. Flutter carries the text on its Others reason.
 
 <CodeGroup>
 
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const flagged = await MessageRepository.flagMessage(
-  messageId,
-  'Contains sensitive account information',
-);
-
-renderResults(flagged);
-```
-
-```swift iOS
-try await messageRepository.flagMessage(
-    withId: "message-id",
-    reason: .others("Contains sensitive account information")
-)
-```
-
 ```kotlin Android
-val disposable = messageRepository
+messageRepository
     .flagMessage(
         messageId = messageId,
-        reason = AmityContentFlagReason.Others(
-            "Contains sensitive account information",
-        ),
+        reason = AmityContentFlagReasonType.OTHERS,
+        detail = "Contains sensitive account information",
     )
     .subscribe(
         { showSuccessMessage() },
         { error -> handleFlagError(error) },
     )
+```
+
+```swift iOS
+try await messageRepository.flagMessage(
+    withId: "message-id",
+    reason: .others,
+    detail: "Contains sensitive account information"
+)
+```
+
+```typescript TypeScript
+import { ContentFlagReasonEnum, MessageRepository } from '@amityco/ts-sdk';
+
+const flagged = await MessageRepository.flagMessage(messageId, {
+  reason: ContentFlagReasonEnum.Others,
+  detail: 'Contains sensitive account information',
+});
+
+renderResults(flagged);
 ```
 
 ```dart Flutter
@@ -134,18 +154,29 @@ final flagCount = flaggedMessage.flagCount;
 
 </CodeGroup>
 
+<Note>
+  The earlier calls that took only a reason are **deprecated** but still work on
+  Android, iOS, and TypeScript: `flagMessage(messageId, reason)` with a reason
+  string on TypeScript, and with `AmityContentFlagReason` on Android and iOS,
+  where custom text was passed as `Others("...")` / `.others("...")`. Move custom
+  text to `detail` with the Others reason. Flagging with only a message ID is
+  not deprecated on these platforms. On Flutter, the repository `flag(messageId)`
+  is deprecated; use `flagMessage(messageId:reason:)`.
+</Note>
+
 ## Unflag A Message
 
 Remove the current user's flag from a message when the user reverses the report action.
 
 <CodeGroup>
 
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const unflagged = await MessageRepository.unflagMessage(messageId);
-
-renderResults(unflagged);
+```kotlin Android
+messageRepository
+    .unflagMessage(messageId = messageId)
+    .subscribe(
+        { showSuccessMessage() },
+        { error -> handleUnflagError(error) },
+    )
 ```
 
 ```swift iOS
@@ -153,13 +184,12 @@ try await messageRepository.unflagMessage(withId: "message-id")
 showSuccessMessage("Message unflagged")
 ```
 
-```kotlin Android
-val disposable = messageRepository
-    .unflagMessage(messageId = messageId)
-    .subscribe(
-        { showSuccessMessage() },
-        { error -> handleUnflagError(error) },
-    )
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const unflagged = await MessageRepository.unflagMessage(messageId);
+
+renderResults(unflagged);
 ```
 
 ```dart Flutter
@@ -179,22 +209,6 @@ Read flag state before rendering selected or disabled report controls.
 
 <CodeGroup>
 
-```typescript TypeScript
-import { MessageRepository } from '@amityco/ts-sdk';
-
-const isFlaggedByMe =
-  await MessageRepository.isMessageFlaggedByMe(messageId);
-
-updateUI({ isFlaggedByMe });
-```
-
-```swift iOS
-let isFlaggedByMe = try await messageRepository
-    .isMessageFlaggedByMe(withId: "message-id")
-
-showSuccessMessage(isFlaggedByMe)
-```
-
 ```kotlin Android
 messageRepository
     .getMessage(messageId = messageId)
@@ -207,6 +221,22 @@ messageRepository
     )
 ```
 
+```swift iOS
+let isFlaggedByMe = try await messageRepository
+    .isMessageFlaggedByMe(withId: "message-id")
+
+showSuccessMessage(isFlaggedByMe)
+```
+
+```typescript TypeScript
+import { MessageRepository } from '@amityco/ts-sdk';
+
+const isFlaggedByMe =
+  await MessageRepository.isMessageFlaggedByMe(messageId);
+
+updateUI({ isFlaggedByMe });
+```
+
 ```dart Flutter
 final fetchedMessage = await AmityChatClient.newMessageRepository()
     .getMessage(messageId);
@@ -215,6 +245,13 @@ final isFlaggedByMe = fetchedMessage.isFlaggedByMe;
 ```
 
 </CodeGroup>
+
+## Platform Notes
+
+- Reason with optional detail ships in TypeScript 7.29.0 and in the October 2026 iOS and Android releases.
+- On iOS, when you omit `detail`, write the reason with its type, for example `AmityContentFlagReasonType.spamOrScams`. The shorthand `.spamOrScams` on its own selects the deprecated call.
+- A flag without a reason is recorded with a default reason: Others on TypeScript and Android, and Against community guidelines on iOS.
+- Flutter has no separate `detail`; the reporter's text travels on `AmityContentFlagReason.others(...)`.
 
 ## Related Topics
 
