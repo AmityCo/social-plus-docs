@@ -12378,7 +12378,7 @@ val disposable = channelRepository
 
 ### [Query Channels](https://learn.social.plus/social-plus-sdk/chat/conversation-management/channels/query-channels)
 
-> Query chat channels by type, membership, tags, deletion state, archive state, or known channel IDs.
+> Query chat channels by type, membership, tags, deletion state, archive state, sort order, or known channel IDs.
 
 Use channel queries to build inboxes, public channel discovery, event chat lists, and moderation views. Query support is similar across platforms, but not identical: TypeScript and Flutter expose keyword/display-name style searching, while Android's public channel query builder focuses on type, membership, tags, and deleted-state filters.
 
@@ -12392,7 +12392,7 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 | Deleted state | `isDeleted` | `includeDeleted` | `.includeDeleted(...)` | `.includeDeleted(...)` |
 | Name or keyword | `displayName` | Not exposed on `AmityChannelQueryOptions` | Not exposed on public query builder | `.withKeyword(...)` |
 | Archive exclusion | `excludeArchives` | `excludeArchives` on `AmityChannelQueryOptions` | `.excludeArchived(...)` | `.excludeArchives(...)` |
-| Sort | `sortBy` | Not exposed on current options | Not exposed on public query builder | `.sortBy(...)` with `LAST_ACTIVITY` |
+| Sort | `sortBy` | `sortBy` with `.lastActivity` or `.lastMessage` | `.sortBy(...)` with `LAST_ACTIVITY` or `LAST_MESSAGE` | `.sortBy(...)` with `LAST_ACTIVITY` |
 | Known IDs | `channelIds` | `getChannels(channelIds:)` | `getChannels(channelIds)` | Not exposed in the current public repository |
 
 ## Parameters
@@ -12406,7 +12406,7 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 | `isDeleted` / `includeDeleted` | No | TypeScript, iOS, Android, Flutter | Include or exclude deleted channels where the platform exposes the filter. |
 | `displayName` / `keyword` | No | TypeScript, Flutter | Search by name or keyword where supported by the platform SDK. |
 | `excludeArchives` | No | TypeScript, iOS, Android, Flutter | Exclude channels archived by the current user where supported. |
-| `sortBy` | No | TypeScript, Flutter | Sort channel lists where the platform exposes sort options. |
+| `sortBy` | No | TypeScript, iOS, Android, Flutter | Sort channel lists where the platform exposes sort options. Choose `lastActivity` (default) or `lastMessage`; see [Sort A Channel List](#sort-a-channel-list). |
 | Pagination controls | No | TypeScript, iOS, Android, Flutter | Use collection callbacks, live collections, or paging data to load additional channels. |
 
 ## Query A Channel List
@@ -12414,32 +12414,24 @@ Use channel queries to build inboxes, public channel discovery, event chat lists
 Query channels with type, membership, tag, deletion, archive, search, and pagination options where each platform exposes them.
 
 
-```typescript TypeScript
-import { ChannelRepository } from '@amityco/ts-sdk';
+```kotlin Android
+val includingTags = AmityTags().apply { add("support") }
+val excludingTags = AmityTags().apply { add("hidden") }
 
-const unsubscribe = ChannelRepository.getChannels(
-  {
-    displayName: 'support',
-    membership: 'member',
-    types: ['community', 'live'],
-    tags: ['support'],
-    excludeTags: ['hidden'],
-    isDeleted: false,
-    excludeArchives: true,
-    sortBy: 'lastActivity',
-  },
-  ({ data: channels, onNextPage, hasNextPage, loading, error }) => {
-    if (error) handleError(error);
-
-    if (!loading && channels) {
-      renderResults(channels);
-    }
-
-    if (hasNextPage) onNextPage?.();
-  },
-);
-
-unsubscribe();
+val disposable = channelRepository
+    .getChannels()
+    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
+    .filter(AmityChannelFilter.MEMBER)
+    .sortBy(AmityChannelSortBy.LAST_MESSAGE)
+    .includingTags(includingTags)
+    .excludingTags(excludingTags)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
 ```
 
 ```swift iOS
@@ -12448,7 +12440,8 @@ let options = AmityChannelQueryOptions(
     filter: .userIsMember,
     includingTags: ["support"],
     excludingTags: ["hidden"],
-    includeDeleted: false
+    includeDeleted: false,
+    sortBy: .lastMessage
 )
 
 let channels = channelRepository.getChannels(with: options)
@@ -12462,23 +12455,32 @@ token = channels.observe { collection, error in
 }
 ```
 
-```kotlin Android
-val includingTags = AmityTags().apply { add("support") }
-val excludingTags = AmityTags().apply { add("hidden") }
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
 
-val disposable = channelRepository
-    .getChannels()
-    .types(listOf(AmityChannel.Type.COMMUNITY, AmityChannel.Type.LIVE))
-    .filter(AmityChannelFilter.MEMBER)
-    .includingTags(includingTags)
-    .excludingTags(excludingTags)
-    .includeDeleted(includeDeleted = false)
-    .build()
-    .query()
-    .subscribe(
-        { pagingData -> showSuccessMessage(pagingData) },
-        { error -> handleGeneralError(error) },
-    )
+const unsubscribe = ChannelRepository.getChannels(
+  {
+    displayName: 'support',
+    membership: 'member',
+    types: ['community', 'live'],
+    tags: ['support'],
+    excludeTags: ['hidden'],
+    isDeleted: false,
+    excludeArchives: true,
+    sortBy: 'lastMessage',
+  },
+  ({ data: channels, onNextPage, hasNextPage, loading, error }) => {
+    if (error) handleError(error);
+
+    if (!loading && channels) {
+      renderResults(channels);
+    }
+
+    if (hasNextPage) onNextPage?.();
+  },
+);
+
+unsubscribe();
 ```
 
 ```dart Flutter
@@ -12502,12 +12504,114 @@ await liveCollection.loadNext();
 ```
 
 
+## Sort A Channel List
+
+Use `sortBy` to choose how a channel list is ordered. Choose `lastMessage` for an inbox that should follow the conversation, so that joining or leaving a channel does not push it to the top.
+
+| Value | Order | What moves a channel to the top |
+| --- | --- | --- |
+| `lastActivity` (default) | Newest activity first | A new message, or a member being added, removed, or banned |
+| `lastMessage` | Newest message first | A new message. Membership changes do not reorder the list. |
+
+Each platform names the values in its own style:
+
+| Platform | Option | `lastActivity` | `lastMessage` |
+| --- | --- | --- | --- |
+| TypeScript | `sortBy` | `'lastActivity'` | `'lastMessage'` |
+| iOS | `AmityChannelQueryOptions.sortBy` (`AmityChannelSortBy`) | `.lastActivity` | `.lastMessage` |
+| Android | `.sortBy(...)` (`AmityChannelSortBy`) | `LAST_ACTIVITY` | `LAST_MESSAGE` |
+
+
+```kotlin Android
+// Newest message first
+val disposable = channelRepository
+    .getChannels()
+    .all()
+    .filter(AmityChannelFilter.MEMBER)
+    .sortBy(AmityChannelSortBy.LAST_MESSAGE)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> submitData(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```swift iOS
+// Newest message first
+let options = AmityChannelQueryOptions(
+    filter: .userIsMember,
+    sortBy: .lastMessage
+)
+
+let channels = channelRepository.getChannels(with: options)
+token = channels.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    for channel in collection.snapshots {
+        showRow(name: channel.displayName, lastMessageAt: channel.lastMessageAt)
+    }
+}
+```
+
+```typescript TypeScript
+import { ChannelRepository } from '@amityco/ts-sdk';
+
+// Newest message first
+const unsubscribe = ChannelRepository.getChannels(
+  { membership: 'member', sortBy: 'lastMessage' },
+  ({ data: channels, error }) => {
+    if (error) handleError(error);
+
+    if (channels) {
+      renderResults(channels);
+    }
+  },
+);
+
+unsubscribe();
+```
+
+
+- **Live order.** The collection reorders as messages arrive. When the current user sends a message, that channel moves to the top right away, before the server responds.
+- **`lastMessageAt`.** The channel's `lastMessageAt` is the time of its newest message, or its creation time if it has none. Unlike `lastActivity`, membership changes and closing the channel do not change it. It is `null` (`nil` on iOS) when the backend has no value for the channel yet, and those channels are listed last, ordered by creation time. Read it as `channel.getLastMessageAt()` on Android, `channel.lastMessageAt` on iOS, and `channel.lastMessageAt` on TypeScript.
+- **Backend support.** `lastMessage` needs backend support for your network. Until it is available, the query fails with HTTP status 422 and error code `500000`. The SDK does not retry and does not fall back to `lastActivity`, so handle the error in your query callback. On iOS, `error.isAmityErrorCode(.business)` identifies it, and on TypeScript the code is `Amity.ServerError.BUSINESS_ERROR`. On Android, the error arrives as `LoadState.Error` in the paging load state, not in the `subscribe` error callback. `AmityError.from(error) == AmityError.BUSINESS_ERROR` identifies it.
+
+Flutter's `sortBy` currently accepts `LAST_ACTIVITY` only. On TypeScript, `sortBy` also accepts `lastCreated`, `firstCreated`, and `displayName`.
+
 ## Query A Specific Type
 
 Use the type-specific helpers when the platform exposes them. Some helpers apply membership defaults: for example, Flutter's `conversationType()` and `liveType()` also set the filter to `MEMBER`.
 
 Use type-specific channel queries when your UI needs a focused list such as conversations or live channels.
 
+
+```kotlin Android
+val disposable = channelRepository
+    .getChannels()
+    .conversationType()
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+```swift iOS
+let options = AmityChannelQueryOptions(
+    types: Set([AmityChannelQueryType.conversation]),
+    filter: .userIsMember,
+    includeDeleted: false
+)
+
+let conversations = channelRepository.getChannels(with: options)
+showSuccessMessage(conversations)
+```
 
 ```typescript TypeScript
 import { ChannelRepository } from '@amityco/ts-sdk';
@@ -12524,30 +12628,6 @@ const unsubscribe = ChannelRepository.getChannels(
 );
 
 unsubscribe();
-```
-
-```swift iOS
-let options = AmityChannelQueryOptions(
-    types: Set([AmityChannelQueryType.conversation]),
-    filter: .userIsMember,
-    includeDeleted: false
-)
-
-let conversations = channelRepository.getChannels(with: options)
-showSuccessMessage(conversations)
-```
-
-```kotlin Android
-val disposable = channelRepository
-    .getChannels()
-    .conversationType()
-    .includeDeleted(includeDeleted = false)
-    .build()
-    .query()
-    .subscribe(
-        { pagingData -> showSuccessMessage(pagingData) },
-        { error -> handleGeneralError(error) },
-    )
 ```
 
 ```dart Flutter
@@ -32819,6 +32899,35 @@ Widget createConversationPage() {
 ```
 
     **Search Optimization**: The search functionality includes built-in debouncing and result optimization handled by the SDK layer.
+
+## Sort Order
+
+By default the chat list shows the most recently active chat first. You can sort by the newest message instead, so that joining or leaving a chat does not push it to the top. This option is available on **iOS, Android, and Web**.
+
+Set `channel_list_sort_by` under `feature_flags.chat` in your UIKit config:
+
+```json
+{
+  "feature_flags": {
+    "chat": {
+      "channel_list_sort_by": "lastMessage"
+    }
+  }
+}
+```
+
+| Value | Order |
+| --- | --- |
+| `lastActivity` (default) | Newest activity first: a new message, or a member added, removed, or banned |
+| `lastMessage` | Newest message first. Membership changes do not reorder the list. |
+
+- **Default.** A missing key, or any value other than `lastMessage`, keeps `lastActivity`. All three tabs (All, Direct, Groups) use the same value.
+- **When it applies.** The chat home page reads the value when it builds its channel queries. On iOS and Android a change takes effect the next time the page opens. On Web the chat home stays mounted for the life of the UIKit, so a change takes effect the next time the UIKit is loaded with the new config.
+- **Row time.** With `lastMessage`, each row shows the time of its newest message (or the chat's creation time if it has none), so a membership change neither moves a row nor changes its time. With `lastActivity`, rows keep showing the last activity time.
+- **Live order.** The list reorders as messages arrive. When the current user sends a message, that chat moves to the top right away.
+- **Backend support.** `lastMessage` needs backend support for your network. If it is not available, the page shows the error state ("Couldn't load chats") in place of the list, with no call to action. The UIKit does not fall back to `lastActivity`. Set the value back to `lastActivity` until it is available.
+
+To sort a channel list in your own UI, see [Query Channels](/social-plus-sdk/chat/conversation-management/channels/query-channels#sort-a-channel-list).
 
 ## Component Management Strategies
 
