@@ -7496,8 +7496,9 @@ disposable.dispose()
 SDK operations throw or emit platform-native errors. Convert those errors to SDK error enums before deciding whether to retry, show a user message, or end the session.
 
 ```typescript TypeScript
-import { Client } from '@amityco/ts-sdk';
+import { Client, MessageRepository, MessageContentType } from '@amityco/ts-sdk';
 
+// Session-level: a global ban ends the session.
 const unsubscribe = Client.onConnectionError(error => {
   if (error.code === Amity.ServerError.GLOBAL_BAN) {
     console.log('The current user is globally banned.');
@@ -7505,6 +7506,27 @@ const unsubscribe = Client.onConnectionError(error => {
 });
 
 unsubscribe();
+
+// Action-level: global mute and unsafe content reject only the failed call.
+async function sendTextMessage(subChannelId: string, text: string) {
+  try {
+    await MessageRepository.createMessage({
+      subChannelId,
+      dataType: MessageContentType.TEXT,
+      data: { text },
+    });
+  } catch (error) {
+    const { code } = error as { code?: number };
+
+    if (code === Amity.ServerError.GLOBAL_MUTE) {
+      console.log('The current user is globally muted and cannot post right now.');
+    } else if (code === Amity.ServerError.UNSAFE_CONTENT) {
+      console.log('The content was rejected by moderation. Edit it before sending again.');
+    } else {
+      throw error;
+    }
+  }
+}
 ```
 
 ```swift iOS
@@ -7530,6 +7552,23 @@ fun handleSdkError(exception: Throwable) {
         print("The current user is globally banned.")
     }
 }
+
+// Action-level: global mute and unsafe content reject only the failed call.
+fun sendTextMessage(subChannelId: String, text: String): Disposable {
+    return AmityChatClient.newMessageRepository()
+        .createTextMessage(subChannelId, text)
+        .build()
+        .send()
+        .subscribe({}, { exception ->
+            when (AmityError.from(exception)) {
+                AmityError.USER_IS_GLOBAL_MUTED ->
+                    print("The current user is globally muted and cannot post right now.")
+                AmityError.UNSAFE_CONTENT ->
+                    print("The content was rejected by moderation. Edit it before sending again.")
+                else -> print(exception)
+            }
+        })
+}
 ```
 
 ```dart Flutter
@@ -7552,6 +7591,8 @@ if (error is AmityException) {
 | Meaning | TypeScript | iOS | Android | Flutter |
 | --- | --- | --- | --- | --- |
 | Globally banned user | `Amity.ServerError.GLOBAL_BAN` | `.globalBan` | `AmityError.USER_IS_GLOBAL_BANNED` | `AmityError.USER_IS_GLOBAL_BANNED` |
+| Globally muted user (`400313`) | `Amity.ServerError.GLOBAL_MUTE` | `.globalMute` | `AmityError.USER_IS_GLOBAL_MUTED` | Not exposed as a public Flutter SDK enum in the current source |
+| Unsafe content rejected (`400314`) | `Amity.ServerError.UNSAFE_CONTENT` | `.unsafeContent` | `AmityError.UNSAFE_CONTENT` | Not exposed as a public Flutter SDK enum in the current source |
 | Unauthorized session | `Amity.ServerError.UNAUTHORIZED` | `.unauthorized` | `AmityError.UNAUTHORIZED_ERROR` | `AmityError.UNAUTHORIZED_ERROR` |
 | Item not found | `Amity.ServerError.ITEM_NOT_FOUND` | `.itemNotFound` | `AmityError.ITEM_NOT_FOUND` | `AmityError.ITEM_NOT_FOUND` |
 | Permission denied | `Amity.ServerError.PERMISSION_DENIED` | `.permissionDenied` | `AmityError.PERMISSION_DENIED` | `AmityError.PERMISSION_DENIED` |
@@ -7561,11 +7602,13 @@ if (error is AmityException) {
 | Max blocked users reached | `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`) | `.maxBlockedUsersReached` | `AmityError.MAX_BLOCKED_USERS_REACHED` | Refer to platform SDK |
 | Connection error | `Amity.ClientError.CONNECTION_ERROR` | `.connectionError` | `AmityError.CONNECTION_ERROR` | `AmityError.CONNECTION_ERROR` |
 
+A global mute (`400313`) is not a global ban (`400312`). The user stays signed in and the session continues; only the blocked action fails. Unsafe content (`400314`) means the request was rejected by content moderation, so sending the same content again fails the same way. Neither code ends the session, so handle both as a per-action error: tell the user why the action failed instead of signing them out.
+
 ## Production Checklist
 
 - Disable broad network payload logging outside development builds.
 - Redact tokens, authorization headers, user identifiers, and message or post bodies before writing logs.
-- Keep retry logic bounded and avoid retrying authorization or global-ban errors.
+- Keep retry logic bounded and avoid retrying authorization, global-ban, global-mute, or unsafe-content errors.
 - Show user-friendly messages in the app UI; keep SDK codes in developer logs and support diagnostics.
 - Unsubscribe or dispose observers when the screen, debug session, or application lifecycle no longer needs them.
 
@@ -44707,11 +44750,8 @@ const LiveStreamPlayer = ({ post }) => {
     >
       <AmityLiveStreamPlayerPage
         post={post}
-        onStreamEnd={() => {
-          // Handle stream end
-        }}
-        onError={(error) => {
-          // Handle playback errors
+        goToDetailPage={(context) => {
+          // Optional: override navigation to the post detail page
         }}
       />
     </AmityUiKitProvider>
@@ -44770,24 +44810,11 @@ fun handleStreamError(context: Context, error: String) {
 
 ```typescript React
 // Handle livestream player navigation
+// AmityLiveStreamPlayerPage accepts only `post`, `roomId` and `goToDetailPage`.
+// It has no onStreamEnd, onError or onFullscreen callbacks.
 const handleLivestreamPlayerNavigation = {
-    onStreamEnd: () => {
-        // Navigate back or to stream summary
-        navigate(-1);
-        showNotification('Live stream has ended');
-    },
-    onError: (error) => {
-        // Handle playback errors
-        showError(`Stream playback error: ${error.message}`);
-        navigate(-1);
-    },
-    onFullscreen: (isFullscreen) => {
-        // Handle fullscreen toggle
-        if (isFullscreen) {
-            enterFullscreen();
-        } else {
-            exitFullscreen();
-        }
+    goToDetailPage: (context) => {
+        // Optional: override navigation to the post detail page
     }
 };
 ```
@@ -60756,6 +60783,12 @@ Flagged user profiles appear in a dedicated **Users** tab within the Moderation 
     - User report counts from other community members (e.g., "4 users")
     - Last flagged timestamp
 
+    **Finding profiles:**
+    - **Search by user ID or name** (at least 3 characters)
+    - **Report source**: All sources, User reports, or AI moderation
+    - **Advanced filter**: Report type (Display name, Description, Profile photo, Behavior) and user Tags
+    - **Sort**: Last flag date, Flag count, or Created date
+
     **Available actions:**
     - **Reset profile** — Reset flagged profile fields to safe defaults
     - **Ban globally** — Ban the user across all communities
@@ -60770,7 +60803,7 @@ Flagged user profiles appear in a dedicated **Users** tab within the Moderation 
     - **Globally banned by [moderator]**
     - **Profile reset by [moderator]**
 
-    Use the **Select moderator** filter to view actions taken by a specific team member.
+    Use the **Select reviewer** filter to view actions taken by specific team members, and the **Advanced filter** to narrow by user Tags.
 
 ## Admin Reset
 
@@ -64084,9 +64117,7 @@ Track these key indicators to understand and optimize your community health:
 
 > Guide for moderators and administrators to assess, moderate, and interpret comprehensive user social activity across the platform
 
-<iframe width="720" height="405" src="https://www.youtube.com/embed/J71ApqnAmok?si=pfr72YRwbLsUXAsn" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
-
-  Use this workspace to perform holistic user assessments: engagement footprint, behavioral patterns, moderation history, and community influence. Focus: operational decision support (not developer internals).
+Use this workspace to perform holistic user assessments: engagement footprint, behavioral patterns, moderation history, and community influence. Focus: operational decision support (not developer internals).
 
     Instant snapshot of stats & flags
 
@@ -64112,14 +64143,35 @@ Track these key indicators to understand and optimize your community health:
 
 ## Snapshot Metrics
 
-Key indicators at top:
+The profile card at the top of the page has three parts.
 
-- Name, follower / following counts, global role
-- Active user-level flags (auto-updates when cleared)
-- Totals: posts, comments, reactions, communities joined
-- Active flagged posts & comments count (decrements as flags cleared)
-- Global bans & community bans counts
-- Quick actions: change role, [global mute/unmute](/analytics-and-moderation/console/user-and-content-management/global-mute), global ban/unban, copy user ID
+**Profile**
+
+- Name, profile creation date, following and follower counts, description, and global role
+- The **⋮** menu: assign tags, change global role, profile moderation, [global mute/unmute](/analytics-and-moderation/console/user-and-content-management/global-mute), global ban/unban, and copy user ID
+
+**Moderation**
+
+The left side shows what is active on the user right now. Each row appears only when it has something to show.
+
+| Row | Shows |
+| --- | --- |
+| **Status** | **Globally banned** and **Muted** badges. Hover over **Muted** to see when the mute expires. |
+| **User** | Flags on the user's profile: AI moderation detections (labeled with the detected category), reports from users (grouped by report type, for example "Username (2), Behavior (1)"), and flags from admins (labeled with the reason). |
+| **Content** | The number of flagged posts and flagged comments. Click either count to open the Posted or Commented & replied tab filtered to flagged items. |
+
+The right side shows the user's moderation record: the total number of moderation actions, and one badge per action type that has happened, with its count. The action types are community bans, community removals, global bans, global mutes, and profile resets.
+
+A user with no active flags and no moderation actions shows a single line: **Nothing active**, "No flags on the user, posts or comments", and "No moderation actions on record".
+
+Counts update as you act. For example, clearing a flag lowers the flagged count, and banning or muting the user from the **⋮** menu updates the moderation record.
+
+**Activity**
+
+- Totals for posts, comments, reactions, and communities joined
+- The user's [Contribution level](/analytics-and-moderation/console/user-and-content-management/user-insights)
+
+Counts of 1,000 or more are shortened, for example 1.2K or 45M. Hover over a shortened count to see the exact number.
 
 {/* Removed missing image: User Statistics Panel */}
 
@@ -64202,15 +64254,15 @@ Key indicators at top:
 
 ### [Moderation Feed](https://learn.social.plus/analytics-and-moderation/console/user-and-content-management/mod-feed)
 
-> Central workspace for reviewing, filtering, actioning, and auditing flagged posts, comments, and messages across the platform
+> Central workspace for reviewing, filtering, actioning, and auditing flagged posts, comments, messages, and user profiles across the platform
 
 <iframe width="720" height="405" src="https://www.youtube.com/embed/uJ_i8utLnBE?si=6Js8nkLmmmHbYF6Y" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
 
-  Use the Moderation Feed to triage all flagged content (posts, comments, messages) in one place. Designed for speed, consistency, and auditability. This guide focuses on operational workflows (not developer implementation).
+  Use the Moderation Feed to triage all flagged content (posts, comments, messages) and flagged user profiles in one place. Designed for speed, consistency, and auditability. This guide focuses on operational workflows (not developer implementation).
 
     Identify highest-risk flagged items
 
-    Narrow by feed, type, reason, tags
+    Narrow by feed, report source, type, reason, tags
 
     Delete or clear flags confidently
 
@@ -64226,13 +64278,13 @@ Key indicators at top:
 
     Start in To Review for active queue; Reviewed for audit.
 
-    Refine by feed type, content type, report reason, tags.
+    Refine by feed type, report source, content type, report reason, tags.
 
     Delete violations; clear validly resolved flags.
 
 ## Interface Structure
 
-    Active flagged content requiring human decision (posts, comments, messages). Split into Posts & Comments / Messages categories with tailored filters.
+    Active flagged content requiring human decision. Split into Posts & Comments, Messages, and Users categories with tailored filters.
 
     Historical ledger of resolved items (deleted or flags cleared) with moderator name, action, timestamp, and additional filters for attribution and action type.
 
@@ -64245,6 +64297,7 @@ Key elements:
 - Thread context for comments (view parent \+ siblings)
 - AI mod reasons \+ user report reasons
 - Reporter count & last flag date
+- Report reason details: select any report reason to see who reported the item, when, and the detail they added
 
 Actions:
 
@@ -64270,6 +64323,10 @@ Actions:
 
 {/* Removed missing image: Flagged Messages */}
 
+## To Review: Users
+
+Flagged user profiles, from AI moderation and from user reports. Find a profile with the **Search by user ID or name** box (at least 3 characters). See [AI User Profile Moderation](/analytics-and-moderation/console/ai-user-profile-moderation) for the profile card, the available actions, and how reports are grouped.
+
 ## Filtering & Sorting
 
     - All feeds
@@ -64287,13 +64344,19 @@ Actions:
     - Video
     - File
     - Audio
+    Show items by who flagged them. Available on Posts & Comments and Users.
+    - All sources
+    - User reports: items reported by users
+    - AI moderation: items flagged by AI moderation
     - Report reasons (multi-select)
     - Tags (multi-select)
+    - Report type (To Review only): **Profile** (Display name, Description, Profile photo) and **Behavior**. An item matches if it was reported for any selected type.
+    - Tags: search for and select one or more user tags.
     - Last flag date
     - Flag count
     - Created date
       Order: Latest first / Oldest first
-    - Moderator Name (multi-select)
+    - Reviewer (select up to 10), on Posts & Comments and Users
     - Moderation Action: Deleted / Flag Cleared
     - Sort: Moderation Date / Created Date
 
@@ -64303,13 +64366,13 @@ Actions:
 
     Filter by report reasons (e.g., abuse, threats) → Sort by Flag count → Delete violations → Clear false positives.
 
-    Use AI mod reasons to pre-group similar infractions → Bulk evaluate for consistency.
+    Report source → AI moderation → Use AI mod reasons to pre-group similar infractions → Bulk evaluate for consistency.
 
     Advanced Filter → Attachments: Videos / Files → Prioritize for manual safety review.
 
     Sort by Oldest first → Work sequentially → Move to Latest first for fresh queue scan.
 
-    Reviewed tab → Filter by Moderator Name → Spot consistency gaps.
+    Reviewed tab → Filter by Reviewer → Spot consistency gaps.
 
 ## Decision Criteria
 
@@ -65750,7 +65813,7 @@ Click the **Actions** (pencil icon) button next to any event to customize the no
 
 > Monetize your social platform with Sponsored Content - customized ad placements with frequency control
 
-Sponsored Content is **not available** on Flutter and React Native platforms.
+Sponsored Content is **not available** on the Flutter platform. In React Native UIKit, ads appear in the global feed, community feeds, and comment lists.
 
   Use Sponsored Content to monetize responsibly: configure frequency logic, placements, scoring, and exposure controls while maintaining user experience quality.
 
