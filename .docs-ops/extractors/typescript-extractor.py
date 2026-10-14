@@ -45,6 +45,7 @@ OUTPUT = DOCS_OPS_ROOT / "sdk-surface" / "typescript.json"
 RE_NAMESPACE_EXPORT = re.compile(r'^export\s+\*\s+as\s+(\w+)\s+from\s+[\'"]([^\'"]+)[\'"]')
 RE_WILDCARD_EXPORT = re.compile(r'^export\s+\*\s+from\s+[\'"]([^\'"]+)[\'"]')
 RE_NAMED_EXPORT_FROM = re.compile(r'^export\s+\{([^}]+)\}\s+from\s+[\'"]([^\'"]+)[\'"]')
+RE_LOCAL_NAMED_EXPORT = re.compile(r'^export\s+\{([^}]+)\}\s*;?\s*$')
 
 # Patterns for declarations inside leaf modules.
 DECL_PATTERNS = [
@@ -222,6 +223,18 @@ def walk_module(file: Path, depth: int = 0, visited: set[str] | None = None) -> 
                         collected.append(target_decls[n])
                     else:
                         unhandled.append(f"named export not found: {n} from {target}")
+            continue
+        if m := RE_LOCAL_NAMED_EXPORT.match(stripped):
+            # Local alias: `export { Foo as Bar };` re-exports a declaration in this file
+            # under another name (e.g. ContentFlagReasonEnum as AmityContentFlagReasonType).
+            local_decls = {d["name"]: d for d in collected}
+            for spec in (s.strip() for s in m.group(1).split(",") if s.strip()):
+                original, _, alias = (p.strip() for p in spec.partition(" as "))
+                decl = local_decls.get(original)
+                if decl is None:
+                    unhandled.append(f"local named export not found: {original} (from {file})")
+                    continue
+                collected.append({**decl, "name": alias or original})
             continue
     return collected, sub_ns
 
