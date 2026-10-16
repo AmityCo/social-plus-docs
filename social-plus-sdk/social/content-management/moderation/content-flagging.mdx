@@ -32,9 +32,10 @@ Use content flagging APIs when users need to report posts or comments for review
 
 A reason is one fixed category. On Android, iOS, and TypeScript it never carries text: the reporter's own words always go in `detail`. Flutter uses these reasons for messages only, and its Others reason carries the text.
 
-| Reason | Android `AmityContentFlagReasonType` | iOS `AmityContentFlagReasonType` | TypeScript `ContentFlagReasonEnum` | Flutter `AmityContentFlagReason` (messages only) |
+| Reason | Android `AmityContentFlagReasonType` | iOS `AmityContentFlagReasonType` | TypeScript `AmityContentFlagReasonType` | Flutter `AmityContentFlagReason` (messages only) |
 | --- | --- | --- | --- | --- |
 | Against community guidelines | `COMMUNITY_GUIDELINES` | `.communityGuidelines` | `CommunityGuidelines` | `communityGuidelines` |
+| Child endangerment | `CHILD_ENDANGERMENT` | `.childEndangerment` | `ChildEndangerment` | Not available |
 | Harassment or bullying | `HARASSMENT_OR_BULLYING` | `.harassmentOrBullying` | `HarassmentOrBullying` | `harassmentOrBullying` |
 | Self-harm or suicide | `SELF_HARM_OR_SUICIDE` | `.selfHarmOrSuicide` | `SelfHarmOrSuicide` | `selfHarmOrSuicide` |
 | Violence or threatening content | `VIOLENCE_OR_THREATENING_CONTENT` | `.violenceOrThreateningContent` | `ViolenceOrThreateningContent` | `violenceOrThreateningContent` |
@@ -43,6 +44,10 @@ A reason is one fixed category. On Android, iOS, and TypeScript it never carries
 | Spam or scams | `SPAM_OR_SCAMS` | `.spamOrScams` | `SpamOrScams` | `spamOrScams` |
 | False information or misinformation | `FALSE_INFORMATION` | `.falseInformation` | `FalseInformation` | `falseInformation` |
 | Others | `OTHERS` | `.others` | `Others` | `others('...')` |
+
+Use **Child endangerment** for content that endangers a child, including suspected child sexual abuse material (CSAM). Send it as its own reason, not as Others with a detail, so these reports reach moderators under their own category. The reason is sent as the exact text `Child endangerment`.
+
+On TypeScript, `AmityContentFlagReasonType` is the same enum as `ContentFlagReasonEnum`, exported under the name Android and iOS use. Both names work. Before TypeScript 7.31.0, only `ContentFlagReasonEnum` is exported.
 
 ## Parameters
 
@@ -119,11 +124,11 @@ try await repository.flagPost(withId: "post-id")
 ```
 
 ```typescript TypeScript
-import { ContentFlagReasonEnum, PostRepository } from '@amityco/ts-sdk';
+import { AmityContentFlagReasonType, PostRepository } from '@amityco/ts-sdk';
 
 // Reason with the reporter's own words
 const didFlag = await PostRepository.flagPost(postId, {
-  reason: ContentFlagReasonEnum.SpamOrScams,
+  reason: AmityContentFlagReasonType.SpamOrScams,
   detail: 'Repeated promotional links',
 });
 
@@ -132,7 +137,7 @@ if (didFlag) {
 }
 
 // Reason only
-await PostRepository.flagPost(postId, { reason: ContentFlagReasonEnum.HarassmentOrBullying });
+await PostRepository.flagPost(postId, { reason: AmityContentFlagReasonType.HarassmentOrBullying });
 
 // No reason
 await PostRepository.flagPost(postId);
@@ -194,11 +199,11 @@ let didFlag = try await repository.flagComment(withId: "comment-id")
 ```
 
 ```typescript TypeScript
-import { CommentRepository, ContentFlagReasonEnum } from '@amityco/ts-sdk';
+import { AmityContentFlagReasonType, CommentRepository } from '@amityco/ts-sdk';
 
 // Reason with the reporter's own words
 const didFlag = await CommentRepository.flagComment(commentId, {
-  reason: ContentFlagReasonEnum.HarassmentOrBullying,
+  reason: AmityContentFlagReasonType.HarassmentOrBullying,
   detail: 'Insults another member in every reply',
 });
 
@@ -220,6 +225,97 @@ if (didFlag) {
 ```
 
 </CodeGroup>
+
+## Report child endangerment
+
+Flag content that endangers a child with the Child endangerment reason. A `detail` is optional, as for any reason. The same reason works for comments and messages, and for user behavior reports.
+
+<CodeGroup>
+
+{/* doc-as-test: skip (CHILD_ENDANGERMENT ships after the published Android SDK) */}
+```kotlin Android
+AmitySocialClient.newPostRepository()
+    .flagPost(postId, AmityContentFlagReasonType.CHILD_ENDANGERMENT)
+    .subscribe(
+        { showSuccessMessage() },
+        { error -> handleGeneralError(error) },
+    )
+```
+
+{/* doc-as-test: skip (childEndangerment ships after the published iOS SDK) */}
+```swift iOS
+// Type the reason explicitly so the current call is used
+try await AmityPostRepository().flagPost(
+    withId: "post-id",
+    reason: AmityContentFlagReasonType.childEndangerment
+)
+```
+
+```typescript TypeScript
+import { AmityContentFlagReasonType, PostRepository } from '@amityco/ts-sdk';
+
+await PostRepository.flagPost(postId, {
+  reason: AmityContentFlagReasonType.ChildEndangerment,
+});
+```
+
+</CodeGroup>
+
+## Build a report-reason picker
+
+On TypeScript and iOS, build your report menu from the SDK's reason list instead of a hardcoded copy. A reason added in a later SDK release then appears in your menu without a code change.
+
+| | TypeScript | iOS |
+| --- | --- | --- |
+| Reasons in display order, Others last | `getContentFlagReasons()` (a new array on each call) | `AmityContentFlagReasonType.allCases` |
+| Stable key, such as `child_endangerment` | `getContentFlagReasonKey(reason)` | `reason.key` |
+| English label | the enum value | `reason.defaultLabel` |
+
+The key is snake_case, the same on every platform, and never renamed. Use it to look up your translated label, and show the English label when you have no translation for the key.
+
+Never send the key or the label to the server. Pass the enum value as `reason`.
+
+<CodeGroup>
+
+```typescript TypeScript
+import {
+  AmityContentFlagReasonType,
+  getContentFlagReasonKey,
+  getContentFlagReasons,
+} from '@amityco/ts-sdk';
+
+// Your app's translated strings, keyed by your own prefix plus the SDK key
+declare const translations: Record<string, string | undefined>;
+
+const reasonRows = getContentFlagReasons()
+  // Offer Others separately, with a free-text field for detail
+  .filter((reason) => reason !== AmityContentFlagReasonType.Others)
+  .map((reason) => ({
+    reason,
+    label: translations[`report_reason_${getContentFlagReasonKey(reason)}`] ?? reason,
+  }));
+```
+
+{/* doc-as-test: skip (key and defaultLabel ship after the published iOS SDK) */}
+```swift iOS
+// Your app's translated strings, keyed by your own prefix plus the SDK key
+let translations: [String: String] = [:]
+
+let reasonRows = AmityContentFlagReasonType.allCases
+    // Offer Others separately, with a free-text field for detail
+    .filter { $0 != .others }
+    .map { reason in
+        (reason: reason, label: translations["report_reason_\(reason.key)"] ?? reason.defaultLabel)
+    }
+```
+
+</CodeGroup>
+
+<Info>
+  Android has no key or label helpers yet. To list the reasons there, iterate
+  `AmityContentFlagReasonType.entries` (or `values()` on Kotlin earlier than 1.9)
+  and supply your own label for each value.
+</Info>
 
 ## Report with Others
 
@@ -249,10 +345,10 @@ try await AmityPostRepository().flagPost(
 ```
 
 ```typescript TypeScript
-import { ContentFlagReasonEnum, PostRepository } from '@amityco/ts-sdk';
+import { AmityContentFlagReasonType, PostRepository } from '@amityco/ts-sdk';
 
 await PostRepository.flagPost(postId, {
-  reason: ContentFlagReasonEnum.Others,
+  reason: AmityContentFlagReasonType.Others,
   detail: "Shares a member's home address",
 });
 ```
@@ -355,6 +451,7 @@ Flagging creates report state; it does not delete, hide, approve, or decline con
 ## Platform notes
 
 - Reason with optional detail ships in TypeScript 7.29.0 and in the October 2026 iOS and Android releases.
+- The Child endangerment reason ships in TypeScript 7.31.0, which also adds `getContentFlagReasons()`, `getContentFlagReasonKey()`, and the `AmityContentFlagReasonType` export. Android and iOS add the reason in their next releases; the iOS release also adds `key` and `defaultLabel` to `AmityContentFlagReasonType`. Flutter does not offer it.
 - On iOS, when you omit `detail`, write the reason with its type, for example `AmityContentFlagReasonType.spamOrScams`. The shorthand `.spamOrScams` on its own selects the deprecated call.
 - A flag without a reason is recorded with a default reason: Others on TypeScript and Android, and Against community guidelines on iOS.
 - Flutter flags posts and comments without a reason.
