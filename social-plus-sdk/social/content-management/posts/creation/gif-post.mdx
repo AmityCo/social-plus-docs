@@ -140,16 +140,14 @@ func showGifs(of post: AmityPost) {
 
 ```typescript TypeScript
 function showGifs(post: Amity.Post) {
-  const gifs = post.childrenPosts.flatMap(child => {
-    const data = (child as Amity.Post<'gif'>).data;
-    return child.dataType === 'gif' && data ? [data] : [];
-  });
-
   const onlyGifs = post.structureType === 'gif';
 
-  gifs.forEach(gif => {
+  post.childrenPosts.forEach(child => {
+    if (child.dataType !== 'gif') return;
+
+    const { url, width, height } = child.data as Amity.ContentDataGif;
     // Your app loads the GIF from the link.
-    renderResults({ url: gif.url, width: gif.width, height: gif.height, onlyGifs });
+    renderResults({ url, width, height, onlyGifs });
   });
 }
 ```
@@ -173,7 +171,7 @@ Send the full list of attachments that the post keeps. social.plus matches each 
   On iOS, edit a GIF post with `AmityMixedMediaPostBuilder`. Do not use `AmityImagePostBuilder`. That builder sends only the images, so the edit removes every GIF.
 </Warning>
 
-The examples below keep the first GIF and remove the other GIFs.
+The examples below keep the first GIF and remove the other GIFs. The TypeScript example also sends back every photo, video, file, and audio child, so a post with other media keeps it.
 
 <CodeGroup>
 
@@ -210,13 +208,26 @@ func keepFirstGif(of post: AmityPost, caption: String) async throws -> AmityPost
 import { PostRepository } from '@amityco/ts-sdk';
 
 async function keepFirstGif(post: Amity.Post) {
-  const keep = post.childrenPosts
-    .flatMap(child => {
-      const data = (child as Amity.Post<'gif'>).data;
-      return child.dataType === 'gif' && data ? [data] : [];
-    })
-    .slice(0, 1)
-    .map(({ url, width, height }) => ({ type: 'gif' as const, url, width, height }));
+  let gifKept = false;
+
+  // `attachments` is the full list to keep, so send back every child you keep:
+  // a GIF by its link and size, a file by its ID. A child left out is deleted.
+  const keep = post.childrenPosts.flatMap((child): Amity.PostAttachment<string>[] => {
+    if (child.dataType === 'gif') {
+      if (gifKept) return [];
+      gifKept = true;
+
+      const { url, width, height } = child.data as Amity.ContentDataGif;
+      return [{ type: 'gif', url, ...(width ? { width } : {}), ...(height ? { height } : {}) }];
+    }
+
+    const fileId =
+      child.dataType === 'video'
+        ? (child.data as Amity.ContentDataVideo).videoFileId.original
+        : (child.data as Amity.ContentDataFile).fileId;
+    // A video's `original` ID is typed as optional, so check it before sending.
+    return fileId ? [{ type: child.dataType, fileId }] : [];
+  });
 
   const { data: updatedPost } = await PostRepository.editPost(post.postId, {
     attachments: keep,
