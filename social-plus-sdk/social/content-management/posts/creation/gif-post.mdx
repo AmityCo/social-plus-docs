@@ -1,0 +1,413 @@
+---
+title: "GIF Posts"
+description: "Create, edit, read, and query posts that hold GIFs from your own GIF provider."
+---
+
+Let users share GIFs in their posts, on their own or beside photos and videos, so a post can carry a mood or a reaction that a still image can't. Each GIF stays animated instead of being flattened into a photo.
+
+You keep the GIF experience you choose. Your app uses its own GIF provider, such as GIPHY, with that provider's search and content filters, and social.plus stores only each GIF's link and size. GIF posts show in feeds and post queries like any other post, you can filter for them by the `gif` data type, and moderators can remove one GIF or the whole post in the social.plus Console.
+
+Your app picks each GIF from its provider and passes the GIF link to the SDK. A post can hold only GIFs, or GIFs beside other media such as images and videos. The SDK does not upload the GIF and does not load it. Your app loads and shows the GIF.
+
+<Info>
+  GIF posts are available in the Android, iOS, and TypeScript SDKs. This page has samples for these three platforms only.
+</Info>
+
+## Parameters
+
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Create a GIF post | `targetType`, `targetId` | Yes | Android, iOS, TypeScript | Feed target, usually `community` or `user`, and its ID. |
+| Create a GIF post | GIFs | Yes | Android, iOS, TypeScript | `AmityGif` objects in `attachments` on Android. `AmityGifData` objects through `setGifs(_:)` on iOS. `Amity.GifAttachment` objects with `type: 'gif'` in `attachments` on TypeScript. |
+| Create a GIF post | `text` | No | Android, iOS, TypeScript | Caption text shown with the GIFs. On TypeScript, set it as `data.text`. |
+| Edit the GIFs of a post | `postId` | Yes | Android, iOS, TypeScript | ID of the post to edit. |
+| Edit the GIFs of a post | Attachments | No | Android, iOS, TypeScript | The full list of attachments to keep. Leave the attachments out to keep every attachment. |
+| Query GIF posts | `dataTypes` | No | Android, iOS, TypeScript | Holds `gif` to return GIF child posts. |
+| Query GIF posts | `includeMixedStructure` | No | Android, iOS, TypeScript | Set to `true` to include posts that hold GIFs beside other media. |
+
+### GIF fields
+
+| Field | Android `AmityGif` | iOS `AmityGifData` | TypeScript `Amity.GifAttachment` | Required | Rule |
+| --- | --- | --- | --- | --- | --- |
+| Link | `url` | `url` | `url: string` | Yes | An `https` link. The link path ends in `.gif`. The link has at most 2,000 characters. |
+| Width | `width: Int?` | `width: Int?` | `width?: number` | No | The width in pixels, from 1 to 4096. Leave it out when you do not know it. |
+| Height | `height: Int?` | `height: Int?` | `height?: number` | No | The height in pixels, from 1 to 4096. Leave it out when you do not know it. |
+
+The GIF host must be on the network's link allowlist. See [Allowlist Management](/analytics-and-moderation/console/moderation/roles-and-privileges). The SDK does not check the GIF rules. The SDK sends the values unchanged, and social.plus refuses a GIF that breaks a rule. See [Errors](#errors).
+
+### Attachment rules
+
+| Rule | Detail |
+| --- | --- |
+| Number of attachments | A post holds 1 to 10 attachments. Each GIF counts as one attachment. |
+| Repeated GIF | A GIF link can appear only once in a post. social.plus refuses a post with the same GIF twice. The SDK does not remove a repeated GIF. |
+| Product tags | A GIF takes no product tags. The SDK sends `attachmentProductTags` for file attachments only. |
+| Child posts | Each GIF becomes a child post with data type `gif`. The parent post has data type `text`. |
+| Structure type | A post with only GIFs has structure type `gif`. A post with GIFs and other media has structure type `mixed`. |
+
+## Create a GIF post
+
+Pass the GIFs to the mixed media creation API. On Android, put `AmityGif` objects in the `attachments` set of `createMixedAttachmentPost`. On iOS, pass `AmityGifData` objects to `AmityMixedMediaPostBuilder.setGifs(_:)`. On TypeScript, put GIF attachments in the `attachments` list of `PostRepository.createMixedMediaPost`. The caption text is optional.
+
+<CodeGroup>
+
+```kotlin Android
+import com.amity.socialcloud.sdk.model.core.file.AmityGif
+
+val gifs: Set<AmityAttachment> = setOf(
+    AmityGif(url = "https://media.example.com/gifs/friday.gif", width = 480, height = 360),
+    AmityGif(url = "https://media.example.com/gifs/dance.gif", width = 498, height = 280),
+)
+
+postRepository.createMixedAttachmentPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    attachments = gifs,
+    text = "Friday mood",
+)
+    .subscribe(
+        { post -> showSuccessMessage(post.getPostId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let builder = AmityMixedMediaPostBuilder()
+builder.setText("Friday mood")
+builder.setGifs([
+    AmityGifData(url: "https://media.example.com/gifs/friday.gif", width: 480, height: 360),
+    AmityGifData(url: "https://media.example.com/gifs/dance.gif", width: 498, height: 280)
+])
+
+let post = try await postRepository.createMixedMediaPost(
+    builder,
+    targetId: "community-id",
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil
+)
+showSuccessMessage(post.postId)
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+const { data: post } = await PostRepository.createMixedMediaPost({
+  targetType: 'community',
+  targetId: communityId,
+  data: { text: 'Friday mood' },
+  attachments: [
+    { type: 'gif', url: 'https://media.example.com/gifs/friday.gif', width: 480, height: 360 },
+    { type: 'gif', url: 'https://media.example.com/gifs/dance.gif', width: 498, height: 280 },
+  ],
+});
+
+renderResults(post);
+```
+
+</CodeGroup>
+
+To add images or videos to the same post, add the uploaded media to the Android `attachments` set. On iOS, also call `setImages(_:)` or `setVideos(_:)` on the builder. On TypeScript, add `{ type: 'image', fileId }` or `{ type: 'video', fileId }` entries to `attachments`. See [Mixed Media Posts](./mixed-media-post).
+
+## Read GIFs on a post
+
+Read each GIF from the child posts of the post. The width and the height are `null` on Android, `nil` on iOS, and `undefined` on TypeScript when the post has no size.
+
+<CodeGroup>
+
+```kotlin Android
+fun showGifs(post: AmityPost) {
+    val gifs = post.getChildren()
+        .mapNotNull { child -> child.getData() as? AmityPost.Data.GIF }
+
+    val onlyGifs = post.getStructureType() == AmityPost.StructureType.GIF
+
+    gifs.forEach { gif ->
+        // Your app loads the GIF from the link.
+        showSuccessMessage("${gif.getUrl()} ${gif.getWidth()} x ${gif.getHeight()} $onlyGifs")
+    }
+}
+```
+
+```swift iOS
+func showGifs(of post: AmityPost) {
+    let gifs = post.childrenPosts.compactMap { $0.getGifInfo() }
+
+    let onlyGifs = post.structureType == "gif"
+
+    for gif in gifs {
+        // Your app loads the GIF from the link.
+        showSuccessMessage("\(gif.url) \(gif.width ?? 0) x \(gif.height ?? 0) \(onlyGifs)")
+    }
+}
+```
+
+```typescript TypeScript
+function showGifs(post: Amity.Post) {
+  const onlyGifs = post.structureType === 'gif';
+
+  post.childrenPosts.forEach(child => {
+    if (child.dataType !== 'gif') return;
+
+    const { url, width, height } = child.data as Amity.ContentDataGif;
+    // Your app loads the GIF from the link.
+    renderResults({ url, width, height, onlyGifs });
+  });
+}
+```
+
+</CodeGroup>
+
+## Edit the GIFs of a post
+
+Send the full list of attachments that the post keeps. social.plus matches each GIF by its link.
+
+| Change | What to send |
+| --- | --- |
+| Keep a GIF | Put the GIF in the list. Build it from the post with `AmityPost.Data.GIF.toGif()` on Android, `getGifInfo()` on iOS, or the `Amity.ContentDataGif` data of the child post on TypeScript. |
+| Change the size of a GIF | Send the same link with the new size. A size that you leave out keeps its current value. |
+| Add a GIF | Add a new GIF to the list. |
+| Remove a GIF | Leave the GIF out of the list. |
+| Remove every attachment | Android: call `.attachments()` with no arguments. iOS: call `removeAllAttachments()` on the builder. TypeScript: set `attachments: []`. The post becomes a text post. |
+| Keep every attachment | Android: do not call `.attachments(...)`. iOS: do not add media to the builder. TypeScript: leave out `attachments`. |
+
+<Warning>
+  On iOS, edit a GIF post with `AmityMixedMediaPostBuilder`. Do not use `AmityImagePostBuilder`. That builder sends only the images, so the edit removes every GIF.
+</Warning>
+
+The examples below keep the first GIF and remove the other GIFs. They also send back every photo, video, file, and audio child, so a post with other media keeps it.
+
+<CodeGroup>
+
+```kotlin Android
+fun keepFirstGif(post: AmityPost) {
+    var gifKept = false
+
+    // `attachments` is the full list to keep, so send back every child you keep.
+    // A child left out is deleted. A video child loads its file first.
+    val keep: List<Flowable<AmityAttachment>> = post.getChildren().mapNotNull { child ->
+        when (val data = child.getData()) {
+            is AmityPost.Data.GIF ->
+                if (gifKept) null else Flowable.just<AmityAttachment>(data.toGif()).also { gifKept = true }
+            is AmityPost.Data.IMAGE -> data.getImage()?.let { Flowable.just<AmityAttachment>(it) }
+            is AmityPost.Data.VIDEO -> data.getVideo().map<AmityAttachment> { it }.toFlowable()
+            is AmityPost.Data.FILE -> data.getFile()?.let { Flowable.just<AmityAttachment>(it) }
+            is AmityPost.Data.AUDIO -> data.getAudio()?.let { Flowable.just<AmityAttachment>(it) }
+            else -> null
+        }
+    }
+
+    Flowable.concat(keep).toList()
+        .flatMapCompletable { attachments ->
+            postRepository.editPost(postId = post.getPostId())
+                .attachments(attachments)
+                .build()
+                .apply()
+        }
+        .subscribe(
+            { showSuccessMessage(post.getPostId()) },
+            { error -> handleGeneralError(error) }
+        )
+}
+```
+
+```swift iOS
+func keepFirstGif(of post: AmityPost, caption: String) async throws -> AmityPost {
+    // The builder's media list is the full set to keep, so add back every child you keep.
+    // A child left out is deleted.
+    let builder = AmityMixedMediaPostBuilder()
+    builder.setText(caption)
+
+    var gifKept = false
+    for child in post.childrenPosts {
+        if let gif = child.getGifInfo() {
+            if !gifKept {
+                builder.setGifs([gif])
+                gifKept = true
+            }
+        } else if child.dataType == AmityPostDataType.image.rawValue, let image = child.getImageInfo() {
+            builder.setImages([image])
+        } else if child.dataType == AmityPostDataType.video.rawValue, let video = child.getVideoInfo() {
+            builder.setVideos([video])
+        } else if child.dataType == AmityPostDataType.file.rawValue, let file = child.getFileInfo() {
+            builder.setFiles([file])
+        } else if child.dataType == AmityPostDataType.audio.rawValue, let audio = child.getAudioInfo() {
+            builder.setAudios([audio])
+        }
+    }
+
+    return try await postRepository.editPost(withId: post.postId, builder: builder)
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+async function keepFirstGif(post: Amity.Post) {
+  let gifKept = false;
+
+  // `attachments` is the full list to keep, so send back every child you keep:
+  // a GIF by its link and size, a file by its ID. A child left out is deleted.
+  const keep = post.childrenPosts.flatMap((child): Amity.PostAttachment<string>[] => {
+    if (child.dataType === 'gif') {
+      if (gifKept) return [];
+      gifKept = true;
+
+      const { url, width, height } = child.data as Amity.ContentDataGif;
+      return [{ type: 'gif', url, ...(width ? { width } : {}), ...(height ? { height } : {}) }];
+    }
+
+    const fileId =
+      child.dataType === 'video'
+        ? (child.data as Amity.ContentDataVideo).videoFileId.original
+        : (child.data as Amity.ContentDataFile).fileId;
+    // A video's `original` ID is typed as optional, so check it before sending.
+    return fileId ? [{ type: child.dataType, fileId }] : [];
+  });
+
+  const { data: updatedPost } = await PostRepository.editPost(post.postId, {
+    attachments: keep,
+  });
+
+  return updatedPost;
+}
+```
+
+</CodeGroup>
+
+The iOS builder sends the post data in each edit. Set the caption on the builder so that the edit sends it.
+
+## Delete one GIF
+
+Delete the GIF child post to remove one GIF. The parent post and its other GIFs stay. When you delete the last GIF, the post keeps its text. A post with no text stays empty. social.plus does not delete the post.
+
+<CodeGroup>
+
+```kotlin Android
+fun deleteGif(gifChildPost: AmityPost) {
+    postRepository.softDeletePost(postId = gifChildPost.getPostId())
+        .subscribe(
+            { showSuccessMessage(gifChildPost.getPostId()) },
+            { error -> handleGeneralError(error) }
+        )
+}
+```
+
+```swift iOS
+func deleteGif(_ gifChildPost: AmityPost, parentPost: AmityPost) async throws {
+    try await postRepository.softDeletePost(
+        withId: gifChildPost.postId,
+        parentId: parentPost.postId
+    )
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+async function deleteGif(gifChildPost: Amity.Post) {
+  await PostRepository.softDeletePost(gifChildPost.postId);
+}
+```
+
+</CodeGroup>
+
+## Query GIF posts
+
+Use the post query with `gif` in the data types. The result holds GIF child posts. Read each GIF with `getData()` on Android, `getGifInfo()` on iOS, or the `data` of the child post on TypeScript. Set `includeMixedStructure` to `true` to also get GIFs from posts that hold other media.
+
+<CodeGroup>
+
+```kotlin Android
+postRepository
+    .getPosts()
+    .targetCommunity(communityId = communityId)
+    .dataTypes(dataTypes = listOf(AmityPost.DataType.GIF))
+    .includeMixedStructure(includeMixedStructure = true)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let options = AmityPostQueryOptions(
+    targetType: .community,
+    targetId: "community-id",
+    sortBy: .lastCreated,
+    deletedOption: .notDeleted,
+    dataTypes: [AmityPostDataType.gif.rawValue],
+    includeMixedStructure: true
+)
+
+token = postRepository.getPosts(options).observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = PostRepository.getPosts(
+  {
+    targetType: 'community',
+    targetId: communityId,
+    dataTypes: ['gif'],
+    includeMixedStructure: true,
+  },
+  ({ data: gifChildPosts, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(gifChildPosts);
+  },
+);
+```
+
+</CodeGroup>
+
+### GIF posts in feeds
+
+| Read path | Behavior |
+| --- | --- |
+| Every feed and post query | Returns GIF posts. |
+| Post query (`getPosts`) | Accepts `gif` in the data types. |
+| User feed and global feed (`getGlobalFeed`) | Do not accept `gif` in the data types. Do not pass it to these feeds. |
+| TypeScript custom ranking global feed (`getCustomRankingGlobalFeed`) | Accepts `gif` in the data types. |
+| Posts with GIFs and other media | These posts have structure type `mixed`. A feed or query returns them only when `includeMixedStructure` is `true`. |
+
+## Errors
+
+The SDK returns a GIF error to your app unchanged. The SDK does not retry the request.
+
+| HTTP status | Error code | Cause | SDK value |
+| --- | --- | --- | --- |
+| `403` | `400309` | The GIF host is not on the network's link allowlist. | Android: `AmityError.LINK_NOT_ALLOWED`. iOS: `AmityErrorCode.linkNotAllowed`. TypeScript: `Amity.ServerError.LINK_NOT_ALLOWED`. |
+| `400` | `400000` | The GIF breaks another rule. For example, the link is not `https`, a size is out of range, or the post has the same GIF twice. | Android: `AmityError.BAD_REQUEST_ERROR`. iOS: `AmityErrorCode.badRequest`. TypeScript: `Amity.ServerError.BAD_REQUEST`. |
+
+## Notes
+
+- Realtime post events carry GIF child posts in the same shape as the API response. No GIF-specific event exists. See [Social Realtime Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events).
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Mixed Media Posts" icon="layer-group" href="./mixed-media-post">
+    Combine GIFs with uploaded images and videos.
+  </Card>
+  <Card title="Query Posts" icon="list" href="../retrieval/query-posts">
+    Filter feeds by data type and mixed structure.
+  </Card>
+  <Card title="GIF Comment" icon="message-square" href="/social-plus-sdk/social/content-management/comments/creation/gif-comment">
+    Add a GIF to a comment.
+  </Card>
+</CardGroup>
