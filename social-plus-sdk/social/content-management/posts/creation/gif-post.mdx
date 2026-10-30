@@ -3,7 +3,11 @@ title: "GIF Posts"
 description: "Create, edit, read, and query posts that hold GIFs from your own GIF provider."
 ---
 
-Let users share GIFs in their posts. Your app picks each GIF from its own GIF provider, such as Giphy, and passes the GIF link to the SDK. A post can hold only GIFs, or GIFs beside other media such as images and videos. The SDK does not upload the GIF and does not load it. Your app loads and shows the GIF.
+Let users share GIFs in their posts, on their own or beside photos and videos, so a post can carry a mood or a reaction that a still image can't. Each GIF stays animated instead of being flattened into a photo.
+
+You keep the GIF experience you choose. Your app uses its own GIF provider, such as GIPHY, with that provider's search and content filters, and social.plus stores only each GIF's link and size. GIF posts show in feeds and post queries like any other post, you can filter for them by the `gif` data type, and moderators can remove one GIF or the whole post in the social.plus Console.
+
+Your app picks each GIF from its provider and passes the GIF link to the SDK. A post can hold only GIFs, or GIFs beside other media such as images and videos. The SDK does not upload the GIF and does not load it. Your app loads and shows the GIF.
 
 <Info>
   GIF posts are available in the Android, iOS, and TypeScript SDKs. This page has samples for these three platforms only.
@@ -171,20 +175,35 @@ Send the full list of attachments that the post keeps. social.plus matches each 
   On iOS, edit a GIF post with `AmityMixedMediaPostBuilder`. Do not use `AmityImagePostBuilder`. That builder sends only the images, so the edit removes every GIF.
 </Warning>
 
-The examples below keep the first GIF and remove the other GIFs. The TypeScript example also sends back every photo, video, file, and audio child, so a post with other media keeps it.
+The examples below keep the first GIF and remove the other GIFs. They also send back every photo, video, file, and audio child, so a post with other media keeps it.
 
 <CodeGroup>
 
 ```kotlin Android
 fun keepFirstGif(post: AmityPost) {
-    val keep: List<AmityAttachment> = post.getChildren()
-        .mapNotNull { child -> (child.getData() as? AmityPost.Data.GIF)?.toGif() }
-        .take(1)
+    var gifKept = false
 
-    postRepository.editPost(postId = post.getPostId())
-        .attachments(keep)
-        .build()
-        .apply()
+    // `attachments` is the full list to keep, so send back every child you keep.
+    // A child left out is deleted. A video child loads its file first.
+    val keep: List<Single<AmityAttachment>> = post.getChildren().mapNotNull { child ->
+        when (val data = child.getData()) {
+            is AmityPost.Data.GIF ->
+                if (gifKept) null else Single.just<AmityAttachment>(data.toGif()).also { gifKept = true }
+            is AmityPost.Data.IMAGE -> data.getImage()?.let { Single.just<AmityAttachment>(it) }
+            is AmityPost.Data.VIDEO -> data.getVideo().map<AmityAttachment> { it }
+            is AmityPost.Data.FILE -> data.getFile()?.let { Single.just<AmityAttachment>(it) }
+            is AmityPost.Data.AUDIO -> data.getAudio()?.let { Single.just<AmityAttachment>(it) }
+            else -> null
+        }
+    }
+
+    Single.concat(keep).toList()
+        .flatMapCompletable { attachments ->
+            postRepository.editPost(postId = post.getPostId())
+                .attachments(attachments)
+                .build()
+                .apply()
+        }
         .subscribe(
             { showSuccessMessage(post.getPostId()) },
             { error -> handleGeneralError(error) }
@@ -194,11 +213,28 @@ fun keepFirstGif(post: AmityPost) {
 
 ```swift iOS
 func keepFirstGif(of post: AmityPost, caption: String) async throws -> AmityPost {
-    let keep = post.childrenPosts.compactMap { $0.getGifInfo() }.prefix(1)
-
+    // The builder's media list is the full set to keep, so add back every child you keep.
+    // A child left out is deleted.
     let builder = AmityMixedMediaPostBuilder()
     builder.setText(caption)
-    builder.setGifs(Array(keep))
+
+    var gifKept = false
+    for child in post.childrenPosts {
+        if let gif = child.getGifInfo() {
+            if !gifKept {
+                builder.setGifs([gif])
+                gifKept = true
+            }
+        } else if child.dataType == AmityPostDataType.image.rawValue, let image = child.getImageInfo() {
+            builder.setImages([image])
+        } else if child.dataType == AmityPostDataType.video.rawValue, let video = child.getVideoInfo() {
+            builder.setVideos([video])
+        } else if child.dataType == AmityPostDataType.file.rawValue, let file = child.getFileInfo() {
+            builder.setFiles([file])
+        } else if child.dataType == AmityPostDataType.audio.rawValue, let audio = child.getAudioInfo() {
+            builder.setAudios([audio])
+        }
+    }
 
     return try await postRepository.editPost(withId: post.postId, builder: builder)
 }
