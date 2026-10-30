@@ -20565,6 +20565,7 @@ Posts are the primary content objects in social.plus. A post belongs to a target
 | Audio | Supported by TypeScript, iOS, and Android after audio upload. A Flutter audio post creator was not found in the current source. |
 | Clip | Supported by TypeScript, iOS, and Android after clip upload. A Flutter clip post creator was not found in the current source. |
 | Mixed media | TypeScript, iOS, and Android expose mixed attachment/media flows. A Flutter mixed-media post creator was not found in the current source. |
+| GIF | Supported by TypeScript, iOS, and Android. A GIF is a link from your GIF provider, not an uploaded file. See [GIF Posts](./creation/gif-post). |
 | Event | Supported by TypeScript, iOS, and Android. References an existing event via `data.eventId`. Reads must go through `GET /api/v5/posts` — event posts are excluded from unfiltered `v3` and `v4` results. See [Event Posts](./creation/event-post). |
 | Custom | Supported by TypeScript, iOS, Android, and Flutter for app-specific data. |
 
@@ -20635,9 +20636,9 @@ Common post fields include:
 
 | Platform | Current behavior |
 | --- | --- |
-| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, `event`, and `mixed`. |
-| iOS | Exposes `structureType` as a string on `AmityPost`. |
-| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `EVENT`, `MIXED`, and `UNKNOWN`. |
+| TypeScript | Typed values are `text`, `image`, `video`, `file`, `audio`, `event`, `mixed`, and `gif`. |
+| iOS | Exposes `structureType` as a string on `AmityPost`. A post with only GIFs has the value `gif`. |
+| Android | Exposes `getStructureType()` with values including `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `LIVESTREAM`, `POLL`, `CLIP`, `ROOM`, `EVENT`, `MIXED`, `GIF`, and `UNKNOWN`. |
 | Flutter | No public `structureType` field was found in the current public `AmityPost` model. |
 
 Use `includeMixedStructure` when querying a single media type and you also want posts whose `structureType` is `mixed`.
@@ -22139,12 +22140,406 @@ Mixed-structure posts can still be **read** from Flutter: pass `includeMixedStru
 - Android accepts a `Set<AmityAttachment>` through `createMixedAttachmentPost`.
 - iOS accepts uploaded media through `AmityMixedMediaPostBuilder`.
 - Do not pass `structureType` in the create request. The service derives it from the attachment composition.
+- Android, iOS, and TypeScript also accept GIFs in a mixed media post. See [GIF Posts](./gif-post).
 
 ## Related Topics
 
     Create image-only posts from uploaded images.
     Create video-only posts from uploaded videos.
     Create file-only posts from uploaded files.
+
+---
+
+### [GIF Posts](https://learn.social.plus/social-plus-sdk/social/content-management/posts/creation/gif-post)
+
+> Create, edit, read, and query posts that hold GIFs from your own GIF provider.
+
+Let users share GIFs in their posts, on their own or beside photos and videos, so a post can carry a mood or a reaction that a still image can't. Each GIF stays animated instead of being flattened into a photo.
+
+You keep the GIF experience you choose. Your app uses its own GIF provider, such as GIPHY, with that provider's search and content filters, and social.plus stores only each GIF's link and size. GIF posts show in feeds and post queries like any other post, you can filter for them by the `gif` data type, and moderators can remove one GIF or the whole post in the social.plus Console.
+
+Your app picks each GIF from its provider and passes the GIF link to the SDK. A post can hold only GIFs, or GIFs beside other media such as images and videos. The SDK does not upload the GIF and does not load it. Your app loads and shows the GIF.
+
+  GIF posts are available in the Android, iOS, and TypeScript SDKs. This page has samples for these three platforms only.
+
+## Parameters
+
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Create a GIF post | `targetType`, `targetId` | Yes | Android, iOS, TypeScript | Feed target, usually `community` or `user`, and its ID. |
+| Create a GIF post | GIFs | Yes | Android, iOS, TypeScript | `AmityGif` objects in `attachments` on Android. `AmityGifData` objects through `setGifs(_:)` on iOS. `Amity.GifAttachment` objects with `type: 'gif'` in `attachments` on TypeScript. |
+| Create a GIF post | `text` | No | Android, iOS, TypeScript | Caption text shown with the GIFs. On TypeScript, set it as `data.text`. |
+| Edit the GIFs of a post | `postId` | Yes | Android, iOS, TypeScript | ID of the post to edit. |
+| Edit the GIFs of a post | Attachments | No | Android, iOS, TypeScript | The full list of attachments to keep. Leave the attachments out to keep every attachment. |
+| Query GIF posts | `dataTypes` | No | Android, iOS, TypeScript | Holds `gif` to return GIF child posts. |
+| Query GIF posts | `includeMixedStructure` | No | Android, iOS, TypeScript | Set to `true` to include posts that hold GIFs beside other media. |
+
+### GIF fields
+
+| Field | Android `AmityGif` | iOS `AmityGifData` | TypeScript `Amity.GifAttachment` | Required | Rule |
+| --- | --- | --- | --- | --- | --- |
+| Link | `url` | `url` | `url: string` | Yes | An `https` link. The link path ends in `.gif`. The link has at most 2,000 characters. |
+| Width | `width: Int?` | `width: Int?` | `width?: number` | No | The width in pixels, from 1 to 4096. Leave it out when you do not know it. |
+| Height | `height: Int?` | `height: Int?` | `height?: number` | No | The height in pixels, from 1 to 4096. Leave it out when you do not know it. |
+
+The GIF host must be on the network's link allowlist. See [Allowlist Management](/analytics-and-moderation/console/moderation/roles-and-privileges). The SDK does not check the GIF rules. The SDK sends the values unchanged, and social.plus refuses a GIF that breaks a rule. See [Errors](#errors).
+
+### Attachment rules
+
+| Rule | Detail |
+| --- | --- |
+| Number of attachments | A post holds 1 to 10 attachments. Each GIF counts as one attachment. |
+| Repeated GIF | A GIF link can appear only once in a post. social.plus refuses a post with the same GIF twice. The SDK does not remove a repeated GIF. |
+| Product tags | A GIF takes no product tags. The SDK sends `attachmentProductTags` for file attachments only. |
+| Child posts | Each GIF becomes a child post with data type `gif`. The parent post has data type `text`. |
+| Structure type | A post with only GIFs has structure type `gif`. A post with GIFs and other media has structure type `mixed`. |
+
+## Create a GIF post
+
+Pass the GIFs to the mixed media creation API. On Android, put `AmityGif` objects in the `attachments` set of `createMixedAttachmentPost`. On iOS, pass `AmityGifData` objects to `AmityMixedMediaPostBuilder.setGifs(_:)`. On TypeScript, put GIF attachments in the `attachments` list of `PostRepository.createMixedMediaPost`. The caption text is optional.
+
+
+```kotlin Android
+import com.amity.socialcloud.sdk.model.core.file.AmityGif
+
+val gifs: Set<AmityAttachment> = setOf(
+    AmityGif(url = "https://media.example.com/gifs/friday.gif", width = 480, height = 360),
+    AmityGif(url = "https://media.example.com/gifs/dance.gif", width = 498, height = 280),
+)
+
+postRepository.createMixedAttachmentPost(
+    targetType = AmityPost.TargetType.COMMUNITY,
+    targetId = communityId,
+    attachments = gifs,
+    text = "Friday mood",
+)
+    .subscribe(
+        { post -> showSuccessMessage(post.getPostId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let builder = AmityMixedMediaPostBuilder()
+builder.setText("Friday mood")
+builder.setGifs([
+    AmityGifData(url: "https://media.example.com/gifs/friday.gif", width: 480, height: 360),
+    AmityGifData(url: "https://media.example.com/gifs/dance.gif", width: 498, height: 280)
+])
+
+let post = try await postRepository.createMixedMediaPost(
+    builder,
+    targetId: "community-id",
+    targetType: .community,
+    metadata: nil,
+    mentionees: nil
+)
+showSuccessMessage(post.postId)
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+const { data: post } = await PostRepository.createMixedMediaPost({
+  targetType: 'community',
+  targetId: communityId,
+  data: { text: 'Friday mood' },
+  attachments: [
+    { type: 'gif', url: 'https://media.example.com/gifs/friday.gif', width: 480, height: 360 },
+    { type: 'gif', url: 'https://media.example.com/gifs/dance.gif', width: 498, height: 280 },
+  ],
+});
+
+renderResults(post);
+```
+
+
+To add images or videos to the same post, add the uploaded media to the Android `attachments` set. On iOS, also call `setImages(_:)` or `setVideos(_:)` on the builder. On TypeScript, add `{ type: 'image', fileId }` or `{ type: 'video', fileId }` entries to `attachments`. See [Mixed Media Posts](./mixed-media-post).
+
+## Read GIFs on a post
+
+Read each GIF from the child posts of the post. The width and the height are `null` on Android, `nil` on iOS, and `undefined` on TypeScript when the post has no size.
+
+
+```kotlin Android
+fun showGifs(post: AmityPost) {
+    val gifs = post.getChildren()
+        .mapNotNull { child -> child.getData() as? AmityPost.Data.GIF }
+
+    val onlyGifs = post.getStructureType() == AmityPost.StructureType.GIF
+
+    gifs.forEach { gif ->
+        // Your app loads the GIF from the link.
+        showSuccessMessage("${gif.getUrl()} ${gif.getWidth()} x ${gif.getHeight()} $onlyGifs")
+    }
+}
+```
+
+```swift iOS
+func showGifs(of post: AmityPost) {
+    let gifs = post.childrenPosts.compactMap { $0.getGifInfo() }
+
+    let onlyGifs = post.structureType == "gif"
+
+    for gif in gifs {
+        // Your app loads the GIF from the link.
+        showSuccessMessage("\(gif.url) \(gif.width ?? 0) x \(gif.height ?? 0) \(onlyGifs)")
+    }
+}
+```
+
+```typescript TypeScript
+function showGifs(post: Amity.Post) {
+  const onlyGifs = post.structureType === 'gif';
+
+  post.childrenPosts.forEach(child => {
+    if (child.dataType !== 'gif') return;
+
+    const { url, width, height } = child.data as Amity.ContentDataGif;
+    // Your app loads the GIF from the link.
+    renderResults({ url, width, height, onlyGifs });
+  });
+}
+```
+
+
+## Edit the GIFs of a post
+
+Send the full list of attachments that the post keeps. social.plus matches each GIF by its link.
+
+| Change | What to send |
+| --- | --- |
+| Keep a GIF | Put the GIF in the list. Build it from the post with `AmityPost.Data.GIF.toGif()` on Android, `getGifInfo()` on iOS, or the `Amity.ContentDataGif` data of the child post on TypeScript. |
+| Change the size of a GIF | Send the same link with the new size. A size that you leave out keeps its current value. |
+| Add a GIF | Add a new GIF to the list. |
+| Remove a GIF | Leave the GIF out of the list. |
+| Remove every attachment | Android: call `.attachments()` with no arguments. iOS: call `removeAllAttachments()` on the builder. TypeScript: set `attachments: []`. The post becomes a text post. |
+| Keep every attachment | Android: do not call `.attachments(...)`. iOS: do not add media to the builder. TypeScript: leave out `attachments`. |
+
+  On iOS, edit a GIF post with `AmityMixedMediaPostBuilder`. Do not use `AmityImagePostBuilder`. That builder sends only the images, so the edit removes every GIF.
+
+The examples below keep the first GIF and remove the other GIFs. They also send back every photo, video, file, and audio child, so a post with other media keeps it.
+
+
+```kotlin Android
+fun keepFirstGif(post: AmityPost) {
+    var gifKept = false
+
+    // `attachments` is the full list to keep, so send back every child you keep.
+    // A child left out is deleted. A video child loads its file first.
+    val keep: List<Single<AmityAttachment>> = post.getChildren().mapNotNull { child ->
+        when (val data = child.getData()) {
+            is AmityPost.Data.GIF ->
+                if (gifKept) null else Single.just<AmityAttachment>(data.toGif()).also { gifKept = true }
+            is AmityPost.Data.IMAGE -> data.getImage()?.let { Single.just<AmityAttachment>(it) }
+            is AmityPost.Data.VIDEO -> data.getVideo().map<AmityAttachment> { it }
+            is AmityPost.Data.FILE -> data.getFile()?.let { Single.just<AmityAttachment>(it) }
+            is AmityPost.Data.AUDIO -> data.getAudio()?.let { Single.just<AmityAttachment>(it) }
+            else -> null
+        }
+    }
+
+    Single.concat(keep).toList()
+        .flatMapCompletable { attachments ->
+            postRepository.editPost(postId = post.getPostId())
+                .attachments(attachments)
+                .build()
+                .apply()
+        }
+        .subscribe(
+            { showSuccessMessage(post.getPostId()) },
+            { error -> handleGeneralError(error) }
+        )
+}
+```
+
+```swift iOS
+func keepFirstGif(of post: AmityPost, caption: String) async throws -> AmityPost {
+    // The builder's media list is the full set to keep, so add back every child you keep.
+    // A child left out is deleted.
+    let builder = AmityMixedMediaPostBuilder()
+    builder.setText(caption)
+
+    var gifKept = false
+    for child in post.childrenPosts {
+        if let gif = child.getGifInfo() {
+            if !gifKept {
+                builder.setGifs([gif])
+                gifKept = true
+            }
+        } else if child.dataType == AmityPostDataType.image.rawValue, let image = child.getImageInfo() {
+            builder.setImages([image])
+        } else if child.dataType == AmityPostDataType.video.rawValue, let video = child.getVideoInfo() {
+            builder.setVideos([video])
+        } else if child.dataType == AmityPostDataType.file.rawValue, let file = child.getFileInfo() {
+            builder.setFiles([file])
+        } else if child.dataType == AmityPostDataType.audio.rawValue, let audio = child.getAudioInfo() {
+            builder.setAudios([audio])
+        }
+    }
+
+    return try await postRepository.editPost(withId: post.postId, builder: builder)
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+async function keepFirstGif(post: Amity.Post) {
+  let gifKept = false;
+
+  // `attachments` is the full list to keep, so send back every child you keep:
+  // a GIF by its link and size, a file by its ID. A child left out is deleted.
+  const keep = post.childrenPosts.flatMap((child): Amity.PostAttachment<string>[] => {
+    if (child.dataType === 'gif') {
+      if (gifKept) return [];
+      gifKept = true;
+
+      const { url, width, height } = child.data as Amity.ContentDataGif;
+      return [{ type: 'gif', url, ...(width ? { width } : {}), ...(height ? { height } : {}) }];
+    }
+
+    const fileId =
+      child.dataType === 'video'
+        ? (child.data as Amity.ContentDataVideo).videoFileId.original
+        : (child.data as Amity.ContentDataFile).fileId;
+    // A video's `original` ID is typed as optional, so check it before sending.
+    return fileId ? [{ type: child.dataType, fileId }] : [];
+  });
+
+  const { data: updatedPost } = await PostRepository.editPost(post.postId, {
+    attachments: keep,
+  });
+
+  return updatedPost;
+}
+```
+
+
+The iOS builder sends the post data in each edit. Set the caption on the builder so that the edit sends it.
+
+## Delete one GIF
+
+Delete the GIF child post to remove one GIF. The parent post and its other GIFs stay. When you delete the last GIF, the post keeps its text. A post with no text stays empty. social.plus does not delete the post.
+
+
+```kotlin Android
+fun deleteGif(gifChildPost: AmityPost) {
+    postRepository.softDeletePost(postId = gifChildPost.getPostId())
+        .subscribe(
+            { showSuccessMessage(gifChildPost.getPostId()) },
+            { error -> handleGeneralError(error) }
+        )
+}
+```
+
+```swift iOS
+func deleteGif(_ gifChildPost: AmityPost, parentPost: AmityPost) async throws {
+    try await postRepository.softDeletePost(
+        withId: gifChildPost.postId,
+        parentId: parentPost.postId
+    )
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+async function deleteGif(gifChildPost: Amity.Post) {
+  await PostRepository.softDeletePost(gifChildPost.postId);
+}
+```
+
+
+## Query GIF posts
+
+Use the post query with `gif` in the data types. The result holds GIF child posts. Read each GIF with `getData()` on Android, `getGifInfo()` on iOS, or the `data` of the child post on TypeScript. Set `includeMixedStructure` to `true` to also get GIFs from posts that hold other media.
+
+
+```kotlin Android
+postRepository
+    .getPosts()
+    .targetCommunity(communityId = communityId)
+    .dataTypes(dataTypes = listOf(AmityPost.DataType.GIF))
+    .includeMixedStructure(includeMixedStructure = true)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> showSuccessMessage(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let options = AmityPostQueryOptions(
+    targetType: .community,
+    targetId: "community-id",
+    sortBy: .lastCreated,
+    deletedOption: .notDeleted,
+    dataTypes: [AmityPostDataType.gif.rawValue],
+    includeMixedStructure: true
+)
+
+token = postRepository.getPosts(options).observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    showSuccessMessage(collection.snapshots.count)
+}
+```
+
+```typescript TypeScript
+import { PostRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = PostRepository.getPosts(
+  {
+    targetType: 'community',
+    targetId: communityId,
+    dataTypes: ['gif'],
+    includeMixedStructure: true,
+  },
+  ({ data: gifChildPosts, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(gifChildPosts);
+  },
+);
+```
+
+
+### GIF posts in feeds
+
+| Read path | Behavior |
+| --- | --- |
+| Every feed and post query | Returns GIF posts. |
+| Post query (`getPosts`) | Accepts `gif` in the data types. |
+| User feed and global feed (`getGlobalFeed`) | Do not accept `gif` in the data types. Do not pass it to these feeds. |
+| TypeScript custom ranking global feed (`getCustomRankingGlobalFeed`) | Accepts `gif` in the data types. |
+| Posts with GIFs and other media | These posts have structure type `mixed`. A feed or query returns them only when `includeMixedStructure` is `true`. |
+
+## Errors
+
+The SDK returns a GIF error to your app unchanged. The SDK does not retry the request.
+
+| HTTP status | Error code | Cause | SDK value |
+| --- | --- | --- | --- |
+| `403` | `400309` | The GIF host is not on the network's link allowlist. | Android: `AmityError.LINK_NOT_ALLOWED`. iOS: `AmityErrorCode.linkNotAllowed`. TypeScript: `Amity.ServerError.LINK_NOT_ALLOWED`. |
+| `400` | `400000` | The GIF breaks another rule. For example, the link is not `https`, a size is out of range, or the post has the same GIF twice. | Android: `AmityError.BAD_REQUEST_ERROR`. iOS: `AmityErrorCode.badRequest`. TypeScript: `Amity.ServerError.BAD_REQUEST`. |
+
+## Notes
+
+- Realtime post events carry GIF child posts in the same shape as the API response. No GIF-specific event exists. See [Social Realtime Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events).
+
+## Related Topics
+
+    Combine GIFs with uploaded images and videos.
+    Filter feeds by data type and mixed structure.
+    Add a GIF to a comment.
 
 ---
 
@@ -22643,10 +23038,12 @@ Use post queries to build user feeds, community feeds, review queues, and media 
 
 | Platform | Query data type values |
 | --- | --- |
-| TypeScript | Non-text post data types through `dataTypes`, including image, video, file, poll, live stream, audio, clip, room, and custom strings |
-| iOS | String `dataTypes`; deprecated `filterPostTypes` exists but new docs should use `dataTypes` |
-| Android | `AmityPost.DataType`, including text, image, video, file, poll, live stream, audio, clip, room, and custom |
+| TypeScript | Non-text post data types through `dataTypes`, including image, video, file, poll, live stream, audio, clip, room, GIF, and custom strings |
+| iOS | String `dataTypes`, including `gif` on the post query; deprecated `filterPostTypes` exists but new docs should use `dataTypes` |
+| Android | `AmityPost.DataType`, including text, image, video, file, poll, live stream, audio, clip, room, GIF, and custom |
 | Flutter | `AmityDataType.TEXT`, `IMAGE`, `VIDEO`, `FILE`, `LIVESTREAM`, `POLL`, and `CUSTOM`; no public audio, clip, or room enum values |
+
+  On Android, iOS, and TypeScript, `gif` is a data type value for the post query. The user feed and the global feed (`getGlobalFeed`) do not accept it. On TypeScript, the custom ranking global feed also accepts it. Every feed still returns GIF posts. See [GIF Posts in Feeds](/social-plus-sdk/social/content-management/posts/creation/gif-post#gif-posts-in-feeds).
 
 ## Query a Community Feed
 
@@ -22948,9 +23345,9 @@ void inspectPostContent(AmityPost post) {
 
 | Platform | Content helpers |
 | --- | --- |
-| TypeScript | Linked post helpers include `childrenPosts`, `getImageInfo()`, `getVideoInfo()`, `getVideoThumbnailInfo()`, `getFileInfo()`, `getPollInfo()`, `getAudioInfo()`, `getClipInfo()`, and `getRoomInfo()` |
-| iOS | `AmityPost` exposes `childrenPosts` plus helper methods for image, video, thumbnail, file, poll, audio, clip, and room data |
-| Android | `AmityPost.getData()` returns a sealed data type; inspect it with `when` and use data-specific methods |
+| TypeScript | Linked post helpers include `childrenPosts`, `getImageInfo()`, `getVideoInfo()`, `getVideoThumbnailInfo()`, `getFileInfo()`, `getPollInfo()`, `getAudioInfo()`, `getClipInfo()`, and `getRoomInfo()`. A GIF child post has `dataType` `gif` and `Amity.ContentDataGif` data |
+| iOS | `AmityPost` exposes `childrenPosts` plus helper methods for image, video, thumbnail, file, poll, audio, clip, and room data. `getGifInfo()` returns the GIF of a GIF child post |
+| Android | `AmityPost.getData()` returns a sealed data type; inspect it with `when` and use data-specific methods. A GIF child post returns `AmityPost.Data.GIF` |
 | Flutter | Current public model exposes text, image, video, file, live stream, poll, and custom data classes; audio, clip, and room post data classes are not exposed in the current public model |
 
 ## Rendering Guidance
@@ -22988,12 +23385,12 @@ Use post editing when your app needs to update content that already exists. The 
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Update a post | `postId` | Yes | Post ID to update. Flutter updates through a loaded `AmityPost` object. |
-| Update a post | Text/data patch | Usually | Updated text or post data supported by the original post type. |
-| Update a post | Attachments/media | No | Complete attachment set to keep where the SDK exposes attachment editing. |
-| Update a post | `metadata`, `tags`, mentions, links | No | Optional fields exposed by the target SDK edit surface. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Update a post | `postId` | Yes | TypeScript, iOS, Android, Flutter | Post ID to update. Flutter updates through a loaded `AmityPost` object. |
+| Update a post | Text/data patch | Usually | TypeScript, iOS, Android, Flutter | Updated text or post data supported by the original post type. |
+| Update a post | Attachments/media | No | TypeScript, iOS, Android, Flutter | Complete attachment set to keep where the SDK exposes attachment editing. |
+| Update a post | `metadata`, `tags`, mentions, links | No | TypeScript, iOS, Android, Flutter | Optional fields exposed by the target SDK edit surface. |
 
 ## Update a Post
 
@@ -23088,6 +23485,8 @@ On platforms with attachment editing, send the complete attachment set you want 
 | iOS | Rebuild the post with the matching media builder, such as `AmityImagePostBuilder`, `AmityFilePostBuilder`, or `AmityVideoPostBuilder` |
 | Android | Pass media objects through `.attachments(...)` on the edit builder |
 | Flutter | Use `.image(...)`, `.file(...)`, or `.video(...)` on the loaded post editor |
+
+To edit the GIFs of a post on Android, iOS, and TypeScript, see [Edit the GIFs of a Post](/social-plus-sdk/social/content-management/posts/creation/gif-post#edit-the-gifs-of-a-post). On iOS, edit a GIF post with `AmityMixedMediaPostBuilder`.
 
 ## Notes
 
@@ -23757,7 +24156,7 @@ final reachedUserCount = users.length;
 
 > Create, query, update, delete, and react to comments on posts, stories, and custom content.
 
-Use the comment repository when you need discussions on posts, stories, or custom content. Comment creation supports text, optional image attachments, metadata, user mentions, and replies through `parentId`.
+Use the comment repository when you need discussions on posts, stories, or custom content. Comment creation supports text, optional image attachments, metadata, user mentions, and replies through `parentId`. On Android, iOS, and TypeScript, a comment can also hold one GIF.
 
   A reply is a normal comment with `parentId` set to another comment ID. There is no separate reply API in the SDK.
 
@@ -23783,6 +24182,7 @@ The exact property names vary by platform, but the SDK model centers on the same
 | Reference | `referenceId`, `referenceType` | `referenceId`, `referenceType` | `comment.getReference()` | `referenceId`, `referenceType` |
 | Text data | `comment.data.text` | `comment.data` text value | `comment.getData()` | `comment.data` |
 | Image attachments | `comment.attachments` | `comment.attachments` | `comment.getAttachments()` | `comment.attachments` |
+| GIF attachment | `{ type: 'gif', url, width, height }` in `comment.attachments` | `.gif(url:width:height:)` in `comment.attachments` | `AmityComment.Attachment.GIF` in `comment.getAttachments()` | Not exposed |
 | Reply count | `childrenNumber` | `childrenNumber` | `getChildCount()` | `childrenNumber` |
 | Reactions | `reactions`, `myReactions` | reaction properties on comment | `getReactionCount()`, `getMyReactions()` | `reactionCount`, `myReactions` |
 | Moderation | `isDeleted`, flags | `isDeleted`, flags | `isDeleted()`, flags | `isDeleted`, flags |
@@ -23790,12 +24190,12 @@ The exact property names vary by platform, but the SDK model centers on the same
 
 ## Creation APIs
 
-| Platform | Repository entry point | Text comment | Image comment |
-| --- | --- | --- | --- |
-| TypeScript | `CommentRepository.createComment(...)` | `data: { text }` | `attachments: [{ type: "image", fileId }]` |
-| iOS | `AmityCommentRepository().createComment(with:)` | `AmityCommentCreateOptions(text:)` | `attachments: [.image(fileId:)]` |
-| Android | `commentRepository.createComment()` | `.with().text(...).build().send()` | `.with().attachments(...).build().send()` |
-| Flutter | `AmitySocialClient.newCommentRepository().createComment()` | `.create().text(...).send()` | `.create().attachments(...).send()` |
+| Platform | Repository entry point | Text comment | Image comment | GIF comment |
+| --- | --- | --- | --- | --- |
+| TypeScript | `CommentRepository.createComment(...)` | `data: { text }` | `attachments: [{ type: "image", fileId }]` | `attachments: [{ type: "gif", url }]` |
+| iOS | `AmityCommentRepository().createComment(with:)` | `AmityCommentCreateOptions(text:)` | `attachments: [.image(fileId:)]` | `attachments: [.gif(url:width:height:)]` |
+| Android | `commentRepository.createComment()` | `.with().text(...).build().send()` | `.with().attachments(...).build().send()` | `.with().attachments(AmityComment.Attachment.GIF(...)).build().send()` |
+| Flutter | `AmitySocialClient.newCommentRepository().createComment()` | `.create().text(...).send()` | `.create().attachments(...).send()` | Not exposed |
 
   Upload image files first, then pass the uploaded image file IDs to the comment creation API. Comment creation does not upload local files by itself.
 
@@ -23805,6 +24205,7 @@ The exact property names vary by platform, but the SDK model centers on the same
 
     Create top-level comments and replies with text
     Create comments with uploaded image attachments
+    Create, edit, and query comments that hold a GIF
     Query top-level comments and reply threads
     Edit, delete, flag, and manage comments
 
@@ -23812,12 +24213,13 @@ The exact property names vary by platform, but the SDK model centers on the same
 
 ### [Create Comment](https://learn.social.plus/social-plus-sdk/social/content-management/comments/creation/create-comment)
 
-> Choose the right comment creation API for text comments, replies, and image comments.
+> Choose the right comment creation API for text comments, replies, image comments, and GIF comments.
 
 Use comment creation APIs to add comments to posts, stories, or your own custom content IDs. A reply is a normal comment with `parentId` set to the comment being replied to.
 
     Create top-level comments and replies with text, metadata, mentions, and supported link payloads.
     Create comments with uploaded image file IDs.
+    Create comments that hold a GIF from your GIF provider. Android, iOS, and TypeScript.
 
 ## Parameters
 
@@ -24396,6 +24798,364 @@ final replyId = reply.commentId;
 
 ---
 
+### [GIF Comment](https://learn.social.plus/social-plus-sdk/social/content-management/comments/creation/gif-comment)
+
+> Create, edit, read, and query comments that hold a GIF from your own GIF provider.
+
+A GIF often says in one tap what a reply would take a sentence to type: a laugh, a cheer, a shrug. GIF comments let your users answer a post or another comment with a GIF that stays animated, the way they already react in other apps.
+
+You keep the GIF experience you choose. Your app uses its own GIF provider, such as GIPHY, with that provider's search and content filters, and social.plus stores only the GIF's link and size. A GIF comment is a regular comment: it comes back in comment queries, you can filter for it by the `gif` data type, and moderators review and remove it in the social.plus Console like any other comment.
+
+Your app picks the GIF from its provider and passes the GIF link to the SDK. The SDK sends the link and the GIF size to social.plus. The SDK does not upload the GIF and does not load it. Your app loads and shows the GIF.
+
+  GIF comments are available in the Android, iOS, and TypeScript SDKs. This page has samples for these three platforms only.
+
+## Parameters
+
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Create a GIF comment | Reference target | Yes | Android, iOS, TypeScript | The content that gets the comment, such as a post ID. |
+| Create a GIF comment | GIF attachment | Yes | Android, iOS, TypeScript | `AmityComment.Attachment.GIF` on Android. `AmityCommentAttachment.gif(url:width:height:)` on iOS. An `Amity.GifAttachment` with `type: 'gif'` on TypeScript. A comment holds one GIF. |
+| Create a GIF comment | `text` | No | Android, iOS, TypeScript | Text shown with the GIF. On TypeScript, set it as `data.text`. |
+| Reply with a GIF | `parentId` | Yes | Android, iOS, TypeScript | ID of the comment that gets the reply. |
+| Replace or remove the GIF | `commentId` | Yes | Android, iOS, TypeScript | ID of the comment to edit. |
+| Replace or remove the GIF | Attachments | No | Android, iOS, TypeScript | A new GIF replaces the GIF. An empty list removes the GIF. Leave the attachments out to keep the GIF. |
+| Query GIF comments | `dataTypes` | No | Android, iOS, TypeScript | An `any` or `exact` filter that holds `gif`. |
+
+### GIF attachment fields
+
+| Field | Type | Required | Rule |
+| --- | --- | --- | --- |
+| `url` | String | Yes | An `https` link. The link path ends in `.gif`. The link has at most 2,000 characters. |
+| `width` | Integer | No | The width in pixels, from 1 to 4096. Leave it out when you do not know it. |
+| `height` | Integer | No | The height in pixels, from 1 to 4096. Leave it out when you do not know it. |
+
+The GIF host must be on the network's link allowlist. See [Allowlist Management](/analytics-and-moderation/console/moderation/roles-and-privileges). The SDK does not check these rules. The SDK sends the values unchanged, and social.plus refuses a GIF that breaks a rule. See [Errors](#errors).
+
+## Create a GIF comment
+
+Build a GIF attachment from the link that your GIF provider returns. Pass the attachment to the comment creation API. Add text when the user typed text. The returned comment has `gif` in its data types. The comment also has `text` in its data types when it has text.
+
+To create a comment with only a GIF, leave out the text on Android. On iOS, pass an empty string as `text`. On TypeScript, leave out `data`.
+
+
+```kotlin Android
+// The link that your GIF provider returns.
+val gifUrl = "https://media.example.com/gifs/thumbs-up.gif"
+
+val gif = AmityComment.Attachment.GIF(
+    url = gifUrl,
+    width = 480,
+    height = 270,
+)
+
+AmitySocialClient.newCommentRepository()
+    .createComment()
+    .post(postId = postId)
+    .with()
+    .attachments(gif)
+    .text(text = "Nice one")
+    .build()
+    .send()
+    .subscribe(
+        { comment -> showSuccessMessage(comment.getCommentId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+// The link that your GIF provider returns.
+let gifURL = "https://media.example.com/gifs/thumbs-up.gif"
+
+let options = AmityCommentCreateOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    text: "Nice one",
+    attachments: [
+        .gif(url: gifURL, width: 480, height: 270)
+    ]
+)
+
+let comment = try await commentRepository.createComment(with: options)
+showSuccessMessage(comment.commentId)
+```
+
+```typescript TypeScript
+import { CommentRepository } from '@amityco/ts-sdk';
+
+// The link that your GIF provider returns.
+const gifUrl = 'https://media.example.com/gifs/thumbs-up.gif';
+
+const { data: comment } = await CommentRepository.createComment({
+  referenceId: postId,
+  referenceType: 'post',
+  data: { text: 'Nice one' },
+  attachments: [{ type: 'gif', url: gifUrl, width: 480, height: 270 }],
+});
+
+renderResults(comment);
+```
+
+
+## Reply with a GIF
+
+Set `parentId` to the ID of the comment that gets the reply. A reply follows the same GIF rules as a top-level comment.
+
+
+```kotlin Android
+val gif = AmityComment.Attachment.GIF(
+    url = "https://media.example.com/gifs/clapping.gif"
+)
+
+AmitySocialClient.newCommentRepository()
+    .createComment()
+    .post(postId = postId)
+    .parentId(parentId = commentId)
+    .with()
+    .attachments(gif)
+    .build()
+    .send()
+    .subscribe(
+        { reply -> showSuccessMessage(reply.getCommentId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let options = AmityCommentCreateOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    text: "",
+    attachments: [
+        .gif(url: "https://media.example.com/gifs/clapping.gif")
+    ],
+    parentId: "parent-comment-id"
+)
+
+let reply = try await commentRepository.createComment(with: options)
+showSuccessMessage(reply.commentId)
+```
+
+```typescript TypeScript
+import { CommentRepository } from '@amityco/ts-sdk';
+
+const { data: reply } = await CommentRepository.createComment({
+  referenceId: postId,
+  referenceType: 'post',
+  parentId: commentId,
+  attachments: [{ type: 'gif', url: 'https://media.example.com/gifs/clapping.gif' }],
+});
+
+renderResults(reply);
+```
+
+
+## Read the GIF on a comment
+
+Read the GIF from the comment attachments. The width and the height are `null` on Android, `nil` on iOS, and `undefined` on TypeScript when the comment has no size.
+
+
+```kotlin Android
+fun showGif(comment: AmityComment) {
+    val gif = comment.getAttachments()
+        .filterIsInstance<AmityComment.Attachment.GIF>()
+        .firstOrNull() ?: return
+
+    // Your app loads the GIF from the link.
+    showSuccessMessage("${gif.getUrl()} ${gif.getWidth()} x ${gif.getHeight()}")
+}
+```
+
+```swift iOS
+func showGif(of comment: AmityComment) {
+    for case let .gif(url, width, height) in comment.attachments {
+        // Your app loads the GIF from the link.
+        showSuccessMessage("\(url) \(width ?? 0) x \(height ?? 0)")
+    }
+}
+```
+
+```typescript TypeScript
+function showGif(comment: Amity.Comment) {
+  const gif = comment.attachments?.find(
+    (attachment): attachment is Amity.GifAttachment => attachment.type === 'gif',
+  );
+  if (!gif) return;
+
+  // Your app loads the GIF from the link.
+  renderResults({ url: gif.url, width: gif.width, height: gif.height });
+}
+```
+
+
+A deleted GIF comment keeps `gif` in its data types. The server returns it with no attachments. Right after a delete, the local copy of the comment can still hold the GIF until the next read. Check that the comment is not deleted before you show a GIF.
+
+## Replace or remove the GIF
+
+Edit the comment attachments to change the GIF.
+
+| Change | Android | iOS | TypeScript |
+| --- | --- | --- | --- |
+| Replace the GIF | Call `.attachments(newGif)`. | Set `attachments: [.gif(url:width:height:)]`. | Set `attachments: [{ type: 'gif', url }]`. |
+| Remove the GIF and keep the text | Call `.attachments()` with no arguments. | Set `attachments: []`. | Set `attachments: []`. |
+| Keep the GIF | Do not call `.attachments(...)`. | Leave `attachments` as `nil`. | Leave out `attachments`. |
+
+The examples below replace the GIF.
+
+
+```kotlin Android
+val newGif = AmityComment.Attachment.GIF(
+    url = "https://media.example.com/gifs/high-five.gif",
+    width = 498,
+    height = 280,
+)
+
+AmitySocialClient.newCommentRepository()
+    .editComment(commentId = commentId)
+    .attachments(newGif)
+    .build()
+    .apply()
+    .subscribe(
+        { updatedComment -> showSuccessMessage(updatedComment.getCommentId()) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let options = AmityCommentUpdateOptions(
+    attachments: [
+        .gif(url: "https://media.example.com/gifs/high-five.gif", width: 498, height: 280)
+    ]
+)
+
+let updatedComment = try await commentRepository.editComment(
+    withId: "comment-id",
+    options: options
+)
+showSuccessMessage(updatedComment.commentId)
+```
+
+```typescript TypeScript
+import { CommentRepository } from '@amityco/ts-sdk';
+
+const { data: updatedComment } = await CommentRepository.updateComment(commentId, {
+  attachments: [
+    { type: 'gif', url: 'https://media.example.com/gifs/high-five.gif', width: 498, height: 280 },
+  ],
+});
+
+renderResults(updatedComment);
+```
+
+
+  A community can require review for comment edits. See [Edit Comment](/social-plus-sdk/social/content-management/comments/actions/edit-comment) for the review rules.
+
+## Query GIF comments
+
+Set a data type filter with `gif` to show only comments that hold a GIF.
+
+| Filter | Comments in the result |
+| --- | --- |
+| `any` with `gif` | Every comment that has a GIF, with text or without text. |
+| `exact` with `gif` | Comments that have a GIF and no text. |
+| `exact` with `gif` and `text` | Comments that have a GIF and text. |
+
+An `exact` filter matches the data types as a set. The order of the values does not matter.
+
+
+```kotlin Android
+import com.amity.socialcloud.sdk.api.social.comment.query.AmityCommentDataTypeFilter
+import com.amity.socialcloud.sdk.api.social.comment.query.AmityCommentSortOption
+
+AmitySocialClient.newCommentRepository()
+    .getComments()
+    .post(postId = postId)
+    .dataTypes(
+        AmityCommentDataTypeFilter.Any(
+            dataTypes = listOf(AmityComment.DataType.GIF)
+        )
+    )
+    .sortBy(AmityCommentSortOption.LAST_CREATED)
+    .includeDeleted(includeDeleted = false)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData -> getPagingData(pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let gifOptions = AmityCommentQueryOptions(
+    referenceId: "post-id",
+    referenceType: .post,
+    filterByParentId: false,
+    dataTypes: .any([.gif]),
+    orderBy: .descending,
+    includeDeleted: false
+)
+
+token = commentRepository
+    .getComments(with: gifOptions)
+    .observe { collection, error in
+        if let error {
+            handleError(error)
+            return
+        }
+
+        showSuccessMessage(collection.snapshots.count)
+    }
+```
+
+```typescript TypeScript
+import { CommentRepository } from '@amityco/ts-sdk';
+
+const unsubscribe = CommentRepository.getComments(
+  {
+    referenceType: 'post',
+    referenceId: postId,
+    dataTypes: {
+      values: ['gif'],
+      matchType: 'any',
+    },
+  },
+  ({ data: gifComments, error }) => {
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(gifComments);
+  },
+);
+```
+
+
+## Errors
+
+The SDK returns a GIF error to your app unchanged. The SDK does not retry the request.
+
+| HTTP status | Error code | Cause | SDK value |
+| --- | --- | --- | --- |
+| `403` | `400309` | The GIF host is not on the network's link allowlist. | Android: `AmityError.LINK_NOT_ALLOWED`. iOS: `AmityErrorCode.linkNotAllowed`. TypeScript: `Amity.ServerError.LINK_NOT_ALLOWED`. |
+| `400` | `400000` | The GIF breaks another rule. For example, the link is not `https`, a size is out of range, the comment has two GIFs, or the comment has a GIF and an image. | Android: `AmityError.BAD_REQUEST_ERROR`. iOS: `AmityErrorCode.badRequest`. TypeScript: `Amity.ServerError.BAD_REQUEST`. |
+
+With optimistic creation on, a refused create keeps the local comment in a failed state. Your app can offer a retry.
+
+## Notes
+
+- A GIF comment holds one GIF and no other attachment. To show an image, create an [Image Comment](./image-comment).
+- Realtime comment events carry the GIF in the comment attachments. No GIF-specific event exists. See [Social Realtime Events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events).
+
+## Related Topics
+
+    Create comments with uploaded image attachments.
+    Query top-level comments, replies, and data types.
+    Update comment text, metadata, and attachments.
+    Add GIFs to posts.
+
+---
+
 ### [Get Comment](https://learn.social.plus/social-plus-sdk/social/content-management/comments/retrieval/get-comment)
 
 > Retrieve a comment by ID and observe updates where the SDK exposes live objects or streams.
@@ -24684,15 +25444,15 @@ Use comment queries when your app needs a paged list for a post, story, or custo
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Query comments | `referenceId` | Yes | ID of the post, story, or custom content item. |
-| Query comments | `referenceType` | Yes | Target content type, such as `post`, `story`, or `content`. |
-| Query comments | `parentId` | No | `null` / `nil` for top-level comments, a comment ID for replies, or omitted where supported. |
-| Query comments | `includeDeleted` | No | Include soft-deleted comments for moderation or audit views. |
-| Query comments | `dataTypes` | No | Filter comments by content type, such as text or image. |
-| Query comments | `sortBy` / `orderBy` | No | Newest-first or oldest-first comment order. |
-| Query comments | `pageSize` / `limit` | No | Number of comments to load per page. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Query comments | `referenceId` | Yes | TypeScript, iOS, Android, Flutter | ID of the post, story, or custom content item. |
+| Query comments | `referenceType` | Yes | TypeScript, iOS, Android, Flutter | Target content type, such as `post`, `story`, or `content`. |
+| Query comments | `parentId` | No | TypeScript, iOS, Android, Flutter | `null` / `nil` for top-level comments, a comment ID for replies, or omitted where supported. |
+| Query comments | `includeDeleted` | No | TypeScript, iOS, Android, Flutter | Include soft-deleted comments for moderation or audit views. |
+| Query comments | `dataTypes` | No | TypeScript, iOS, Android, Flutter | Filter comments by content type, such as text or image. Android, iOS, and TypeScript also accept `gif`. |
+| Query comments | `sortBy` / `orderBy` | No | TypeScript, iOS, Android, Flutter | Newest-first or oldest-first comment order. |
+| Query comments | `pageSize` / `limit` | No | TypeScript, iOS, Android, Flutter | Number of comments to load per page. |
 
 ## Query Options
 
@@ -24702,7 +25462,7 @@ Use comment queries when your app needs a paged list for a post, story, or custo
 | `referenceType` | `post`, `story`, or `content` |
 | `parentId` | `null` / `nil` for top-level comments; a comment ID for replies; omit the parent filter to include all levels where supported |
 | `includeDeleted` | Include soft-deleted comments when building moderation or audit views |
-| `dataTypes` | Filter comments by content type, such as text or image |
+| `dataTypes` | Filter comments by content type, such as text or image. Android, iOS, and TypeScript also accept `gif` |
 | `sortBy` / `orderBy` | Newest-first or oldest-first comment order |
 | `pageSize` / `limit` | Number of comments to load per page |
 
@@ -24884,7 +25644,7 @@ final replyCount = replies.length;
 
 ## Filter by Data Type
 
-Use data type filters when your UI needs a specific type of comment, such as image-only comments.
+Use data type filters when your UI needs a specific type of comment, such as image-only comments. To find GIF comments on Android, iOS, and TypeScript, see [Query GIF Comments](/social-plus-sdk/social/content-management/comments/creation/gif-comment#query-gif-comments).
 
 
 ```typescript TypeScript
@@ -25009,6 +25769,7 @@ Use comment update APIs when a user edits a comment or replaces its image attach
 | Mentions | `mentionees` | `mentioneesBuilder` | `.mentionUsers(...)` | `.mentionUsers(...)` |
 | Links | `links` | `links` | `.links(...)` | Not exposed on the public update builder |
 | Image attachments | `attachments` payload | `attachments` | `.attachments(...)` | `.attachments(...)` |
+| GIF attachment | `attachments: [{ type: 'gif', url }]` | `attachments: [.gif(url:width:height:)]` | `.attachments(AmityComment.Attachment.GIF(...))` | Not exposed |
 
   Upload image files first, then pass the uploaded file IDs to the update API. Passing local file paths to comment update is not supported.
 
@@ -25175,6 +25936,7 @@ Different SDKs distinguish between "leave this field unchanged" and "replace thi
 - For TypeScript image attachment updates, build the attachment payload using the same uploaded-file shape as comment creation.
 - For iOS, Android, and Flutter, `nil` / unset attachment fields leave existing attachments unchanged; an explicit empty list removes attachments.
 - Rebuild mention and link payloads from the edited text before updating a comment.
+- To replace or remove the GIF of a comment on Android, iOS, and TypeScript, see [Replace or Remove the GIF](/social-plus-sdk/social/content-management/comments/creation/gif-comment#replace-or-remove-the-gif).
 - Handle permission, not-found, and moderation errors from the SDK call rather than relying only on client-side checks.
 
 ## Related Topics
@@ -38422,6 +39184,8 @@ const SampleCommunitySettingWithBehavior = () => {
 
     Notification Settings components provide granular control over community notifications, allowing users to customize their notification preferences for posts, comments, stories, and other community activities.
 
+    The notification setting pages on this tab are not available in the Web (React) UIKit.
+
     ### Community Notification Setting Page
 
     The Community Notification Setting Page is the main page to change the notification settings within the community.
@@ -38452,25 +39216,6 @@ fun composeCommunityNotificationSettingPage(community: AmityCommunity) {
         community = community,
     )
 }
-```
-
-```typescript React
-import React from 'react';
-import { AmityUiKitProvider, AmityCommunityNotificationSettingPage } from '@amityco/ui-kit';
-
-const SampleNotificationSettings = () => {
-  return (
-    <AmityUiKitProvider
-      apiKey="API_KEY"
-      apiRegion="API_REGION"
-      userId="userId"
-      displayName="displayName"
-      configs={{}}
-    >
-      <AmityCommunityNotificationSettingPage community={{}} />
-    </AmityUiKitProvider>
-  );
-};
 ```
 
 ```dart Flutter
@@ -38510,25 +39255,6 @@ fun composeCommunityPostsNotificationSettingPage(community: AmityCommunity) {
         community = community,
     )
 }
-```
-
-```typescript React
-import React from 'react';
-import { AmityUiKitProvider, AmityCommunityPostsNotificationSettingPage } from '@amityco/ui-kit';
-
-const SamplePostsNotificationSettings = () => {
-  return (
-    <AmityUiKitProvider
-      apiKey="API_KEY"
-      apiRegion="API_REGION"
-      userId="userId"
-      displayName="displayName"
-      configs={{}}
-    >
-      <AmityCommunityPostsNotificationSettingPage community={{}} />
-    </AmityUiKitProvider>
-  );
-};
 ```
 
 ```dart Flutter
@@ -38571,25 +39297,6 @@ fun composeCommunityCommentsNotificationSettingPage(community: AmityCommunity) {
 }
 ```
 
-```typescript React
-import React from 'react';
-import { AmityUiKitProvider, AmityCommunityCommentsNotificationSettingPage } from '@amityco/ui-kit';
-
-const SampleCommentsNotificationSettings = () => {
-  return (
-    <AmityUiKitProvider
-      apiKey="API_KEY"
-      apiRegion="API_REGION"
-      userId="userId"
-      displayName="displayName"
-      configs={{}}
-    >
-      <AmityCommunityCommentsNotificationSettingPage community={{}} />
-    </AmityUiKitProvider>
-  );
-};
-```
-
 ```dart Flutter
 Widget communityCommentsNotificationSettingPage(AmityCommunity community) {
   return AmityCommunityCommentsNotificationSettingPage(community: community);
@@ -38628,25 +39335,6 @@ fun composeCommunityStoriesNotificationSettingPage(community: AmityCommunity) {
         community = community,
     )
 }
-```
-
-```typescript React
-import React from 'react';
-import { AmityUiKitProvider, AmityCommunityStoriesNotificationSettingPage } from '@amityco/ui-kit';
-
-const SampleStoriesNotificationSettings = () => {
-  return (
-    <AmityUiKitProvider
-      apiKey="API_KEY"
-      apiRegion="API_REGION"
-      userId="userId"
-      displayName="displayName"
-      configs={{}}
-    >
-      <AmityCommunityStoriesNotificationSettingPage community={{}} />
-    </AmityUiKitProvider>
-  );
-};
 ```
 
 ```dart Flutter
@@ -38696,30 +39384,6 @@ fun setCustomBehavior() {
     val customBehaviour = CustomCommunityNotificationSettingPageBehavior()
     AmityUIKit4Manager.behavior.communityNotificationSettingPageBehavior = customBehaviour
 }
-```
-
-```typescript React
-const SampleNotificationWithBehavior = () => {
-  return (
-    <AmityUiKitProvider
-      pageBehavior={{
-        AmityCommunityNotificationSettingPageBehavior: {
-          goToPostsNotificationSettingPage: (context) => {
-            // Custom posts notification navigation
-          },
-          goToCommentsNotificationSettingPage: (context) => {
-            // Custom comments notification navigation
-          },
-          goToStoriesNotificationSettingPage: (context) => {
-            // Custom stories notification navigation
-          },
-        },
-      }}
-    >
-      <AmityCommunityNotificationSettingPage community={{}} />
-    </AmityUiKitProvider>
-  );
-};
 ```
 
     **Pending posts and content moderation tools**
@@ -42762,7 +43426,7 @@ The **Story** feature in social.plus UIKit v4 enables users to create, share, an
 | Story Target Tab Component | ✅   | ✅       | ✅   | ✅       | ✅            |
 | Story Creation             | ✅   | ✅       | -   | ✅       | ✅            |
 | Story Viewing              | ✅   | ✅       | ✅   | ✅       | ✅            |
-| Story Target Selection     | ✅   | ✅       | -   | ✅       | -            |
+| Story Target Selection     | ✅   | ✅       | ✅   | ✅       | ✅            |
 | Story Drafting             | ✅   | ✅       | ✅   | ✅       | ✅            |
 | Live Now                   | ✅   | ✅       | ✅   | -       | -            |
 
@@ -50940,11 +51604,10 @@ await ChannelRepository.Moderation.banMembers(channelId, [userId]);
 await ChannelRepository.Moderation.unbanMembers(channelId, [userId]);
 
 // Query banned users
-const banned = ChannelRepository.Membership.getMembers({
-  channelId,
-  filter: 'bannedMember',
-});
-banned.on('dataUpdated', (list) => renderBannedList(list));
+const unsubscribe = ChannelRepository.Membership.getMembers(
+  { channelId, memberships: ['banned'] },
+  ({ data: list }) => renderBannedList(list),
+);
 ```
 
 
@@ -56654,7 +57317,7 @@ import { RoomRepository, PostRepository } from '@amityco/ts-sdk';
 import { Room as LiveKitRoom } from 'livekit-client';
 
 // 1. Create a room with live chat enabled
-const room = await RoomRepository.createRoom({
+const { data: room } = await RoomRepository.createRoom({
   title: 'Friday AMA', channelEnabled: true,
 });
 
@@ -56716,7 +57379,7 @@ sequenceDiagram
 ## Quick Start: Create a Room and Go Live
 
 ```typescript
-const room = await RoomRepository.createRoom({
+const { data: room } = await RoomRepository.createRoom({
   title: 'Product Launch Event',
   description: 'Join us for the unveiling',
   channelEnabled: true,  // auto-creates a live chat channel
@@ -56735,7 +57398,7 @@ Full reference → [Create Room](/social-plus-sdk/video-new/broadcasting/create-
 ```typescript
 import { RoomRepository } from '@amityco/ts-sdk';
 
-const room = await RoomRepository.createRoom({
+const { data: room } = await RoomRepository.createRoom({
   title: 'Weekly Q&A Session',
   description: 'Ask us anything',
   thumbnailFileId: null,
@@ -56820,8 +57483,8 @@ await liveKitRoom.disconnect();
 await RoomRepository.stopRoom(room.roomId);
 
 // 3. Poll for recording (room status transitions: ENDED → RECORDED)
-const recordedUrls = await RoomRepository.getRecordedUrl(room.roomId);
-recordedUrls.forEach(url => console.log('Recording:', url));
+const { url } = await RoomRepository.getRecordedUrl(room.roomId);
+console.log('Recording:', url);
 ```
 
     Full reference → [Recorded Playback](/social-plus-sdk/video-new/broadcasting/recorded-playback)
@@ -57184,7 +57847,7 @@ import { Room as LiveKitRoom } from 'livekit-client';
 await room.createInvitation('co-host-user-id');
 
 // CO-HOST: poll for invitation & accept
-const invitation = await room.getInvitation();
+const invitation = await room.getInvitations();
 if (invitation?.status === 'pending') await invitation.accept();
 
 // CO-HOST: get credentials & go live
@@ -57213,7 +57876,7 @@ sequenceDiagram
 
     Host->>SDK: createInvitation(userId)
     SDK-->>CoHost: Invitation (pending)
-    CoHost->>SDK: getMyRoomInvitations()
+    CoHost->>SDK: room.getInvitations()
     CoHost->>SDK: accept()
     SDK-->>Host: Invitation status → approved
     CoHost->>SDK: getBroadcastData(roomId)
@@ -57273,23 +57936,20 @@ const unsubscribe = InvitationRepository.getInvitations(
     Cancel before the invitee responds — e.g., if you sent the wrong user.
 
 ```typescript
-await invitation.cancel();
+await InvitationRepository.cancelInvitation(invitation._id);
 ```
 
 ---
 
 ## Co-Host Side
 
-    Poll or observe your pending room invitations. Show them as an in-app notification or banner.
+    Fetch your pending invitation for the room with `room.getInvitations()`. Show it as an in-app notification or banner.
 
 ```typescript
-const unsubscribe = InvitationRepository.getMyCommunityInvitations(
-  { limit: 20 },
-  ({ data }) => {
-    const pending = data?.filter(inv => inv.status === 'pending');
-    // Show pending invitations to the user
-  },
-);
+const invitation = await room.getInvitations();
+if (invitation?.status === 'pending') {
+  // Show the pending invitation to the user
+}
 ```
     Present an "Accept / Decline" UI. Both operations are one-liners.
 
@@ -57329,7 +57989,7 @@ See the component reference → [Livestream Components](/uikit/components/social
 
 **Calling `getBroadcastData` before accepting** — The co-host must accept the invitation first. Calling `getBroadcastData` while the invitation is still `pending` or `rejected` will fail.
 
-**Not listening for invitation status changes** — Use the live collection (`getInvitations` / `getMyRoomInvitations`) instead of a one-shot fetch. Statuses update in real-time (e.g., host cancels while you're looking at the invite).
+**Not listening for invitation status changes** — Hosts should use the live collection (`InvitationRepository.getInvitations`) instead of a one-shot fetch, because statuses update in real time. Co-hosts should call `room.getInvitations()` again before accepting (e.g., host cancels while you're looking at the invite).
 
 **Assuming the room is still live** — Between the invitation and the accept, the host may have stopped the stream. Always check `room.status === 'live'` before calling `getBroadcastData`.
 
@@ -67778,6 +68438,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Audio Posts | Available | ✅ | ✅ | ✅ | — |
 | Poll Posts | Available | ✅ | ✅ | ✅ | ✅ |
 | Clips (Short Form Videos) | Available | ✅ | ✅ | ✅ | ✅ |
+| GIF Posts | Available | ✅ | ✅ | ✅ | — |
 | Live Stream Posts | Available | ✅ | ✅ | ✅ | ✅ |
 | Custom Posts | Available | ✅ | ✅ | ✅ | ✅ |
 
@@ -67790,6 +68451,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | Audio Posts | Not Available | — | — | — | — | — |
 | Poll Posts | Available | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Clips (Short Form Videos) | Available | ✅ | ✅ | ✅ | — | — |
+| GIF Posts | Not Available | — | — | — | — | — |
 | Live Stream Posts | Available | ✅ | ✅ | ✅ | ✅ | — |
 | Custom Posts | Not Available | — | — | — | — | — |
 
@@ -67860,7 +68522,7 @@ For individual platforms, ✅ means supported and **—** means not yet supporte
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | Single-Level Comments | Available | ✅ | ✅ | ✅ | ✅ |
 | Multi-Level Comments | Available | ✅ | ✅ | ✅ | — |
-| GIF Comments | Not Available | — | — | — | — |
+| GIF Comments | Available | ✅ | ✅ | ✅ | — |
 | Comment Ranking | Not Available | — | — | — | — |
 | Multiple Reactions | Available | ✅ | ✅ | ✅ | — |
 
