@@ -29520,14 +29520,19 @@ Use the follow API to create a relationship from the current user to another use
 
 Use the unfollow API to cancel a pending request or remove an accepted follow relationship.
 
-If the relationship is blocked, follow and unfollow calls can fail or return a blocked status. Read the connection status before rendering a follow button when the UI needs to distinguish blocked users.
+Following fails while a block is in place, in either direction:
+
+- Following a user the current user blocked fails with a bad-request error.
+- Following a user who blocked the current user fails with a forbidden error, code `400301`.
+
+Read the connection status before rendering a follow button so the UI can hide it for blocked users. A block also removes existing follows in both directions. See [Block & Unblock User](../blocking/block-unblock-user#effect-on-follow-relationships).
 
 ## Parameters
 
-| Operation | Parameter | Required | Description |
-| --- | --- | --- | --- |
-| Follow user | `userId` / `targetUserId` | Yes | ID of the user the current user wants to follow. |
-| Unfollow user | `userId` / `targetUserId` | Yes | ID of the user the current user wants to unfollow or whose pending request should be canceled. |
+| Operation | Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- | --- |
+| Follow user | `userId` / `targetUserId` | Yes | Android, iOS, TypeScript, Flutter | ID of the user the current user wants to follow. |
+| Unfollow user | `userId` / `targetUserId` | Yes | Android, iOS, TypeScript, Flutter | ID of the user the current user wants to unfollow or whose pending request should be canceled. |
 
 ## Follow User
 
@@ -30092,9 +30097,9 @@ final followingCount = info.followingCount;
 
 Use the block API when the current user wants to block another user. Use the unblock API to remove that block.
 
-The SDK updates relationship data after block and unblock calls. TypeScript returns the updated blocked payload (`follows` and `followCounts`). iOS, Android, and Flutter expose these actions as async or completable operations.
+The SDK updates relationship data after block and unblock calls. TypeScript returns the updated payload (`follows` and `followCounts`). iOS, Android, and Flutter expose these actions as async or completable operations.
 
-Blocking affects relationship state, but downstream visibility and interaction behavior can vary by feature area and backend configuration. Keep feed, comment, search, and profile screens resilient by handling errors from those feature APIs and refreshing relationship status after block or unblock actions.
+Blocking removes any follow relationship between the two users, in both directions, and unblocking does not restore it. You don't need to call `unfollow` before `blockUser`. See [Effect on follow relationships](#effect-on-follow-relationships).
 
 ## Parameters
 
@@ -30108,11 +30113,6 @@ Blocking affects relationship state, but downstream visibility and interaction b
 Block a user when the current user wants to prevent or limit relationship-based interactions with that account.
 
 
-```swift iOS
-let relationship = AmityUserRelationship()
-try await relationship.blockUser(userId: "target-user-id")
-```
-
 ```kotlin Android
 val disposable = AmityCoreClient.newUserRepository()
     .relationship()
@@ -30125,6 +30125,11 @@ val disposable = AmityCoreClient.newUserRepository()
             handleGeneralError(error)
         },
     )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+try await relationship.blockUser(userId: "target-user-id")
 ```
 
 ```typescript TypeScript
@@ -30143,39 +30148,15 @@ await AmityCoreClient.newUserRepository()
 ```
 
 
+On TypeScript, `follows[0]` is the relationship from the current user to the blocked user, with status `blocked`. `followCounts[0]` holds the current user's updated follower, following, and pending counts. The response does not include the blocked user's counts.
+
 ### Handle the blocked-user limit
 
-A network caps how many users one account can block. When the current user is already at that cap, the block call fails with a "maximum blocked users reached" error instead of succeeding. On TypeScript this surfaces as the server error code `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`). Catch it and prompt the user to unblock someone before blocking another account.
+A network caps how many users one account can block, and how many accounts can block one user. Either limit makes the block call fail instead of succeeding:
 
+- **The current user is at their block limit.** The call fails with a "maximum blocked users reached" error. On TypeScript this surfaces as the server error code `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`). Prompt the user to unblock someone before blocking another account.
+- **The target user is already blocked by the maximum number of accounts.** The call fails with a general bad-request error that has no dedicated error code. Treat it as a generic failure.
 
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-
-try {
-  await UserRepository.Relationship.blockUser(userId);
-} catch (error) {
-  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
-    showBlockedUserLimitReached();
-    return;
-  }
-  handleError(error);
-}
-```
-
-```swift iOS
-let relationship = AmityUserRelationship()
-do {
-    try await relationship.blockUser(userId: "target-user-id")
-    showSuccessMessage()
-} catch {
-    if error.isAmityErrorCode(.maxBlockedUsersReached) {
-        // Already at the per-network block cap — prompt the user to unblock someone first.
-        showBlockedUserLimitReached()
-    } else {
-        handleError(error)
-    }
-}
-```
 
 ```kotlin Android
 AmityCoreClient.newUserRepository()
@@ -30195,16 +30176,40 @@ AmityCoreClient.newUserRepository()
     .subscribe()
 ```
 
+```swift iOS
+let relationship = AmityUserRelationship()
+do {
+    try await relationship.blockUser(userId: "target-user-id")
+    showSuccessMessage()
+} catch {
+    if error.isAmityErrorCode(.maxBlockedUsersReached) {
+        // Already at the per-network block cap — prompt the user to unblock someone first.
+        showBlockedUserLimitReached()
+    } else {
+        handleError(error)
+    }
+}
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+try {
+  await UserRepository.Relationship.blockUser(userId);
+} catch (error) {
+  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
+    showBlockedUserLimitReached();
+    return;
+  }
+  handleError(error);
+}
+```
+
 
 ## Unblock User
 
-Unblock a user when the current user removes a previously created block.
+Unblock a user when the current user removes a previously created block. Unblocking a user who is not blocked fails with a bad-request error.
 
-
-```swift iOS
-let relationship = AmityUserRelationship()
-try await relationship.unblockUser(userId: "target-user-id")
-```
 
 ```kotlin Android
 val disposable = AmityCoreClient.newUserRepository()
@@ -30218,6 +30223,11 @@ val disposable = AmityCoreClient.newUserRepository()
             handleGeneralError(error)
         },
     )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+try await relationship.unblockUser(userId: "target-user-id")
 ```
 
 ```typescript TypeScript
@@ -30236,6 +30246,36 @@ await AmityCoreClient.newUserRepository()
 ```
 
 
+On TypeScript, `follows[0]` has status `none` after an unblock.
+
+## Effect on Follow Relationships
+
+A block replaces the follow relationship between the two users. The diagram and table show the status in each direction, where the current user is the one calling `blockUser` or `unblockUser`.
+
+```mermaid
+flowchart LR
+    subgraph OUT["Current user → target user"]
+        direction LR
+        O0["none / pending / accepted"] -->|blockUser| O1["blocked"]
+        O1 -->|unblockUser| O2["none"]
+    end
+    subgraph IN["Target user → current user"]
+        direction LR
+        I0["none / pending / accepted"] -->|blockUser| I1["none"]
+        I1 -->|unblockUser| I2["none<br/>(not restored)"]
+    end
+```
+
+| Action | Current user → target user | Target user → current user |
+| --- | --- | --- |
+| Block | `blocked`. Replaces an existing `accepted` follow or `pending` request. | `none`. An `accepted` follow or `pending` request is removed. |
+| Unblock | `none` | `none` |
+
+- **Unblocking does not restore follows.** After an unblock, either user must follow the other again. On networks that require follow approval, that means a new follow request.
+- **Follow counts change for both users.** The block removes up to one follower and one following entry from each user's counts. The block response carries only the current user's counts, so refresh the target user's counts wherever your UI shows them.
+- **Following is rejected while a block is in place.** The current user can't follow a user they blocked, and the blocked user can't follow the user who blocked them. See [Follow/Unfollow User](../following/follow-unfollow-user).
+- **To remove a block, call `unblockUser`.** Don't use `unfollow` to undo a block.
+
 ## After Block Or Unblock
 
 After a successful block or unblock action:
@@ -30243,7 +30283,7 @@ After a successful block or unblock action:
 - Refresh follow info if the current screen shows relationship status or counters.
 - Refresh follower/following lists if the current screen displays social graph data.
 - Refresh blocked-user lists if the current screen lets users manage blocked accounts.
-- Handle errors from other feature APIs instead of assuming all product surfaces update in the same way.
+- Hide content from users in either block direction with `excludeBlockUserPosts` and `excludeBlockUserComments`. See [Users Who Blocked You](./manage-blocking-users).
 
 ## Related Topics
 
@@ -52772,7 +52812,7 @@ const isAccepted = await UserRepository.Relationship.acceptMyFollower('userId');
 ```
 
     Full reference → [Accept/Decline Follow Request](/social-plus-sdk/social/user-relationship/following/accept-decline-follow-request)
-    Check the relationship between two users before displaying follow/unfollow buttons. Status can be: `none`, `following`, `pending`, or `blocked`.
+    Check the relationship between two users before displaying follow/unfollow buttons. Status can be: `none`, `accepted`, `pending`, or `blocked`.
 
 ```typescript
 import { UserRepository } from '@amityco/ts-sdk';
@@ -52801,7 +52841,7 @@ const unsubscriber = UserRepository.Relationship.getFollowers(
 ```
 
     Full reference → [Get Follower / Following List](/social-plus-sdk/social/user-relationship/following/get-follower-following-list)
-    Blocking is bidirectional — neither user can see the other's content or interact with them. You can also read both directions: the users you blocked, and the users who blocked you.
+    Blocking is bidirectional — neither user can see the other's content or interact with them. A block also removes any follow or pending follow request between the two users, in both directions. You can also read both directions: the users you blocked, and the users who blocked you.
 
 ```typescript
 import { UserRepository } from '@amityco/ts-sdk';
@@ -52852,7 +52892,7 @@ const { data } = await UserRepository.Relationship.follow('userId');
 setState(data.status); // 'accepted' or 'pending'
 ```
 
-**Blocking without unfollowing first** — Blocking a user does not automatically unfollow them. Call `unfollow` before `blockUser` to fully sever the relationship.
+**Expecting follows to return after unblock** — Blocking removes the follow relationship in both directions, including pending requests, so you don't need to call `unfollow` first. Unblocking does not restore it: both users start from `none` and must follow again.
 
 **Querying the full follower list on profile load** — Large accounts can have thousands of followers. Only fetch a count for the profile header, and paginate the full list on demand.
 
@@ -52861,7 +52901,7 @@ setState(data.status); // 'accepted' or 'pending'
     - Show follower counts as rounded numbers for large accounts ("1.2K") to avoid gaming dynamics
     - Never expose private account content before a follow request is accepted
     - Let users choose between public and request-based following in their account settings
-    - When a user blocks another, immediately hide the blocked user's content from all feeds client-side
+    - Turn on `excludeBlockUserPosts` and `excludeBlockUserComments` in post and comment queries so content from users in either block direction drops out as soon as a block happens
     - Show the connection status in a single CTA button: "Follow" → "Requested" → "Following"
     - Display mutual followers ("3 people you follow also follow this account") to drive trust
     - Add empty states for users with 0 followers/following — show suggestions instead of a blank list
