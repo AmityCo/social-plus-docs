@@ -5,11 +5,11 @@ description: "Block or unblock another user with the social.plus SDKs."
 
 Use the block API when the current user wants to block another user. Use the unblock API to remove that block.
 
-The SDK updates relationship data after block and unblock calls. TypeScript returns the updated blocked payload (`follows` and `followCounts`). iOS, Android, and Flutter expose these actions as async or completable operations.
+The SDK updates relationship data after block and unblock calls. TypeScript returns the updated payload (`follows` and `followCounts`). iOS, Android, and Flutter expose these actions as async or completable operations.
 
-<Warning>
-Blocking affects relationship state, but downstream visibility and interaction behavior can vary by feature area and backend configuration. Keep feed, comment, search, and profile screens resilient by handling errors from those feature APIs and refreshing relationship status after block or unblock actions.
-</Warning>
+<Info>
+Blocking removes any follow relationship between the two users, in both directions, and unblocking does not restore it. You don't need to call `unfollow` before `blockUser`. See [Effect on follow relationships](#effect-on-follow-relationships).
+</Info>
 
 ## Parameters
 
@@ -24,11 +24,6 @@ Block a user when the current user wants to prevent or limit relationship-based 
 
 <CodeGroup>
 
-```swift iOS
-let relationship = AmityUserRelationship()
-try await relationship.blockUser(userId: "target-user-id")
-```
-
 ```kotlin Android
 val disposable = AmityCoreClient.newUserRepository()
     .relationship()
@@ -41,6 +36,11 @@ val disposable = AmityCoreClient.newUserRepository()
             handleGeneralError(error)
         },
     )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+try await relationship.blockUser(userId: "target-user-id")
 ```
 
 ```typescript TypeScript
@@ -60,40 +60,16 @@ await AmityCoreClient.newUserRepository()
 
 </CodeGroup>
 
+On TypeScript, `follows[0]` is the relationship from the current user to the blocked user, with status `blocked`. `followCounts[0]` holds the current user's updated follower, following, and pending counts. The response does not include the blocked user's counts.
+
 ### Handle the blocked-user limit
 
-A network caps how many users one account can block. When the current user is already at that cap, the block call fails with a "maximum blocked users reached" error instead of succeeding. On TypeScript this surfaces as the server error code `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`). Catch it and prompt the user to unblock someone before blocking another account.
+A network caps how many users one account can block, and how many accounts can block one user. Either limit makes the block call fail instead of succeeding:
+
+- **The current user is at their block limit.** The call fails with a "maximum blocked users reached" error. On TypeScript this surfaces as the server error code `Amity.ServerError.MAX_BLOCKED_USERS_REACHED` (`400324`). Prompt the user to unblock someone before blocking another account.
+- **The target user is already blocked by the maximum number of accounts.** The call fails with a general bad-request error that has no dedicated error code. Treat it as a generic failure.
 
 <CodeGroup>
-
-```typescript TypeScript
-import { UserRepository } from '@amityco/ts-sdk';
-
-try {
-  await UserRepository.Relationship.blockUser(userId);
-} catch (error) {
-  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
-    showBlockedUserLimitReached();
-    return;
-  }
-  handleError(error);
-}
-```
-
-```swift iOS
-let relationship = AmityUserRelationship()
-do {
-    try await relationship.blockUser(userId: "target-user-id")
-    showSuccessMessage()
-} catch {
-    if error.isAmityErrorCode(.maxBlockedUsersReached) {
-        // Already at the per-network block cap — prompt the user to unblock someone first.
-        showBlockedUserLimitReached()
-    } else {
-        handleError(error)
-    }
-}
-```
 
 ```kotlin Android
 AmityCoreClient.newUserRepository()
@@ -113,18 +89,42 @@ AmityCoreClient.newUserRepository()
     .subscribe()
 ```
 
+```swift iOS
+let relationship = AmityUserRelationship()
+do {
+    try await relationship.blockUser(userId: "target-user-id")
+    showSuccessMessage()
+} catch {
+    if error.isAmityErrorCode(.maxBlockedUsersReached) {
+        // Already at the per-network block cap — prompt the user to unblock someone first.
+        showBlockedUserLimitReached()
+    } else {
+        handleError(error)
+    }
+}
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+try {
+  await UserRepository.Relationship.blockUser(userId);
+} catch (error) {
+  if (error?.code === Amity.ServerError.MAX_BLOCKED_USERS_REACHED) {
+    showBlockedUserLimitReached();
+    return;
+  }
+  handleError(error);
+}
+```
+
 </CodeGroup>
 
 ## Unblock User
 
-Unblock a user when the current user removes a previously created block.
+Unblock a user when the current user removes a previously created block. Unblocking a user who is not blocked fails with a bad-request error.
 
 <CodeGroup>
-
-```swift iOS
-let relationship = AmityUserRelationship()
-try await relationship.unblockUser(userId: "target-user-id")
-```
 
 ```kotlin Android
 val disposable = AmityCoreClient.newUserRepository()
@@ -138,6 +138,11 @@ val disposable = AmityCoreClient.newUserRepository()
             handleGeneralError(error)
         },
     )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+try await relationship.unblockUser(userId: "target-user-id")
 ```
 
 ```typescript TypeScript
@@ -157,6 +162,36 @@ await AmityCoreClient.newUserRepository()
 
 </CodeGroup>
 
+On TypeScript, `follows[0]` has status `none` after an unblock.
+
+## Effect on Follow Relationships
+
+A block replaces the follow relationship between the two users. The diagram and table show the status in each direction, where the current user is the one calling `blockUser` or `unblockUser`.
+
+```mermaid
+flowchart LR
+    subgraph OUT["Current user → target user"]
+        direction LR
+        O0["none / pending / accepted"] -->|blockUser| O1["blocked"]
+        O1 -->|unblockUser| O2["none"]
+    end
+    subgraph IN["Target user → current user"]
+        direction LR
+        I0["none / pending / accepted"] -->|blockUser| I1["none"]
+        I1 -->|unblockUser| I2["none<br/>(not restored)"]
+    end
+```
+
+| Action | Current user → target user | Target user → current user |
+| --- | --- | --- |
+| Block | `blocked`. Replaces an existing `accepted` follow or `pending` request. | `none`. An `accepted` follow or `pending` request is removed. |
+| Unblock | `none` | `none` |
+
+- **Unblocking does not restore follows.** After an unblock, either user must follow the other again. On networks that require follow approval, that means a new follow request.
+- **Follow counts change for both users.** The block removes up to one follower and one following entry from each user's counts. The block response carries only the current user's counts, so refresh the target user's counts wherever your UI shows them.
+- **Following is rejected while a block is in place.** The current user can't follow a user they blocked, and the blocked user can't follow the user who blocked them. See [Follow/Unfollow User](../following/follow-unfollow-user).
+- **To remove a block, call `unblockUser`.** Don't use `unfollow` to undo a block.
+
 ## After Block Or Unblock
 
 After a successful block or unblock action:
@@ -164,7 +199,7 @@ After a successful block or unblock action:
 - Refresh follow info if the current screen shows relationship status or counters.
 - Refresh follower/following lists if the current screen displays social graph data.
 - Refresh blocked-user lists if the current screen lets users manage blocked accounts.
-- Handle errors from other feature APIs instead of assuming all product surfaces update in the same way.
+- Hide content from users in either block direction with `excludeBlockUserPosts` and `excludeBlockUserComments`. See [Users Who Blocked You](./manage-blocking-users).
 
 ## Related Topics
 
