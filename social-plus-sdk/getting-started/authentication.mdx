@@ -124,7 +124,7 @@ sequenceDiagram
 | Login user | `displayName` | No | iOS, Android, TypeScript, Flutter | Display name stored in the social.plus user profile. |
 | Login user | `authToken` | Production | iOS, Android, TypeScript, Flutter | Backend-generated token proving your system authenticated the user. |
 | Login user | `sessionHandler` | Recommended | iOS, Android, TypeScript, Flutter | Callback used to renew auth tokens when the SDK session expires. |
-| Login with access token | `accessToken` | Yes | iOS, Android, TypeScript | JWT access token issued by your backend. |
+| Login with access token | `accessToken` | Yes | iOS, Android, TypeScript | Access token your backend gets from the social.plus session API. |
 | Login with access token | access token handler | Yes | iOS, Android, TypeScript | Handler registered before login so the SDK can renew access tokens. |
 | Logout | None | No | iOS, Android, TypeScript, Flutter | Ends the current SDK session; secure logout revokes the access token where supported. |
 
@@ -677,7 +677,11 @@ Session handlers automatically manage token lifecycle:
 
 By default, social.plus SDK handles access token management for you — you provide a `userId` and an optional `authToken`, and the SDK takes care of obtaining and refreshing access tokens behind the scenes.
 
-**Login with Access Token** is an alternative authentication method for customers who want to manage the entire token lifecycle themselves. Instead of letting the SDK obtain tokens, your backend issues a JWT access token directly, and your app passes it to the SDK.
+**Login with Access Token** is an alternative authentication method for customers who want to manage the entire token lifecycle themselves. Instead of letting the SDK obtain tokens, your backend requests an access token from social.plus, and your app passes it to the SDK.
+
+<Warning>
+social.plus signs every access token. The SDK does not accept a JWT that your backend signs with its own key, and there is no setting to register your own signing key. Your backend must get the token from the social.plus session API, as shown in [Get an Access Token on Your Backend](#get-an-access-token-on-your-backend).
+</Warning>
 
 <Note>
 **Most developers should use the default login flow** described in the [Quick Start](#quick-start-basic-authentication) section above. Only use this approach if you have a specific need listed below.
@@ -689,8 +693,8 @@ By default, social.plus SDK handles access token management for you — you prov
   <Card title="SSO Integration" icon="right-to-bracket">
     Your app already has a centralized authentication system and you want social.plus sessions to be issued as part of that flow — no extra network hop from the client.
   </Card>
-  <Card title="Reduce Client-Side Dependencies" icon="server">
-    You want to eliminate the client-to-social.plus token exchange during login so that social.plus API availability does not block your app's core login experience.
+  <Card title="Keep Token Exchange on Your Backend" icon="server">
+    You want your backend, not the app, to create the social.plus session and decide when to issue a new access token.
   </Card>
 </CardGroup>
 
@@ -699,10 +703,10 @@ By default, social.plus SDK handles access token management for you — you prov
 | | **Default Login** | **Login with Access Token** |
 |---|---|---|
 | **SDK method** | `login(userId, authToken)` | `loginWithAccessToken(accessToken)` |
-| **Who obtains the access token?** | The SDK handles it automatically | Your backend issues a JWT and your app passes it to the SDK |
+| **Who obtains the access token?** | The SDK handles it automatically | Your backend gets it from the social.plus session API and your app passes it to the SDK |
 | **Token renewal** | Session handler (`sessionWillRenewAccessToken`) | Access token handler (`onTokenRenew`) |
 | **Best for** | Most integrations | SSO, custom auth backends, decoupled architectures |
-| **Client-to-social.plus call during login?** | Yes — SDK exchanges credentials for a token | No — token is pre-issued by your backend |
+| **Client-to-social.plus call during login?** | Yes — SDK exchanges credentials for a token | Yes — SDK validates the token your backend obtained; no credential exchange from the client |
 
 ### How It Works
 
@@ -714,20 +718,54 @@ sequenceDiagram
     participant API as social.plus API
 
     App->>Backend: Request access token for user
-    Backend->>Backend: Generate & sign JWT
-    Backend->>App: Return JWT access token
+    Backend->>Backend: Verify the user in your system
+    Backend->>API: Get auth token (secure mode only)
+    API->>Backend: authToken
+    Backend->>API: Create session (userId, deviceId, authToken)
+    API->>Backend: accessToken signed by social.plus
+    Backend->>App: Return accessToken
     App->>SDK: loginWithAccessToken(accessToken)
-    SDK->>API: Verify token
+    SDK->>API: Validate token
     API->>SDK: Session established
     SDK->>App: Login complete
 
     Note over SDK,API: Later, when token is about to expire...
     SDK->>App: onTokenRenew(userId)
     App->>Backend: Request new access token
-    Backend->>App: Return fresh JWT
+    Backend->>API: Create session again
+    API->>Backend: New accessToken
+    Backend->>App: Return new accessToken
     App->>SDK: Return new token
-    SDK->>API: Verify & refresh session
+    SDK->>API: Validate token
 ```
+
+### Get an Access Token on Your Backend
+
+Your backend makes two server-to-server calls. Never call these from the app, and never ship your server key to the client.
+
+1. **Get an auth token** with your server key. Skip this step if secure mode is off for your network.
+2. **Create a session** with your API key. The `accessToken` in the response is the token you pass to `loginWithAccessToken()`.
+
+```bash
+# 1. Get an auth token (secure mode only)
+curl -X GET 'https://apix.<region>.amity.co/api/v3/authentication/token?userId=<userId>' \
+  -H 'x-server-key: <your-server-key>'
+
+# 2. Create a session and get the access token
+curl -X POST 'https://apix.<region>.amity.co/api/v4/sessions' \
+  -H 'x-api-key: <your-api-key>' \
+  -H 'Content-Type: application/json' \
+  -d '{"userId": "<userId>", "deviceId": "<deviceId>", "authToken": "<authToken>"}'
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `userId` | Yes | The user to log in. Must match the `userId` used to get the auth token. |
+| `deviceId` | Yes | A stable identifier for the user's device. Reuse the same value for that device when you renew the token. |
+| `authToken` | Secure mode only | The auth token from step 1. |
+| `displayName` | No | Display name stored in the social.plus user profile. |
+
+To renew, repeat both calls when the SDK invokes your `onTokenRenew` handler. For more on server keys and secure mode, see [social.plus APIs and Services](/analytics-and-moderation/social+-apis-and-services/README).
 
 ### Implementation
 
@@ -735,13 +773,13 @@ Integration requires three steps: implement a token handler, register it, then l
 
 <Steps>
   <Step title="Implement an Access Token Handler">
-    Create a handler that the SDK will call whenever the token needs renewal. Your handler should request a fresh JWT from your backend.
+    Create a handler that the SDK will call whenever the token needs renewal. Your handler should ask your backend for a new access token, which your backend gets from the social.plus session API.
   </Step>
   <Step title="Register the Handler">
     Call `setAccessTokenHandler()` **before** logging in. This tells the SDK how to obtain a new token when the current one expires.
   </Step>
   <Step title="Login with Your Access Token">
-    Call `loginWithAccessToken()` with the JWT your backend issued. The SDK verifies it with social.plus and establishes the session.
+    Call `loginWithAccessToken()` with the access token your backend got from social.plus. The SDK validates it with social.plus and establishes the session.
   </Step>
 </Steps>
 
@@ -967,9 +1005,8 @@ Integration requires three steps: implement a token handler, register it, then l
     **Solutions**:
 
     1. Ensure you called `setAccessTokenHandler()` **before** `loginWithAccessToken()` — the handler must be registered first
-    2. Verify your JWT is well-formed (valid JSON Web Token structure)
-    3. Check that the JWT contains the required `userId` claim
-    4. Confirm your backend is signing the token with the key configured in the social.plus console
+    2. Pass the `accessToken` from the session API response unchanged — the SDK reads the user ID from it
+    3. Confirm the token came from the social.plus session API for the same network as your API key — the SDK does not accept a JWT signed by your own backend
   </Accordion>
   <Accordion title="Access token handler (onTokenRenew) not called">
     **Symptoms**: Token expires but the SDK does not invoke your `onTokenRenew` handler
