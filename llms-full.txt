@@ -35883,6 +35883,7 @@ For content creator applications:
 | Component | What it shows | Platforms |
 | --- | --- | --- |
 | [For You Feed](#for-you-feed) | Posts the backend personalized for the current user | React Web, iOS, Android |
+| [Video Autoplay](#video-autoplay) | Feed videos that play muted as the member scrolls | React Web, iOS, Android |
 | [Social Home Page](#social-home-page) | The container that hosts the feed tabs, creation menu, and discovery | All |
 | [Newsfeed](#newsfeed-component) | Stories plus the global post list | All |
 | [Global Feed](#global-feed-component) | Aggregated community posts, newest first (chronological only) | All |
@@ -35960,6 +35961,109 @@ fun composeForYouFeedComponent() {
 | `useForYouFeedCollection({ shouldCall })` | `{ posts, isLoading, hasMore, loadMore, error, refresh, isLoadingFirstPage }` | Render the personalized post list and paginate it. Gate `shouldCall` on the enabled setting. |
 
 Both hooks and the `ForYouFeed` component are backed by the SDK's `FeedRepository.getForYouFeed()` and `Client.getForYouFeedSetting()`. See [For You Feed](/social-plus-sdk/social/discovery-engagement/feed/for-you-feed) for the SDK-level behavior.
+
+## Video Autoplay
+
+Members scroll past a still thumbnail without knowing what the video holds. With **Video Autoplay**, a feed video starts playing, muted, as soon as the member scrolls to it. Members see the content at once, and they can turn the sound on with one tap.
+
+Video Autoplay is a **network-level setting**, and it is off by default. When you turn it on, the UIKit plays feed videos for you. You do not add any code to the feeds.
+
+**Platform Support**: Video Autoplay is available on the **React Web, iOS, and Android** UIKit. It is not available on Flutter or React Native. Those UIKits keep the thumbnail and play button.
+
+### Turn autoplay on for your network
+
+Set `post.video.autoPlay` with the feed setting API. The call needs an **Admin API Access Token**. The console has no switch for this setting.
+
+```bash
+curl -X PUT "https://apix.<region>.amity.co/api/v3/network-settings/feed-setting" \
+  -H "Authorization: Bearer <admin-access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "post": { "video": { "autoPlay": true } } }'
+```
+
+Send `false` to turn it off again. The call changes only this field and keeps your other feed settings.
+
+The UIKit reads the setting each time the SDK session is established: at login, when the app starts, and after a reconnect. It does not read the setting when the app returns from the background. A change reaches each member at their next login, app start or reconnect. If the UIKit cannot read the setting, autoplay stays off until the next successful read.
+
+### How playback behaves
+
+| Behavior | What the member sees |
+| --- | --- |
+| When a video starts | The video starts when half or more of it is on screen. A video taller than the screen starts when it fills half the screen. |
+| One at a time | Only one video plays. It keeps playing until less than half of it is on screen. Then the most visible video starts. |
+| Sound | Every video starts muted. The sound button on the video turns the sound on for the rest of the session. Logout, an app restart, a web page reload or a new browser tab starts muted again. |
+| Other apps' audio | A muted video does not stop music or other audio from another app. The video takes the audio only after the member turns the sound on. |
+| End of a video | The video plays once. It stops on a dimmed last frame with a **Watch again** button. It does not loop and does not move to the next video. |
+| Scrolling back | The video continues from the point where it stopped. Post detail and the full-screen player continue from the same point. |
+| Loading | A spinner shows over the video if it takes more than 1 second to start, or at once if it stops to load while it plays. |
+| Covered or left | The video pauses when a sheet, a menu, the full-screen player or another page covers the feed, or when the app goes to the background. It continues when the member returns. |
+| Carousels | Swiping to a video page plays it. The page the member swiped away from pauses. |
+| Livestream posts | Live and recorded livestream posts follow the same rules. A preview in the feed does not count as a view and does not add the member to the viewer list. |
+
+To make room for the sound button, the product tag badge on feed media now sits at the **bottom-left**. In the post composer, the ALT badge moves to the bottom-right.
+
+### Where videos autoplay
+
+Videos autoplay in these places:
+
+- The global feed, the For You feed, community feeds, event discussion feeds and user feeds, including the pinned and announcement posts at the top
+- The **Pin** tab of a community profile
+- Post detail
+
+These places keep the thumbnail and play button:
+
+- Search results
+- Pending posts
+- The **Videos** and **Livestream** tabs of a community profile
+- The media gallery
+
+### When videos do not autoplay
+
+The feed shows the thumbnail and play button, and nothing plays, when any of these is true:
+
+- The network setting is off, or the UIKit could not read it.
+- The member chose **Never**, or chose **on Wi-Fi only** while on mobile data.
+- **Low Data Mode** (iOS) or **Data Saver** (Android) is on.
+- The browser blocks autoplay (React Web).
+- The device is offline.
+
+If one of these becomes true while a video plays, the video stops at once and keeps its position. If a video fails to play, the frame also shows the thumbnail and play button. A tap opens the full-screen player in every case.
+
+### Member setting
+
+Members choose when videos autoplay on their own device. They open their own profile, tap the **⋯** menu, and tap **Autoplay in feed** under **Settings**.
+
+| Platform | Options | Default |
+| --- | --- | --- |
+| iOS, Android | **on Wi-Fi and mobile data**, **on Wi-Fi only**, **Never** | on Wi-Fi and mobile data |
+| React Web | One **Autoplay in feed** switch, **On** or **Off**, on its own page | On |
+
+The choice is saved on the device or in the browser, not on the server. It applies to every user who logs in on that device. When the network setting is off, nothing autoplays, whatever the member chose.
+
+### Read the setting in your own UI
+
+If you build your own feed UI, read the network setting from the SDK. The field is `false` when the server does not send it.
+
+```typescript TypeScript
+import { getFeedSettings } from '@amityco/ts-sdk';
+
+const feedSettings = await getFeedSettings();
+const isAutoPlayEnabled =
+  feedSettings.post?.find(({ contentType }) => contentType === 'video')?.autoPlay ?? false;
+```
+
+```swift iOS
+let settings = try await client.getContentSettings()
+let isAutoPlayEnabled = settings.post?.videoSettings?.autoPlay ?? false
+```
+
+```kotlin Android
+AmityCoreClient.getContentCheck()
+    .map { it.post()?.video?.autoPlay ?: false }
+    .subscribe { isAutoPlayEnabled ->
+        // Show or hide autoplay in your feed
+    }
+```
 
 ## Social Home Page
 
