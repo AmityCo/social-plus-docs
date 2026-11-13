@@ -95,7 +95,7 @@ Webhook Events provide a powerful way to extend social.plus functionality by rec
   <Accordion title="Webhook Characteristics">
     **Performance Considerations**
     - Each webhook request times out after 1 second
-    - With retry enabled for a callback URL, a delivery makes up to 5 attempts (about 12.5 seconds worst case, including backoff between attempts)
+    - With **Retry** on, a failed delivery is retried for up to 24 hours. See [Delivery and retries](#delivery-and-retries).
     - Your webhook endpoint must respond within this interval
     - System should return HTTP 200 status with empty JSON response
 
@@ -144,6 +144,99 @@ Webhook Events provide a powerful way to extend social.plus functionality by rec
   </Card>
 </CardGroup>
 
+## Delivery and retries
+
+A short outage on your side does not have to cost you events. With **Retry** on, social.plus keeps sending a failed delivery for up to 24 hours, until your endpoint accepts it.
+
+A delivery is one event sent to one webhook. A delivery succeeds when your endpoint returns a 2xx status within 1 second.
+
+### Turn retry on or off
+
+Each webhook has its own **Retry** setting. To change it, edit the webhook in **Settings → Webhook** in the console. When you add a webhook in the console, **Retry** is on.
+
+- **Retry on:** we retry a failed delivery on the schedule in [When we retry](#when-we-retry).
+- **Retry off:** we send each delivery once.
+
+### What we retry
+
+| Failure | Retried |
+|---------|---------|
+| No response within 1 second | Yes |
+| The endpoint cannot be reached, for example because of a DNS, connection, or TLS error | Yes |
+| HTTP `429` | Yes |
+| HTTP `5xx` | Yes |
+| Any other HTTP `4xx`, such as `400` or `404` | No |
+
+We do not retry the other `4xx` statuses. Your endpoint rejected the request itself, so a retry would fail the same way.
+
+### When we retry
+
+1. We try up to 3 times in the first few seconds.
+2. If those tries fail, we retry 1, 5, 15, and 30 minutes, then 1, 2, 4, 8, 16, and 24 hours after the quick tries end.
+
+Each scheduled time can vary by up to 10%, so that the retries of many deliveries do not all arrive at once. No scheduled time is later than 24 hours after the quick tries end.
+
+That makes up to 13 tries. The delivery ends at the first 2xx response. It also ends when a try fails in a way that we do not retry, such as a `400` response. The delivery then shows as **Failed**. If the last try fails, the delivery shows as **Retries exhausted**.
+
+### What a retry sends
+
+- **The same event.** A retry sends the same event payload as the first try.
+- **The webhook's current settings.** A scheduled retry uses the URL, secret, and custom headers that the webhook has when the retry runs. We sign each retry with the webhook's current secret.
+- **The same delivery ID.** See [Identify a delivery](#identify-a-delivery).
+
+If you delete a webhook or turn its **Retry** off, we drop its waiting retries. The **Deliveries** tab shows each dropped delivery as **Failed**, with the reason "The webhook was deleted while it was waiting" or "Retry was turned off while it was waiting".
+
+### Identify a delivery
+
+Every request carries two headers that tell you which delivery it is and which try:
+
+| Header | Value |
+|--------|-------|
+| `x-socialplus-delivery-id` | `<event ID>:<webhook ID>`, for example `23302103085264915:6af6f0430bab059f47f6c26b`. The value is the same on every try of a delivery. |
+| `x-socialplus-delivery-attempt` | The try number, starting at `1`. The count includes the quick tries. |
+
+We set these two headers after your custom headers. A custom header with the same name does not replace them.
+
+### Handle retries in your endpoint
+
+Your endpoint can receive the same delivery more than once. For example, this happens when your endpoint processed a delivery but responded after the 1-second timeout.
+
+1. Respond with a 2xx status within 1 second. Process the event after you respond.
+2. Verify `x-amity-signature` on every try, as described in [Signature verification](#signature-verification).
+3. Store the `x-socialplus-delivery-id` of each delivery that you process. If a request has an ID that you already handled, respond with a 2xx status and skip it.
+4. Do not rely on arrival order. A retry can arrive after newer events.
+
+```javascript Node.js
+const crypto = require('crypto');
+const express = require('express');
+
+const app = express();
+const handled = new Set(); // In production, use a shared store with an expiry.
+
+app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const expected = Buffer.from(
+    crypto.createHmac('sha256', process.env.WEBHOOK_SECRET).update(req.body).digest('base64')
+  );
+  const received = Buffer.from(req.get('x-amity-signature') || '');
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
+    return res.sendStatus(401);
+  }
+
+  const deliveryId = req.get('x-socialplus-delivery-id');
+  if (handled.has(deliveryId)) {
+    return res.sendStatus(200); // A retry of a delivery you already handled.
+  }
+  handled.add(deliveryId);
+
+  res.sendStatus(200); // Respond first, within 1 second.
+  processEvent(JSON.parse(req.body)); // Your own processing.
+});
+```
+
+### Monitor deliveries
+
+The **Deliveries** tab in **Settings → Webhook** lists the deliveries of the last 3 days, with the result and the number of tries for each one. A delivery that waits for a retry shows a **Retrying** row with the time of the next try. To find one delivery, search by its `x-socialplus-delivery-id`. For details, see [Webhook deliveries](/analytics-and-moderation/console/settings/integrations#webhook-deliveries).
+
 ## Security and Authentication
 
 ### Signature Verification
@@ -164,6 +257,8 @@ Webhook Events provide a powerful way to extend social.plus functionality by rec
     | `User-Agent` | Identifies the webhook delivery system |
     | `Content-Type` | Always `application/json` |
     | `Content-Length` | Size of the JSON payload |
+    | `x-socialplus-delivery-id` | Identifies the delivery. The same on every try. See [Identify a delivery](#identify-a-delivery). |
+    | `x-socialplus-delivery-attempt` | The try number, starting at `1` |
   </Tab>
 
   <Tab title="Legacy Support">
@@ -245,7 +340,7 @@ Webhook Events provide a powerful way to extend social.plus functionality by rec
   <Card title="Reliability" icon="check">
     **Handle Failures Gracefully**
     - Implement retry logic for failed processing
-    - Handle duplicate events appropriately
+    - Skip duplicate deliveries by `x-socialplus-delivery-id`
     - Store events for replay in case of system failures
     - Monitor webhook health and alert on issues
   </Card>
