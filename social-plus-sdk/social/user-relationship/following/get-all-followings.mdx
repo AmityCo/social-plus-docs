@@ -1,0 +1,136 @@
+---
+title: "Get All Followings"
+description: "Get every user the current user follows, with each follow's status, in one call with the social.plus SDKs."
+---
+
+Show the right follow button next to every author in a feed without paging through the following list. `getAllFollowings()` returns, in one call, each user the current user follows and whether that follow is accepted or still a pending request.
+
+| API | Best for | Returns |
+| --- | --- | --- |
+| `getAllFollowings()` | Deciding the follow button for many users at once, such as post authors in a feed | A one-shot list of user IDs and follow statuses |
+| `getMyFollowings()` | A following list screen with names and avatars | A paginated live collection of follow relationships with user objects |
+
+<Info>
+`getAllFollowings()` returns IDs and statuses only — no user profiles. Take names and avatars from the content you already show, or use [Get Follower/Following List](./get-follower-following-list) for a list screen.
+</Info>
+
+## Parameters
+
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| None | — | Android, iOS, TypeScript | The method takes no arguments. It always returns the current user's followings. |
+
+Each item in the result has two fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `userId` | `String` | The followed user's ID. Match it against a post's author ID. |
+| `status` | Follow status | `accepted` — the current user follows them. `pending` — a follow request waits for them to accept. |
+
+A user who is not in the list is not followed by the current user.
+
+## Get all followings
+
+Call `getAllFollowings()` when a feed or list opens, then look up each author's ID in the result to choose the button: no button for `accepted`, **Pending** for `pending`, and **Follow** when the user is missing.
+
+The result holds up to 5,000 users, most recently changed first. If follow requests are turned off for your network, every entry is `accepted`.
+
+<CodeGroup>
+
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getAllFollowings()
+    .subscribe(
+        { followings: List<AmityFollowingUserStatus> ->
+            val statusOf = followings.associate { it.userId to it.status }
+            posts.forEach { post ->
+                when (statusOf[post.getCreatorId()]) {
+                    AmityFollowStatus.ACCEPTED -> hideFollowButton(post)
+                    AmityFollowStatus.PENDING -> showPendingButton(post)
+                    else -> showFollowButton(post)
+                }
+            }
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+
+do {
+    let followings = try await relationship.getAllFollowings()
+    let statusOf = Dictionary(uniqueKeysWithValues: followings.map { ($0.userId, $0.status) })
+
+    for post in posts {
+        switch statusOf[post.postedUserId] {
+        case .accepted:
+            hideFollowButton(for: post)
+        case .pending:
+            showPendingButton(for: post)
+        default:
+            showFollowButton(for: post)
+        }
+    }
+} catch {
+    handleError(error)
+}
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const followings = await UserRepository.Relationship.getAllFollowings();
+const statusOf = new Map(followings.map((following) => [following.userId, following.status]));
+
+posts.forEach((post) => {
+  const status = statusOf.get(post.postedUserId);
+
+  if (status === 'accepted') hideFollowButton(post);
+  else if (status === 'pending') showPendingButton(post);
+  else showFollowButton(post);
+});
+```
+
+</CodeGroup>
+
+## Keep the result current
+
+`getAllFollowings()` returns a snapshot, not a live collection — it does not notify you when a follow changes. Call it again whenever you need fresh statuses, for example when more posts load or the feed comes back into view.
+
+Repeat calls are cheap:
+
+- The SDK keeps the result for 5 minutes. Calls within that window answer from the device without a network request.
+- Follows, follow requests, unfollows, cancelled requests, and blocks made through the SDK show in the next call at once.
+- Changes made on another device, or by the other user — accepting a request, declining it, or removing the current user as a follower — show once the SDK receives the real-time event.
+- Changes the SDK missed, for example while the app was offline, show on the next call after the 5-minute window ends.
+- Signing out clears the result, so the next session starts fresh.
+
+If the request fails, the call throws (iOS), rejects (TypeScript), or emits an error (Android). The failure is not cached — the next call tries again.
+
+## Platform notes
+
+| Platform | Method | Result type |
+| --- | --- | --- |
+| Android | `AmityCoreClient.newUserRepository().relationship().getAllFollowings()` | `Single<List<AmityFollowingUserStatus>>` |
+| iOS | `AmityUserRelationship().getAllFollowings()` | `async throws -> [AmityFollowingUserStatus]` |
+| TypeScript | `UserRepository.Relationship.getAllFollowings()` | `Promise<Amity.FollowingUserStatus[]>` |
+
+Not available on Flutter.
+
+## Related topics
+
+<CardGroup cols={3}>
+  <Card title="Get Follower/Following List" href="./get-follower-following-list" icon="list">
+    Page through followers and followings with user profiles.
+  </Card>
+  <Card title="Follow/Unfollow User" href="./follow-unfollow-user" icon="user-plus">
+    Change the follow status.
+  </Card>
+  <Card title="Manage Blocked Users" href="../blocking/manage-blocked-users" icon="ban">
+    The same one-shot pattern for blocked users.
+  </Card>
+</CardGroup>
