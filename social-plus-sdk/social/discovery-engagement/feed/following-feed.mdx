@@ -1,0 +1,141 @@
+---
+title: "Following Feed"
+description: "Query a feed of posts from the people the current user follows, newest first or ranked."
+---
+
+A home feed that mixes every joined community can bury the people a member actually chose to follow. **The following feed keeps those people front and center**: it returns posts from the users the current user follows, plus the user's own posts, in one paginated collection.
+
+`getFollowingFeed()` is a live collection on the feed repository. The backend decides which posts match; the SDK takes only a sort order and returns the posts the backend provides.
+
+## Parameters
+
+| Parameter | Platforms | Required | Description |
+| --- | --- | --- | --- |
+| `sortBy` | All | No | `lastCreated` (newest first) or `customRanking` (ranked by the backend). When you don't set it, the backend applies `customRanking`. Android and iOS use `AmityFollowingFeedSortBy`; TypeScript uses `FollowingFeedSortByEnum`. |
+| `limit` | TypeScript | No | Number of posts in the first page, from 1 to 100. Defaults to 20. Later pages keep the same size. Android and iOS always use 20. |
+
+The following feed takes no other filters: there is no `dataTypes`, `includeMixedStructure`, or `excludeBlockUserPosts` option.
+
+## Query the following feed
+
+Use `getFollowingFeed()` for a "Following" tab or any surface that should show only the people a user follows. Pass `lastCreated` when you want a strictly chronological list.
+
+<CodeGroup>
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getFollowingFeed()
+    .sortBy(AmityFollowingFeedSortBy.LAST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> -> adapter.submitData(lifecycle, pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let followingFeed = feedRepository.getFollowingFeed(sortBy: .lastCreated)
+
+token = followingFeed.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    render(collection.snapshots)
+}
+
+// When the user scrolls to the end of the list
+if followingFeed.hasNext {
+    followingFeed.nextPage()
+}
+```
+
+```typescript TypeScript
+import { FeedRepository, FollowingFeedSortByEnum } from '@amityco/ts-sdk';
+
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
+
+const unsubscribe = FeedRepository.getFollowingFeed(
+  { sortBy: FollowingFeedSortByEnum.LastCreated, limit: 20 },
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
+  },
+);
+
+function loadMoreFollowingFeed() {
+  if (canLoadMore) {
+    loadNextPage?.();
+  }
+}
+
+// When the screen goes away
+unsubscribe();
+```
+
+</CodeGroup>
+
+## Choose a sort order
+
+| `sortBy` | Order | What it includes |
+| --- | --- | --- |
+| `lastCreated` | Newest first | Posts by the users the current user follows, plus the user's own posts. |
+| `customRanking` (default) | Ranked by the backend, by engagement and recency | Posts by the current user and the users they follow, and posts from the communities the user has joined. |
+
+Use `lastCreated` when the feed must contain only people the user follows. `customRanking` ranks a wider set of posts, so a joined community's posts can appear even when no followed user wrote them.
+
+Which posts each order includes also depends on your network's feed configuration. For example, a network can be set up so that `lastCreated` includes followed users' posts in public communities the user has not joined. Contact social.plus support to change your network's feed configuration.
+
+## Real-time updates
+
+The following feed is a live collection, but it does not add new posts on its own. Whether a new post belongs in a user's following feed depends on who they follow and on your network's configuration, which only the backend knows.
+
+| Event | What the collection does |
+| --- | --- |
+| A post is created or approved, by anyone, the current user included | Nothing. The post appears the next time the feed is loaded from the first page. |
+| A listed post is deleted or declined | Removes it at once. |
+| A listed post is edited, reacted to, or commented on | Updates it in place. |
+
+To show new posts, load the feed again from the first page, for example on pull to refresh or when the screen opens.
+
+<Note>
+With `customRanking`, a newly created post can take up to about 5 minutes to appear, even after a refresh. `lastCreated` shows it on the next refresh. The custom-ranking global feed behaves the same way.
+</Note>
+
+<Tip>
+To show the current user's new post at the top right away, add the post returned by `createPost` to the top of your list in the app, and drop it once a refresh returns it from the feed.
+</Tip>
+
+## Blocked users
+
+The following feed leaves out posts written by users the current user has blocked and by users who have blocked the current user. A post written by someone else is still shown when it only mentions a blocked user. A block or unblock is reflected the next time the feed is loaded from the first page.
+
+## Platform notes
+
+- **TypeScript** exposes `limit`. Android and iOS always request 20 posts per page.
+- **Android** returns `Flowable<PagingData<AmityPost>>`. iOS returns `AmityCollection<AmityPost>`. TypeScript reports pages through the live collection callback and returns an unsubscribe function.
+- **Flutter** does not have a following feed.
+
+## Related topics
+
+<CardGroup cols={3}>
+  <Card title="Feeds & Timelines" icon="layer-group" href="/social-plus-sdk/social/discovery-engagement/feed/overview">
+    Compare the following feed with the For You, global, and custom-ranking feeds.
+  </Card>
+  <Card title="Follow and Unfollow" icon="user-plus" href="/social-plus-sdk/social/user-relationship/following/follow-unfollow-user">
+    Build the follow relationships the following feed is based on.
+  </Card>
+  <Card title="Global Feed" icon="clock" href="/social-plus-sdk/social/discovery-engagement/feed/global-feed">
+    The chronological feed of everything the user can see.
+  </Card>
+</CardGroup>
