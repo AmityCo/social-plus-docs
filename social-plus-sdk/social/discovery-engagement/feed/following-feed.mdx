@@ -1,0 +1,170 @@
+---
+title: "Following Feed"
+description: "Query a feed of posts from the people the current user follows, newest first or ranked."
+---
+
+Members follow people for a reason, but in a busy network those people's posts get buried under everything from the communities a member joined, and posts they write in communities the member hasn't joined never show up at all. **The following feed builds a feed around the people each member chose to follow**: it returns posts from the users the current user follows, in one paginated collection. With `customRanking` (the default), it also includes the user's own posts and posts from the communities the user joined. With `lastCreated`, your network decides what appears alongside followed users: keep joined communities, add what followed users post in any public community, or narrow the feed to followed people only (see [Which posts appear](#which-posts-appear)).
+
+`getFollowingFeed()` is a live collection on the feed repository. The backend decides which posts match; the SDK takes a sort order (and, on TypeScript, a page size) and returns the posts the backend provides.
+
+## Parameters
+
+| Parameter | Platforms | Required | Description |
+| --- | --- | --- | --- |
+| `sortBy` | All | No | `lastCreated` (newest first) or `customRanking` (ranked by the backend). When you don't set it, the backend applies `customRanking`. Android and iOS use `AmityFollowingFeedSortBy`; TypeScript uses `FollowingFeedSortByEnum`. |
+| `limit` | TypeScript | No | Number of posts in the first page, from 1 to 100. Defaults to 20. Later pages keep the same size. A value outside 1–100 fails with a validation error. Android and iOS always use 20. |
+
+The following feed takes no other filters: there is no `dataTypes`, `includeMixedStructure`, or `excludeBlockUserPosts` option.
+
+## Query the following feed
+
+Use `getFollowingFeed()` for a "Following" tab built around the people a user follows. Pass `lastCreated` when you want a chronological list.
+
+<CodeGroup>
+
+```kotlin Android
+AmitySocialClient.newFeedRepository()
+    .getFollowingFeed()
+    .sortBy(AmityFollowingFeedSortBy.LAST_CREATED)
+    .build()
+    .query()
+    .subscribe(
+        { pagingData: PagingData<AmityPost> -> adapter.submitData(lifecycle, pagingData) },
+        { error -> handleGeneralError(error) }
+    )
+```
+
+```swift iOS
+let followingFeed = feedRepository.getFollowingFeed(sortBy: .lastCreated)
+
+token = followingFeed.observe { collection, error in
+    if let error {
+        handleError(error)
+        return
+    }
+
+    render(collection.snapshots)
+}
+
+// When the user scrolls to the end of the list
+if followingFeed.hasNext {
+    followingFeed.nextPage()
+}
+```
+
+```typescript TypeScript
+import { FeedRepository, FollowingFeedSortByEnum } from '@amityco/ts-sdk';
+
+let loadNextPage: (() => void) | undefined;
+let canLoadMore = false;
+
+const unsubscribe = FeedRepository.getFollowingFeed(
+  { sortBy: FollowingFeedSortByEnum.LastCreated, limit: 20 },
+  ({ data: posts, onNextPage, hasNextPage, loading, error }) => {
+    if (loading) return;
+    if (error) {
+      handleError(error);
+      return;
+    }
+
+    renderResults(posts);
+    loadNextPage = onNextPage;
+    canLoadMore = hasNextPage;
+  },
+);
+
+function loadMoreFollowingFeed() {
+  if (canLoadMore) {
+    loadNextPage?.();
+  }
+}
+
+// When the screen goes away
+unsubscribe();
+```
+
+</CodeGroup>
+
+If a request fails, the error is reported through the platform's error path: `error` in the TypeScript callback, `error` in the iOS `observe` block, and the error handler on Android. Posts already loaded stay in the list.
+
+## Choose a sort order
+
+| `sortBy` | Order | Which posts it includes | When to use it |
+| --- | --- | --- | --- |
+| `lastCreated` | Newest first | Set by your network's following feed configuration (see [Which posts appear](#which-posts-appear)). | A chronological "Following" tab. |
+| `customRanking` (default) | Ranked by the backend, by engagement and recency | Always the user's own posts, followed users' posts, and posts from the communities the user joined. The following feed configuration does not change it. | A ranked home feed. |
+
+When you don't set `sortBy`, the backend applies `customRanking`. Both orders return the same post format and page the same way; only which posts come back, and their order, differ.
+
+## Which posts appear
+
+With `lastCreated`, your network's following feed configuration decides which posts appear. It is made of the sources below, and each one is turned on or off separately:
+
+| Source | On by default |
+| --- | --- |
+| The user's own posts | ✅ |
+| Posts on the profiles of users the user follows | ✅ |
+| Posts in communities the user joined | ✅ |
+| Posts on every user's profile, followed or not | ❌ |
+| Posts by followed users in public communities, joined or not. Includes the user's own public community posts when the user's own posts are on. | ❌ |
+
+Each source starts from your network's global feed setting for the same source, so the defaults above apply only while your global feed uses its defaults. For example, if your global feed is set to show posts from everyone, `lastCreated` also includes posts on every user's profile, followed or not. Once a source is changed for the following feed, it no longer follows the global feed, and the change doesn't affect the global feed.
+
+Two common setups:
+
+- **People and communities:** the defaults, plus followed users' posts in public communities. The feed keeps the communities the user joined and adds what followed users post in communities the user hasn't joined.
+- **People only:** joined communities turned off, followed users' posts in public communities turned on. The feed contains only people the user follows, plus the user's own posts when that source is on.
+
+Posts in **private** communities come only from the joined communities source. When that source is off, they're left out, even when the user is a member and the author is followed. This includes the user's own posts there.
+
+Contact [social.plus Support](https://ekoapp.atlassian.net/servicedesk/customer/portal/3) to change which sources your network's following feed includes, or to check its current setup. These sources apply only to the following feed with `lastCreated`: `customRanking` and the global feed are not affected.
+
+On both orders, the feed never includes deleted posts, posts awaiting review, hidden posts, or event posts. Visitor users can read the feed.
+
+## Real-time updates
+
+The following feed is a live collection, but it does not add new posts on its own. Whether a new post belongs in a user's following feed depends on who they follow and on your network's configuration, which only the backend knows.
+
+| Event | What the collection does |
+| --- | --- |
+| A post is created or approved, by anyone, the current user included | Nothing. The post appears the next time the feed is loaded from the first page. |
+| A listed post is deleted by the current user, or declined | Removes it at once. |
+| A listed post is deleted by another user | Removes it at once if your app subscribes to [realtime events](/social-plus-sdk/core-concepts/realtime-communication/realtime-events/social-realtime-events) for the post, its author, or its community. Otherwise, the post leaves the next time the feed is loaded from the first page. |
+| A listed post is edited or reacted to by the current user | Updates it in place. |
+| A listed post is commented on by the current user | Updates the comment count at once. On TypeScript and Android, read it with `getLocalCommentCount()`; `commentsCount` (`getCommentCount()` on Android) keeps the server's value until the next load. On iOS, `commentsCount` updates at once. |
+| A listed post is edited, reacted to, or commented on by another user | Updates it at once if your app subscribes to realtime events for the post, its author, or its community, as for deletes. Otherwise, the new counts show the next time the feed is loaded from the first page. |
+
+To show new posts, load the feed again from the first page, for example on pull to refresh or when the screen opens.
+
+<Note>
+With `customRanking`, a newly created post can take a few minutes to appear, even after a refresh. `lastCreated` shows it on the next refresh.
+</Note>
+
+<Tip>
+To show the current user's new post at the top right away, add the post returned by `createPost` to the top of your list in the app, and drop it once a refresh returns it from the feed.
+</Tip>
+
+## Blocked users
+
+The following feed leaves out posts written by users the current user has blocked and by users who have blocked the current user. A post written by someone else is still shown when it only mentions a blocked user. A block or unblock is reflected the next time the feed is loaded from the first page. Blocking a user also removes the current user's follow of them, so after an unblock, follow the user again to bring their posts back into the feed.
+
+## Platform notes
+
+- **Availability:** Android 7.34.0, iOS 8.13.0, and TypeScript 7.34.0 or later.
+- **TypeScript** exposes `limit`. Android and iOS always request 20 posts per page.
+- **Android** returns `Flowable<PagingData<AmityPost>>`. iOS returns `AmityCollection<AmityPost>`. TypeScript reports pages through the live collection callback and returns an unsubscribe function.
+- **Flutter** does not have a following feed.
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Feeds & Timelines" icon="layer-group" href="/social-plus-sdk/social/discovery-engagement/feed/overview">
+    Compare the following feed with the For You, global, and custom-ranking feeds.
+  </Card>
+  <Card title="Follow and Unfollow" icon="user-plus" href="/social-plus-sdk/social/user-relationship/following/follow-unfollow-user">
+    Build the follow relationships the following feed is based on.
+  </Card>
+  <Card title="Global Feed" icon="clock" href="/social-plus-sdk/social/discovery-engagement/feed/global-feed">
+    The chronological feed of everything the user can see.
+  </Card>
+</CardGroup>
