@@ -1,0 +1,138 @@
+---
+title: "Get All Followings"
+description: "Check the follow status of every user the current user follows in one call, to decide follow buttons wherever a user appears."
+---
+
+Wherever your app shows a user (a post author, a commenter, a community member, a search result), it has to decide whether to show **Follow**, **Pending**, or nothing. `getAllFollowings()` answers that in one call: it returns the ID of each user the current user follows, with the follow's status, `accepted` or `pending`. It is a status check, not a list of users. It returns no user profiles and no pages. To show a list of followings or followers, use the paginated following list query instead.
+
+| API | Best for | Returns |
+| --- | --- | --- |
+| `getAllFollowings()` | Checking follow status wherever a user appears, such as post authors, commenters, or members | A one-shot list of user IDs and follow statuses |
+| Following list query — `getMyFollowings()` (Android, iOS), `getFollowings()` (TypeScript) | Showing a list of followings or followers, with user profiles, page by page | A paginated live collection of follow relationships |
+
+<Info>
+`getAllFollowings()` returns IDs and statuses only — no user profiles. Take names and avatars from the content you already show. For a paginated following list, see [Get Follower/Following List](./get-follower-following-list).
+</Info>
+
+## Parameters
+
+| Parameter | Required | Platforms | Description |
+| --- | --- | --- | --- |
+| None | — | Android, iOS, TypeScript | The method takes no arguments. It always returns the current user's followings. |
+
+Each item in the result has two fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `userId` | `String` | The followed user's ID. Match it against the user ID on the content you show, such as a post's author. |
+| `status` | `AmityFollowStatus` (Android, iOS); `'accepted' \| 'pending'` (TypeScript) | `accepted` — the current user follows them. `pending` — a follow request waits for them to accept. |
+
+A user who is not in the list is not followed by the current user, unless the current user has more than 5,000 follows and pending requests in total (see below).
+
+The method has no status filter. It always returns `accepted` and `pending` follows together. To use only one status, filter the result by `status`. For a paginated list of one status, use the following list query with a status filter. See [Get Follower/Following List](./get-follower-following-list).
+
+## Get Follow Status for Many Users
+
+Call `getAllFollowings()` when a feed or list opens, then look up each user's ID in the result to choose the button: no button for `accepted`, **Pending** for `pending`, and **Follow** when the user is missing.
+
+The result holds up to 5,000 users, most recently changed first, counting both accepted follows and pending requests. If the current user has more than 5,000 in total, only the 5,000 most recently changed are returned, so a user missing from the result may still be followed or have a pending request. If follow requests are turned off for your network, every entry is `accepted`.
+
+<CodeGroup>
+
+```kotlin Android
+val disposable = AmityCoreClient.newUserRepository()
+    .relationship()
+    .getAllFollowings()
+    .subscribe(
+        { followings: List<AmityFollowingUserStatus> ->
+            val statusOf = followings.associate { it.userId to it.status }
+            posts.forEach { post ->
+                when (statusOf[post.getCreatorId()]) {
+                    AmityFollowStatus.ACCEPTED -> hideFollowButton(post)
+                    AmityFollowStatus.PENDING -> showPendingButton(post)
+                    else -> showFollowButton(post)
+                }
+            }
+        },
+        { error ->
+            handleGeneralError(error)
+        },
+    )
+```
+
+```swift iOS
+let relationship = AmityUserRelationship()
+
+do {
+    let followings = try await relationship.getAllFollowings()
+    let statusOf = Dictionary(uniqueKeysWithValues: followings.map { ($0.userId, $0.status) })
+
+    for post in posts {
+        switch statusOf[post.postedUserId] {
+        case .accepted:
+            hideFollowButton(for: post)
+        case .pending:
+            showPendingButton(for: post)
+        default:
+            showFollowButton(for: post)
+        }
+    }
+} catch {
+    handleError(error)
+}
+```
+
+```typescript TypeScript
+import { UserRepository } from '@amityco/ts-sdk';
+
+const followings = await UserRepository.Relationship.getAllFollowings();
+const statusOf = new Map(followings.map((following) => [following.userId, following.status]));
+
+posts.forEach((post) => {
+  const status = statusOf.get(post.postedUserId);
+
+  if (status === 'accepted') hideFollowButton(post);
+  else if (status === 'pending') showPendingButton(post);
+  else showFollowButton(post);
+});
+```
+
+</CodeGroup>
+
+## Keep Follow Status Current
+
+`getAllFollowings()` returns a snapshot, not a live collection — it does not notify you when a follow changes. Call it again whenever you need fresh statuses, for example when more posts load or when the feed comes back into view.
+
+Repeat calls are cheap:
+
+- The SDK keeps the result for 5 minutes. Calls within that window answer from the device without a network request.
+- Follows, follow requests, unfollows (including withdrawing a pending request), and blocks made through the SDK show in the next call at once.
+- Changes made on another device, or by the other user — accepting a request, declining it, or removing the current user as a follower — show once the SDK receives the real-time event. These events arrive through the `BLOCK` auto-subscription, which is on by default.
+- If you [turn off the `BLOCK` auto-subscription](../blocking/manage-blocking-users#keep-block-state-live), those changes show on the next call after the 5-minute window ends.
+- Signing out clears the result, so the next session starts fresh.
+
+If the request fails, the call throws (iOS), rejects (TypeScript), or emits an error (Android). The failure is not cached — the next call tries again.
+
+## Platform Notes
+
+| Platform | Method | Result type |
+| --- | --- | --- |
+| Android | `AmityCoreClient.newUserRepository().relationship().getAllFollowings()` | `Single<List<AmityFollowingUserStatus>>`. Requires Android SDK 7.34.0 or later. |
+| iOS | `AmityUserRelationship().getAllFollowings()` | `async throws -> [AmityFollowingUserStatus]`. Requires iOS SDK 8.13.0 or later. |
+| TypeScript | `UserRepository.Relationship.getAllFollowings()` | `Promise<Amity.FollowingUserStatus[]>`. Requires TypeScript SDK 7.34.0 or later. |
+
+Not available on Flutter.
+
+## Related Topics
+
+<CardGroup cols={3}>
+  <Card title="Get Follower/Following List" href="./get-follower-following-list" icon="list">
+    Page through followers and followings with user profiles.
+  </Card>
+  <Card title="Follow/Unfollow User" href="./follow-unfollow-user" icon="user-plus">
+    Change the follow status.
+  </Card>
+  <Card title="Manage Blocked Users" href="../blocking/manage-blocked-users" icon="ban">
+    The same one-shot pattern for blocked users.
+  </Card>
+</CardGroup>
