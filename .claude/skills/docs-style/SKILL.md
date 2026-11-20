@@ -28,10 +28,14 @@ Follow the repo's doc-writing contract. Read the authoritative sources relevant 
   - **SDK pages:** `kotlin Android` → `swift iOS` → `typescript TypeScript` → `dart Flutter`.
   - **UIKit pages:** `kotlin Android` → `swift iOS` → the web UIKit sample, labeled `React` (`typescript React` / `tsx React`, the existing UIKit convention; a few older pages use `Web`) → `jsx React Native` → `dart Flutter`.
   - A `{/* doc-as-test: … */}` comment belongs to the block right after it; move it with that block.
-  - Pages written before this rule may still use the older TypeScript-first order. Reorder a page's groups when you edit it rather than mixing orders on one page.
+  - Pages written before this rule may still use the older TypeScript-first order. Reorder **every** group on a page when you add or edit one, rather than mixing orders on one page. Moving blocks is not changing code: keep each block byte-identical.
+  - No checker enforces this order. Check it yourself before you push.
+- **Headings — match the folder.** Use the heading case the other pages in the same folder use; consistency within a section beats the sentence-case default. Today most SDK and UIKit pages use title case. End SDK pages with `## Related Topics` and UIKit component pages with `## Related Components`. Never repeat the page title as the first section heading.
 - **Confidential internals stay out:** no exact ranking weights, scoring formulas, or backend storage/mechanics — keep to customer-facing behavior.
+- **No customer names** in pages or PR descriptions, even when a spec or ticket names the customer who asked for the feature. Say "a customer".
+- **Consistent across pages:** when a page describes behavior another page also covers (a delay, a limit, a default), say it the same way on both, or fix the other page. Reuse shared forms, such as `[social.plus Support](https://ekoapp.atlassian.net/servicedesk/customer/portal/3)` for "contact support".
 - **Navigation:** defined in `docs.json` (not `placeholder.json`, which is stale).
-- **Don't hand-edit** generated layers (`.docs-ops/sdk-surface/*`). The SDK best-practice "opinion" layer lives in the `social-plus-foundry` (Vise) repo.
+- **Don't hand-edit generated files:** `.docs-ops/sdk-surface/*`, `llms.txt` and `llms-full.txt` (a bot regenerates the last two after merge). The SDK best-practice "opinion" layer lives in the `social-plus-foundry` (Vise) repo.
 
 ## Voice by section type
 
@@ -55,6 +59,19 @@ Write for the integrator: give them everything they need to build, and nothing t
 - Exact ranking weights, scoring formulas, decay curves, thresholds, and the math behind them. Name the *signals* and describe their effect in plain language instead.
 - Backend storage and delivery mechanics (caches, snapshots, cursors, queues, datastore names) the integrator never touches.
 - Internal cold-start counts, tuning constants, and experiment parameters.
+- Tunable operational values — delays, cache lifetimes, timeouts, poll intervals — even when a spec says "accept and document" the effect. Describe the behavior ("a new post can take a few minutes to appear"), not the number, so it can change without a docs fix.
+
+**Leave out what the reader doesn't need.** Confidential is not the only reason to cut. Before you keep a sentence, ask whether the integrator acts on it. Common cuts:
+- How to change a setting that only social.plus Support changes: no admin endpoints, curl calls, tokens or error codes for it. Say the default, and "contact social.plus Support" to change it.
+- Roadmap remarks ("no console toggle yet", "coming soon").
+- Release-note material in a feature page ("the badge now sits bottom-left"). It belongs in the changelog.
+- SDK samples repeated on a UIKit page when the UIKit already does the work. Link the SDK page instead.
+- Generic errors (entitlement, auth, rate limits) repeated on a feature page. They belong in the error reference.
+- How-tos that the sibling pages don't give (for example a refresh flow), unless the feature needs one.
+- Localization key tables on UIKit component pages: the localization reference lists the keys.
+- Mechanics no one acts on ("a video taller than the screen counts once it fills half of it").
+
+A UIKit capability that runs on its own needs only: what members see, the defaults, how it is turned on, what members can change, the integration steps that really exist, and customization.
 
 **Never document a feature that isn't implemented.** A field in a schema, a type, or a leftover trace is **not** a feature. If the code path doesn't exist and ship, it does not go in the docs — and never invent companion fields or APIs to make an inferred feature sound coherent. When you find a dormant field, either label it (reserved / not implemented) or leave it out.
 
@@ -75,6 +92,11 @@ Read in this order, stopping once you have what the integrator needs:
    - `front-end-tech-specs/ImplementationPlan/…` — how the feature is split and staged across platforms.
    - `tech-specs/`, `tech-proposals/`, `prd/` and `prds/` — behavior, eligibility rules, and the *why*.
 2. **Actual SDK / UIKit source** — the sibling repos listed in the `release-notes` skill (`$GITHUB_ROOT/<repo-name>`). Confirm the real API names, signatures, and that the code path actually ships. Distribution/tag conventions are in the `release-notes` skill.
+3. **Backend source — `$GITHUB_ROOT/social-plus-core`** — for anything the backend decides: which posts a feed returns, network settings and their defaults, limits, and what a setting can be combined with. Read the settings and defaults (`src/shared/network-setting/`, `app.config.ts`) and the module code, not only the SDK call.
+
+**Document the capability, not the first customer's setup.** A feature built for one customer often ships as general settings that customer happens to combine one way. Describe what the system can do (each option and its default), then give the customer's combination as an example if it helps.
+
+**What each source is for.** The latest shipped code (SDK, UIKit, backend) is the scope — even when a spec or product doc says otherwise, since scope changes during the build. Product and problem-validation docs (Notion feature requests, PRDs, research) are for the problem statement and benefit framing only. Never take a capability, a default or a self-serve path from them.
 
 **cleverden is internal.** It contains exactly the material you must NOT publish — exact ranking weights, formulas, thresholds, backend storage/delivery mechanics, cold-start constants, and roadmap items that haven't shipped. Use it to *understand* the feature, then apply **What to expose vs. keep private** (above) to the output: document only the public API, the observable behavior, and what the integrator must do. If a spec describes something the shipped source does not yet implement, do not document it as available.
 
@@ -113,6 +135,15 @@ Every docs PR description carries, in this order:
 5. **Deliberately not done / flagged** — anything intentionally left, and why.
 
 **Keep it current.** The description describes the branch, not the first commit. Whenever you add a commit that changes the content, update the affected sections **and** re-assess the context checklist in the same step — a later commit often adds source verification or a spec reference that flips a `⚠️` to `✅`. A stale checklist is worse than none, because it is read as a claim about the work.
+
+## Before merge: the release check
+
+Pages are often written before the SDKs and UIKits ship, and go stale the day they do. Before a feature page merges, and again whenever a platform releases:
+
+1. Find the release that contains the feature on each platform (release notes or tags; the `release-notes` skill lists the repos).
+2. Re-check every API name, field and behavior against the **released tag**, not the feature branch or PR you first verified against.
+3. Name the first version per platform: in `## Platform notes` on SDK pages, in the **Platform Support** `Info` on UIKit pages. Leave a `{/* … */}` placeholder only for a platform that hasn't shipped.
+4. Update the PR description in the same step: the hold-the-merge note, checklist rows 4 and 5, and any "not released" items under **Deliberately not done**.
 
 ## Enforcement
 

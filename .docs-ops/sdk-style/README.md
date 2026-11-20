@@ -33,7 +33,7 @@ SDK operation pages should use this order:
 4. `## Parameters` for create, update, query, delete, or action pages with SDK inputs.
 5. Method sections such as `## Create an event`, `## Query events`, or `## Delete a channel`.
 6. `## Platform notes` for SDK differences that do not belong inside snippets.
-7. `## Related topics` with `CardGroup` links when useful.
+7. `## Related Topics` with `CardGroup` links when useful.
 
 For single-method operation pages, `## Parameters` should usually be the method's parameter table. For multi-operation pages, use `## Parameters` as a compact operation-level input summary, then add `### Inputs` tables inside method sections when each operation has a different input shape. Avoid mixing result controls such as callbacks, live collections, or pagination handles into a parameter table unless the SDK call accepts them directly as arguments.
 
@@ -42,7 +42,7 @@ For single-method operation pages, `## Parameters` should usually be the method'
 - Do not add a visible `#` heading in page content. Mintlify renders the frontmatter `title`.
 - Do not repeat the page title as the first body heading.
 - Prefer task or method headings over platform headings.
-- Use sentence case for method headings.
+- Match the heading case of the other pages in the same folder (most SDK pages use title case). See the `docs-style` skill.
 
 ## Code Snippets
 
