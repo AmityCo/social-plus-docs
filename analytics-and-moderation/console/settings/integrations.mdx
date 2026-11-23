@@ -22,6 +22,7 @@ Configure webhooks and push notification infrastructure to stream real-time even
 
 <Steps>
   <Step title="Add Endpoint">Enter HTTPS URL in **Settings → Webhook** section.</Step>
+  <Step title="Choose Retry">Leave **Retry** on to retry failed deliveries for up to 24 hours. Turn it off to send each delivery once. To change it later, edit the webhook.</Step>
   <Step title="Secret Issued">Console generates secret key tied to that URL.</Step>
   <Step title="Validate Signature">Configure backend to verify HMAC (secret) per event.</Step>
   <Step title="Rotate Secret">Delete & re-add endpoint if compromise suspected.</Step>
@@ -30,10 +31,66 @@ Configure webhooks and push notification infrastructure to stream real-time even
 <Warning>Use publicly reachable HTTPS endpoints; avoid including query secrets in the URL.</Warning>
 
 <AccordionGroup>
-  <Accordion title="Best Practices">Idempotent processing, 200 fast ACK then async work, exponential retry logic on your side.</Accordion>
+  <Accordion title="Best Practices">Respond with a 2xx status within 1 second, then process the event. Skip a delivery whose `x-socialplus-delivery-id` you already handled, because retries can send it again. See [Delivery and retries](/analytics-and-moderation/social+-apis-and-services/webhook-event#delivery-and-retries).</Accordion>
   <Accordion title="Security">Restrict IPs if possible; verify signature before queuing work.</Accordion>
   <Accordion title="Versioning">Include event schema version in payload to future‑proof consumers.</Accordion>
 </AccordionGroup>
+
+### Webhook deliveries
+
+The **Deliveries** tab in **Settings → Webhook** shows the deliveries of the last 3 days. A delivery is one event sent to one webhook. Use the tab to check that your endpoint receives events, and to find out why a delivery failed.
+
+<img
+  src="/images/analytics-and-moderation/console-webhook-deliveries.png"
+  alt="Deliveries tab with the delivery ID search, the Webhook, Result, and Event filters, Export CSV, and a list of deliveries"
+/>
+
+<Note>
+Deliveries that succeed on the first try are sampled at 10%. Every failure, and every delivery that needed more than one try, is shown in full.
+</Note>
+
+Each row has one of these results:
+
+| Result | Meaning |
+|--------|---------|
+| **Delivered** | Your endpoint returned a 2xx status. |
+| **Failed** | The delivery failed and was not retried. For example, your endpoint returned `400`, **Retry** is off, or the webhook was deleted while a retry was waiting. |
+| **Retries exhausted** | Every try failed with an error that we retry, and no tries are left. |
+| **Retrying** | A try failed, and the next try is scheduled. The row shows when the next try is due. |
+
+A retried delivery shows one **Retrying** row for each scheduled retry. The delivery then ends with one final row: **Delivered**, **Failed**, or **Retries exhausted**. For the retry schedule, see [Delivery and retries](/analytics-and-moderation/social+-apis-and-services/webhook-event#delivery-and-retries).
+
+#### Find a delivery
+
+- Filter the list by **Webhook**, **Result**, and **Event**.
+- To find one delivery, search by its delivery ID: the value of the `x-socialplus-delivery-id` header that your endpoint received. Enter the full ID to find the delivery to one webhook. Enter only the part before the colon to find the deliveries of that event to all of your webhooks.
+- To download the list, click **Export CSV**. The file has up to the newest 10,000 deliveries that match your filters.
+
+#### Delivery details
+
+Click a row to open **Delivery details**.
+
+<img
+  src="/images/analytics-and-moderation/console-webhook-delivery-details.png"
+  alt="Delivery details for a Retrying delivery: next attempt, endpoint, last HTTP status 429, attempts, delivery ID, and the endpoint's response"
+  style={{ maxWidth: "420px", margin: "0 auto", display: "block" }}
+/>
+
+| Field | Description |
+|-------|-------------|
+| **Result** | Delivered, Failed, Retries exhausted, or Retrying. |
+| **Next attempt** | On a **Retrying** row, when the next try is due. |
+| **Time** | When the row was recorded. |
+| **Event** | The event name, such as `message.didCreate`. |
+| **Endpoint** | The webhook URL, without its query string. |
+| **Last HTTP status** | The status code of the last try, if your endpoint responded. |
+| **Attempts** | The number of tries so far, including the quick tries. |
+| **Elapsed** | The latency, in milliseconds. On the first send, it includes every quick try and the pauses between them. On a scheduled retry, it covers only that one try, not the wait before it. |
+| **Retry** | Whether **Retry** is on for the webhook now. |
+| **Error** | The type of error when your endpoint did not respond: a timeout, a DNS, connection, or TLS error, another network error, or an invalid callback URL. |
+| **Reason** | Why the delivery ended without a 2xx status, when the result alone does not say. For example, "Retry was not on for this delivery, so it was tried once". |
+| **Delivery ID** | The `x-socialplus-delivery-id` value, in the format `<event ID>:<webhook ID>`. The same on every try. |
+| **Response from your endpoint** | The first 256 bytes of your endpoint's response to a failed try, with secrets masked. |
 
 ## Push Notifications
 
