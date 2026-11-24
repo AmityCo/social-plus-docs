@@ -7,11 +7,7 @@ description: "Show who's online with user and channel presence, heartbeat sync, 
 
 <Accordion title="Speed run — just the code" icon="forward">
 ```typescript
-// 1. Enable presence for the current user
-await PresenceManager.enable();
-
-// 2. Start heartbeat to stay online
-PresenceManager.startHeartbeat({ intervalMs: 10000 });
+// 1-2. User presence and the heartbeat are iOS and Android only: see Part 1
 
 // 3. Observe a channel's online members
 ChannelRepository.Membership.getMembers(
@@ -25,7 +21,7 @@ Full walkthrough below ↓
 </Accordion>
 
 <Tip>
-**Platform note** — code samples below use TypeScript. Every method has an equivalent in the iOS (Swift), Android (Kotlin), and Flutter (Dart) SDKs — see the linked SDK reference in each step.
+**Platform note**: user presence and channel presence (Quick Start, Part 1 and Part 2) are available on iOS and Android only, so those samples use Swift and Kotlin. The TypeScript and Flutter SDKs do not expose them. Part 3 samples use the TypeScript SDK; see the linked SDK reference in each step.
 </Tip>
 
 Presence makes your app feel alive. When users can see who's online, which communities are active, and get instant content updates, engagement increases. This guide covers enabling user presence, syncing channel activity, managing heartbeats, and subscribing to real-time social events.
@@ -73,21 +69,44 @@ graph TD
 
 ## Quick Start: Enable User Presence
 
-```typescript TypeScript
-import { PresenceManager, UserPresenceRepository } from '@social-plus/sdk';
+<CodeGroup>
 
-try {
-  const presence = new PresenceManager();
-  await presence.enable();
-  presence.startHeartbeat();
-
-  // Track another user's online status
-  const userPresence = new UserPresenceRepository();
-  await userPresence.syncUserPresence('user-123');
-} catch (error) {
-  console.error('Presence setup failed:', error);
+```swift iOS
+let isEnabled = try await client.presence.isEnabled()
+if !isEnabled {
+    try await client.presence.enable()
 }
+
+try await client.presence.startHeartbeat()
+
+// Call when the user should no longer appear online.
+client.presence.stopHeartbeat()
 ```
+
+```kotlin Android
+AmityCoreClient.presence().isEnabled()
+    .flatMapCompletable { isEnabled ->
+        val enableIfNeeded = if (isEnabled) {
+            Completable.complete()
+        } else {
+            AmityCoreClient.presence().enable()
+        }
+
+        enableIfNeeded.andThen(AmityCoreClient.presence().startHeartbeat())
+    }
+    .subscribeOn(Schedulers.io())
+    .observeOn(AndroidSchedulers.mainThread())
+    .subscribe({
+        showSuccessMessage("Presence heartbeat started")
+    }, { error ->
+        showErrorMessage(error = error)
+    })
+
+// Call when the user should no longer appear online.
+AmityCoreClient.presence().stopHeartbeat()
+```
+
+</CodeGroup>
 
 Full reference → [Presence Overview](/social-plus-sdk/core-concepts/realtime-communication/presence-state/overview)
 
@@ -122,82 +141,200 @@ sequenceDiagram
   <Step title="Enable presence and start heartbeat">
     Enable presence tracking for the current user and start the automatic heartbeat. The SDK sends a heartbeat every 20-30 seconds to keep the user's online status current.
 
-    ```typescript TypeScript
-    import { PresenceManager } from '@social-plus/sdk';
+    <CodeGroup>
 
-    const presence = new PresenceManager();
-
-    const isAvailable = await presence.isEnabled();
-    if (isAvailable) {
-      await presence.enable();
-      presence.startHeartbeat();
+    ```swift iOS
+    let isEnabled = try await client.presence.isEnabled()
+    if !isEnabled {
+        try await client.presence.enable()
     }
+
+    try await client.presence.startHeartbeat()
+
+    // Call when the user should no longer appear online.
+    client.presence.stopHeartbeat()
     ```
+
+    ```kotlin Android
+    AmityCoreClient.presence().isEnabled()
+        .flatMapCompletable { isEnabled ->
+            val enableIfNeeded = if (isEnabled) {
+                Completable.complete()
+            } else {
+                AmityCoreClient.presence().enable()
+            }
+
+            enableIfNeeded.andThen(AmityCoreClient.presence().startHeartbeat())
+        }
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe({
+            showSuccessMessage("Presence heartbeat started")
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+
+    // Call when the user should no longer appear online.
+    AmityCoreClient.presence().stopHeartbeat()
+    ```
+
+    </CodeGroup>
 
     Full reference → [Heartbeat Sync](/social-plus-sdk/core-concepts/realtime-communication/presence-state/heartbeat-sync)
   </Step>
   <Step title="Query user presence">
     Check whether specific users are online. Query up to 220 users at once for a member list or chat contact screen.
 
-    ```typescript TypeScript
-    import { UserPresenceRepository } from '@social-plus/sdk';
+    <CodeGroup>
 
-    const presenceRepo = new UserPresenceRepository();
-    const presences = await presenceRepo.getUserPresence(['user-1', 'user-2', 'user-3']);
+    ```swift iOS
+    let repository = AmityUserPresenceRepository()
 
-    presences.forEach(p => {
-      console.log(`${p.userId}: ${p.isOnline ? 'Online' : 'Offline'}`);
-    });
+    let presences = try await repository.getUserPresence(userIds: [userId])
+    for presence in presences {
+        let isOnline = presence.isOnline
+        let lastHeartbeat = presence.lastHeartbeat
+        showSuccessMessage("\(presence.userId): \(isOnline)")
+    }
     ```
+
+    ```kotlin Android
+    val repository = AmityCoreClient.newUserPresenceRepository()
+
+    repository.getUserPresence(listOf(userId))
+        .subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe({ presences ->
+            presences.forEach { presence ->
+                val isOnline = presence.isOnline()
+                val lastHeartbeat = presence.getLastHeartbeat()
+                showSuccessMessage("${presence.getUserId()}: $isOnline")
+            }
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+    ```
+
+    </CodeGroup>
 
     Full reference → [User Presence](/social-plus-sdk/core-concepts/realtime-communication/presence-state/user-presence)
   </Step>
   <Step title="Sync presence for real-time updates">
     For users visible on screen (profile page, chat list), sync their presence to get live updates when they come online or go offline. Max 20 synced users at a time.
 
-    ```typescript TypeScript
-    const presenceRepo = new UserPresenceRepository();
+    <CodeGroup>
 
-    // Start syncing (call for each visible user)
-    await presenceRepo.syncUserPresence('user-123');
+    ```swift iOS
+    let repository = AmityUserPresenceRepository()
 
-    // Observe changes
-    presenceRepo.getSyncingUserPresence().subscribe(presences => {
-      presences.forEach(p => {
-        updateStatusDot(p.userId, p.isOnline);
-      });
-    });
+    let cancellable = repository.getSyncingUserPresence()
+        .sink(receiveCompletion: { completion in
+            if case let .failure(error) = completion {
+                handleError(error)
+            }
+        }, receiveValue: { presences in
+            for presence in presences {
+                showSuccessMessage("\(presence.userId): \(presence.isOnline)")
+            }
+        })
 
-    // Stop when user scrolls off screen
-    await presenceRepo.unsyncUserPresence('user-123');
+    repository.syncUserPresence(id: userId)
+
+    // Call when the row or screen is no longer visible.
+    repository.unsyncUserPresence(id: userId)
+
+    _ = cancellable
     ```
+
+    ```kotlin Android
+    val repository = AmityCoreClient.newUserPresenceRepository()
+
+    repository.getSyncingUserPresence()
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe({ presences ->
+            presences.forEach { presence ->
+                showSuccessMessage("${presence.getUserId()}: ${presence.isOnline()}")
+            }
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+
+    repository.syncUserPresence(userId)
+
+    // Call when the row or screen is no longer visible.
+    repository.unsyncUserPresence(userId)
+    ```
+
+    </CodeGroup>
 
     Full reference → [User Presence](/social-plus-sdk/core-concepts/realtime-communication/presence-state/user-presence)
   </Step>
   <Step title="Get online users count">
     Display a global "X users online" counter for your platform.
 
-    ```typescript TypeScript
-    const presenceRepo = new UserPresenceRepository();
-    const count = await presenceRepo.getOnlineUsersCount();
-    console.log(`${count} users online`);
+    <CodeGroup>
+
+    ```swift iOS
+    let repository = AmityUserPresenceRepository()
+
+    let count = try await repository.getOnlineUsersCount()
+    showSuccessMessage(count)
+
+    let snapshot = try await repository.getOnlineUsersSnapshot()
+    let users = snapshot.users
+
+    if snapshot.canLoadMore {
+        await snapshot.loadMore()
+    }
     ```
+
+    ```kotlin Android
+    val repository = AmityCoreClient.newUserPresenceRepository()
+
+    repository.getOnlineUsersCount()
+        .subscribe({ count ->
+            showSuccessMessage(count)
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+
+    repository.getOnlineUsersSnapshot()
+        .subscribe({ snapshot ->
+            val users = snapshot.getUsers()
+            if (snapshot.canLoadMore()) {
+                snapshot.loadMore().subscribe()
+            }
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+    ```
+
+    </CodeGroup>
 
     Full reference → [User Presence](/social-plus-sdk/core-concepts/realtime-communication/presence-state/user-presence)
   </Step>
   <Step title="Handle app lifecycle">
     Stop the heartbeat when the app goes to the background and restart it when the app returns to the foreground. This prevents false "online" status while the app is minimized.
 
-    ```typescript TypeScript
-    // Web: use visibility change
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        presence.stopHeartbeat();
-      } else {
-        presence.startHeartbeat();
-      }
-    });
+    <CodeGroup>
+
+    ```swift iOS
+    // App moved to the background
+    client.presence.stopHeartbeat()
+
+    // App returned to the foreground
+    try await client.presence.startHeartbeat()
     ```
+
+    ```kotlin Android
+    // App moved to the background
+    AmityCoreClient.presence().stopHeartbeat()
+
+    // App returned to the foreground
+    AmityCoreClient.presence().startHeartbeat().subscribe()
+    ```
+
+    </CodeGroup>
 
     Full reference → [Heartbeat Sync](/social-plus-sdk/core-concepts/realtime-communication/presence-state/heartbeat-sync)
   </Step>
@@ -209,36 +346,81 @@ sequenceDiagram
 
 <Steps>
   <Step title="Sync channel presence">
-    Track which channels have active members. Useful for chat lists showing "2 members active" or highlighting active communities.
+    Track which channels have active members. Useful for chat lists showing an "active now" indicator when another member is online.
 
-    ```typescript TypeScript
-    import { ChannelPresenceRepository } from '@social-plus/sdk';
+    <CodeGroup>
 
-    const channelPresence = new ChannelPresenceRepository();
-    await channelPresence.syncChannelPresence('channel-123');
+    ```swift iOS
+    let repository = AmityChannelPresenceRepository()
 
-    channelPresence.getSyncingChannelPresence().subscribe(updates => {
-      updates.forEach(cp => {
-        console.log(`Channel ${cp.channelId}: ${cp.activeUserCount} active`);
-      });
-    });
+    let cancellable = repository.getSyncingChannelPresence()
+        .sink(receiveCompletion: { completion in
+            if case let .failure(error) = completion {
+                handleError(error)
+            }
+        }, receiveValue: { presences in
+            for presence in presences {
+                let isAnyMemberOnline = presence.isAnyMemberOnline
+                showSuccessMessage("\(presence.channelId): \(isAnyMemberOnline)")
+            }
+        })
+
+    repository.syncChannelPresence(id: channelId)
+
+    // Call when the row or screen is no longer visible.
+    repository.unsyncChannelPresence(id: channelId)
+
+    _ = cancellable
     ```
+
+    ```kotlin Android
+    val repository = AmityChatClient.newChannelPresenceRepository()
+
+    repository.getSyncingChannelPresence()
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe({ presences ->
+            presences.forEach { presence ->
+                val isAnyMemberOnline = presence.isAnyMemberOnline()
+                showSuccessMessage("${presence.getChannelId()}: $isAnyMemberOnline")
+            }
+        }, { error ->
+            showErrorMessage(error = error)
+        })
+
+    repository.syncChannelPresence(channelId)
+
+    // Call when the row or screen is no longer visible.
+    repository.unsyncChannelPresence(channelId)
+    ```
+
+    </CodeGroup>
 
     Full reference → [Channel Presence](/social-plus-sdk/core-concepts/realtime-communication/presence-state/channel-presence)
   </Step>
   <Step title="Manage visible channels">
     Sync/unsync channels as the user scrolls through a chat list. Max 20 synced channels at a time.
 
-    ```typescript TypeScript
-    // When a new channel becomes visible
-    await channelPresence.syncChannelPresence('channel-456');
+    <CodeGroup>
 
-    // When a channel scrolls off screen
-    await channelPresence.unsyncChannelPresence('channel-123');
+    ```swift iOS
+    let repository = AmityChannelPresenceRepository()
 
-    // Cleanup on unmount
-    await channelPresence.unsyncAllChannelPresence();
+    repository.syncChannelPresence(id: channelId)
+
+    // Later, when the channel list is dismissed.
+    repository.unsyncAllChannelPresence()
     ```
+
+    ```kotlin Android
+    val repository = AmityChatClient.newChannelPresenceRepository()
+
+    repository.syncChannelPresence(channelId)
+
+    // Later, when the channel list is dismissed.
+    repository.unsyncAllChannelPresence()
+    ```
+
+    </CodeGroup>
 
     Full reference → [Channel Presence](/social-plus-sdk/core-concepts/realtime-communication/presence-state/channel-presence)
   </Step>
@@ -318,20 +500,21 @@ Beyond presence, you can subscribe to content events — new posts, comments, re
 ## Common Mistakes
 
 <Warning>
-**Forgetting to stop the heartbeat on logout** — If you start `PresenceManager.startHeartbeat()` but don't stop it when the user logs out, the user appears "online" indefinitely.
+**Forgetting to stop the heartbeat on logout**: if you start the current user heartbeat but don't stop it when the user logs out, the user appears "online" indefinitely.
 
-```typescript
-// ❌ Bad — heartbeat leaks
-async function logout() {
-  await Client.logout(); // heartbeat still running
-}
+<CodeGroup>
 
-// ✅ Good — stop heartbeat first
-async function logout() {
-  PresenceManager.stopHeartbeat();
-  await Client.logout();
-}
+```swift iOS
+// Stop the heartbeat before the user logs out
+client.presence.stopHeartbeat()
 ```
+
+```kotlin Android
+// Stop the heartbeat before the user logs out
+AmityCoreClient.presence().stopHeartbeat()
+```
+
+</CodeGroup>
 </Warning>
 
 <Warning>
